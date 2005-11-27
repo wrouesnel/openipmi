@@ -114,13 +114,22 @@ control_dump(ipmi_control_t *control, ipmi_cmd_info_t *cmd_info)
 	val = ipmi_control_light_set_with_setting(control);
 	if (val) {
 	    ipmi_cmdlang_out(cmd_info, "Set with", "settings");
-	    val = ipmi_control_light_has_local_control(control);
-	    ipmi_cmdlang_out_bool(cmd_info, "Local Control", val);
-	    for (i=IPMI_CONTROL_COLOR_BLACK; i<IPMI_CONTROL_COLOR_ORANGE; i++){
-		val = ipmi_control_light_is_color_supported(control, i);
-		if (val)
-		    ipmi_cmdlang_out(cmd_info, "Color",
-				     ipmi_get_color_string(i));
+	    for (j=0; j<num; j++) {
+		ipmi_cmdlang_out(cmd_info, "Light", NULL);
+		ipmi_cmdlang_down(cmd_info);
+		ipmi_cmdlang_out_int(cmd_info, "Number", j);
+		val = ipmi_control_light_has_loc_ctrl(control, j);
+		ipmi_cmdlang_out_bool(cmd_info, "Local Control", val);
+		for (i=IPMI_CONTROL_COLOR_BLACK;
+		     i<IPMI_CONTROL_COLOR_ORANGE;
+		     i++)
+		{
+		    val = ipmi_control_light_is_color_sup(control, j, i);
+		    if (val)
+			ipmi_cmdlang_out(cmd_info, "Color",
+					 ipmi_get_color_string(i));
+		}
+		ipmi_cmdlang_up(cmd_info);
 	    }
 	} else {
 	    ipmi_cmdlang_out(cmd_info, "Set with", "transitions");

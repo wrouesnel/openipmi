@@ -1611,11 +1611,19 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
 int ipmi_control_light_set_with_setting(ipmi_control_t *control);
 
 /* Allows detecting if a setting light supports a specific color. */
-int ipmi_control_light_is_color_supported(ipmi_control_t *control,
-					  unsigned int   color);
+int ipmi_control_light_is_color_sup(ipmi_control_t *control,
+				    int            light_num,
+				    unsigned int   color);
 
 /* Allows detecting if a setting light supports local control. */
+int ipmi_control_light_has_loc_ctrl(ipmi_control_t *control,
+				    int            light_num);
+
+/* Old interfaces, only works with light number zero.  Don't use this. */
+int ipmi_control_light_is_color_supported(ipmi_control_t *control,
+					  unsigned int   color);
 int ipmi_control_light_has_local_control(ipmi_control_t *control);
+
 
 /* Handling the settings variable for a settings type light.  Note
    that setting the on time to zero will turn off the LED (the off

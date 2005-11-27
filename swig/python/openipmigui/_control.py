@@ -32,7 +32,6 @@ class ControlSet:
                            size=wx.Size(300, 300))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
         
         self.values = scrolled.ScrolledPanel(dialog, -1,
                                              size=wx.Size(300, 200))
@@ -107,24 +106,37 @@ class LightSet:
                            size=wx.Size(300, 300))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
         
         self.values = scrolled.ScrolledPanel(dialog, -1,
                                              size=wx.Size(300, 200))
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self.values, -1, "Value(s):")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        box2 = wx.BoxSizer(wx.VERTICAL)
-        self.fields = [ ]
+        self.lights = [ ]
+        box = wx.BoxSizer(wx.VERTICAL)
         for i in range(0, self.c.num_vals):
-            if (i >= len(self.c.vals)):
-                v = '0'
+            if (len(self.c.vals) <= i):
+                ivals = ("", "black", '0', '1')
             else:
-                v = str(self.c.vals[i])
-            field = wx.TextCtrl(self.values, -1, v)
-            self.fields.append(field)
-            box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                ivals = self.c.vals[i]
+            box2 = wx.BoxSizer(wx.HORIZONTAL)
+            label = wx.StaticText(self.values, -1, "Light " + str(i))
+            box2.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            if (self.c.lights[i][0]):
+                lc = wx.CheckBox(self.values, -1, "Local Control")
+                lc.SetValue(ivals[0] == "lc")
+                box2.Add(lc, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            else:
+                lc = None
+            box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            color = wx.RadioBox(self.values, -1, "Color",
+                                wx.DefaultPosition, wx.DefaultSize,
+                                self.c.lights[i][1], 2, wx.RA_SPECIFY_COLS)
+            color.SetSelection(self.c.lights[i][1].index(ivals[1]))
+            box.Add(color, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            (b, ontime) = self.newField("On Time", self.values, ivals[2])
+            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            (b, offtime) = self.newField("Off Time", self.values, ivals[3])
+            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            self.lights.append((lc, color, ontime, offtime))
+            
         self.values.SetSizer(box)
         sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         
@@ -142,28 +154,46 @@ class LightSet:
         dialog.CenterOnScreen();
         dialog.Show(True);
 
+    def newField(self, name, parent, initval="", style=0):
+        if parent == None:
+            parent = self
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        label = wx.StaticText(parent, -1, name + ":")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        field = wx.TextCtrl(parent, -1, initval, style=style);
+        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        return box, field;
+
     def cancel(self, event):
         self.dialog.Close()
 
     def ok(self, event):
-        self.ival = [ ]
+        val = [ ]
         try:
-            for f in self.fields:
-                val = f.GetValue()
-                self.ival.append(int(val))
-        except:
+            i = 0;
+            for f in self.lights:
+                lc = ""
+                if (f[0] != None) and f[0].GetValue():
+                    lc = "lc"
+                color = self.c.lights[i][1][f[1].GetSelection()]
+                ontime = str(f[2].GetValue())
+                offtime = str(f[3].GetValue())
+                val.append(' '.join([lc, color, ontime, offtime]))
+                i = i + 1
+
+            self.ival = ';'.join(val)
+            self.c.control_id.convert_to_control(self)
+        except Exception, e:
             return
-        self.c.control_id.convert_to_control(self)
         self.dialog.Close()
 
     def OnClose(self, event):
         self.dialog.Destroy()
 
     def control_cb(self, control):
-        if (self.c.control_type == OpenIPMI.CONTROL_IDENTIFIER):
-            control.identifier_set_val(self.ival)
-        else:
-            control.set_val(self.ival)
+        rv = control.set_light(self.ival)
+        if (rv != 0):
+            raise ValueError("set_light failed: " + str(rv))
         
 class Control:
     def __init__(self, e, control):
@@ -183,13 +213,14 @@ class Control:
         if ((self.control_type == OpenIPMI.CONTROL_LIGHT)
             and (control.light_set_with_setting())):
             self.setting_light = True
-            self.has_local_control = control.light_has_local_control()
-            self.colors = [ ]
-            for i in range (0, OpenIPMI.CONTROL_NUM_COLORS):
-                if control.light_is_color_supported(i):
-                    self.colors.append(OpenIPMI.color_string(i))
-                else:
-                    self.colors.append(None)
+            self.lights = [ ]
+            for  i in range (0, self.num_vals):
+                lc = control.light_has_local_control(i)
+                colors = [ ]
+                for j in range (0, OpenIPMI.CONTROL_NUM_COLORS):
+                    if control.light_is_color_supported(i, j):
+                        colors.append(OpenIPMI.color_string(j))
+                self.lights.append((lc, colors))
         else:
             self.setting_light = False
 
@@ -234,9 +265,15 @@ class Control:
         if (err != 0):
             self.ui.set_item_text(self.treeroot, str(self), None)
             return
-        self.num_vals = control.identifier_get_max_length();
-        self.vals = vals
-        self.ui.set_item_text(self.treeroot, str(self), str(vals))
+        self.num_vals = control.get_num_vals();
+        v1 = vals.split(":")
+        self.vals = [ ]
+        for s1 in v1:
+            v1 = s1.split()
+            if (v1[0] != "lc"):
+                v1.insert(0, "")
+            self.vals.append(v1)
+        self.ui.set_item_text(self.treeroot, str(self), str(self.vals))
 
     def remove(self):
         self.e.controls.pop(self.name)

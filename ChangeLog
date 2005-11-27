@@ -6,6 +6,18 @@
 	* swig/OpenIPMI.i: Properly name get_light and set_light (remove
 	the ipmi_control_ from in front of them).  Fix a doc error.
 
+	* include/OpenIPMI/ipmiif.h.in: The setting light information
+	about local control and color support didn't have per-light
+	values, which was a problem.  A new interface was added, the
+	old one only works for the first light.
+	* include/OpenIPMI/internal/ipmi_control.h: ditto
+	* lib/control.c: ditto
+	* cmdlang/cmd_control: ditto
+	* lib/oem_atca.c: ditto
+	* swig/OpenIPMI.i: ditto
+
+	* swig/OpenIPMI.i: Fix a problem setting light parms
+
 2005-11-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/aes_cbc.c: Make sure we don't coredump if the connection

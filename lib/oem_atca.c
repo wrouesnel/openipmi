@@ -1438,14 +1438,14 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     }
     for (i=1; i<=6; i++) {
 	if (msg->data[2] & (1 << i))
-	    ipmi_control_add_light_color_support(l->control,
+	    ipmi_control_add_light_color_support(l->control, 0,
 						 atca_to_openipmi_color[i]);
     }
      /* We always support black */
-    ipmi_control_add_light_color_support(l->control,
+    ipmi_control_add_light_color_support(l->control, 0,
 					 IPMI_CONTROL_COLOR_BLACK);
     ipmi_control_set_num_elements(l->control, 1);
-    ipmi_control_light_set_has_local_control(l->control, l->local_control);
+    ipmi_control_light_set_has_local_control(l->control, 0, l->local_control);
     rv = atca_add_control(mc, 
 			  &l->control,
 			  num,

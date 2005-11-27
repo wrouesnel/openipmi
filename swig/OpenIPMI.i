@@ -1938,6 +1938,7 @@ str_to_light_setting(char *s, ipmi_light_setting_t **setting)
     rv = next_colon_parm(s, &start, &next);
     while (!rv) {
 	start = next;
+	count++;
 	rv = next_colon_parm(s, &start, &next);
     }
     if (count == 0)
@@ -7176,18 +7177,18 @@ int pef_str_to_parm(char *str);
      * Allows detecting if a setting light supports a specific
      * color.
      */
-    int light_is_color_supported(int color)
+    int light_is_color_supported(int light_num, int color)
     {
-	return ipmi_control_light_is_color_supported(self, color);
+	return ipmi_control_light_is_color_sup(self, light_num, color);
     }
 
     /*
      * Returns true if the light has a local control mode, false if
      * not.
      */
-    int light_has_local_control()
+    int light_has_local_control(int light_num)
     {
-	return ipmi_control_light_has_local_control(self);
+	return ipmi_control_light_has_loc_ctrl(self, light_num);
     }
 
     /*

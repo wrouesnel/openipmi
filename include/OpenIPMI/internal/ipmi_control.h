@@ -199,10 +199,12 @@ typedef struct ipmi_control_cbs_s
 } ipmi_control_cbs_t;
 
 /* For settings-based LEDs. */
-void ipmi_control_add_light_color_support(ipmi_control_t *control,
-					  unsigned int   color);
-void ipmi_control_light_set_has_local_control(ipmi_control_t *control,
-					      int            val);
+int ipmi_control_add_light_color_support(ipmi_control_t *control,
+					 int            light_num,
+					 unsigned int   color);
+int ipmi_control_light_set_has_local_control(ipmi_control_t *control,
+					     int            light_num,
+					     int            val);
 
 void ipmi_control_identifier_set_max_length(ipmi_control_t *control,
 					    unsigned int   val);

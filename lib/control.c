@@ -109,9 +109,10 @@ struct ipmi_control_s
     locked_list_t *handler_list;
 
     /* For light types. */
+#define MAX_LIGHTS 10
     ipmi_control_light_t *lights;
-    unsigned int         colors;
-    int                  has_local_control;
+    unsigned int         colors[MAX_LIGHTS];
+    int                  has_local_control[MAX_LIGHTS];
 
     /* For display types. */
     unsigned int columns;
@@ -1780,34 +1781,49 @@ ipmi_light_settings_dup(ipmi_light_setting_t *settings)
     return rv;
 }
 
-void
+int
 ipmi_control_add_light_color_support(ipmi_control_t *control,
+				     int            light_num,
 				     unsigned int   color)
 {
-    control->colors |= (1 << color);
+    if (light_num >= MAX_LIGHTS)
+	return EINVAL;
+    control->colors[light_num] |= (1 << color);
+    return 0;
 }
 
 int
-ipmi_control_light_is_color_supported(ipmi_control_t *control,
-				      unsigned int   color)
+ipmi_control_light_is_color_sup(ipmi_control_t *control,
+				int            light_num,
+				unsigned int   color)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return (control->colors & (1 << color)) != 0;
-}
-
-void
-ipmi_control_light_set_has_local_control(ipmi_control_t *control, int val)
-{
-     control->has_local_control = val;
+    if (light_num >= MAX_LIGHTS)
+	return 0;
+    return (control->colors[light_num] & (1 << color)) != 0;
 }
 
 int
-ipmi_control_light_has_local_control(ipmi_control_t *control)
+ipmi_control_light_set_has_local_control(ipmi_control_t *control,
+					 int            light_num,
+					 int            val)
+{
+    if (light_num >= MAX_LIGHTS)
+	return EINVAL;
+     control->has_local_control[light_num] = val;
+     return 0;
+}
+
+int
+ipmi_control_light_has_loc_ctrl(ipmi_control_t *control,
+				int            light_num)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return control->has_local_control;
+    if (light_num >= MAX_LIGHTS)
+	return 0;
+    return control->has_local_control[light_num];
 }
 
 int
@@ -1946,3 +1962,15 @@ ipmi_control_get_num_light_settings(ipmi_control_t *control,
     return ipmi_control_get_num_light_values(control, light);
 }
 
+int
+ipmi_control_light_is_color_supported(ipmi_control_t *control,
+				      unsigned int   color)
+{
+    return ipmi_control_light_is_color_sup(control, 0, color);
+}
+
+int
+ipmi_control_light_has_local_control(ipmi_control_t *control)
+{
+    return ipmi_control_light_has_loc_ctrl(control, 0);
+}
