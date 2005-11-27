@@ -19,9 +19,7 @@ def save(objlist, file):
     doc.appendChild(main)
     for obj in objlist:
         elem = doc.createElement(obj.getTag())
-        attrs = obj.getAttr()
-        for attr in attrs:
-            elem.setAttribute(attr[0], attr[1])
+        obj.SaveInfo(doc, elem)
         main.appendChild(elem)
     # FIXME - need try/except here
     f = open(file, 'w')
@@ -33,9 +31,5 @@ def restore(file, mainhandler):
         if (child.nodeType == child.ELEMENT_NODE):
             tag = child.nodeName
             if (tag in taghash):
-                attrhash = { }
-                for i in range(0, child.attributes.length):
-                    attr = child.attributes.item(i)
-                    attrhash[attr.nodeName] = attr.nodeValue
-                taghash[tag].restore(mainhandler, attrhash)
+                taghash[tag].restore(mainhandler, child)
         child = child.nextSibling

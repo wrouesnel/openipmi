@@ -7199,7 +7199,7 @@ int pef_str_to_parm(char *str);
      * second parameter (if it is supplied) will be called with the
      * following parameters: <self> <control> <err>.
      */
-    int ipmi_control_set_light(char *settings, swig_cb handler = NULL)
+    int set_light(char *settings, swig_cb handler = NULL)
     {
 	ipmi_light_setting_t *s;
 	int                  rv;
@@ -7233,13 +7233,13 @@ int pef_str_to_parm(char *str);
     /*
      * Get the current values of the light.  The control_get_light_cb
      * method on the first parm will be called with the following
-     * parameters: <self> <err> <light settings>
+     * parameters: <self> <control> <err> <light settings>
      * The light settings is a string with each light separated by
      * colons with the (optional) local control (lc), color, on, and
      * off time like this:
      * "[lc] <color> <on_time> <off time>[:[lc] <color>...]"
      */
-    int ipmi_control_get_light(swig_cb handler)
+    int get_light(swig_cb handler)
     {
 	swig_cb_val            handler_val = NULL;
 	ipmi_light_settings_cb done = NULL;

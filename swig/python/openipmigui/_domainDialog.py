@@ -8,33 +8,15 @@ auth_algs = [ 'default', 'rakp_none', 'rakp_hmac_sha1', 'rakp_hmac_md5' ]
 integ_algs = [ 'default', 'none', 'hmac_sha1', 'hmac_md5', 'md5' ]
 conf_algs = [ 'default', 'none', 'aes_cbc_128', 'xrc4_128', 'xrc4_40' ]
 
-class OpenDomainDialog(wx.Dialog):
-    def __init__(self, mainhandler):
-        wx.Dialog.__init__(self, None, -1, "Open Domain",
-                           size=wx.Size(400, 600),
-                           pos=wx.DefaultPosition,
-                           style=wx.RESIZE_BORDER)
-
-        self.mainhandler = mainhandler
-
+class ConnInfo(wx.Panel):
+    def __init__(self, parent, mainhandler, enable=True):
+        if enable:
+            sminumval = "0"
+        else:
+            sminumval = ""
+        wx.Panel.__init__(self, parent, size=wx.Size(400, 300))
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box, self.name = self.newField("Domain name")
-        self.sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.status = wx.StatusBar(self)
-        self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        
-        self.contype = wx.RadioBox(self, -1, "Domain Type",
+        self.contype = wx.RadioBox(self, -1, "Connection Type",
                                    wx.DefaultPosition, wx.DefaultSize,
                                    [ 'smi', 'lan'], 2, wx.RA_SPECIFY_COLS)
         self.Bind(wx.EVT_RADIOBOX, self.selectType, self.contype);
@@ -42,13 +24,13 @@ class OpenDomainDialog(wx.Dialog):
 
         self.smiInfo = wx.Panel(self, -1)
         self.smiInfo_sizer = wx.BoxSizer(wx.VERTICAL)
-        box, self.smiNum = self.newField("SMI Number", "0",
+        box, self.smiNum = self.newField("SMI Number", sminumval,
                                          parent=self.smiInfo)
         self.smiInfo_sizer.Add(box, 0, wx.LEFT | wx.ALL, 2)
         self.sizer.Add(self.smiInfo, 0, wx.ALIGN_CENTRE, 2)
         self.smiInfo.Show(True)
 
-        self.lanInfo = scrolled.ScrolledPanel(self, -1, size=wx.Size(400, 400))
+        self.lanInfo = scrolled.ScrolledPanel(self, -1, size=wx.Size(400, 200))
         self.lanInfo_sizer = wx.BoxSizer(wx.VERTICAL)
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         box, self.address = self.newField("Address", parent=self.lanInfo)
@@ -122,16 +104,12 @@ class OpenDomainDialog(wx.Dialog):
         box, self.port2 = self.newField("Port2", "623", parent=self.lanInfo)
         bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-
+        
         self.lanInfo.SetSizer(self.lanInfo_sizer)
         self.sizer.Add(self.lanInfo, 0, wx.ALIGN_CENTRE, 2)
         self.lanInfo.SetupScrolling()
         self.lanInfo.Show(False)
-
         self.SetSizer(self.sizer)
-
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-        
 
     def newField(self, name, initval="", parent=None, style=0):
         if parent == None:
@@ -145,12 +123,85 @@ class OpenDomainDialog(wx.Dialog):
 
     def selectType(self, event):
         if event.GetInt() == 0:
-            self.lanInfo.Show(False)
             self.smiInfo.Show(True)
+            self.lanInfo.Show(False)
         else:
             self.smiInfo.Show(False)
             self.lanInfo.Show(True)
         self.Layout()
+
+    def FillinConn(self, con):
+        contype = self.contype.GetSelection()
+        if (contype == 0):
+            con.SetType("smi")
+            con.SetPort(str(self.smiNum.GetValue()))
+        elif (contype == 1):
+            con.SetType("lan")
+            con.SetAddress(str(self.address.GetValue()))
+            con.SetPort(str(self.port.GetValue()))
+            con.SetUsername(str(self.username.GetValue()))
+            con.SetPassword(str(self.password.GetValue()))
+            con.SetPrivilege(privileges[self.privilege.GetSelection()])
+            con.SetAuthtype(authtypes[self.authtype.GetSelection()])
+            con.SetAuth_alg(auth_algs[self.auth_alg.GetSelection()])
+            con.SetInteg_alg(integ_algs[self.integ_alg.GetSelection()])
+            con.SetConf_alg(conf_algs[self.conf_alg.GetSelection()])
+            con.SetBmc_key(str(self.bmc_key.GetValue()))
+            con.Lookup_uses_priv(self.lookup_uses_priv.GetValue())
+            con.SetAddress2(str(self.address2.GetValue()))
+            con.SetPort2(str(self.port2.GetValue()))
+            if (self.h_intelplus.GetValue()):
+                con.AddHack("intelplus")
+            if (self.h_rakp_wrong_rolem.GetValue()):
+                con.AddHack("rakp3_wrong_rolem")
+            if (self.h_rmcpp_integ_sik.GetValue()):
+                con.AddHack("rmcpp_intek_sik")
+
+class OpenDomainDialog(wx.Dialog):
+    def __init__(self, mainhandler):
+        wx.Dialog.__init__(self, None, -1, "Open Domain",
+                           size=wx.Size(400, 700),
+                           pos=wx.DefaultPosition,
+                           style=wx.RESIZE_BORDER)
+
+        self.mainhandler = mainhandler
+
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        box, self.name = self.newField("Domain name")
+        self.sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        self.name.SetFocus()
+        
+        bbox = wx.BoxSizer(wx.HORIZONTAL)
+        cancel = wx.Button(self, -1, "Cancel")
+        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
+        ok = wx.Button(self, -1, "Ok")
+        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
+        self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+
+        self.status = wx.StatusBar(self)
+        self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+
+        self.conn = [ ConnInfo(self, mainhandler),
+                      ConnInfo(self, mainhandler, False) ]
+        self.sizer.Add(self.conn[0], 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        self.sizer.Add(self.conn[1], 0, wx.ALIGN_LEFT | wx.ALL, 2)
+
+        self.SetSizer(self.sizer)
+
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        
+    def newField(self, name, initval="", parent=None, style=0):
+        if parent == None:
+            parent = self
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        label = wx.StaticText(parent, -1, name + ":")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        field = wx.TextCtrl(parent, -1, initval, style=style);
+        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        return box, field;
 
     def cancel(self, event):
         self.Close(True)
@@ -161,37 +212,14 @@ class OpenDomainDialog(wx.Dialog):
         if (name == ""):
             self.status.SetStatusText("No name specified")
             return
-        contype = self.contype.GetSelection()
         d = _domain.Domain(self.mainhandler, name);
         try:
-            if (contype == 0):
-                d.SetType("smi")
-                d.SetPort(str(self.port.GetValue()))
-            elif (contype == 1):
-                d.SetType("lan")
-                d.SetAddress(str(self.address.GetValue()))
-                d.SetPort(str(self.port.GetValue()))
-                d.SetUsername(str(self.username.GetValue()))
-                d.SetPassword(str(self.password.GetValue()))
-                d.SetPrivilege(privileges[self.privilege.GetSelection()])
-                d.SetAuthtype(authtypes[self.authtype.GetSelection()])
-                d.SetAuth_alg(auth_algs[self.auth_alg.GetSelection()])
-                d.SetInteg_alg(integ_algs[self.integ_alg.GetSelection()])
-                d.SetConf_alg(conf_algs[self.conf_alg.GetSelection()])
-                d.SetBmc_key(str(self.bmc_key.GetValue()))
-                d.Lookup_uses_priv(self.lookup_uses_priv.GetValue())
-                d.SetAddress2(str(self.address2.GetValue()))
-                d.SetPort2(str(self.port2.GetValue()))
-                if (self.h_intelplus.GetValue()):
-                    d.AddHack("intelplus")
-                if (self.h_rakp_wrong_rolem.GetValue()):
-                    d.AddHack("rakp3_wrong_rolem")
-                if (self.h_rmcpp_integ_sik.GetValue()):
-                    d.AddHack("rmcpp_intek_sik")
+            self.conn[0].FillinConn(d.connection[0])
+            self.conn[1].FillinConn(d.connection[1])
             d.Connect()
         except _domain.InvalidDomainInfo, e:
             d.remove()
-            self.status.SetStatusText(e)
+            self.status.SetStatusText(str(e))
             return
         except Exception, e:
             d.remove()

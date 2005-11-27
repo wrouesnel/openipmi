@@ -1,3 +1,11 @@
+2005-11-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: Set the number of values properly on non-identifier
+	controls.
+
+	* swig/OpenIPMI.i: Properly name get_light and set_light (remove
+	the ipmi_control_ from in front of them).  Fix a doc error.
+
 2005-11-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/aes_cbc.c: Make sure we don't coredump if the connection

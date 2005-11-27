@@ -263,6 +263,8 @@ atca_alloc_control(ipmi_mc_t                 *mc,
 
     if (control_type == IPMI_CONTROL_IDENTIFIER)
 	ipmi_control_identifier_set_max_length(*control, length);
+    else
+	ipmi_control_set_num_elements(*control, length);
 
     ipmi_control_set_callbacks(*control, &cbs);
 
