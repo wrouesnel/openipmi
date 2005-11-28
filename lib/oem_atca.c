@@ -2950,6 +2950,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
 	}
+	_ipmi_entity_add_ref(b->frus[0]->entity);
 
 	/* Store the site_num as the physical slot number */
 	ipmi_entity_set_physical_slot_num(b->frus[0]->entity, 1,
@@ -3292,6 +3293,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 		if (info->shelf_entity)
 		    ipmi_entity_remove_child(info->shelf_entity,
 					     b->frus[0]->entity);
+		_ipmi_entity_remove_ref(b->frus[0]->entity);
 		_ipmi_entity_put(b->frus[0]->entity);
 	    }
 	}

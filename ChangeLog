@@ -1,3 +1,9 @@
+2005-11-28 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: Make sure the main entities I create hang around
+	after devices have been removed, so the configured data from the
+	address table stays valid.
+
 2005-11-27 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/ipmigui.py: removed
