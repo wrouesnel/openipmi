@@ -1,3 +1,34 @@
+# gui.py
+#
+# main openipmi GUI handling
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2005 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
 import wx
 import _domainDialog
 
@@ -67,7 +98,6 @@ class IPMIGUI(wx.Frame):
         isz = (16, 16)
         self.tree = IPMITreeCtrl(self)
         self.treeroot = self.tree.AddRoot("Domains")
-        self.tree.SetPyData(self.treeroot, None)
         box.Add(self.tree, 1,
                 wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.ALIGN_BOTTOM | wx.GROW,
                 0)
@@ -232,8 +262,6 @@ class IPMIGUI(wx.Frame):
         e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
         e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
         self.tree.SetPyData(e.treeroot, e)
-        self.tree.SetPyData(e.sensorroot, None)
-        self.tree.SetPyData(e.controlroot, None)
     
     def remove_entity(self, e):
         if (hasattr(e, "treeroot")):

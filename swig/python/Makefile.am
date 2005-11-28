@@ -1,4 +1,6 @@
 
+SUBDIRS = . openipmigui
+
 AM_CFLAGS = $(PYTHON_CFLAGS) \
 	    $(GLIB_CFLAGS) \
 	    -I $(top_builddir)/include \
@@ -11,7 +13,7 @@ DEFS = @DEFS@
 
 COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
 
-all: _OpenIPMI.so
+all-local: _OpenIPMI.so
 
 OpenIPMI_SRC = OpenIPMI_wrap.c
 OpenIPMI_OBJ = OpenIPMI_wrap.o
@@ -21,7 +23,9 @@ OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
 	       $(GLIB_LIB)
 
-EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h ipmigui.py
+EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
+
+bin_SCRIPTS = openipmigui.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)

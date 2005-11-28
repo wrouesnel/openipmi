@@ -45,6 +45,14 @@ Requires: OpenIPMI = %{version}, python
 %description python
 A Python interface for OpenIPMI.
 
+%package gui
+Summary: GUI (in python) for OpenIPMI
+Group: Utilities
+Requires: OpenIPMI-python = %{version}, python, wxPythonGTK
+
+%description gui
+A GUI interface for OpenIPMI.  Written in python an requiring wxWidgets.
+
 %package ui
 Summary: User Interface (ui)
 Group: Utilities
@@ -135,8 +143,16 @@ fi
 %files python
 ###################################################
 %defattr(-,root,root)
-%{_exec_prefix}/lib/python*
-%doc swig/OpenIPMI.i swig/python/ipmigui.py
+%{_exec_prefix}/lib/python*/*OpenIPMI.*
+%doc swig/OpenIPMI.i
+
+###################################################
+%files gui
+###################################################
+%defattr(-,root,root)
+%dir %{_exec_prefix}/lib/python*/openipmidir
+%{_exec_prefix}/lib/python*/openipmidir/*
+%{_bindir}/openipmigui.py
 
 ###################################################
 %files devel

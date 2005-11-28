@@ -1,3 +1,12 @@
+2005-11-27 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/ipmigui.py: removed
+
+	* swig/python/openipmigui.py, swig/pythong/openipmigui/*: Started
+	work on a real GUI.
+
+	* OpenIPMI.spec.in, configure.in: Added GUI directories.
+
 2005-11-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Set the number of values properly on non-identifier

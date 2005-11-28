@@ -184,7 +184,7 @@ AC_ARG_WITH(swig,
 )
 
 AC_PROG_CC
-AM_PROG_LIBTOOL
+AC_PROG_LIBTOOL
 AC_STDC_HEADERS
 AC_CHECK_FUNCS(getaddrinfo)
 
@@ -498,6 +498,7 @@ AC_OUTPUT(Makefile
 	  swig/Makefile
 	  swig/perl/Makefile
 	  swig/python/Makefile
+	  swig/python/openipmigui/Makefile
 	  cmdlang/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile
