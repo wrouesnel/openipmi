@@ -1,7 +1,22 @@
 2005-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Keep the entity key around (channel, IPMB, id,
-	instance) even if the SDR the entity is in is destroyed.
+	instance) even if the entity's SDR is destroyed.
+
+	* lib/mc.c: Added a callback when the MC is completely up.  This
+	was a major undertaking, the basic operation of MCs had to change
+	substantialy.  Before, MCs could go active and inactve any number
+	of times and the transitions were counted and reported
+	appropriately.  This no longer happens; the MC will go through a
+	state machine and active/inactive/fully up will only happen in
+	order.
+
+	* lib/oem_atca.c: Make sure the MC is scanned when the entity is
+	newly present (as well as when it goes away, which was already
+	there).  Also some code cleanups.
+
+	* lib/ipmi_smi.c: Fix a "memory use while free" problem at
+	shutdown.
 
 2005-11-28 Corey Minyard <cminyard@mvista.com>
 

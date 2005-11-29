@@ -63,9 +63,9 @@ void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
    repository. */
 int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
 
-/* Set the MC as active via "normal" mechanisms.  It will be reported
-   to the user, etc. */
-void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
+/* Used to refcount when the MC is completely up. */
+void _ipmi_mc_startup_get(ipmi_mc_t *mc, char *caller);
+void _ipmi_mc_startup_put(ipmi_mc_t *mc, char *caller);
 
 /* Force the MC to be active, do not report to the user.  DON'T USE
    THIS UNLESS YOU *REALLY* KNOW WHAT YOU ARE DOING.  It is used to

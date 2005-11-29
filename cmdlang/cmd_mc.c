@@ -2023,7 +2023,39 @@ mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 
  out_err:
     ipmi_cmdlang_global_err(mc_name,
-			    "cmd_mc.c(presence_change)",
+			    "cmd_mc.c(mc_active)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
+static void
+mc_fully_up(ipmi_mc_t *mc, void *cb_data)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "MC");
+    ipmi_cmdlang_out(evi, "Name", mc_name);
+    ipmi_cmdlang_out(evi, "Operation", "Fully Up");
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(mc_name,
+			    "cmd_mc.c(mc_fully_up)",
 			    errstr, rv);
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);
@@ -2060,6 +2092,11 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 	rv = ipmi_mc_add_active_handler(mc, mc_active, NULL);
 	if (rv) {
 	    errstr = "ipmi_mc_add_active_handler failed";
+	    goto out_err;
+	}
+	rv = ipmi_mc_add_fully_up_handler(mc, mc_fully_up, NULL);
+	if (rv) {
+	    errstr = "ipmi_mc_add_fully_up_handler failed";
 	    goto out_err;
 	}
 	break;

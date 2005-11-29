@@ -902,7 +902,7 @@ setup_domain(char          *name,
 
     /* Force this one to always be active, so anything that uses it is
        always ready to go.  Since it represents the connection, it
-       really can't every go inactive. */
+       really can't ever go inactive. */
     _ipmi_mc_force_active(domain->si_mc, 1);
 
     rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);

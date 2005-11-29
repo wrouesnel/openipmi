@@ -96,6 +96,153 @@ typedef struct domain_up_info_s
     ipmi_mcid_t mcid;
 } domain_up_info_t;
 
+/*
+ * The MC follows a state machine for it's status to keep reporting of
+ * active/inactive/fully up sane.  It is driven by the following inputs:
+ *
+ * _ipmi_mc_handle_new - function call from domain code when MC is detected
+ * _ipmi_cleanup_mc - function call from domain code when MC removal is
+ *	detected
+ * put_done - When the _ipmi_mc_put() calls cause the count to go to 0
+ * startup_get - When a startup operation starts
+ * startup_done - When a startup operation completes
+ *
+ * It has the following states:
+ *
+ * MC_INACTIVE - startup state
+ *  _ipmi_mc_handle_new
+ *	state = MC_INACTIVE_PEND_STARTUP
+ *  _ipmi_cleanup_mc
+ *	nil
+ *  put_done
+ *	nil
+ *  startup_get
+ *	nil
+ *  startup_done
+ *	nil
+ *
+ * MC_INACTIVE_PEND_STARTUP - A startup has been requested.  Wait for the
+ * mc to be put_done and start up the MC.
+ *  _ipmi_mc_handle_new
+ *	nil
+ *  _ipmi_cleanup_mc
+ *	state = MC_INACTIVE
+ *  put_done
+ *	state = MC_ACTIVE_IN_STARTUP
+ *	startup MC
+ *      startup_count = True
+ *      startup_called = False
+ *      active = 1
+ *      call active handlers
+ *  startup_get
+ *	nil
+ *  startup_done
+ *	nil
+ *
+ * MC_ACTIVE_IN_STARTUP - MC is startup up
+ *  _ipmi_mc_handle_new
+ *	nil
+ *  _ipmi_cleanup_mc
+ *	state = MC_ACTIVE_PENDING_CLEANUP
+ *  put_done
+ *	nil
+ *  startup_get
+ *	startup_count++
+ *  startup_done
+ *	startup_count--
+ *      if (startup_count == 0 and NOT startup_called)
+ *        startup_called = True
+ *	  state = MC_ACTIVE_PENDING_FULLY_UP
+ *
+ * MC_ACTIVE_PEND_FULLY_UP - We have gone fully up, waiting for
+ * put_done to go to active and report fully up
+ *  _ipmi_mc_handle_new
+ *	nil
+ *  _ipmi_cleanup_mc
+ *	state = MC_ACTIVE_PENDING_CLEANUP
+ *  put_done
+ *	state = MC_ACTIVE
+ *      call fully up handlers
+ *  startup_get
+ *	nil
+ *  startup_done
+ *	nil
+ *
+ * MC_ACTIVE - MC is fully operational
+ *  _ipmi_mc_handle_new
+ *	nil
+ *  _ipmi_cleanup_mc
+ *	state = MC_ACTIVE_PENDING_CLEANUP
+ *  put_done
+ *	nil
+ *  startup_get
+ *	nil
+ *  startup_done
+ *	nil
+ *
+ * MC_ACTIVE_PEND_CLEANUP - A cleanup has been requested, pending for
+ * the startup_count to go to zero in a put_done.
+ *  _ipmi_mc_handle_new
+ *	state = MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP
+ *  _ipmi_cleanup_mc
+ *	nil
+ *  put_done
+ *	if (startup_count == 0)
+ *        state = MC_INACTIVE
+ *	  active = 0
+ *	  cleanup MC
+ *        call active handlers
+ *  startup_get
+ *	startup_count++
+ *  startup_done
+ *	startup_count--
+ *
+ * MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP - When we were pending close, an
+ * _ipmi_mc_handle_new event came in.  We need to finish cleaning up
+ * before we restart the MC.
+ *  _ipmi_mc_handle_new
+ *	nil
+ *  _ipmi_cleanup_mc
+ *	state = MC_ACTIVE_PENDING_CLEANUP
+ *  put_done
+ *	if (startup_count == 0)
+ *        state = MC_INACTIVE
+ *	  active = 0
+ *	  cleanup MC
+ *        call active handlers
+ *        state = MC_ACTIVE_IN_STARTUP
+ *	  active = 0
+ *	  startup MC
+ *        startup_count = True
+ *        startup_called = False
+ *        active = 1
+ *        call active handlers
+ *  startup_get
+ *	startup_count++
+ *  startup_done
+ *	startup_count--
+ *
+ * A few notes:
+ *
+ * We don't do anything in the startup_get and startup_put operations
+ * because the caller must be holding an mc and we want to wait until
+ * the put operation to do anything.
+ *
+ * Same with the handle_new and cleanup calls
+ *
+ * For the user, you will never get a fully_up call while the MC is
+ * inactive.
+ */
+typedef enum {
+    MC_INACTIVE,
+    MC_INACTIVE_PEND_STARTUP,
+    MC_ACTIVE_IN_STARTUP,
+    MC_ACTIVE_PEND_FULLY_UP,
+    MC_ACTIVE,
+    MC_ACTIVE_PEND_CLEANUP,
+    MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP
+} mc_state_e;
+
 struct ipmi_mc_s
 {
     unsigned int usecount;
@@ -108,8 +255,11 @@ struct ipmi_mc_s
     ipmi_addr_t   addr;
     int           addr_len;
 
-    /* Are we currently in need of a cleanup? */
-    int cleanup;
+    mc_state_e state;
+
+    /* How many startup items are pending? */
+    unsigned int startup_count;
+    int startup_reported;
 
     /* If we have any external users that do not have direct
        references, we increment the usercount.  This is primarily the
@@ -123,13 +273,6 @@ struct ipmi_mc_s
        that refer to this MC, but the MC is not currently in the
        system. */
     int active;
-
-    /* This is the "real" current active value.  We wait until the MC
-       is not in use to change the active value, this keeps track of
-       the current value and the number of times is has changed while
-       the mc was in use. */
-    int curr_active;
-    unsigned int active_transitions;
 
     /* Used to generate unique numbers for the MC. */
     unsigned int uniq_num;
@@ -206,6 +349,9 @@ struct ipmi_mc_s
     /* Call these when the MC changes from active to inactive. */
     locked_list_t *active_handlers;
 
+    /* Called after going active when the MC is fully up. */
+    locked_list_t *fully_up_handlers;
+
     /* The following are for waiting until a domain is up before
        starting the SEL query, so that the domain will be registered
        before events are fetched. */
@@ -252,8 +398,7 @@ static void con_up_handler(ipmi_domain_t *domain,
 			   void          *cb_data);
 
 static void call_active_handlers(ipmi_mc_t *mc);
-
-static void cleanup_mc(ipmi_mc_t *mc);
+static void call_fully_up_handlers(ipmi_mc_t *mc);
 
 typedef struct mc_name_info
 {
@@ -321,6 +466,52 @@ _ipmi_mc_name(const ipmi_mc_t *mc)
     return mc->name;
 }
 
+static int
+check_mc_destroy(ipmi_mc_t *mc)
+{
+    ipmi_domain_t *domain = mc->domain;
+
+    if ((mc->state == MC_INACTIVE)
+	&& (ipmi_controls_get_count(mc->controls) == 0)
+	&& (ipmi_sensors_get_count(mc->sensors) == 0)
+	&& (mc->usercount == 0))
+    {
+	mc->in_destroy = 1;
+	ipmi_unlock(mc->lock);
+
+	/* There are no sensors associated with this MC, so it's safe
+           to delete it.  If there are sensors that still reference
+           this MC (such as from another MC's SDR repository, or the
+           main SDR repository) we have to leave it inactive but not
+           delete it.  The active handlers come from MCDLR and FRUDLR
+           SDRs that monitor the MC. */
+	_ipmi_remove_mc_from_domain(domain, mc);
+
+	if (mc->conup_info)
+	    ipmi_mem_free(mc->conup_info);
+	if (mc->removed_handlers)
+	    locked_list_destroy(mc->removed_handlers);
+    	if (mc->active_handlers)
+	    locked_list_destroy(mc->active_handlers);
+    	if (mc->fully_up_handlers)
+	    locked_list_destroy(mc->fully_up_handlers);
+	if (mc->sensors)
+	    ipmi_sensors_destroy(mc->sensors);
+	if (mc->controls)
+	    ipmi_controls_destroy(mc->controls);
+	if (mc->sdrs)
+	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+	if (mc->sel)
+	    ipmi_sel_destroy(mc->sel, NULL, NULL);
+	if (mc->lock)
+	    ipmi_destroy_lock(mc->lock);
+
+	ipmi_mem_free(mc);
+	return 1;
+    }
+    return 0;
+}
+
 int
 _ipmi_create_mc(ipmi_domain_t *domain,
 		ipmi_addr_t   *addr,
@@ -337,6 +528,8 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     if (!mc)
 	return ENOMEM;
     memset(mc, 0, sizeof(*mc));
+
+    mc->state = MC_INACTIVE;
 
     mc->usecount = 1; /* Require a release */
 
@@ -364,6 +557,11 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     }
     mc->active_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
     if (!mc->active_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    mc->fully_up_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (!mc->fully_up_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -405,7 +603,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc_set_name(mc);
  out_err:
     if (rv)
-	_ipmi_cleanup_mc(mc);
+	check_mc_destroy(mc);
     else
 	*new_mc = mc;
 
@@ -430,58 +628,8 @@ call_removed_handler(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static int
-check_mc_destroy(ipmi_mc_t *mc)
-{
-    ipmi_domain_t *domain = mc->domain;
-
-    if (!mc->active
-	&& (ipmi_controls_get_count(mc->controls) == 0)
-	&& (ipmi_sensors_get_count(mc->sensors) == 0)
-	&& (mc->usercount == 0))
-    {
-	mc->in_destroy = 1;
-
-	cleanup_mc(mc);
-	/* There are no sensors associated with this MC, so it's safe
-           to delete it.  If there are sensors that still reference
-           this MC (such as from another MC's SDR repository, or the
-           main SDR repository) we have to leave it inactive but not
-           delete it.  The active handlers come from MCDLR and FRUDLR
-           SDRs that monitor the MC. */
-	_ipmi_remove_mc_from_domain(domain, mc);
-
-	if (mc->conup_info)
-	    ipmi_mem_free(mc->conup_info);
-	if (mc->removed_handlers)
-	    locked_list_destroy(mc->removed_handlers);
-    	if (mc->active_handlers)
-	    locked_list_destroy(mc->active_handlers);
-	if (mc->sensors)
-	    ipmi_sensors_destroy(mc->sensors);
-	if (mc->controls)
-	    ipmi_controls_destroy(mc->controls);
-	if (mc->sdrs)
-	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
-	if (mc->sel)
-	    ipmi_sel_destroy(mc->sel, NULL, NULL);
-	if (mc->lock)
-	    ipmi_destroy_lock(mc->lock);
-
-	ipmi_mem_free(mc);
-	return 1;
-    }
-    return 0;
-}
-
-void
-_ipmi_cleanup_mc(ipmi_mc_t *mc)
-{
-    mc->cleanup = 1;
-}
-
 static void
-cleanup_mc(ipmi_mc_t *mc)
+mc_cleanup(ipmi_mc_t *mc)
 {
     int           i;
     int           rv;
@@ -549,10 +697,6 @@ cleanup_mc(ipmi_mc_t *mc)
 						  con_up_handler,
 						  mc->conup_info);
     }
-
-    mc->cleanup = 0;
-
-    _ipmi_mc_set_active(mc, 0);
 }
 
 /***********************************************************************
@@ -1775,6 +1919,30 @@ start_sel_ops(ipmi_mc_t           *mc,
     return rv;
 }
 
+void
+_ipmi_mc_startup_get(ipmi_mc_t *mc, char *name)
+{
+    ipmi_lock(mc->lock);
+    mc->startup_count++;
+    ipmi_unlock(mc->lock);
+}
+
+void
+_ipmi_mc_startup_put(ipmi_mc_t *mc, char *name)
+{
+    ipmi_lock(mc->lock);
+    mc->startup_count--;
+    if (mc->startup_reported || (mc->startup_count > 0)) {
+	ipmi_unlock(mc->lock);
+	return;
+    }
+    mc->startup_reported = 1;
+    if (mc->state == MC_ACTIVE_IN_STARTUP)
+	mc->state = MC_ACTIVE_PEND_FULLY_UP;
+    ipmi_unlock(mc->lock);
+    _ipmi_put_domain_fully_up(mc->domain, "_ipmi_mc_startup_get");
+}
+
 static void
 mc_first_sels_read(ipmi_sel_info_t *sel,
 		   int             err,
@@ -1784,7 +1952,7 @@ mc_first_sels_read(ipmi_sel_info_t *sel,
 {
     ipmi_mc_t *mc = cb_data;
 
-    _ipmi_put_domain_fully_up(mc->domain, "mc_first_sels_read");
+    _ipmi_mc_startup_put(mc, "mc_first_sels_read");
 }
 
 /* This is called after the first sensor scan for the MC, we start up
@@ -1821,7 +1989,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	/* If the MC supports an SEL, start scanning its SEL. */
 	start_sel_ops(mc, 0, mc_first_sels_read, mc);
     else
-	_ipmi_put_domain_fully_up(mc->domain, "sensors_reread");
+	_ipmi_mc_startup_put(mc, "sensors_reread");
 }
 
 static void
@@ -1849,20 +2017,14 @@ got_guid(ipmi_mc_t  *mc,
 	sensors_reread(mc, 0, NULL);
 }
 
-int
-_ipmi_mc_handle_new(ipmi_mc_t *mc)
+static void
+mc_startup(ipmi_mc_t *mc)
 {
     ipmi_msg_t msg;
     int        rv = 0;
 
-    /* Apply any pending updates now, so we can get things that the
-       OEM handler installed. */
-    if (mc->pending_devid_data) {
-	mc->pending_devid_data = 0;
-	mc->devid = mc->pending_devid;
-    }
-
-    _ipmi_mc_set_active(mc, 1);
+    mc->startup_count = 1;
+    mc->startup_reported = 0;
 
     if (mc->devid.chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
         rv = _ipmi_chassis_create_controls(mc);
@@ -1871,11 +2033,12 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 		     "%smc.c(ipmi_mc_setup_new): "
 		     "Unable to create chassis controls.",
 		     mc->name);
-	    return rv;
+	    return;
 	}
     }
 
-    /* FIXME - handle errors setting up OEM comain information. */
+    /* FIXME - handle errors setting up OEM comain information.
+       Handle errors so they get retried. */
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_GUID_CMD;
@@ -1885,18 +2048,17 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
     _ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
     rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, NULL);
     if (rv) {
-	_ipmi_put_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%smc.c(ipmi_mc_setup_new): "
 		 "Unable to send get guid command.",
 		 mc->name);
+	_ipmi_mc_startup_put(mc, "mc_startup");
     }
-    return rv;
 }
 
 /***********************************************************************
  *
- * MC ID handling
+ * MC ID and state handling
  *
  **********************************************************************/
 
@@ -1922,57 +2084,144 @@ _ipmi_mc_get(ipmi_mc_t *mc)
     return 0;
 }
 
+static void
+mc_apply_pending(ipmi_mc_t *mc)
+{
+    if (mc->pending_devid_data) {
+	mc->devid = mc->pending_devid;
+	mc->pending_devid_data = 0;
+	if (mc->pending_new_mc) {
+	    _ipmi_mc_handle_new(mc);
+	    mc->pending_new_mc = 0;
+	}
+    }
+}
+
 void
 _ipmi_mc_put(ipmi_mc_t *mc)
 {
     _ipmi_domain_mc_lock(mc->domain);
     if (mc->usecount == 1) {
-	/* Install any pending change from device id changes. */
-	if (mc->pending_devid_data) {
-	    mc->devid = mc->pending_devid;
-	    mc->pending_devid_data = 0;
-	    if (mc->pending_new_mc) {
-		_ipmi_mc_handle_new(mc);
-		mc->pending_new_mc = 0;
-	    }
-	}
-
-	/* If we need to cleanup the MC, do so. */
-	if (mc->cleanup) {
-	    _ipmi_domain_mc_unlock(mc->domain);
-	    cleanup_mc(mc);
-	    _ipmi_domain_mc_lock(mc->domain);
-
-	    /* Something grabbed the MC while we were out, don't do
-	       any more transitions. */
-	    if (mc->usecount != 1)
-		goto out;
-	}
-
-	/* Do as many active transitions as necessary to bring the MC
-	   to the proper state. */
-	while (mc->active_transitions != 0) {
-	    mc->active_transitions--;
-	    mc->active = !mc->active;
+	/* Make sure this code cannot run when we release the lock. */
+	mc->usecount++;
+	ipmi_lock(mc->lock);
+	switch (mc->state) {
+	case MC_INACTIVE_PEND_STARTUP:
+	    mc->state = MC_ACTIVE_IN_STARTUP;
+	    mc_startup(mc);
+	    mc->active = 1;
+	    mc_apply_pending(mc);
+	    ipmi_unlock(mc->lock);
 	    _ipmi_domain_mc_unlock(mc->domain);
 	    call_active_handlers(mc);
 	    _ipmi_domain_mc_lock(mc->domain);
+	    break;
 
-	    /* Something grabbed the MC while we were out, don't do
-	       any more transitions. */
-	    if (mc->usecount != 1)
-		goto out;
+	case MC_ACTIVE_PEND_FULLY_UP:
+	    mc->state = MC_ACTIVE;
+	    ipmi_unlock(mc->lock);
+	    _ipmi_domain_mc_unlock(mc->domain);
+	    call_fully_up_handlers(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+	    break;
+
+	case MC_ACTIVE_PEND_CLEANUP:
+	    if (mc->startup_count > 0) {
+		ipmi_unlock(mc->lock);
+		goto still_in_startup;
+	    }
+	    mc->state = MC_INACTIVE;
+	    mc->active = 0;
+	    ipmi_unlock(mc->lock);
+	    _ipmi_domain_mc_unlock(mc->domain);
+	    mc_cleanup(mc);
+	    call_active_handlers(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+	    break;
+
+	case MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP:
+	    if (mc->startup_count > 0) {
+		ipmi_unlock(mc->lock);
+		goto still_in_startup;
+	    }
+	    mc->state = MC_INACTIVE;
+	    mc->active = 0;
+	    ipmi_unlock(mc->lock);
+	    mc_cleanup(mc);
+	    call_active_handlers(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+	    ipmi_lock(mc->lock);
+	    mc->state = MC_ACTIVE_IN_STARTUP;
+	    mc->active = 1;
+	    mc_apply_pending(mc);
+	    mc_startup(mc);
+	    ipmi_unlock(mc->lock);
+	    _ipmi_domain_mc_unlock(mc->domain);
+	    call_active_handlers(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+	    break;
+
+	default:
+	    ipmi_unlock(mc->lock);
+	    break;
 	}
+    still_in_startup:
+	mc->usecount--;
 
-	/* Destroy the MC if it is ready.  Note that if this actually
-	   does the destroy, it will release the MC lock and return
-	   true, so we can just return. */
-	if (check_mc_destroy(mc))
-	    return;
+	/* Only attemp the destroy if no one else has gotten the MC
+	   while we were holding it. */
+	if (mc->usecount == 1) {
+	    ipmi_lock(mc->lock);
+	    if (check_mc_destroy(mc))
+		return;
+	    ipmi_unlock(mc->lock);
+	}
     }
- out:
     mc->usecount--;
     _ipmi_domain_mc_unlock(mc->domain);
+}
+
+int
+_ipmi_mc_handle_new(ipmi_mc_t *mc)
+{
+    ipmi_lock(mc->lock);
+    switch (mc->state) {
+    case MC_INACTIVE:
+	mc->state = MC_INACTIVE_PEND_STARTUP;
+	break;
+    case MC_ACTIVE_PEND_CLEANUP:
+	mc->state = MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP;
+	break;
+    default:
+	break;
+    }
+    ipmi_unlock(mc->lock);
+    return 0;
+}
+
+void
+_ipmi_cleanup_mc(ipmi_mc_t *mc)
+{
+    ipmi_lock(mc->lock);
+    switch (mc->state) {
+    case MC_INACTIVE_PEND_STARTUP:
+	mc->state = MC_INACTIVE;
+	break;
+    case MC_ACTIVE_IN_STARTUP:
+	mc->state = MC_ACTIVE_PEND_CLEANUP;
+	/* FIXME - shut down startup code */
+	break;
+    case MC_ACTIVE:
+    case MC_ACTIVE_PEND_FULLY_UP:
+	mc->state = MC_ACTIVE_PEND_CLEANUP;
+	break;
+    case MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP:
+	mc->state = MC_ACTIVE_PEND_CLEANUP;
+	break;
+    default:
+	break;
+    }
+    ipmi_unlock(mc->lock);
 }
 
 ipmi_mcid_t
@@ -2818,24 +3067,53 @@ ipmi_mc_is_active(ipmi_mc_t *mc)
 }
 
 void
-_ipmi_mc_set_active(ipmi_mc_t *mc, int val)
-{
-    ipmi_lock(mc->lock);
-    if (mc->curr_active != val) {
-	mc->curr_active = val;
-	mc->active_transitions++;
-    }
-    ipmi_unlock(mc->lock);
-}
-
-void
 _ipmi_mc_force_active(ipmi_mc_t *mc, int val)
 {
     ipmi_lock(mc->lock);
     mc->active = val;
-    mc->curr_active = val;
-    mc->active_transitions = 0;
     ipmi_unlock(mc->lock);
+}
+
+static int
+call_fully_up_handler(void *cb_data, void *item1, void *item2)
+{
+    ipmi_mc_ptr_cb handler = item1;
+    ipmi_mc_t      *mc = cb_data;
+
+    handler(mc, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_fully_up_handlers(ipmi_mc_t *mc)
+{
+    locked_list_iterate(mc->fully_up_handlers, call_fully_up_handler, mc);
+}
+
+int
+ipmi_mc_add_fully_up_handler(ipmi_mc_t      *mc,
+			     ipmi_mc_ptr_cb handler,
+			     void           *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_add(mc->fully_up_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_mc_remove_fully_up_handler(ipmi_mc_t      *mc,
+				ipmi_mc_ptr_cb handler,
+				void           *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_remove(mc->fully_up_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 void
