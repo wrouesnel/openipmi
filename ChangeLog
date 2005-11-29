@@ -11,6 +11,8 @@
 	state machine and active/inactive/fully up will only happen in
 	order.
 
+	* swig/OpenIPMI.i: Add the MC fully up handler methods.
+
 	* lib/oem_atca.c: Make sure the MC is scanned when the entity is
 	newly present (as well as when it goes away, which was already
 	there).  Also some code cleanups.
