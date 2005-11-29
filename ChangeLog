@@ -1,3 +1,8 @@
+2005-11-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Keep the entity key around (channel, IPMB, id,
+	instance) even if the SDR the entity is in is destroyed.
+
 2005-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Make sure the main entities I create hang around

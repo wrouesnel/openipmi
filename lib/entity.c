@@ -145,6 +145,8 @@ struct ipmi_entity_s
     ipmi_domain_id_t domain_id;
     long             seq;
 
+    dlr_ref_t key;
+
     /* Lock used for protecting misc data. */
     ipmi_lock_t *lock;
 
@@ -655,17 +657,17 @@ entity_set_name(ipmi_entity_t *entity)
     length = ipmi_domain_get_name(entity->domain, entity->name, length);
     entity->name[length] = '(';
     length++;
-    if (entity->info.entity_instance >= 0x60) {
+    if (entity->key.entity_instance >= 0x60) {
 	length += snprintf(entity->name+length, IPMI_ENTITY_NAME_LEN-length-3,
 			   "r%d.%d.%d.%d",
-			   entity->info.device_num.channel,
-			   entity->info.device_num.address,
-			   entity->info.entity_id,
-			   entity->info.entity_instance - 0x60);
+			   entity->key.device_num.channel,
+			   entity->key.device_num.address,
+			   entity->key.entity_id,
+			   entity->key.entity_instance - 0x60);
     } else {
 	length += snprintf(entity->name+length, IPMI_ENTITY_NAME_LEN-length-3,
-			   "%d.%d", entity->info.entity_id,
-			   entity->info.entity_instance);
+			   "%d.%d", entity->key.entity_id,
+			   entity->key.entity_instance);
     }
     entity->name[length] = ')';
     length++;
@@ -862,9 +864,7 @@ ipmi_entity_info_remove_update_handler(ipmi_entity_info_t    *ents,
 }
 
 typedef struct search_info_s {
-    ipmi_device_num_t device_num;
-    uint8_t           entity_id;
-    uint8_t           entity_instance;
+    dlr_ref_t         key;
     ipmi_entity_t     *ent;
 } search_info_t;
 
@@ -875,10 +875,10 @@ search_entity(void *cb_data, void *item1, void *item2)
     search_info_t *info = (search_info_t *) cb_data;
     int           same;
 
-    same = ((ent->info.device_num.channel == info->device_num.channel)
-	    && (ent->info.device_num.address == info->device_num.address)
-	    && (ent->info.entity_id == info->entity_id)
-	    && (ent->info.entity_instance == info->entity_instance));
+    same = ((ent->key.device_num.channel == info->key.device_num.channel)
+	    && (ent->key.device_num.address == info->key.device_num.address)
+	    && (ent->key.entity_id == info->key.entity_id)
+	    && (ent->key.entity_instance == info->key.entity_instance));
     if (same) {
 	info->ent = ent;
 	return LOCKED_LIST_ITER_STOP;
@@ -893,7 +893,7 @@ entity_find(ipmi_entity_info_t *ents,
 	    int                entity_instance,
 	    ipmi_entity_t      **found_ent)
 {
-    search_info_t info = {device_num, entity_id, entity_instance, NULL};
+    search_info_t info = { {device_num, entity_id, entity_instance}, NULL};
     int           rv = 0;
 
     locked_list_iterate_nolock(ents->entities, search_entity, &info);
@@ -1057,9 +1057,9 @@ entity_add(ipmi_entity_info_t *ents,
     ent->ents = ents;
 
     ent->info.type = IPMI_ENTITY_UNKNOWN;
-    ent->info.device_num = device_num;
-    ent->info.entity_id = entity_id;
-    ent->info.entity_instance = entity_instance;
+    ent->key.device_num = device_num;
+    ent->key.entity_id = entity_id;
+    ent->key.entity_instance = entity_instance;
     ent->info.id_type = IPMI_ASCII_STR;
 
     ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
@@ -3038,8 +3038,8 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
     sdr.data[4] = 0;
     sdr.data[5] = 0;
     sdr.data[6] = 0;
-    sdr.data[7] = ent->info.entity_id;
-    sdr.data[8] = ent->info.entity_instance;
+    sdr.data[7] = ent->key.entity_id;
+    sdr.data[8] = ent->key.entity_instance;
     sdr.data[9] = info->oem;
     len = 16;
     ipmi_set_device_string(info->id,
@@ -4244,7 +4244,7 @@ ipmi_entity_get_entity_id(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.entity_id;
+    return ent->key.entity_id;
 }
 
 int
@@ -4252,7 +4252,7 @@ ipmi_entity_get_entity_instance(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.entity_instance;
+    return ent->key.entity_instance;
 }
 
 int
@@ -4260,7 +4260,7 @@ ipmi_entity_get_device_channel(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.device_num.channel;
+    return ent->key.device_num.channel;
 }
 
 int
@@ -4268,7 +4268,7 @@ ipmi_entity_get_device_address(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.device_num.address;
+    return ent->key.device_num.address;
 }
 
 int
@@ -4729,10 +4729,10 @@ ipmi_entity_convert_to_id(ipmi_entity_t *ent)
     CHECK_ENTITY_LOCK(ent);
 
     val.domain_id = ent->domain_id;
-    val.entity_id = ent->info.entity_id;
-    val.entity_instance = ent->info.entity_instance;
-    val.channel = ent->info.device_num.channel;
-    val.address = ent->info.device_num.address;
+    val.entity_id = ent->key.entity_id;
+    val.entity_instance = ent->key.entity_instance;
+    val.channel = ent->key.device_num.channel;
+    val.address = ent->key.device_num.address;
     val.seq = ent->seq;
 
     return val;
@@ -4994,7 +4994,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 		 "%sentity.c(fru_fetched_ent_cb):"
 		 "Error fetching entity %d.%d FRU: %x",
 		 ENTITY_NAME(ent),
-		 ent->info.entity_id, ent->info.entity_instance, info->err);
+		 ent->key.entity_id, ent->key.entity_instance, info->err);
 	if ((ent->fru) && (info->fru))
 	    /* Keep the old FRU on errors. */
 	    ipmi_fru_destroy_internal(info->fru, NULL, NULL);
