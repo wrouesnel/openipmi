@@ -20,6 +20,12 @@
 	* lib/ipmi_smi.c: Fix a "memory use while free" problem at
 	shutdown.
 
+	* lib/domain.c: Restart the domain audit timer immediately when
+	the timeout is set.
+
+	* glib/glib_os_hnd.c: Clear the running flag when timer is
+	stopped.
+
 2005-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Make sure the main entities I create hang around

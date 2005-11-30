@@ -191,12 +191,35 @@ class IPMIGUI(wx.Frame):
             self.logwindow.Remove(0, end+1)
             self.logcount -= 1
 
+    def setup_item(self, item, active=False):
+        item.active = active
+        item.num_warning = 0
+        item.num_severe = 0
+        item.num_critical = 0
+        if (not active):
+            self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+
+    def cleanup_item(self, item):
+        parent = self.tree.GetItemParent(item)
+        if not parent.IsOk():
+            return
+        while (item.num_warning > 0):
+            item.num_warn = item.num_warn - 1;
+            self.decr_item_warning(parent); 
+        while (item.num_severe > 0):
+            item.num_severe = item.num_severe - 1;
+            self.decr_item_severe(parent); 
+        while (item.num_critical > 0):
+            item.num_critical = item.num_critical - 1;
+            self.decr_item_critical(parent); 
+
     def add_domain(self, d):
         d.treeroot = self.tree.AppendItem(self.treeroot, str(d))
         self.tree.SetPyData(d.treeroot, d)
         d.entityroot = self.tree.AppendItem(d.treeroot, "Entities")
         d.mcroot = self.tree.AppendItem(d.treeroot, "MCs")
         self.tree.Expand(self.treeroot)
+        self.setup_item(d.treeroot)
 
     def prepend_item(self, o, name, value, data=None, parent=None):
         if (parent == None):
@@ -208,6 +231,7 @@ class IPMIGUI(wx.Frame):
             item = self.tree.PrependItem(parent, name + ":\t" + value)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
+        self.setup_item(item, active=True)
         return item
 
     def append_item(self, o, name, value, data=None, parent=None):
@@ -220,6 +244,7 @@ class IPMIGUI(wx.Frame):
             item = self.tree.AppendItem(parent, name + ":\t" + value)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
+        self.setup_item(item, active=True)
         return item
 
     def set_item_text(self, item, name, value):
@@ -228,8 +253,110 @@ class IPMIGUI(wx.Frame):
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
             self.tree.SetItemText(item, name + ":\t" + value)
-            self.tree.SetItemTextColour(item, wx.BLACK)
+            if (item.active):
+                self.tree.SetItemTextColour(item, wx.BLACK)
 
+    def set_item_inactive(self, item):
+        item.active = False
+        self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+        
+    def set_item_active(self, item):
+        item.active = True
+        if (item.num_critical > 0):
+            self.tree.SetItemTextColour(item, wx.Blue)
+            return
+        if (item.num_severe > 0):
+            self.tree.SetItemTextColour(item, wx.Red)
+            return
+        if (item.num_warning > 0):
+            self.tree.SetItemTextColour(item, wx.Yellow)
+            return
+        self.tree.SetItemTextColour(item, wx.BLACK)
+        
+    def incr_item_warning(self, item):
+        item.num_warning = item.num_warning + 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.incr_item_warning(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical > 0):
+            return
+        if (item.num_severe > 0):
+            return
+        if (item.num_warning == 1):
+            self.tree.SetItemTextColour(item, wx.Yellow)
+        
+    def decr_item_warning(self, item):
+        item.num_warning = item.num_warning - 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.decr_item_warning(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical > 0):
+            return
+        if (item.num_severe > 0):
+            return
+        if (item.num_warning > 0):
+            return
+        self.tree.SetItemTextColour(item, wx.Black)
+        
+    def incr_item_severe(self, item):
+        item.num_severe = item.num_severe + 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.incr_item_severe(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical > 0):
+            return
+        if (item.num_severe == 1):
+            self.tree.SetItemTextColour(item, wx.Red)
+        
+    def decr_item_severe(self, item):
+        item.num_severe = item.num_severe - 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.decr_item_severe(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical > 0):
+            return
+        if (item.num_severe > 0):
+            return
+        if (item.num_warning > 0):
+            self.tree.SetItemTextColour(item, wx.Yellow)
+            return
+        self.tree.SetItemTextColour(item, wx.Black)
+        
+    def incr_item_critical(self, item):
+        item.num_critical = item.num_critical + 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.incr_item_critical(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical == 1):
+            self.tree.SetItemTextColour(item, wx.Blue)
+        
+    def decr_item_critical(self, item):
+        item.num_critical = item.num_critical - 1
+        parent = self.tree.GetItemParent(item)
+        if parent.IsOk():
+           self.decr_item_critical(parent); 
+        if (not item.active):
+            return
+        if (item.num_critical > 0):
+            return
+        if (item.num_severe > 0):
+            self.tree.SetItemTextColour(item, wx.Red)
+            return
+        if (item.num_warning > 0):
+            self.tree.SetItemTextColour(item, wx.Yellow)
+            return
+        self.tree.SetItemTextColour(item, wx.Black)
+        
     def get_item_pos(self, item):
         rect = self.tree.GetBoundingRect(item)
         if (rect == None):
@@ -252,6 +379,7 @@ class IPMIGUI(wx.Frame):
     def remove_domain(self, d):
         if (hasattr(d, "treeroot")):
             self.tree.Delete(d.treeroot)
+            self.tree.cleanup_item(d.treeroot)
 
     def add_entity(self, d, e, parent=None):
         if (parent == None):
@@ -262,32 +390,39 @@ class IPMIGUI(wx.Frame):
         e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
         e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
         self.tree.SetPyData(e.treeroot, e)
+        self.setup_item(e.treeroot)
     
     def remove_entity(self, e):
         if (hasattr(e, "treeroot")):
             self.tree.Delete(e.treeroot)
+            self.tree.cleanup_item(e.treeroot)
 
     def add_mc(self, d, m):
         m.treeroot = self.tree.AppendItem(d.mcroot, m.name)
         self.tree.SetPyData(m.treeroot, m)
+        self.setup_item(m.treeroot)
 
     def remove_mc(self, m):
         if (hasattr(m, "treeroot")):
             self.tree.Delete(m.treeroot)
+            self.tree.cleanup_item(m.treeroot)
 
     def add_sensor(self, e, s):
         s.treeroot = self.tree.AppendItem(e.sensorroot, str(s))
         self.tree.SetPyData(s.treeroot, s)
+        self.setup_item(s.treeroot, active=True)
 
     def remove_sensor(self, s):
         if (hasattr(s, "treeroot")):
             self.tree.Delete(s.treeroot)
+            self.tree.cleanup_item(s.treeroot)
 
     def add_control(self, e, c):
         c.treeroot = self.tree.AppendItem(e.controlroot, str(c))
         self.tree.SetPyData(c.treeroot, c)
+        self.setup_item(c.treeroot, active=True)
 
     def remove_control(self, c):
         if (hasattr(c, "treeroot")):
             self.tree.Delete(c.treeroot)
-
+            self.tree.cleanup_item(c.treeroot)

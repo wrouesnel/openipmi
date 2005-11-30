@@ -54,6 +54,7 @@ class Entity:
             self.ui.set_item_text(self.treeroot, str(self), eid)
         self.sensors = { }
         self.controls = { }
+        entity.add_presence_handler(self)
 
     def __str__(self):
         return self.name
@@ -77,3 +78,8 @@ class Entity:
         elif (op == "removed"):
             self.controls[control.get_name()].remove()
 
+    def entity_presence_cb(self, entity, present, event):
+        if (present):
+            self.ui.set_item_active(self.treeroot)
+        else:
+            self.ui.set_item_inactive(self.treeroot)

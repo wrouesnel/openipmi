@@ -38,9 +38,14 @@ class MC:
         d.mcs[self.name] = self
         self.ui = d.ui;
         self.ui.add_mc(self.d, self)
+        mc.add_active_handler(self)
 
     def remove(self):
         self.d.mcs.pop(self.name)
         self.ui.remove_mc(self)
 
-
+    def mc_active_cb(self, mc, active):
+        if (active):
+            self.ui.set_item_active(self.treeroot)
+        else:
+            self.ui.set_item_inactive(self.treeroot)

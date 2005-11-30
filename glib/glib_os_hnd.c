@@ -208,6 +208,7 @@ stop_timer(os_handler_t *handler, os_hnd_timer_id_t *id)
     if (!id->running)
 	return EINVAL;
 
+    id->running = 0;
     g_source_remove(id->ev_id);
 
     return 0;

@@ -449,10 +449,22 @@ class Domain:
         if self.connection[1].Valid():
             self.connection[1].FillinConAttr(attr)
         #print str(attr)
-        self.domain_id = OpenIPMI.open_domain2(self.name, attr)
+        self.already_up = False
+        self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
         if (self.domain_id == None):
             raise InvalidDomainInfo("Open domain failed, invalid parms")
 
+    def domain_up_cb(self, domain):
+        self.already_up = True;
+        self.ui.set_item_active(self.treeroot)
+
+    def conn_change_cb(self, domain, err, connum, portnum, connected):
+        if (self.already_up):
+            if (connected):
+                self.ui.set_item_active(self.treeroot)
+            else:
+                self.ui.set_item_inactive(self.treeroot)
+    
     def connected(self, domain):
         domain.add_entity_update_handler(self)
         domain.add_mc_update_handler(self)

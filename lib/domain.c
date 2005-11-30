@@ -2052,9 +2052,29 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
 void
 ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain, unsigned int seconds)
 {
+    int            rv;
+    struct timeval timeout;
+
     CHECK_DOMAIN_LOCK(domain);
 
+    ipmi_lock(domain->audit_domain_timer_info->lock);
     domain->audit_domain_interval = seconds;
+    rv = domain->os_hnd->stop_timer(domain->os_hnd,
+				    domain->audit_domain_timer);
+    if (rv) {
+	/* If we can't stop the timer, that's ok, the timer is in the
+	   wakeup and will handle the restart for us. */
+	ipmi_unlock(domain->audit_domain_timer_info->lock);
+	return;
+    }
+    timeout.tv_sec = domain->audit_domain_interval;
+    timeout.tv_usec = 0;
+    domain->os_hnd->start_timer(domain->os_hnd,
+				domain->audit_domain_timer,
+				&timeout,
+				domain_audit,
+				domain->audit_domain_timer_info);
+    ipmi_unlock(domain->audit_domain_timer_info->lock);
 }
 
 unsigned int
