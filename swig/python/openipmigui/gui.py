@@ -287,7 +287,7 @@ class IPMIGUI(wx.Frame):
             self.tree.SetItemTextColour(item, wx.RED)
             return
         if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.Yellow)
+            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
             return
         self.tree.SetItemTextColour(item, wx.BLACK)
         
@@ -306,7 +306,7 @@ class IPMIGUI(wx.Frame):
         if (data.num_severe > 0):
             return
         if (data.num_warning == 1):
-            self.tree.SetItemTextColour(item, wx.Yellow)
+            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
         
     def decr_item_warning(self, item):
         parent = self.tree.GetItemParent(item)
@@ -356,7 +356,7 @@ class IPMIGUI(wx.Frame):
         if (data.num_severe > 0):
             return
         if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.Yellow)
+            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
             return
         self.tree.SetItemTextColour(item, wx.BLACK)
         
@@ -389,7 +389,7 @@ class IPMIGUI(wx.Frame):
             self.tree.SetItemTextColour(item, wx.RED)
             return
         if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.Yellow)
+            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
             return
         self.tree.SetItemTextColour(item, wx.BLACK)
         

@@ -35,6 +35,7 @@ import OpenIPMI
 import _entity
 import _mc
 import _saveprefs
+import logging
 
 class InvalidDomainInfo(Exception):
     def __init__(self, value):
@@ -264,15 +265,10 @@ class DomainConnection:
             return False
 
     def FillinConAttr(self, attr):
-        print "9.1"
         if (self.contype == "smi"):
-            print "9.2"
-            print "9.3: " + self.port
             if (self.port == ""):
                 raise InvalidDomainInfo("No port specified")
-            print "9.3"
             attr.extend([ "smi", str(self.port) ])
-            print "9.4"
         elif (self.contype == "lan"):
             if (self.address == ""):
                 raise InvalidDomainInfo("No address specified")
@@ -308,7 +304,6 @@ class DomainConnection:
                 attr.append(self.address2)
         else:
             raise InvalidDomainInfo("Invalid connection type: " + self.contype)
-        print "9.5"
 
     def getAttr(self):
         if (self.contype == ""):
@@ -451,20 +446,14 @@ class Domain:
 
     def Connect(self):
         attr = [ ]
-        print "1"
         self.connection[0].FillinConAttr(attr)
-        print "1.1"
         if self.connection[1].Valid():
-            print "1.2"
             self.connection[1].FillinConAttr(attr)
         #print str(attr)
-        print "2"
         self.already_up = False
         self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
-        print "3"
         if (self.domain_id == None):
             raise InvalidDomainInfo("Open domain failed, invalid parms")
-        print "4"
 
     def domain_up_cb(self, domain):
         self.already_up = True;
@@ -520,13 +509,11 @@ class _DomainRestore(_saveprefs.RestoreHandler):
         _saveprefs.RestoreHandler.__init__(self, "domain")
 
     def restore(self, mainhandler, node):
-        print "A"
         name = str(node.getAttribute("name"));
         if (name == ""):
             return
         d = Domain(mainhandler, name)
         cnum = 0
-        print "B"
         for c in node.childNodes:
             if ((c.nodeType == c.ELEMENT_NODE)
                 and (c.nodeName == "connection")):
@@ -538,12 +525,9 @@ class _DomainRestore(_saveprefs.RestoreHandler):
                 if (cnum < 1):
                     cnum = 1;
         try:
-            print "B1"
             d.Connect()
-            print "B2"
         except InvalidDomainInfo, e:
             d.remove()
-            print "Error making domain connection for " + name + ": " + str(e)
-        print "C"
+            logging.error("Error making domain connection for " + name + ": " + str(e))
 
 _DomainRestore()
