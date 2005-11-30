@@ -44,7 +44,6 @@
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
-#include <OpenIPMI/internal/ipmi_event.h>
 
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
@@ -1196,8 +1195,13 @@ ipmi_cmdlang_event_out(ipmi_event_t    *event,
 			  ipmi_event_get_timestamp(event));
     len = ipmi_event_get_data_len(event);
     if (len) {
-	ipmi_cmdlang_out_binary(cmd_info, "Data",
-				(char *) ipmi_event_get_data_ptr(event), len);
+	unsigned char *data;
+	data = ipmi_mem_alloc(len);
+	if (!data)
+	    return;
+	len = ipmi_event_get_data(event, data, 0, len);
+	ipmi_cmdlang_out_binary(cmd_info, "Data", (char *) data, len);
+	ipmi_mem_free(data);
     }
 }
 

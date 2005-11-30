@@ -60,7 +60,7 @@ class Entity:
         return self.name
 
     def entity_iter_entities_cb(self, child, parent):
-        self.parent = self.d.entities[parent.get_name()]
+        self.parent = self.d.find_or_create_entity(parent)
         
     def remove(self):
         self.d.entities.pop(self.name)

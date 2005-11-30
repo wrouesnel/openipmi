@@ -2108,11 +2108,11 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	switch (mc->state) {
 	case MC_INACTIVE_PEND_STARTUP:
 	    mc->state = MC_ACTIVE_IN_STARTUP;
-	    mc_startup(mc);
 	    mc->active = 1;
 	    mc_apply_pending(mc);
 	    ipmi_unlock(mc->lock);
 	    _ipmi_domain_mc_unlock(mc->domain);
+	    mc_startup(mc);
 	    call_active_handlers(mc);
 	    _ipmi_domain_mc_lock(mc->domain);
 	    break;
@@ -2154,9 +2154,9 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	    mc->state = MC_ACTIVE_IN_STARTUP;
 	    mc->active = 1;
 	    mc_apply_pending(mc);
-	    mc_startup(mc);
 	    ipmi_unlock(mc->lock);
 	    _ipmi_domain_mc_unlock(mc->domain);
+	    mc_startup(mc);
 	    call_active_handlers(mc);
 	    _ipmi_domain_mc_lock(mc->domain);
 	    break;

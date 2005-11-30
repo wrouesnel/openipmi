@@ -1,3 +1,12 @@
+2005-11-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Got something wrong in the new MC state machine.  Need
+	to call mc_startup without any locks held.
+
+	* lib/entity.c: Fixed some problems with detecting presence from
+	children.  Also fixed some bugs dealing with entity containment
+	SDR records.
+
 2005-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Keep the entity key around (channel, IPMB, id,
@@ -19,6 +28,9 @@
 
 	* lib/ipmi_smi.c: Fix a "memory use while free" problem at
 	shutdown.
+
+	* cmdlang/cmd_domain.c: Remove the code and requirement for
+	including internal/ipmi_event.h
 
 	* lib/domain.c: Restart the domain audit timer immediately when
 	the timeout is set.

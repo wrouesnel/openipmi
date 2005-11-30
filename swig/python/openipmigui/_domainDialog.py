@@ -46,6 +46,7 @@ class ConnInfo(wx.Panel):
         else:
             sminumval = ""
         wx.Panel.__init__(self, parent, size=wx.Size(400, 300))
+        self.parent = parent
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.contype = wx.RadioBox(self, -1, "Connection Type",
                                    wx.DefaultPosition, wx.DefaultSize,
@@ -159,7 +160,7 @@ class ConnInfo(wx.Panel):
         else:
             self.smiInfo.Show(False)
             self.lanInfo.Show(True)
-        self.Layout()
+        self.parent.Layout()
 
     def FillinConn(self, con):
         contype = self.contype.GetSelection()
@@ -217,8 +218,8 @@ class OpenDomainDialog(wx.Dialog):
 
         self.conn = [ ConnInfo(self, mainhandler),
                       ConnInfo(self, mainhandler, False) ]
-        self.sizer.Add(self.conn[0], 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        self.sizer.Add(self.conn[1], 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        self.sizer.Add(self.conn[0], 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.sizer.Add(self.conn[1], 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         self.SetSizer(self.sizer)
 

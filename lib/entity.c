@@ -786,6 +786,15 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 		goto out;
 	}
 
+	if (ent->presence_possibly_changed) {
+	    _ipmi_domain_entity_unlock(domain);
+	    ipmi_detect_entity_presence_change(ent, 0);
+	    _ipmi_domain_entity_lock(domain);
+
+	    if (ent->usecount != 1)
+		goto out;
+	}
+
 	while (ent->present_change_count) {
 	    int present;
 	    ent->present = !ent->present;
@@ -1493,9 +1502,12 @@ presence_child_handler(ipmi_entity_t *ent,
 		       void          *cb_data)
 {
     int *present = cb_data;
+    int p = child->present;
 
-    if (child->present)
-	*present = 1;
+    if (ent->present_change_count % 2)
+	p = !p;
+    if (p)
+	*present = p;
 }
 
 static int
@@ -3287,17 +3299,18 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	j = i - 1;
 	ent = found->ent;
 	while ((j > 0) && (ent == (infos->found+j)->ent)) {
-	    j--;
 	    if ((infos->found+j)->found)
-		continue;
+		goto next_ent;
 	    if ((infos->dlrs[j]->type != IPMI_ENTITY_EAR)
 		&& (infos->dlrs[j]->type != IPMI_ENTITY_DREAR))
-		continue;
+		goto next_ent;
 	    found = infos->found+j;
 
 	    /* Since this is an EAR and we are putting it's entries in
 	       another place, ignore this one. */
 	    (infos->found+i)->found = 1;
+	next_ent:
+	    j--;
 	}
 
 	if (infos->dlrs[i]->is_ranges) {
@@ -3356,11 +3369,13 @@ put_entities(entity_sdr_info_t *infos)
     for (i=0; i<infos->next; i++) {
 	found = infos->found+i;
 
-	if (found->found)
-	    continue;
-
 	if (found->ent)
 	    _ipmi_entity_put(found->ent);
+
+	/* Still put the entity even if found, as it was refcounted by
+	   looking it up. */
+	if (found->found)
+	    continue;
 
 	for (j=0; j<found->cent_next; j++)
 	    _ipmi_entity_put(found->cent[j]);

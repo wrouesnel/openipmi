@@ -470,9 +470,16 @@ class Domain:
         domain.add_mc_update_handler(self)
         DomainRefreshData(self)
 
+    def find_or_create_entity(self, entity):
+        ename = entity.get_name()
+        if (ename in self.entities):
+            return self.entities[ename];
+        else:
+            return _entity.Entity(self, entity)
+        
     def entity_update_cb(self, op, domain, entity):
         if (op == "added"):
-            e = _entity.Entity(self, entity)
+            e = self.find_or_create_entity(entity)
             entity.add_sensor_update_handler(e)
             entity.add_control_update_handler(e)
         elif (op == "removed"):

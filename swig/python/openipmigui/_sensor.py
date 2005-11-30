@@ -48,6 +48,9 @@ class Sensor:
         self.updater = SensorRefreshData(self)
         ui.add_sensor(self.e, self)
         sensor.get_value(self)
+        self.in_warning = False
+        self.in_severe = False
+        self.in_critical = False
 
     def __str__(self):
         return self.name
@@ -58,6 +61,39 @@ class Sensor:
     def remove(self):
         self.e.sensors.pop(self.name)
         self.ui.remove_sensor(self)
+
+    def handle_threshold_states(self, states):
+        th = states.split()
+        while len(th) > 0:
+            v = th[0]
+            del th[0]
+
+            if (v == "un") or (v == "ln"):
+                if (not self.in_warning):
+                    self.in_warning = True
+                    self.ui.incr_item_warning(self.treeroot)
+            else:
+                if (self.in_warning):
+                    self.in_warning = False
+                    self.ui.decr_item_warning(self.treeroot)
+
+            if (v == "uc") or (v == "lc"):
+                if (not self.in_severe):
+                    self.in_severe = True
+                    self.ui.incr_item_severe(self.treeroot)
+            else:
+                if (self.in_severe):
+                    self.in_severe = False
+                    self.ui.decr_item_severe(self.treeroot)
+
+            if (v == "ur") or (v == "lr"):
+                if (not self.in_critical):
+                    self.in_critical = True
+                    self.ui.incr_item_critical(self.treeroot)
+            else:
+                if (self.in_critical):
+                    self.in_critical = False
+                    self.ui.decr_item_critical(self.treeroot)
 
     def threshold_reading_cb(self, sensor, err, raw_set, raw, value_set,
                              value, states):
@@ -71,6 +107,7 @@ class Sensor:
             v = v + "(" + str(raw) + ")"
         v = v + ": " + states
         self.ui.set_item_text(self.treeroot, str(self), v)
+        self.handle_threshold_states(states)
         
     def discrete_states_cb(self, sensor, err, states):
         if (err):
