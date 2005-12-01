@@ -320,23 +320,23 @@ class Control:
         
     def control_get_val_cb(self, control, err, vals):
         if (err != 0):
-            self.ui.set_item_text(self.treeroot, str(self), None)
+            self.ui.set_item_text(self.treeroot, None)
             return
         self.num_vals = control.get_num_vals();
         self.vals = vals
-        self.ui.set_item_text(self.treeroot, str(self), str(vals))
+        self.ui.set_item_text(self.treeroot, str(vals))
         
     def control_get_id_cb(self, control, err, val):
         if (err != 0):
-            self.ui.set_item_text(self.treeroot, str(self), None)
+            self.ui.set_item_text(self.treeroot, None)
             return
         self.num_vals = control.identifier_get_max_length();
         self.val = val
-        self.ui.set_item_text(self.treeroot, str(self), str(val))
+        self.ui.set_item_text(self.treeroot, str(val))
 
     def control_get_light_cb(self, control, err, vals):
         if (err != 0):
-            self.ui.set_item_text(self.treeroot, str(self), None)
+            self.ui.set_item_text(self.treeroot, None)
             return
         self.num_vals = control.get_num_vals();
         v1 = vals.split(":")
@@ -346,7 +346,7 @@ class Control:
             if (v1[0] != "lc"):
                 v1.insert(0, "")
             self.vals.append(v1)
-        self.ui.set_item_text(self.treeroot, str(self), str(self.vals))
+        self.ui.set_item_text(self.treeroot, str(self.vals))
 
     def remove(self):
         self.e.controls.pop(self.name)

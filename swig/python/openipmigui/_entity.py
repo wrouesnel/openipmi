@@ -51,7 +51,7 @@ class Entity:
         if (eid == None):
             eid = entity.get_entity_id_string()
         if (eid != None):
-            self.ui.set_item_text(self.treeroot, str(self), eid)
+            self.ui.set_item_text(self.treeroot, eid)
         self.sensors = { }
         self.controls = { }
         entity.add_presence_handler(self)

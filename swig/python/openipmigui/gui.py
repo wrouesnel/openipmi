@@ -224,7 +224,8 @@ class IPMIGUI(wx.Frame):
             self.decr_item_critical(parent); 
 
     def add_domain(self, d):
-        d.treeroot = self.tree.AppendItem(self.treeroot, str(d))
+        d.name_str = str(d)
+        d.treeroot = self.tree.AppendItem(self.treeroot, d.name_str)
         self.tree.SetPyData(d.treeroot, d)
         self.setup_item(d.treeroot)
         d.entityroot = self.tree.AppendItem(d.treeroot, "Entities")
@@ -236,6 +237,9 @@ class IPMIGUI(wx.Frame):
         self.tree.Expand(self.treeroot)
 
     def prepend_item(self, o, name, value, data=None, parent=None):
+        if (data == None):
+            data = IPMITreeDummyItem()
+        data.name_str = name
         if (parent == None):
             parent = o.treeroot
         if (value == None):
@@ -248,6 +252,9 @@ class IPMIGUI(wx.Frame):
         return item
 
     def append_item(self, o, name, value, data=None, parent=None):
+        if (data == None):
+            data = IPMITreeDummyItem()
+        data.name_str = name
         if (parent == None):
             parent = o.treeroot
         if (value == None):
@@ -259,14 +266,15 @@ class IPMIGUI(wx.Frame):
         self.tree.SetPyData(item, data)
         return item
 
-    def set_item_text(self, item, name, value):
+    def set_item_text(self, item, value):
+        data = self.tree.GetPyData(item)
+        name = data.name_str
         if (value == None):
             self.tree.SetItemText(item, name + ":")
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
             self.tree.SetItemText(item, name + ":\t" + value)
-            data = self.tree.GetPyData(item)
-            if (data != None) and (hasattr(data, "active")):
+            if (hasattr(data, "active")):
                 if (data.active):
                     self.tree.SetItemTextColour(item, wx.BLACK)
             else:
@@ -422,7 +430,8 @@ class IPMIGUI(wx.Frame):
             parent = d.entityroot
         else:
             parent = parent.treeroot
-        e.treeroot = self.tree.AppendItem(parent, str(e))
+        e.name_str = str(e)
+        e.treeroot = self.tree.AppendItem(parent, e.name_str)
         self.tree.SetPyData(e.treeroot, e)
         self.setup_item(e.treeroot)
         e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
@@ -438,7 +447,8 @@ class IPMIGUI(wx.Frame):
             self.cleanup_item(e.treeroot)
 
     def add_mc(self, d, m):
-        m.treeroot = self.tree.AppendItem(d.mcroot, m.name)
+        m.name_str = str(m)
+        m.treeroot = self.tree.AppendItem(d.mcroot, m.name_str)
         self.tree.SetPyData(m.treeroot, m)
         self.setup_item(m.treeroot)
 
@@ -448,7 +458,8 @@ class IPMIGUI(wx.Frame):
             self.cleanup_item(m.treeroot)
 
     def add_sensor(self, e, s):
-        s.treeroot = self.tree.AppendItem(e.sensorroot, str(s))
+        s.name_str = str(s)
+        s.treeroot = self.tree.AppendItem(e.sensorroot, s.name_str)
         self.tree.SetPyData(s.treeroot, s)
         self.setup_item(s.treeroot, active=True)
 
@@ -458,7 +469,8 @@ class IPMIGUI(wx.Frame):
             self.cleanup_item(s.treeroot)
 
     def add_control(self, e, c):
-        c.treeroot = self.tree.AppendItem(e.controlroot, str(c))
+        c.name_str = str(c)
+        c.treeroot = self.tree.AppendItem(e.controlroot, c.name_str)
         self.tree.SetPyData(c.treeroot, c)
         self.setup_item(c.treeroot, active=True)
 

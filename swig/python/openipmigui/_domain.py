@@ -51,15 +51,10 @@ class DomainRefreshData:
     def domain_cb(self, domain):
         self.d.ipmb_rescan_time = domain.get_ipmb_rescan_time()
         self.d.sel_rescan_time = domain.get_sel_rescan_time()
-        self.d.ui.set_item_text(self.d.irscn,
-                                "IPMB Rescan Time",
-                                str(self.d.ipmb_rescan_time))
-        self.d.ui.set_item_text(self.d.srscn, "SEL Rescan Time",
-                                str(self.d.sel_rescan_time))
-        self.d.ui.set_item_text(self.d.dguid, "GUID",
-                                domain.get_guid())
-        self.d.ui.set_item_text(self.d.dtype, "Type",
-                                domain.get_type())
+        self.d.ui.set_item_text(self.d.irscn, str(self.d.ipmb_rescan_time))
+        self.d.ui.set_item_text(self.d.srscn, str(self.d.sel_rescan_time))
+        self.d.ui.set_item_text(self.d.dguid, domain.get_guid())
+        self.d.ui.set_item_text(self.d.dtype, domain.get_type())
 
 
 class DomainSelSet:
@@ -118,7 +113,7 @@ class DomainSelSet:
     def domain_cb(self, domain):
         domain.set_sel_rescan_time(self.ival)
         if (self.d.srscn != None):
-            self.d.ui.set_item_text(self.d.srscn, "SEL Rescan Time",
+            self.d.ui.set_item_text(self.d.srscn,
                                     str(domain.get_sel_rescan_time()))
         
 class DomainIPMBSet:
@@ -177,7 +172,7 @@ class DomainIPMBSet:
     def domain_cb(self, domain):
         domain.set_ipmb_rescan_time(self.ival)
         if (self.d.srscn != None):
-            self.d.ui.set_item_text(self.d.irscn, "IPMB Rescan Time",
+            self.d.ui.set_item_text(self.d.irscn,
                                     str(domain.get_ipmb_rescan_time()))
 
 class DomainConnection:
