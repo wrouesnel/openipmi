@@ -7,6 +7,8 @@
 	children.  Also fixed some bugs dealing with entity containment
 	SDR records.
 
+	* swig/OpenIPMI.i: Fix threshold printing
+
 2005-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Keep the entity key around (channel, IPMB, id,
