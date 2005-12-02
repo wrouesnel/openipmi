@@ -1,0 +1,24 @@
+Entity info
+   General info
+   FRU Information
+Entity hot-swap handling
+SEL management
+MC info
+MC commands:
+   event enables
+   send message
+   reset
+   sel rescan
+   SDR fetch
+   event log enables
+   channel commandss
+      access controls
+      user configuration
+   lanparm
+   pet
+   pef
+Sensor commands:
+   rearm
+Domain info
+   connections
+Debug settings
