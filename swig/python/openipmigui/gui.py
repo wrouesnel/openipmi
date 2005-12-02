@@ -30,15 +30,28 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import wx
+import wx.gizmos as gizmos
 import _domainDialog
+import _saveprefs
+import logging
+
+init_treenamewidth = 150
+init_sashposition = 100
+init_windowwidth = 400
+init_windowheight = 400
 
 class IPMITreeDummyItem:
     def __init__(self):
         pass
 
-class IPMITreeCtrl(wx.TreeCtrl):
+class IPMITreeCtrl(gizmos.TreeListCtrl):
     def __init__(self, parent):
-        wx.TreeCtrl.__init__(self, parent)
+        gizmos.TreeListCtrl.__init__(self, parent)
+        self.AddColumn("Name")
+        self.AddColumn("Value")
+        self.SetMainColumn(0)
+        self.SetColumnWidth(0, init_treenamewidth)
+        self.SetColumnWidth(1, 800)
 
     def OnCompareItems(self, item1, item2):
         t1 = self.GetItemText(item1)
@@ -73,7 +86,8 @@ class IPMIGUI_Timer(wx.Timer):
 
 class IPMIGUI(wx.Frame):
     def __init__(self, mainhandler):
-        wx.Frame.__init__(self, None, 01, "IPMI GUI")
+        wx.Frame.__init__(self, None, 01, "IPMI GUI",
+                          size=wx.Size(init_windowwidth, init_windowheight))
 
         self.mainhandler = mainhandler
         
@@ -97,28 +111,24 @@ class IPMIGUI(wx.Frame):
 
         self.SetMenuBar(menubar)
 
-        box = wx.BoxSizer(wx.HORIZONTAL)
+        self.splitter = wx.SplitterWindow(self)
+        self.splitter.SetMinimumPaneSize(10)
 
         isz = (16, 16)
-        self.tree = IPMITreeCtrl(self)
+        self.tree = IPMITreeCtrl(self.splitter)
         self.treeroot = self.tree.AddRoot("Domains")
         self.tree.SetPyData(self.treeroot, self)
         self.setup_item(self.treeroot, active=True)
-        box.Add(self.tree, 1,
-                wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.ALIGN_BOTTOM | wx.GROW,
-                0)
 
-        self.logwindow = wx.TextCtrl(self, -1,
+        self.logwindow = wx.TextCtrl(self.splitter, -1,
                                      style=(wx.TE_MULTILINE
                                             | wx.TE_READONLY
                                             | wx.HSCROLL))
-        box.Add(self.logwindow, 1,
-                wx.ALIGN_RIGHT | wx.ALIGN_TOP | wx.ALIGN_BOTTOM | wx.GROW,
-                0)
         self.logcount = 0
         self.maxloglines = 1000
 
-        self.SetSizer(box);
+        self.splitter.SplitVertically(self.tree, self.logwindow)
+        self.splitter.SetSashPosition(init_sashposition)
 
         self.tree.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.TreeMenu)
         self.tree.Bind(wx.EVT_TREE_ITEM_EXPANDED, self.TreeExpanded)
@@ -257,11 +267,11 @@ class IPMIGUI(wx.Frame):
         data.name_str = name
         if (parent == None):
             parent = o.treeroot
+        item = self.tree.AppendItem(parent, name + ":")
         if (value == None):
-            item = self.tree.AppendItem(parent, name + ":")
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            item = self.tree.AppendItem(parent, name + ":\t" + value)
+            self.tree.SetItemText(parent, value, 1)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
         return item
@@ -270,10 +280,10 @@ class IPMIGUI(wx.Frame):
         data = self.tree.GetPyData(item)
         name = data.name_str
         if (value == None):
-            self.tree.SetItemText(item, name + ":")
+            self.tree.SetItemText(item, "", 1)
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            self.tree.SetItemText(item, name + ":\t" + value)
+            self.tree.SetItemText(item, value, 1)
             if (hasattr(data, "active")):
                 if (data.active):
                     self.tree.SetItemTextColour(item, wx.BLACK)
@@ -478,3 +488,45 @@ class IPMIGUI(wx.Frame):
         if (hasattr(c, "treeroot")):
             self.tree.Delete(c.treeroot)
             self.cleanup_item(c.treeroot)
+
+    # XML preferences handling
+    def getTag(self):
+        return "guiparms"
+
+    def SaveInfo(self, doc, elem):
+        (width, height) = self.GetSize()
+        elem.setAttribute("windowwidth", str(width))
+        elem.setAttribute("windowheight", str(height))
+        elem.setAttribute("sashposition", str(self.splitter.GetSashPosition()))
+        elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
+
+def GetAttrInt(attr, default):
+    try:
+        return int(attr.nodeValue)
+    except Exception, e:
+        logging.error ("Error getting init parm " + attr.nodeName)
+        return default
+
+class _GUIRestore(_saveprefs.RestoreHandler):
+    def __init__(self):
+        _saveprefs.RestoreHandler.__init__(self, "guiparms")
+
+    def restore(self, node):
+        global init_windowheight
+        global init_windowwidth
+        global init_sashposition
+        global init_treenamewidth
+        
+        for i in range(0, node.attributes.length):
+            attr = node.attributes.item(i)
+            if (attr.nodeName == "windowwidth"):
+                init_windowwidth = GetAttrInt(attr, init_windowwidth)
+            elif (attr.nodeName == "windowheight"):
+                init_windowheight = GetAttrInt(attr, init_windowheight)
+            elif (attr.nodeName == "sashposition"):
+                init_sashposition = GetAttrInt(attr, init_sashposition)
+            elif (attr.nodeName == "treenamewidth"):
+                init_treenamewidth = GetAttrInt(attr, init_treenamewidth)
+
+_GUIRestore()
+    

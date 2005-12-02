@@ -81,7 +81,9 @@ class DomainHandler:
         self.ui = ui;
 
     def savePrefs(self):
-        _saveprefs.save(self.domains.itervalues(), preffile)
+        objs = self.domains.values()
+        objs.append(self.ui)
+        _saveprefs.save(objs, preffile)
 
     def log(self, level, log):
         self.ui.new_log(level + ": " + log);
@@ -106,6 +108,7 @@ if __name__ == "__main__":
     app = IPMIGUI_App()
     
     preffile = os.path.join(os.environ['HOME'], '.ipmigui.startup')
+    _saveprefs.restore(preffile)
 
     mainhandler = DomainHandler(preffile)
 
@@ -117,7 +120,7 @@ if __name__ == "__main__":
     OpenIPMI.add_domain_change_handler(mainhandler)
     OpenIPMI.set_log_handler(mainhandler)
 
-    _saveprefs.restore(preffile, mainhandler)
+    _domain.RestoreDomains(mainhandler)
     
     app.MainLoop()
     OpenIPMI.set_log_handler(DummyLogHandler())

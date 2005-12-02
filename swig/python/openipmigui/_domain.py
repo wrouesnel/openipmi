@@ -381,7 +381,7 @@ class DomainConnection:
                 self.Lookup_uses_priv(True)
 
 class Domain:
-    def __init__(self, mainhandler, name):
+    def __init__(self, mainhandler, name, connects=[]):
         if (mainhandler.domains.has_key(name)):
             print "***D"
             raise InvalidDomainError("Domain name already exists")
@@ -391,7 +391,15 @@ class Domain:
         self.entities = { }
         self.mcs = { }
 
-        self.connection = [ DomainConnection(), DomainConnection() ]
+        if (len(connects) > 0):
+            con1 = connects[0]
+        else:
+            con1 = DomainConnection()
+        if (len(connects) > 1):
+            con2 = connects[1]
+        else:
+            con2 = DomainConnection()
+        self.connection = [ con1, con2 ]
 
         self.updater = DomainRefreshData(self)
         self.domain_id = None
@@ -411,7 +419,7 @@ class Domain:
         return self.name
 
     def getTag(self):
-        return "domain";
+        return "domain"
 
     def SaveInfo(self, doc, elem):
         c1 = doc.createElement("connection")
@@ -505,17 +513,34 @@ class Domain:
             self.domain_id.convert_to_domain(self)
         self.mainhandler.domains.pop(self.name);
         self.ui.remove_domain(self)
-        
+
+defaultDomains = [ ]
+
+def RestoreDomains(mainhandler):
+    for i in defaultDomains:
+        name = i[0]
+        attrhashes = i[1]
+        connects = [ ]
+        for attrhash in attrhashes:
+            connect = DomainConnection()
+            connect.restore(mainhandler, attrhash)
+            connects.append(connect)
+        d = Domain(mainhandler, name, connects=connects)
+        try:
+            d.Connect()
+        except InvalidDomainError, e:
+            d.remove()
+            logging.error("Error making domain connection for " + name + ": " + str(e))
+
 class _DomainRestore(_saveprefs.RestoreHandler):
     def __init__(self):
         _saveprefs.RestoreHandler.__init__(self, "domain")
 
-    def restore(self, mainhandler, node):
+    def restore(self, node):
         name = str(node.getAttribute("name"));
         if (name == ""):
             return
-        d = Domain(mainhandler, name)
-        cnum = 0
+        connects = [ ]
         for c in node.childNodes:
             if ((c.nodeType == c.ELEMENT_NODE)
                 and (c.nodeName == "connection")):
@@ -523,13 +548,7 @@ class _DomainRestore(_saveprefs.RestoreHandler):
                 for i in range(0, c.attributes.length):
                     attr = c.attributes.item(i)
                     attrhash[attr.nodeName] = attr.nodeValue
-                d.connection[cnum].restore(mainhandler, attrhash)
-                if (cnum < 1):
-                    cnum = 1;
-        try:
-            d.Connect()
-        except InvalidDomainError, e:
-            d.remove()
-            logging.error("Error making domain connection for " + name + ": " + str(e))
+                connects.append(attrhash)
+        defaultDomains.append([name, connects])
 
 _DomainRestore()

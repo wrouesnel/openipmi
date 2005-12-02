@@ -40,7 +40,7 @@ class RestoreHandler:
     def __init__(self, tag):
         taghash[tag] = self
 
-    def restore(self, mainhandler, attrlist):
+    def restore(self, attrlist):
         pass
 
 
@@ -57,7 +57,7 @@ def save(objlist, file):
     f = open(file, 'w')
     doc.writexml(f, indent='', addindent='\t', newl='\n')
 
-def restore(file, mainhandler):
+def restore(file):
     try:
         doc = xml.dom.minidom.parse(file).documentElement
     except:
@@ -67,5 +67,5 @@ def restore(file, mainhandler):
             if (child.nodeType == child.ELEMENT_NODE):
                 tag = child.nodeName
                 if (tag in taghash):
-                    taghash[tag].restore(mainhandler, child)
+                    taghash[tag].restore(child)
                     child = child.nextSibling
