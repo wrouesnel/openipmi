@@ -10,6 +10,8 @@
 
 	* swig/perl/*, swig/python/*: Adjusted for the previous change.
 
+	* swig/OpenIPMI.i: Fixed problems dealing with threshold strings.
+
 2005-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_sensor.h:

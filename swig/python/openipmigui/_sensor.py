@@ -31,6 +31,7 @@
 #
 import wx
 import OpenIPMI
+import logging
 
 class SensorRefreshData:
     def __init__(self, s):
@@ -132,27 +133,38 @@ class SensorHysteresisSet(wx.Dialog):
             self.negative = int(self.neg.GetValue())
         except:
             return
-        self.s.sensor_id.to_sensor(self)
-        self.Close()
+        rv = self.s.sensor_id.to_sensor(self)
+        if (rv == 0):
+            rv = self.err
+        if (rv != 0):
+            logging.error("Error setting sensor thresholds: " + str(rv))
+            self.Close()
 
     def OnClose(self, event):
         self.Destroy()
 
     def sensor_cb(self, sensor):
         if (self.setting):
-            sensor.set_hysteresis(self.positive, self.negative)
-            sensor.get_hysteresis(self.s)
+            self.err = sensor.set_hysteresis(self.positive, self.negative, self)
         else:
             sensor.get_hysteresis(self)
             self.setting = True
 
     def sensor_get_hysteresis_cb(self, sensor, err, positive, negative):
         if (err != 0):
+            logging.error("Error getting sensor hysteresis: " + str(err))
             self.Destroy()
         else:
             self.pos.SetValue(str(positive))
             self.neg.SetValue(str(negative))
             self.Show(True);
+
+    def sensor_set_hysteresis_cb(self, sensor, err):
+        if (err):
+            logging.error("Unable to set sensor thresholds: " + str(err))
+        else:
+            sensor.get_hysteresis(self.s)
+        self.Close()
 
 
 class SensorThresholdsSet(wx.Dialog):
@@ -162,7 +174,7 @@ class SensorThresholdsSet(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         self.thresholds = { }
-        for th in s.settable_thresholds:
+        for th in s.settable_thresholds.split():
             box = wx.BoxSizer(wx.HORIZONTAL)
             label = wx.StaticText(self, -1, threshold_str_to_full(th))
             box.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
@@ -184,48 +196,141 @@ class SensorThresholdsSet(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.CenterOnScreen();
 
-        if (self.s.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_READABLE):
-            self.setting = False
-            if (s.sensor_id.to_sensor(self) != 0):
-                self.Destroy()
-        else:
-            # Can't read them, just set.
-            self.setting = False
-            self.Show()
+        self.setting = False
+        if (s.sensor_id.to_sensor(self) != 0):
+            self.Destroy()
 
     def cancel(self, event):
         self.Close()
 
     def ok(self, event):
-        try:
-            self.positive = float(self.pos.GetValue())
-        except:
-            return
-        try:
-            self.negative = int(self.neg.GetValue())
-        except:
-            return
-        self.s.sensor_id.to_sensor(self)
-        self.Close()
+        tlist = [ ]
+        for ths in self.thresholds.iteritems():
+            try:
+                tlist.append(ths[0] + " " + str(float(ths[1].GetValue())))
+            except:
+                return
+        self.threshold_str = ":".join(tlist)
+        rv = self.s.sensor_id.to_sensor(self)
+        if (rv == 0):
+            rv = self.err
+        if (rv != 0):
+            logging.error("Error setting sensor thresholds: " + str(rv))
+            self.Close()
 
     def OnClose(self, event):
         self.Destroy()
 
     def sensor_cb(self, sensor):
         if (self.setting):
-            sensor.set_thresholds(self.positive, self.negative)
-            sensor.get_thresholds(self.s)
+            self.err = sensor.set_thresholds(self.threshold_str, self)
         else:
-            sensor.get_thresholds(self)
+            rv = sensor.get_thresholds(self)
+            if (rv != 0):
+                logging.error("Error getting sensor thresholds: " + str(rv))
+                self.Destroy()
+                return
+            self.setting = True
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
         if (err != 0):
+            logging.error("Error getting sensor thresholds: " + str(err))
             self.Destroy()
             return
         for i in th.split(':'):
-            j = i.split(' ')
+            j = i.split()
             self.thresholds[j[0]].SetValue(j[1])
         self.Show()
+
+    def sensor_set_thresholds_cb(self, sensor, err):
+        if (err):
+            logging.error("Unable to set sensor thresholds: " + str(err))
+        else:
+            sensor.get_thresholds(self.s)
+        self.Close()
+
+
+class SensorEventEnablesSet(wx.Dialog):
+    def __init__(self, s):
+        wx.Dialog.__init__(self, None, -1, "Set Event Enables for " + str(s))
+        self.s = s
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.event_enables = { }
+        for th in s.settable_thresholds.split():
+            box = wx.BoxSizer(wx.HORIZONTAL)
+            label = wx.StaticText(self, -1, threshold_str_to_full(th))
+            box.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
+            th_text_box = wx.TextCtrl(self, -1, "")
+            self.thresholds[th] = th_text_box
+            box.Add(th_text_box, 0, wx.ALIGN_LEFT | wx.ALL, 5)
+            sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        cancel = wx.Button(self, -1, "Cancel")
+        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
+        ok = wx.Button(self, -1, "Ok")
+        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
+        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+
+        self.SetSizer(sizer)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.CenterOnScreen();
+
+        self.setting = False
+        if (s.sensor_id.to_sensor(self) != 0):
+            self.Destroy()
+
+    def cancel(self, event):
+        self.Close()
+
+    def ok(self, event):
+        tlist = [ ]
+        for ths in self.thresholds.iteritems():
+            try:
+                tlist.append(ths[0] + " " + str(float(ths[1].GetValue())))
+            except:
+                return
+        self.threshold_str = ":".join(tlist)
+        rv = self.s.sensor_id.to_sensor(self)
+        if (rv == 0):
+            rv = self.err
+        if (rv != 0):
+            logging.error("Error setting sensor thresholds: " + str(rv))
+            self.Close()
+
+    def OnClose(self, event):
+        self.Destroy()
+
+    def sensor_cb(self, sensor):
+        if (self.setting):
+            self.err = sensor.set_thresholds(self.threshold_str, self)
+        else:
+            rv = sensor.get_thresholds(self)
+            if (rv != 0):
+                logging.error("Error getting sensor thresholds: " + str(rv))
+                self.Destroy()
+                return
+            self.setting = True
+
+    def sensor_get_thresholds_cb(self, sensor, err, th):
+        if (err != 0):
+            logging.error("Error getting sensor thresholds: " + str(err))
+            self.Destroy()
+            return
+        for i in th.split(':'):
+            j = i.split()
+            self.thresholds[j[0]].SetValue(j[1])
+        self.Show()
+
+    def sensor_set_thresholds_cb(self, sensor, err):
+        if (err):
+            logging.error("Unable to set sensor thresholds: " + str(err))
+        else:
+            sensor.get_thresholds(self.s)
+        self.Close()
 
 
 class Sensor:
@@ -391,7 +496,7 @@ class Sensor:
         pass
     
     def SetThresholds(self, event):
-        pass
+        SensorThresholdsSet(self)
     
     def SetHysteresis(self, event):
         SensorHysteresisSet(self)
