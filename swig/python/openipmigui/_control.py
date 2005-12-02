@@ -108,7 +108,7 @@ class ControlSet:
                 self.ival.append(int(val))
         except:
             return
-        self.c.control_id.convert_to_control(self)
+        self.c.control_id.to_control(self)
         self.dialog.Close()
 
     def OnClose(self, event):
@@ -213,7 +213,7 @@ class LightSet:
                 i = i + 1
 
             self.ival = ';'.join(val)
-            self.c.control_id.convert_to_control(self)
+            self.c.control_id.to_control(self)
         except Exception, e:
             return
         self.dialog.Close()
@@ -312,7 +312,7 @@ class Control:
 
     def DoUpdate(self):
         if (self.is_readable):
-            self.control_id.convert_to_control(self.updater)
+            self.control_id.to_control(self.updater)
 
     def HandleMenu(self, event):
         if (self.setter != None):

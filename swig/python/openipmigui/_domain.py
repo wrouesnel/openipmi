@@ -72,7 +72,7 @@ class DomainSelSet:
         menu.Destroy()
 
     def modval(self, event):
-        dialog = wx.Dialog(None, -1, "Set SEL Rescan Time")
+        dialog = wx.Dialog(None, -1, "Set SEL Rescan Time for " + str(self.d))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -106,7 +106,7 @@ class DomainSelSet:
             self.ival = int(val)
         except:
             return
-        self.d.domain_id.convert_to_domain(self)
+        self.d.domain_id.to_domain(self)
         self.dialog.Close()
 
     def OnClose(self, event):
@@ -131,7 +131,7 @@ class DomainIPMBSet:
         menu.Destroy()
 
     def modval(self, event):
-        dialog = wx.Dialog(None, -1, "Set IPMB Rescan Time")
+        dialog = wx.Dialog(None, -1, "Set IPMB Rescan Time for " + str(self.d))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -165,7 +165,7 @@ class DomainIPMBSet:
             self.ival = int(val)
         except:
             return
-        self.d.domain_id.convert_to_domain(self)
+        self.d.domain_id.to_domain(self)
         self.dialog.Close()
 
     def OnClose(self, event):
@@ -437,7 +437,7 @@ class Domain:
 
     def DoUpdate(self):
         if (self.domain_id != None):
-            self.domain_id.convert_to_domain(self.updater)
+            self.domain_id.to_domain(self.updater)
 
     def HandleExpand(self, event):
         self.DoUpdate()
@@ -510,7 +510,7 @@ class Domain:
         
     def remove(self):
         if (self.domain_id != None):
-            self.domain_id.convert_to_domain(self)
+            self.domain_id.to_domain(self)
         self.mainhandler.domains.pop(self.name);
         self.ui.remove_domain(self)
 

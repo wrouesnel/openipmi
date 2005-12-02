@@ -152,7 +152,7 @@ use OpenIPMI;
 
 	if (defined $$self->{domain_id}) {
 	    my $v = CloseDomain::new($self);
-	    $$self->{domain_id}->convert_to_domain($v);
+	    $$self->{domain_id}->to_domain($v);
 	} else {
 	    $$self->{done} = 1;
 	}

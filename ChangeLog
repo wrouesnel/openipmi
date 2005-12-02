@@ -1,3 +1,15 @@
+2005-12-02 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: There was a critical error in the
+	convert_to_xxx methods; they returned a string instead of an error
+	and were inconsistent (A NULL return might mean success or an
+	error).  Make them consistently return an int and remove the
+	"convert_" prefix since it seems unnecessary.  This is,
+	unfortunately, not backwards compatible, but needs to be fixed.
+	And hopefully there are not too many perl/python users yet.
+
+	* swig/perl/*, swig/python/*: Adjusted for the previous change.
+
 2005-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_sensor.h:

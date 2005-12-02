@@ -40,6 +40,8 @@ init_sashposition = 100
 init_windowwidth = 400
 init_windowheight = 400
 
+refresh_timer_time = 10000
+
 class IPMITreeDummyItem:
     def __init__(self):
         pass
@@ -78,11 +80,11 @@ class IPMIGUI_Timer(wx.Timer):
     def __init__(self, ui):
         wx.Timer.__init__(self)
         self.ui = ui
-        self.Start(1000, oneShot=True)
+        self.Start(refresh_timer_time, oneShot=True)
 
     def Notify(self):
         self.ui.Timeout()
-        self.Start(1000, oneShot=True)
+        self.Start(refresh_timer_time, oneShot=True)
 
 class IPMIGUI(wx.Frame):
     def __init__(self, mainhandler):
@@ -165,7 +167,7 @@ class IPMIGUI(wx.Frame):
             return
         closer = IPMICloser(self, self.closecount)
         for v in self.mainhandler.domains.itervalues():
-            v.domain_id.convert_to_domain(closer)
+            v.domain_id.to_domain(closer)
 
     def openDomain(self, event):
         dialog = _domainDialog.OpenDomainDialog(self.mainhandler)
@@ -252,11 +254,11 @@ class IPMIGUI(wx.Frame):
         data.name_str = name
         if (parent == None):
             parent = o.treeroot
+        item = self.tree.PrependItem(parent, name + ":")
         if (value == None):
-            item = self.tree.PrependItem(parent, name + ":")
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            item = self.tree.PrependItem(parent, name + ":\t" + value)
+            self.tree.SetItemText(item, value, 1)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
         return item
@@ -271,7 +273,7 @@ class IPMIGUI(wx.Frame):
         if (value == None):
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            self.tree.SetItemText(parent, value, 1)
+            self.tree.SetItemText(item, value, 1)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
         return item

@@ -69,7 +69,7 @@ use OpenIPMI;
 	$mcid = $event->get_mc_id();
 
 	$name = MC_Nameget::new("");
-	$mcid->convert_to_mc($name);
+	$mcid->to_mc($name);
 	$dataref = $event->get_data();
 	@data = @$dataref;
 

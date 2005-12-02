@@ -969,7 +969,7 @@ sub get_errcount {
 
 	$get = PetGet::new($self);
 	$mcid = $pef->get_mc_id();
-	$rv = $mcid->convert_to_mc($get);
+	$rv = $mcid->to_mc($get);
 	if ($rv) {
 	    main::reg_err("Unable to convert mcid to md: $rv\n");
 	    $self->close();
@@ -1040,7 +1040,7 @@ sub get_errcount {
 
 	if (defined $$self->{domain_id}) {
 	    my $v = CloseDomain::new($self);
-	    $$self->{domain_id}->convert_to_domain($v);
+	    $$self->{domain_id}->to_domain($v);
 	} else {
 	    $$self->{keepon} = 0;
 	}
