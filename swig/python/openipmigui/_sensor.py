@@ -29,6 +29,7 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
+import wx
 import OpenIPMI
 
 class SensorRefreshData:
@@ -94,9 +95,10 @@ class Sensor:
                                                        "get_event_enables"))
             sensor.get_event_enables(self)
 
-        # OP: rearm (if no auto_rearm)
         # OP: set thresholds
         # OP: set event enables
+
+        self.auto_rearm = sensor.get_supports_auto_rearm()
 
         self.is_threshold = (sensor.get_event_reading_type()
                              == OpenIPMI.EVENT_READING_TYPE_THRESHOLD)
@@ -139,8 +141,8 @@ class Sensor:
             ts = self.threshold_support
             self.ui.append_item(self, "Threshold Support\t",
                               OpenIPMI.get_threshold_access_support_string(ts))
+            sval = ""
             if (ts != OpenIPMI.THRESHOLD_ACCESS_SUPPORT_NONE):
-                sval = ""
                 rval = ""
                 wval = ""
                 ival = [ 0 ]
@@ -157,6 +159,7 @@ class Sensor:
                 if (wval != ""):
                     wval = wval.strip()
                     self.ui.append_item(self, "Thresholds Reported", wval)
+
             if ((ts == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_READABLE)
                 or (ts == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE)):
                 if (sval != ""):
@@ -171,6 +174,10 @@ class Sensor:
                                       data = SensorInfoGetter(self,
                                                        "get_thresholds"))
                 sensor.get_thresholds(self)
+            else:
+                sval = ""
+
+            self.settable_thresholds = sval
 
             self.hysteresis_support = sensor.get_hysteresis_support()
             hs = self.hysteresis_support
@@ -183,6 +190,9 @@ class Sensor:
                                      data = SensorInfoGetter(self,
                                                              "get_hysteresis"))
                 sensor.get_hysteresis(self)
+        else:
+            self.hysteresis_support = OpenIPMI.HYSTERESIS_SUPPORT_NONE
+            self.threshold_support = OpenIPMI.THRESHOLD_ACCESS_SUPPORT_NONE
                 
     def __str__(self):
         return self.name
@@ -190,6 +200,44 @@ class Sensor:
     def DoUpdate(self):
         self.sensor_id.convert_to_sensor(self.updater)
 
+    def HandleMenu(self, event):
+        eitem = event.GetItem();
+        menu = wx.Menu();
+        doit = False
+        if (self.event_support != OpenIPMI.EVENT_SUPPORT_NONE):
+            item = menu.Append(-1, "Rearm")
+            self.ui.Bind(wx.EVT_MENU, self.Rearm, item)
+            doit = True
+        if (self.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE):
+            item = menu.Append(-1, "Set Thresholds")
+            self.ui.Bind(wx.EVT_MENU, self.SetThresholds, item)
+            doit = True
+        if (self.hysteresis_support == OpenIPMI.HYSTERESIS_SUPPORT_SETTABLE):
+            item = menu.Append(-1, "Set Hysteresis")
+            self.ui.Bind(wx.EVT_MENU, self.SetHysteresis, item)
+            doit = True
+        if ((self.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE)
+            or (self.event_support == OpenIPMI.EVENT_SUPPORT_ENTIRE_SENSOR)):
+            item = menu.Append(-1, "Set Event Enables")
+            self.ui.Bind(wx.EVT_MENU, self.SetEventEnables, item)
+            doit = True
+
+        if (doit):
+            self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
+        menu.Destroy()
+
+    def Rearm(self, event):
+        pass
+    
+    def SetThresholds(self, event):
+        pass
+    
+    def SetHysteresis(self, event):
+        pass
+    
+    def SetEventEnables(self, event):
+        pass
+    
     def remove(self):
         self.e.sensors.pop(self.name)
         self.ui.remove_sensor(self)

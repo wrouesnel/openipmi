@@ -415,7 +415,8 @@ class IPMIGUI(wx.Frame):
         rect = self.tree.GetBoundingRect(item)
         if (rect == None):
             return None
-        return wx.Point(rect.GetLeft(), rect.GetBottom())
+        # FIXME - why do I have to add 25?
+        return wx.Point(rect.GetLeft(), rect.GetBottom()+25)
 
     def TreeMenu(self, event):
         item = event.GetItem()
