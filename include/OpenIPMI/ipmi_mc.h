@@ -435,6 +435,20 @@ int ipmi_channel_access_setall(ipmi_channel_access_t *access);
 
 /***********************************************************************
  *
+ * Misc stuff...
+ *
+ **********************************************************************/
+
+/* Get the MC that the message is sent to for reading and controlling
+   the sensor.  The SDR for the sensor may not have come from here.
+   Note that this is not refcounted, it is held in existance by the
+   sensor's refcount.  So don't keep this after the sensor pointer
+   ceases to exist. */
+ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
+
+
+/***********************************************************************
+ *
  * Crufty backwards-compatible interfaces.  Don't use these as they
  * are deprecated.
  *

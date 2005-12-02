@@ -2881,6 +2881,24 @@ pef_str_to_parm(char *str)
     return ipmi_pefconfig_str_to_parm(str);
 }
 
+static const char *
+get_threshold_access_support_string(int val)
+{
+    return ipmi_get_threshold_access_support_string(val);
+}
+
+static const char *
+get_hysteresis_support_string(int val)
+{
+    return ipmi_get_hysteresis_support_string(val);
+}
+
+static const char *
+get_event_support_string(int val)
+{
+    return ipmi_get_event_support_string(val);
+}
+
 static void
 domain_change_handler(ipmi_domain_t      *domain,
 		      enum ipmi_update_e op,
@@ -2999,6 +3017,11 @@ int lanparm_str_to_parm(char *str);
 /* Convert between pef string names and parm numbers. */
 char *pef_parm_to_str(int parm);
 int pef_str_to_parm(char *str);
+
+/* Convert various sensor values to strings. */
+char *get_threshold_access_support_string(int val);
+char *get_hysteresis_support_string(int val);
+char *get_event_support_string(int val);
 
 /*
  * A domain id object.  This object is guaranteed to be valid and
@@ -6537,6 +6560,14 @@ int pef_str_to_parm(char *str);
 	return ipmi_sensor_get_modifier_unit_use(self);
     }
 
+    /*
+     * Returns if the value is a percentage.
+     */
+    int get_percentage()
+    {
+	return ipmi_sensor_get_percentage(self);
+    }
+
 
     /*
      * This call is a little different from the other string calls.
@@ -6718,7 +6749,7 @@ int pef_str_to_parm(char *str);
 	char                        *s;
 
 	s = threshold_event_from_str(event, strlen(event), &thresh,
-				      &value_dir, &dir);
+				     &value_dir, &dir);
 	if (!s)
 	    return EINVAL;
 	return ipmi_sensor_threshold_event_supported(self,
@@ -6803,14 +6834,6 @@ int pef_str_to_parm(char *str);
     int discrete_event_readable(int offset, int *val)
     {
 	return ipmi_sensor_discrete_event_readable(self, offset, val);
-    }
-
-    /*
-     * Returns if the value is a percentage.
-     */
-    int get_percentage()
-    {
-	return ipmi_sensor_get_percentage(self);
     }
 
     /*
@@ -6921,6 +6944,14 @@ int pef_str_to_parm(char *str);
 	char *id = malloc(len);
 	ipmi_sensor_get_id(self, id, len);
 	return id;
+    }
+
+    /*
+     * Return the MC that owns the sensor.
+     */
+    ipmi_mc_t *get_mc()
+    {
+	return ipmi_sensor_get_mc(self);
     }
 }
 

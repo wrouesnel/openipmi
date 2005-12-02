@@ -249,7 +249,7 @@ class OpenDomainDialog(wx.Dialog):
             self.conn[0].FillinConn(d.connection[0])
             self.conn[1].FillinConn(d.connection[1])
             d.Connect()
-        except _domain.InvalidDomainInfo, e:
+        except _domain.InvalidDomainError, e:
             d.remove()
             self.status.SetStatusText(str(e))
             return

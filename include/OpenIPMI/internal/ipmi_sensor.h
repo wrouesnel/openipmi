@@ -493,10 +493,6 @@ void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor,
 void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor,
 					  const char    *str);
 
-/* Get the MC that the message is sent to for reading and controlling
-   the sensor. */
-ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
-
 /* Get the sensor's domain. */
 ipmi_domain_t *ipmi_sensor_get_domain(ipmi_sensor_t *sensor);
 

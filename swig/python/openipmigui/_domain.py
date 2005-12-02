@@ -37,11 +37,13 @@ import _mc
 import _saveprefs
 import logging
 
-class InvalidDomainInfo(Exception):
+class InvalidDomainError(Exception):
     def __init__(self, value):
         self.value = value
-    def __str__(self):
+    def __repr__(self):
         return repr(self.value)
+    def __str__(self):
+        return str(self.value)
 
 
 class DomainRefreshData:
@@ -262,11 +264,13 @@ class DomainConnection:
     def FillinConAttr(self, attr):
         if (self.contype == "smi"):
             if (self.port == ""):
-                raise InvalidDomainInfo("No port specified")
+                print "***A"
+                raise InvalidDomainError("No port specified")
             attr.extend([ "smi", str(self.port) ])
         elif (self.contype == "lan"):
             if (self.address == ""):
-                raise InvalidDomainInfo("No address specified")
+                print "***B"
+                raise InvalidDomainError("No address specified")
             attr.append("lan")
             if (self.port != ""):
                 attr.extend(["-p", self.port])
@@ -298,7 +302,8 @@ class DomainConnection:
             if (self.address2 != ""):
                 attr.append(self.address2)
         else:
-            raise InvalidDomainInfo("Invalid connection type: " + self.contype)
+            print "***C"
+            raise InvalidDomainError("Invalid connection type: " + self.contype)
 
     def getAttr(self):
         if (self.contype == ""):
@@ -378,7 +383,8 @@ class DomainConnection:
 class Domain:
     def __init__(self, mainhandler, name):
         if (mainhandler.domains.has_key(name)):
-            raise InvalidDomainInfo("Domain name already exists")
+            print "***D"
+            raise InvalidDomainError("Domain name already exists")
         self.name = name
         self.mainhandler = mainhandler
         self.ui = mainhandler.ui
@@ -448,7 +454,8 @@ class Domain:
         self.already_up = False
         self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
         if (self.domain_id == None):
-            raise InvalidDomainInfo("Open domain failed, invalid parms")
+            print "***E"
+            raise InvalidDomainError("Open domain failed, invalid parms")
 
     def domain_up_cb(self, domain):
         self.already_up = True;
@@ -521,7 +528,7 @@ class _DomainRestore(_saveprefs.RestoreHandler):
                     cnum = 1;
         try:
             d.Connect()
-        except InvalidDomainInfo, e:
+        except InvalidDomainError, e:
             d.remove()
             logging.error("Error making domain connection for " + name + ": " + str(e))
 

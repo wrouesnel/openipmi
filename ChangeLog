@@ -1,3 +1,14 @@
+2005-12-01 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_sensor.h:
+	Move the ipmi_sensor_get_mc() call to a more public interface,
+	primarily to give the GUI access to it.
+
+	* swig/OpenIPMI.i: Add get_mc() to the sensor class.
+
+	* swig/OpenIPMI.i: Added function to conver the various threshold
+	and event values into strings.
+
 2005-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Got something wrong in the new MC state machine.  Need
