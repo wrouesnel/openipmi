@@ -10,7 +10,16 @@
 
 	* swig/perl/*, swig/python/*: Adjusted for the previous change.
 
-	* swig/OpenIPMI.i: Fixed problems dealing with threshold strings.
+	* swig/OpenIPMI.i: Fixed problems dealing with threshold and event
+	strings.
+
+	* swig/OpenIPMI.i: Have the discrete event handle call the proper
+	callback.
+
+	* swig/OpenIPMI.i: Add an event delete capability.
+
+	* swig/python/OpenIPMI_lang.i: Fix a hidden (in a macro) vague
+	else clase.
 
 2005-12-01 Corey Minyard <cminyard@mvista.com>
 
