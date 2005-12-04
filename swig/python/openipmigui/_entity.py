@@ -47,18 +47,39 @@ class Entity:
             self.parent = None # Don't leave circular reference
         else:
             self.ui.add_entity(self.d, self)
-        eid = entity.get_id_string()
+        self.id_str = entity.get_id_string()
+        self.entity_id_str = entity.get_entity_id_string()
+        eid = self.id_str
         if (eid == None):
-            eid = entity.get_entity_id_string()
+            eid = self.entity_id_str
         if (eid != None):
             self.ui.set_item_text(self.treeroot, eid)
         self.sensors = { }
         self.controls = { }
         entity.add_presence_handler(self)
+        self.entity_type = entity.get_type()
+        self.ui.append_item(self, 'Type', self.entity_type)
+        if (self.id_str != None):
+            self.ui.append_item(self, 'ID String', self.id_str)
+        if (self.entity_id_str != None):
+            self.ui.append_item(self, 'Entity ID', self.entity_id_str)
+        self.ui.append_item(self, 'Presence Sensor Always There',
+                           str(entity.get_presence_sensor_always_there() != 0))
+        self.slot_number = entity.get_physical_slot_num()
+        if (self.slot_number >= 0):
+            self.ui.append_item(self, 'Slot Number', str(self.slot_number))
+        self.mc_id = entity.get_mc_id()
+        self.mc_name = None
+        if (self.mc_id != None):
+            self.mc_id.to_mc(self);
+        if (self.mc_name != None):
+            self.ui.append_item(self, 'MC', self.mc_name)
 
     def __str__(self):
         return self.name
 
+    def mc_cb(self, mc):
+        self.mc_name = mc.get_name()
     def entity_iter_entities_cb(self, child, parent):
         self.parent = self.d.find_or_create_entity(parent)
         

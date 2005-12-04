@@ -4117,7 +4117,18 @@ char *get_event_support_string(int val);
 	return ipmi_entity_get_slave_address(self);
     }
 
-
+    %newobject get_mc_id;
+    ipmi_mcid_t *get_mc_id()
+    {
+	ipmi_mcid_t *mc_id = malloc(sizeof(*mc_id));
+	int rv;
+	rv = ipmi_entity_get_mc_id(self, mc_id);
+	if (rv) {
+	    free(mc_id);
+	    mc_id = NULL;
+	}
+	return mc_id;
+    }
     /*
      * Return if the FRU is logical (from the device locator record).
      * Valid for FRU entities.

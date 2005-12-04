@@ -1,3 +1,7 @@
+2005-12-03 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Added a method to get the MC id for an entity.
+
 2005-12-02 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: There was a critical error in the
