@@ -1,3 +1,28 @@
+2005-12-05 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Added compare functions for all entity ids.
+
+	* swig/OpenIPMI.i: Redid all constants to use %constant.  Also
+	renamed some misnamed ones, they are not supposed to begin with
+	IPMI_.
+
+	* swig/OpenIPMI.i: Fixed the hot-swap comments for the
+	auto-activate/deactivate settings.
+
+	* include/OpenIPMI/ipmiif.h.in, lib/entity.c, swig/OpenIPMI.i:
+	Added a function that returns if the entity supports auto activate
+	or auto deactivate time.
+
+	* lib/fru.c: Make sure to return an error instead of crashing if a
+	root node fetcher is not installed.
+
+	* lib/oem_atca.c: Set the auto activate/deactivate function to
+	NULL instead of real functions that return value.  That lets the
+	upper level code detect that this is not supported.
+	
+	* swig/python/OpenIPMI_lang.i: Fixes problems with returning NULL
+	char ** and other ** objects.
+
 2005-12-03 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Added a method to get the MC id for an entity.

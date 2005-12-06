@@ -261,17 +261,27 @@
 }
 
 %typemap(argout) const char ** {
-    PyObject *o = PyString_FromString(*$1);
-    if (!o) {
-	PyErr_SetString(PyExc_TypeError, "Unable to allocate string object");
-	return NULL;
-    }
-    if (PySequence_SetItem($input, 0, o) == -1) {
-	PyErr_SetString(PyExc_TypeError, "Unable to set string object item");
+    if (*$1) {
+	PyObject *o = PyString_FromString(*$1);
+	if (!o) {
+	    PyErr_SetString(PyExc_TypeError,
+			    "Unable to allocate string object");
+	    return NULL;
+	}
+	if (PySequence_SetItem($input, 0, o) == -1) {
+	    PyErr_SetString(PyExc_TypeError,
+			    "Unable to set string object item");
+	    Py_DECREF(o);
+	    return NULL;
+	}
 	Py_DECREF(o);
-	return NULL;
+    } else {
+	if (PySequence_SetItem($input, 0, Py_None) == -1) {
+	    PyErr_SetString(PyExc_TypeError,
+			    "Unable to set NULL object item");
+	    return NULL;
+	}
     }
-    Py_DECREF(o);
 }
 
 %typemap(in) char ** (char *svalue) {
@@ -297,6 +307,12 @@
 	}
 	Py_DECREF(o);
 	free(*$1);
+    } else {
+	if (PySequence_SetItem($input, 0, Py_None) == -1) {
+	    PyErr_SetString(PyExc_TypeError,
+			    "Unable to set NULL object item");
+	    return NULL;
+	}
     }
 }
 
@@ -322,6 +338,12 @@
 	    return NULL;
 	}
 	Py_DECREF(o);
+    } else {
+	if (PySequence_SetItem($input, 0, Py_None) == -1) {
+	    PyErr_SetString(PyExc_TypeError,
+			    "Unable to set NULL object item");
+	    return NULL;
+	}
     }
 }
 

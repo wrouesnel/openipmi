@@ -116,7 +116,6 @@ class IPMIGUI(wx.Frame):
         self.splitter = wx.SplitterWindow(self)
         self.splitter.SetMinimumPaneSize(10)
 
-        isz = (16, 16)
         self.tree = IPMITreeCtrl(self.splitter)
         self.treeroot = self.tree.AddRoot("Domains")
         self.tree.SetPyData(self.treeroot, self)

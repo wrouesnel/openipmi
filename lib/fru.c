@@ -1377,6 +1377,8 @@ ipmi_fru_get_root_node(ipmi_fru_t      *fru,
 		       const char      **name,
 		       ipmi_fru_node_t **node)
 {
+    if (!fru->ops.get_root_node)
+	return ENOSYS;
     return fru->ops.get_root_node(fru, name, node);
 }
 

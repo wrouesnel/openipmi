@@ -527,6 +527,7 @@ atca_get_hot_swap_state(ipmi_entity_t                 *entity,
      return rv;
 }
 
+#if 0
 static int
 atca_set_auto_activate(ipmi_entity_t  *ent,
 		       ipmi_timeout_t auto_act,
@@ -560,6 +561,7 @@ atca_get_auto_deactivate(ipmi_entity_t       *ent,
 {
     return ENOSYS;
 }
+#endif
 
 static void
 atca_activate_done(ipmi_sensor_t *sensor,
@@ -833,10 +835,17 @@ atca_check_hot_swap_state(ipmi_entity_t *entity)
 static ipmi_entity_hot_swap_t atca_hot_swap_handlers =
 {
     .get_hot_swap_state       = atca_get_hot_swap_state,
+#if 0
     .set_auto_activate        = atca_set_auto_activate,
     .get_auto_activate        = atca_get_auto_activate,
     .set_auto_deactivate      = atca_set_auto_deactivate,
     .get_auto_deactivate      = atca_get_auto_deactivate,
+#else
+    .set_auto_activate        = NULL,
+    .get_auto_activate        = NULL,
+    .set_auto_deactivate      = NULL,
+    .get_auto_deactivate      = NULL,
+#endif
     .set_activation_requested = atca_unlock_fru,
     .activate                 = atca_activate,
     .deactivate               = atca_deactivate,

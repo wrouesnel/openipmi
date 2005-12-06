@@ -957,6 +957,7 @@ int ipmi_entity_get_hot_swap_state(ipmi_entity_t                 *ent,
    the user must call the activate or deactivate routines below to
    push it out of those states.  Otherwise, the timeout is the time in
    nanoseconds for the operation. */
+int ipmi_entity_supports_auto_activate_time(ipmi_entity_t *ent);
 int ipmi_entity_get_auto_activate_time(ipmi_entity_t       *ent,
 				       ipmi_entity_time_cb handler,
 				       void                *cb_data);
@@ -964,6 +965,7 @@ int ipmi_entity_set_auto_activate_time(ipmi_entity_t  *ent,
 				       ipmi_timeout_t auto_act,
 				       ipmi_entity_cb done,
 				       void           *cb_data);
+int ipmi_entity_supports_auto_deactivate_time(ipmi_entity_t *ent);
 int ipmi_entity_get_auto_deactivate_time(ipmi_entity_t       *ent,
 					 ipmi_entity_time_cb handler,
 					 void                *cb_data);

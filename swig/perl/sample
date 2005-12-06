@@ -529,7 +529,7 @@ use OpenIPMI;
 	$i = 0;
 	while (1) {
 	    $rv = $node->get_field($i, \$name, \$type, \$value, \$sub_node);
-	    if (($rv == $OpenIPMI::enosys) || ($rv == $OpenIPMI::einval)) {
+	    if ($rv == $OpenIPMI::einval) {
 		return;
 	    }
 	    $i++;

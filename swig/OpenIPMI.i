@@ -39,6 +39,7 @@
 #endif
 
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -811,7 +812,7 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
-    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%d%s", &entity_ref,
+    swig_call_cb(cb, "entity_hot_swap_cb", "%p%d%s", &entity_ref,
 		 err, ipmi_hot_swap_state_name(state));
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     /* One-time call, get rid of the CB. */
@@ -3045,6 +3046,8 @@ char *get_threshold_access_support_string(int val);
 char *get_hysteresis_support_string(int val);
 char *get_event_support_string(int val);
 
+%constant long long TIMEOUT_FOREVER = IPMI_TIMEOUT_FOREVER;
+
 /*
  * A domain id object.  This object is guaranteed to be valid and
  * can be converted into a domain pointer later.
@@ -3053,6 +3056,12 @@ char *get_event_support_string(int val);
     ~ipmi_domain_id_t()
     {
 	free(self);
+    }
+
+    /* Compare self with other for equality.  */
+    int cmp(ipmi_domain_id_t *other)
+    {
+	return ipmi_cmp_domain_id(*self, *other);
     }
 
     /*
@@ -3665,6 +3674,12 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
+    /* Compare self with other for equality.  */
+    int cmp(ipmi_entity_id_t *other)
+    {
+	return ipmi_cmp_entity_id(*self, *other);
+    }
+
     /*
      * Convert a entity id to a entity pointer.  The "entity_cb" method
      * will be called on the first parameter with the following parameters:
@@ -3680,8 +3695,62 @@ char *get_event_support_string(int val);
     }
 }
 
+%constant int ENTITY_ID_UNSPECIFIED = IPMI_ENTITY_ID_UNSPECIFIED;
+%constant int ENTITY_ID_OTHER = IPMI_ENTITY_ID_OTHER;
+%constant int ENTITY_ID_UNKOWN = IPMI_ENTITY_ID_UNKOWN;
+%constant int ENTITY_ID_PROCESSOR = IPMI_ENTITY_ID_PROCESSOR;
+%constant int ENTITY_ID_DISK = IPMI_ENTITY_ID_DISK;
+%constant int ENTITY_ID_PERIPHERAL = IPMI_ENTITY_ID_PERIPHERAL;
+%constant int ENTITY_ID_SYSTEM_MANAGEMENT_MODULE = IPMI_ENTITY_ID_SYSTEM_MANAGEMENT_MODULE;
+%constant int ENTITY_ID_SYSTEM_BOARD = IPMI_ENTITY_ID_SYSTEM_BOARD;
+%constant int ENTITY_ID_MEMORY_MODULE = IPMI_ENTITY_ID_MEMORY_MODULE;
+%constant int ENTITY_ID_PROCESSOR_MODULE = IPMI_ENTITY_ID_PROCESSOR_MODULE;
+%constant int ENTITY_ID_POWER_SUPPLY = IPMI_ENTITY_ID_POWER_SUPPLY;
+%constant int ENTITY_ID_ADD_IN_CARD = IPMI_ENTITY_ID_ADD_IN_CARD;
+%constant int ENTITY_ID_FRONT_PANEL_BOARD = IPMI_ENTITY_ID_FRONT_PANEL_BOARD;
+%constant int ENTITY_ID_BACK_PANEL_BOARD = IPMI_ENTITY_ID_BACK_PANEL_BOARD;
+%constant int ENTITY_ID_POWER_SYSTEM_BOARD = IPMI_ENTITY_ID_POWER_SYSTEM_BOARD;
+%constant int ENTITY_ID_DRIVE_BACKPLANE = IPMI_ENTITY_ID_DRIVE_BACKPLANE;
+%constant int ENTITY_ID_SYSTEM_INTERNAL_EXPANSION_BOARD = IPMI_ENTITY_ID_SYSTEM_INTERNAL_EXPANSION_BOARD;
+%constant int ENTITY_ID_OTHER_SYSTEM_BOARD = IPMI_ENTITY_ID_OTHER_SYSTEM_BOARD;
+%constant int ENTITY_ID_PROCESSOR_BOARD = IPMI_ENTITY_ID_PROCESSOR_BOARD;
+%constant int ENTITY_ID_POWER_UNIT = IPMI_ENTITY_ID_POWER_UNIT;
+%constant int ENTITY_ID_POWER_MODULE = IPMI_ENTITY_ID_POWER_MODULE;
+%constant int ENTITY_ID_POWER_MANAGEMENT_BOARD = IPMI_ENTITY_ID_POWER_MANAGEMENT_BOARD;
+%constant int ENTITY_ID_CHASSIS_BACK_PANEL_BOARD = IPMI_ENTITY_ID_CHASSIS_BACK_PANEL_BOARD;
+%constant int ENTITY_ID_SYSTEM_CHASSIS = IPMI_ENTITY_ID_SYSTEM_CHASSIS;
+%constant int ENTITY_ID_SUB_CHASSIS = IPMI_ENTITY_ID_SUB_CHASSIS;
+%constant int ENTITY_ID_OTHER_CHASSIS_BOARD = IPMI_ENTITY_ID_OTHER_CHASSIS_BOARD;
+%constant int ENTITY_ID_DISK_DRIVE_BAY = IPMI_ENTITY_ID_DISK_DRIVE_BAY;
+%constant int ENTITY_ID_PERIPHERAL_BAY = IPMI_ENTITY_ID_PERIPHERAL_BAY;
+%constant int ENTITY_ID_DEVICE_BAY = IPMI_ENTITY_ID_DEVICE_BAY;
+%constant int ENTITY_ID_FAN_COOLING = IPMI_ENTITY_ID_FAN_COOLING;
+%constant int ENTITY_ID_COOLING_UNIT = IPMI_ENTITY_ID_COOLING_UNIT;
+%constant int ENTITY_ID_CABLE_INTERCONNECT = IPMI_ENTITY_ID_CABLE_INTERCONNECT;
+%constant int ENTITY_ID_MEMORY_DEVICE = IPMI_ENTITY_ID_MEMORY_DEVICE;
+%constant int ENTITY_ID_SYSTEM_MANAGEMENT_SOFTWARE = IPMI_ENTITY_ID_SYSTEM_MANAGEMENT_SOFTWARE;
+%constant int ENTITY_ID_BIOS = IPMI_ENTITY_ID_BIOS;
+%constant int ENTITY_ID_OPERATING_SYSTEM = IPMI_ENTITY_ID_OPERATING_SYSTEM;
+%constant int ENTITY_ID_SYSTEM_BUS = IPMI_ENTITY_ID_SYSTEM_BUS;
+%constant int ENTITY_ID_GROUP = IPMI_ENTITY_ID_GROUP;
+%constant int ENTITY_ID_REMOTE_MGMT_COMM_DEVICE = IPMI_ENTITY_ID_REMOTE_MGMT_COMM_DEVICE;
+%constant int ENTITY_ID_EXTERNAL_ENVIRONMENT = IPMI_ENTITY_ID_EXTERNAL_ENVIRONMENT;
+%constant int ENTITY_ID_BATTERY = IPMI_ENTITY_ID_BATTERY;
+%constant int ENTITY_ID_PROCESSING_BLADE = IPMI_ENTITY_ID_PROCESSING_BLADE;
+%constant int ENTITY_ID_CONNECTIVITY_SWITCH = IPMI_ENTITY_ID_CONNECTIVITY_SWITCH;
+%constant int ENTITY_ID_PROCESSOR_MEMORY_MODULE = IPMI_ENTITY_ID_PROCESSOR_MEMORY_MODULE;
+%constant int ENTITY_ID_IO_MODULE = IPMI_ENTITY_ID_IO_MODULE;
+%constant int ENTITY_ID_PROCESSOR_IO_MODULE = IPMI_ENTITY_ID_PROCESSOR_IO_MODULE;
+%constant int ENTITY_ID_MGMT_CONTROLLER_FIRMWARE = IPMI_ENTITY_ID_MGMT_CONTROLLER_FIRMWARE;
+%constant int ENTITY_ID_IPMI_CHANNEL = IPMI_ENTITY_ID_IPMI_CHANNEL;
+%constant int ENTITY_ID_PCI_BUS = IPMI_ENTITY_ID_PCI_BUS;
+%constant int ENTITY_ID_PCI_EXPRESS_BUS = IPMI_ENTITY_ID_PCI_EXPRESS_BUS;
+%constant int ENTITY_ID_SCSI_BUS = IPMI_ENTITY_ID_SCSI_BUS;
+%constant int ENTITY_ID_SATA_SAS_BUS = IPMI_ENTITY_ID_SATA_SAS_BUS;
+%constant int ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS = IPMI_ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS;
+
 /*
- * And entity object.
+ * An entity object.
  */
 %extend ipmi_entity_t {
     /*
@@ -3892,60 +3961,6 @@ char *get_event_support_string(int val);
     {
 	return ipmi_entity_get_is_fru(self);
     }
-
-#define ENTITY_ID_UNSPECIFIED	       			0
-#define ENTITY_ID_OTHER					1
-#define ENTITY_ID_UNKOWN				2
-#define ENTITY_ID_PROCESSOR				3
-#define ENTITY_ID_DISK					4
-#define ENTITY_ID_PERIPHERAL				5
-#define ENTITY_ID_SYSTEM_MANAGEMENT_MODULE		6
-#define ENTITY_ID_SYSTEM_BOARD				7
-#define ENTITY_ID_MEMORY_MODULE				8
-#define ENTITY_ID_PROCESSOR_MODULE			9
-#define ENTITY_ID_POWER_SUPPLY				10
-#define ENTITY_ID_ADD_IN_CARD				11
-#define ENTITY_ID_FRONT_PANEL_BOARD			12
-#define ENTITY_ID_BACK_PANEL_BOARD			13
-#define ENTITY_ID_POWER_SYSTEM_BOARD			14
-#define ENTITY_ID_DRIVE_BACKPLANE			15
-#define ENTITY_ID_SYSTEM_INTERNAL_EXPANSION_BOARD	16
-#define ENTITY_ID_OTHER_SYSTEM_BOARD			17
-#define ENTITY_ID_PROCESSOR_BOARD			18
-#define ENTITY_ID_POWER_UNIT				19
-#define ENTITY_ID_POWER_MODULE				20
-#define ENTITY_ID_POWER_MANAGEMENT_BOARD		21
-#define ENTITY_ID_CHASSIS_BACK_PANEL_BOARD		22
-#define ENTITY_ID_SYSTEM_CHASSIS			23
-#define ENTITY_ID_SUB_CHASSIS				24
-#define ENTITY_ID_OTHER_CHASSIS_BOARD			25
-#define ENTITY_ID_DISK_DRIVE_BAY			26
-#define ENTITY_ID_PERIPHERAL_BAY			27
-#define ENTITY_ID_DEVICE_BAY				28
-#define ENTITY_ID_FAN_COOLING				29
-#define ENTITY_ID_COOLING_UNIT				30
-#define ENTITY_ID_CABLE_INTERCONNECT			31
-#define ENTITY_ID_MEMORY_DEVICE				32
-#define ENTITY_ID_SYSTEM_MANAGEMENT_SOFTWARE		33
-#define ENTITY_ID_BIOS					34
-#define ENTITY_ID_OPERATING_SYSTEM			35
-#define ENTITY_ID_SYSTEM_BUS				36
-#define ENTITY_ID_GROUP					37
-#define ENTITY_ID_REMOTE_MGMT_COMM_DEVICE		38
-#define ENTITY_ID_EXTERNAL_ENVIRONMENT			39
-#define ENTITY_ID_BATTERY				40
-#define ENTITY_ID_PROCESSING_BLADE			41
-#define ENTITY_ID_CONNECTIVITY_SWITCH			42
-#define ENTITY_ID_PROCESSOR_MEMORY_MODULE		43
-#define ENTITY_ID_IO_MODULE				44
-#define ENTITY_ID_PROCESSOR_IO_MODULE			45
-#define ENTITY_ID_MGMT_CONTROLLER_FIRMWARE		46
-#define ENTITY_ID_IPMI_CHANNEL				47
-#define ENTITY_ID_PCI_BUS				48
-#define ENTITY_ID_PCI_EXPRESS_BUS			49
-#define ENTITY_ID_SCSI_BUS				50
-#define ENTITY_ID_SATA_SAS_BUS				51
-#define ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS		52
 
     %newobject get_id_string;
     /*
@@ -4363,9 +4378,15 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
+    /* Returns if the entity supports auto-activate. */
+    int supports_auto_activate_time()
+    {
+	return ipmi_entity_supports_auto_activate_time(self);
+    }
+
     /*
      * Get the current hot-swap activation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
     int get_auto_activate_time(swig_cb handler)
@@ -4373,10 +4394,10 @@ char *get_event_support_string(int val);
 	swig_cb_val handler_val;
 	int         rv;
 
-	if (! valid_swig_cb(handler, entity_hot_swap_time_cb))
+	if (! valid_swig_cb(handler, entity_hot_swap_get_time_cb))
 	    return EINVAL;
 
-	handler_val = ref_swig_cb(handler, entity_hot_swap_time_cb);
+	handler_val = ref_swig_cb(handler, entity_hot_swap_get_time_cb);
 	rv = ipmi_entity_get_auto_activate_time
 	    (self,
 	     entity_get_hot_swap_time_handler,
@@ -4388,7 +4409,7 @@ char *get_event_support_string(int val);
 
     /*
      * Set the current hot-swap activation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_set_time_cb handler will be called with the
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_activate_time(ipmi_timeout_t auto_act,
@@ -4399,9 +4420,9 @@ char *get_event_support_string(int val);
 	int            rv;
 
 	if (!nil_swig_cb(handler)) {
-	    if (!valid_swig_cb(handler, entity_hot_swap_time_cb))
+	    if (!valid_swig_cb(handler, entity_hot_swap_set_time_cb))
 		return EINVAL;
-	    handler_val = ref_swig_cb(handler, entity_hot_swap_time_cb);
+	    handler_val = ref_swig_cb(handler, entity_hot_swap_set_time_cb);
 	    done = entity_set_hot_swap_time_handler;
 	}
 	rv = ipmi_entity_set_auto_activate_time
@@ -4411,9 +4432,15 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
+    /* Returns if the entity supports auto-deactivate. */
+    int supports_auto_deactivate_time()
+    {
+	return ipmi_entity_supports_auto_deactivate_time(self);
+    }
+
     /*
      * Get the current hot-swap deactivation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
     int get_auto_deactivate_time(swig_cb handler)
@@ -4421,10 +4448,10 @@ char *get_event_support_string(int val);
 	swig_cb_val handler_val;
 	int         rv;
 
-	if (! valid_swig_cb(handler, entity_hot_swap_time_cb))
+	if (! valid_swig_cb(handler, entity_hot_swap_get_time_cb))
 	    return EINVAL;
 
-	handler_val = ref_swig_cb(handler, entity_hot_swap_time_cb);
+	handler_val = ref_swig_cb(handler, entity_hot_swap_get_time_cb);
 	rv = ipmi_entity_get_auto_deactivate_time
 	    (self,
 	     entity_get_hot_swap_time_handler,
@@ -4436,7 +4463,7 @@ char *get_event_support_string(int val);
 
     /*
      * Set the current hot-swap deactivation time for the entity.  The
-     * entity_hot_swap_time_cb handler will be called with the
+     * entity_hot_swap_set_time_cb handler will be called with the
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_deactivate_time(ipmi_timeout_t auto_act,
@@ -4447,9 +4474,9 @@ char *get_event_support_string(int val);
 	int            rv;
 
 	if (!nil_swig_cb(handler)) {
-	    if (!valid_swig_cb(handler, entity_hot_swap_time_cb))
+	    if (!valid_swig_cb(handler, entity_hot_swap_set_time_cb))
 		return EINVAL;
-	    handler_val = ref_swig_cb(handler, entity_hot_swap_time_cb);
+	    handler_val = ref_swig_cb(handler, entity_hot_swap_set_time_cb);
 	    done = entity_set_hot_swap_time_handler;
 	}
 	rv = ipmi_entity_set_auto_deactivate_time
@@ -4523,10 +4550,10 @@ char *get_event_support_string(int val);
     {
 	swig_cb_val    handler_val = NULL;
 	ipmi_entity_cb done = NULL;
-	int         rv;
+	int            rv;
 
 	if (!nil_swig_cb(handler)) {
-	    if (valid_swig_cb(handler, entity_activate_cb))
+	    if (! valid_swig_cb(handler, entity_activate_cb))
 		return EINVAL;
 	    handler_val = ref_swig_cb(handler, entity_activate_cb);
 	    done = entity_activate_handler;
@@ -4556,6 +4583,12 @@ char *get_event_support_string(int val);
     ~ipmi_mcid_t()
     {
 	free(self);
+    }
+
+    /* Compare self with other for equality.  */
+    int cmp(ipmi_mcid_t *other)
+    {
+	return ipmi_cmp_mc_id(*self, *other);
     }
 
     /*
@@ -4900,8 +4933,8 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
-#define IPMI_MC_RESET_COLD 1
-#define IPMI_MC_RESET_WARM 2
+%constant int MC_RESET_COLD = IPMI_MC_RESET_COLD;
+%constant int MC_RESET_WARM = IPMI_MC_RESET_WARM;
     /*
      * Reset the MC, either a cold or warm reset depending on the
      * first parm.  Note that the effects of a reset are not defined
@@ -5513,18 +5546,18 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
-#define CHANNEL_MEDIUM_IPMB	1
-#define CHANNEL_MEDIUM_ICMB_V10	2
-#define CHANNEL_MEDIUM_ICMB_V09	3
-#define CHANNEL_MEDIUM_8023_LAN	4
-#define CHANNEL_MEDIUM_RS232	5
-#define CHANNEL_MEDIUM_OTHER_LAN	6
-#define CHANNEL_MEDIUM_PCI_SMBUS	7
-#define CHANNEL_MEDIUM_SMBUS_v1	8
-#define CHANNEL_MEDIUM_SMBUS_v2	9
-#define CHANNEL_MEDIUM_USB_v1	10
-#define CHANNEL_MEDIUM_USB_v2	11
-#define CHANNEL_MEDIUM_SYS_INTF	12
+%constant int CHANNEL_MEDIUM_IPMB = IPMI_CHANNEL_MEDIUM_IPMB;
+%constant int CHANNEL_MEDIUM_ICMB_V10 = IPMI_CHANNEL_MEDIUM_ICMB_V10;
+%constant int CHANNEL_MEDIUM_ICMB_V09 = IPMI_CHANNEL_MEDIUM_ICMB_V09;
+%constant int CHANNEL_MEDIUM_8023_LAN = IPMI_CHANNEL_MEDIUM_8023_LAN;
+%constant int CHANNEL_MEDIUM_RS232 = IPMI_CHANNEL_MEDIUM_RS232;
+%constant int CHANNEL_MEDIUM_OTHER_LAN = IPMI_CHANNEL_MEDIUM_OTHER_LAN;
+%constant int CHANNEL_MEDIUM_PCI_SMBUS = IPMI_CHANNEL_MEDIUM_PCI_SMBUS;
+%constant int CHANNEL_MEDIUM_SMBUS_v1 = IPMI_CHANNEL_MEDIUM_SMBUS_v1;
+%constant int CHANNEL_MEDIUM_SMBUS_v2 = IPMI_CHANNEL_MEDIUM_SMBUS_v2;
+%constant int CHANNEL_MEDIUM_USB_v1 = IPMI_CHANNEL_MEDIUM_USB_v1;
+%constant int CHANNEL_MEDIUM_USB_v2 = IPMI_CHANNEL_MEDIUM_USB_v2;
+%constant int CHANNEL_MEDIUM_SYS_INTF = IPMI_CHANNEL_MEDIUM_SYS_INTF;
     int get_medium(int *medium)
     {
 	unsigned int val;
@@ -5533,14 +5566,14 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
-#define CHANNEL_PROTOCOL_IPMB	1
-#define CHANNEL_PROTOCOL_ICMB	2
-#define CHANNEL_PROTOCOL_SMBus	4
-#define CHANNEL_PROTOCOL_KCS	5
-#define CHANNEL_PROTOCOL_SMIC	6
-#define CHANNEL_PROTOCOL_BT_v10	7
-#define CHANNEL_PROTOCOL_BT_v15	8
-#define CHANNEL_PROTOCOL_TMODE	9
+%constant int CHANNEL_PROTOCOL_IPMB = IPMI_CHANNEL_PROTOCOL_IPMB;
+%constant int CHANNEL_PROTOCOL_ICMB = IPMI_CHANNEL_PROTOCOL_ICMB;
+%constant int CHANNEL_PROTOCOL_SMBus = IPMI_CHANNEL_PROTOCOL_SMBus;
+%constant int CHANNEL_PROTOCOL_KCS = IPMI_CHANNEL_PROTOCOL_KCS;
+%constant int CHANNEL_PROTOCOL_SMIC = IPMI_CHANNEL_PROTOCOL_SMIC;
+%constant int CHANNEL_PROTOCOL_BT_v10 = IPMI_CHANNEL_PROTOCOL_BT_v10;
+%constant int CHANNEL_PROTOCOL_BT_v15 = IPMI_CHANNEL_PROTOCOL_BT_v15;
+%constant int CHANNEL_PROTOCOL_TMODE = IPMI_CHANNEL_PROTOCOL_TMODE;
     int get_protocol_type(int *prot_type)
     {
 	unsigned int val;
@@ -5550,10 +5583,10 @@ char *get_event_support_string(int val);
     }
 
 
-#define CHANNEL_SESSION_LESS	0
-#define CHANNEL_SINGLE_SESSION	1
-#define CHANNEL_MULTI_SESSION	2
-#define CHANNEL_SESSION_BASED	3
+%constant int CHANNEL_SESSION_LESS = IPMI_CHANNEL_SESSION_LESS;
+%constant int CHANNEL_SINGLE_SESSION = IPMI_CHANNEL_SINGLE_SESSION;
+%constant int CHANNEL_MULTI_SESSION = IPMI_CHANNEL_MULTI_SESSION;
+%constant int CHANNEL_SESSION_BASED = IPMI_CHANNEL_SESSION_BASED;
     int get_session_support(int *sup)
     {
 	unsigned int val;
@@ -5650,10 +5683,10 @@ char *get_event_support_string(int val);
 	return ipmi_channel_access_set_user_auth(self, user_auth);
     }
 
-#define CHANNEL_ACCESS_MODE_DISABLED	0
-#define CHANNEL_ACCESS_MODE_PRE_BOOT	1
-#define CHANNEL_ACCESS_MODE_ALWAYS		2
-#define CHANNEL_ACCESS_MODE_SHARED		3
+%constant int CHANNEL_ACCESS_MODE_DISABLED = IPMI_CHANNEL_ACCESS_MODE_DISABLED;
+%constant int CHANNEL_ACCESS_MODE_PRE_BOOT = IPMI_CHANNEL_ACCESS_MODE_PRE_BOOT;
+%constant int CHANNEL_ACCESS_MODE_ALWAYS = IPMI_CHANNEL_ACCESS_MODE_ALWAYS;
+%constant int CHANNEL_ACCESS_MODE_SHARED = IPMI_CHANNEL_ACCESS_MODE_SHARED;
     int get_access_mode(int *access_mode)
     {
 	unsigned int val;
@@ -5667,11 +5700,11 @@ char *get_event_support_string(int val);
 	return ipmi_channel_access_set_access_mode(self, access_mode);
     }
 
-#define PRIVILEGE_CALLBACK		1
-#define PRIVILEGE_USER		2
-#define PRIVILEGE_OPERATOR		3
-#define PRIVILEGE_ADMIN		4
-#define PRIVILEGE_OEM		5
+%constant int PRIVILEGE_CALLBACK = IPMI_PRIVILEGE_CALLBACK;
+%constant int PRIVILEGE_USER = IPMI_PRIVILEGE_USER;
+%constant int PRIVILEGE_OPERATOR = IPMI_PRIVILEGE_OPERATOR;
+%constant int PRIVILEGE_ADMIN = IPMI_PRIVILEGE_ADMIN;
+%constant int PRIVILEGE_OEM = IPMI_PRIVILEGE_OEM;
     int get_privilege_limit(int *priv_limit)
     {
 	unsigned int val;
@@ -5846,6 +5879,12 @@ char *get_event_support_string(int val);
     ~ipmi_sensor_id_t()
     {
 	free(self);
+    }
+
+    /* Compare self with other for equality.  */
+    int cmp(ipmi_sensor_id_t *other)
+    {
+	return ipmi_cmp_sensor_id(*self, *other);
     }
 
     /*
@@ -6322,47 +6361,47 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_sensor_type_string(self);
     }
 
-#define SENSOR_TYPE_TEMPERATURE				0x01
-#define SENSOR_TYPE_VOLTAGE				0x02
-#define SENSOR_TYPE_CURRENT				0x03
-#define SENSOR_TYPE_FAN					0x04
-#define SENSOR_TYPE_PHYSICAL_SECURITY			0x05
-#define SENSOR_TYPE_PLATFORM_SECURITY			0x06
-#define SENSOR_TYPE_PROCESSOR				0x07
-#define SENSOR_TYPE_POWER_SUPPLY			0x08
-#define SENSOR_TYPE_POWER_UNIT				0x09
-#define SENSOR_TYPE_COOLING_DEVICE			0x0a
-#define SENSOR_TYPE_OTHER_UNITS_BASED_SENSOR		0x0b
-#define SENSOR_TYPE_MEMORY				0x0c
-#define SENSOR_TYPE_DRIVE_SLOT				0x0d
-#define SENSOR_TYPE_POWER_MEMORY_RESIZE			0x0e
-#define SENSOR_TYPE_SYSTEM_FIRMWARE_PROGRESS		0x0f
-#define SENSOR_TYPE_EVENT_LOGGING_DISABLED		0x10
-#define SENSOR_TYPE_WATCHDOG_1				0x11
-#define SENSOR_TYPE_SYSTEM_EVENT			0x12
-#define SENSOR_TYPE_CRITICAL_INTERRUPT			0x13
-#define SENSOR_TYPE_BUTTON				0x14
-#define SENSOR_TYPE_MODULE_BOARD			0x15
-#define SENSOR_TYPE_MICROCONTROLLER_COPROCESSOR		0x16
-#define SENSOR_TYPE_ADD_IN_CARD				0x17
-#define SENSOR_TYPE_CHASSIS				0x18
-#define SENSOR_TYPE_CHIP_SET				0x19
-#define SENSOR_TYPE_OTHER_FRU				0x1a
-#define SENSOR_TYPE_CABLE_INTERCONNECT			0x1b
-#define SENSOR_TYPE_TERMINATOR				0x1c
-#define SENSOR_TYPE_SYSTEM_BOOT_INITIATED		0x1d
-#define SENSOR_TYPE_BOOT_ERROR				0x1e
-#define SENSOR_TYPE_OS_BOOT				0x1f
-#define SENSOR_TYPE_OS_CRITICAL_STOP			0x20
-#define SENSOR_TYPE_SLOT_CONNECTOR			0x21
-#define SENSOR_TYPE_SYSTEM_ACPI_POWER_STATE		0x22
-#define SENSOR_TYPE_WATCHDOG_2				0x23
-#define SENSOR_TYPE_PLATFORM_ALERT			0x24
-#define SENSOR_TYPE_ENTITY_PRESENCE			0x25
-#define SENSOR_TYPE_MONITOR_ASIC_IC			0x26
-#define SENSOR_TYPE_LAN					0x27
-#define SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH		0x28
-#define SENSOR_TYPE_BATTERY				0x29
+%constant int SENSOR_TYPE_TEMPERATURE = IPMI_SENSOR_TYPE_TEMPERATURE;
+%constant int SENSOR_TYPE_VOLTAGE = IPMI_SENSOR_TYPE_VOLTAGE;
+%constant int SENSOR_TYPE_CURRENT = IPMI_SENSOR_TYPE_CURRENT;
+%constant int SENSOR_TYPE_FAN = IPMI_SENSOR_TYPE_FAN;
+%constant int SENSOR_TYPE_PHYSICAL_SECURITY = IPMI_SENSOR_TYPE_PHYSICAL_SECURITY;
+%constant int SENSOR_TYPE_PLATFORM_SECURITY = IPMI_SENSOR_TYPE_PLATFORM_SECURITY;
+%constant int SENSOR_TYPE_PROCESSOR = IPMI_SENSOR_TYPE_PROCESSOR;
+%constant int SENSOR_TYPE_POWER_SUPPLY = IPMI_SENSOR_TYPE_POWER_SUPPLY;
+%constant int SENSOR_TYPE_POWER_UNIT = IPMI_SENSOR_TYPE_POWER_UNIT;
+%constant int SENSOR_TYPE_COOLING_DEVICE = IPMI_SENSOR_TYPE_COOLING_DEVICE;
+%constant int SENSOR_TYPE_OTHER_UNITS_BASED_SENSOR = IPMI_SENSOR_TYPE_OTHER_UNITS_BASED_SENSOR;
+%constant int SENSOR_TYPE_MEMORY = IPMI_SENSOR_TYPE_MEMORY;
+%constant int SENSOR_TYPE_DRIVE_SLOT = IPMI_SENSOR_TYPE_DRIVE_SLOT;
+%constant int SENSOR_TYPE_POWER_MEMORY_RESIZE = IPMI_SENSOR_TYPE_POWER_MEMORY_RESIZE;
+%constant int SENSOR_TYPE_SYSTEM_FIRMWARE_PROGRESS = IPMI_SENSOR_TYPE_SYSTEM_FIRMWARE_PROGRESS;
+%constant int SENSOR_TYPE_EVENT_LOGGING_DISABLED = IPMI_SENSOR_TYPE_EVENT_LOGGING_DISABLED;
+%constant int SENSOR_TYPE_WATCHDOG_1 = IPMI_SENSOR_TYPE_WATCHDOG_1;
+%constant int SENSOR_TYPE_SYSTEM_EVENT = IPMI_SENSOR_TYPE_SYSTEM_EVENT;
+%constant int SENSOR_TYPE_CRITICAL_INTERRUPT = IPMI_SENSOR_TYPE_CRITICAL_INTERRUPT;
+%constant int SENSOR_TYPE_BUTTON = IPMI_SENSOR_TYPE_BUTTON;
+%constant int SENSOR_TYPE_MODULE_BOARD = IPMI_SENSOR_TYPE_MODULE_BOARD;
+%constant int SENSOR_TYPE_MICROCONTROLLER_COPROCESSOR = IPMI_SENSOR_TYPE_MICROCONTROLLER_COPROCESSOR;
+%constant int SENSOR_TYPE_ADD_IN_CARD = IPMI_SENSOR_TYPE_ADD_IN_CARD;
+%constant int SENSOR_TYPE_CHASSIS = IPMI_SENSOR_TYPE_CHASSIS;
+%constant int SENSOR_TYPE_CHIP_SET = IPMI_SENSOR_TYPE_CHIP_SET;
+%constant int SENSOR_TYPE_OTHER_FRU = IPMI_SENSOR_TYPE_OTHER_FRU;
+%constant int SENSOR_TYPE_CABLE_INTERCONNECT = IPMI_SENSOR_TYPE_CABLE_INTERCONNECT;
+%constant int SENSOR_TYPE_TERMINATOR = IPMI_SENSOR_TYPE_TERMINATOR;
+%constant int SENSOR_TYPE_SYSTEM_BOOT_INITIATED = IPMI_SENSOR_TYPE_SYSTEM_BOOT_INITIATED;
+%constant int SENSOR_TYPE_BOOT_ERROR = IPMI_SENSOR_TYPE_BOOT_ERROR;
+%constant int SENSOR_TYPE_OS_BOOT = IPMI_SENSOR_TYPE_OS_BOOT;
+%constant int SENSOR_TYPE_OS_CRITICAL_STOP = IPMI_SENSOR_TYPE_OS_CRITICAL_STOP;
+%constant int SENSOR_TYPE_SLOT_CONNECTOR = IPMI_SENSOR_TYPE_SLOT_CONNECTOR;
+%constant int SENSOR_TYPE_SYSTEM_ACPI_POWER_STATE = IPMI_SENSOR_TYPE_SYSTEM_ACPI_POWER_STATE;
+%constant int SENSOR_TYPE_WATCHDOG_2 = IPMI_SENSOR_TYPE_WATCHDOG_2;
+%constant int SENSOR_TYPE_PLATFORM_ALERT = IPMI_SENSOR_TYPE_PLATFORM_ALERT;
+%constant int SENSOR_TYPE_ENTITY_PRESENCE = IPMI_SENSOR_TYPE_ENTITY_PRESENCE;
+%constant int SENSOR_TYPE_MONITOR_ASIC_IC = IPMI_SENSOR_TYPE_MONITOR_ASIC_IC;
+%constant int SENSOR_TYPE_LAN = IPMI_SENSOR_TYPE_LAN;
+%constant int SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH = IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH;
+%constant int SENSOR_TYPE_BATTERY = IPMI_SENSOR_TYPE_BATTERY;
     /*
      * Return the numeric sensor type.
      */
@@ -6381,19 +6420,19 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_event_reading_type_string(self);
     }
 
-#define EVENT_READING_TYPE_THRESHOLD				0x01
-#define EVENT_READING_TYPE_DISCRETE_USAGE			0x02
-#define EVENT_READING_TYPE_DISCRETE_STATE			0x03
-#define EVENT_READING_TYPE_DISCRETE_PREDICTIVE_FAILURE		0x04
-#define EVENT_READING_TYPE_DISCRETE_LIMIT_EXCEEDED		0x05
-#define EVENT_READING_TYPE_DISCRETE_PERFORMANCE_MET		0x06
-#define EVENT_READING_TYPE_DISCRETE_SEVERITY			0x07
-#define EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE		0x08
-#define EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE		0x09
-#define EVENT_READING_TYPE_DISCRETE_AVAILABILITY		0x0a
-#define EVENT_READING_TYPE_DISCRETE_REDUNDANCY			0x0b
-#define EVENT_READING_TYPE_DISCRETE_ACPI_POWER			0x0c
-#define EVENT_READING_TYPE_SENSOR_SPECIFIC			0x6f
+%constant int EVENT_READING_TYPE_THRESHOLD = IPMI_EVENT_READING_TYPE_THRESHOLD;
+%constant int EVENT_READING_TYPE_DISCRETE_USAGE = IPMI_EVENT_READING_TYPE_DISCRETE_USAGE;
+%constant int EVENT_READING_TYPE_DISCRETE_STATE = IPMI_EVENT_READING_TYPE_DISCRETE_STATE;
+%constant int EVENT_READING_TYPE_DISCRETE_PREDICTIVE_FAILURE = IPMI_EVENT_READING_TYPE_DISCRETE_PREDICTIVE_FAILURE;
+%constant int EVENT_READING_TYPE_DISCRETE_LIMIT_EXCEEDED = IPMI_EVENT_READING_TYPE_DISCRETE_LIMIT_EXCEEDED;
+%constant int EVENT_READING_TYPE_DISCRETE_PERFORMANCE_MET = IPMI_EVENT_READING_TYPE_DISCRETE_PERFORMANCE_MET;
+%constant int EVENT_READING_TYPE_DISCRETE_SEVERITY = IPMI_EVENT_READING_TYPE_DISCRETE_SEVERITY;
+%constant int EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE = IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE;
+%constant int EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE = IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE;
+%constant int EVENT_READING_TYPE_DISCRETE_AVAILABILITY = IPMI_EVENT_READING_TYPE_DISCRETE_AVAILABILITY;
+%constant int EVENT_READING_TYPE_DISCRETE_REDUNDANCY = IPMI_EVENT_READING_TYPE_DISCRETE_REDUNDANCY;
+%constant int EVENT_READING_TYPE_DISCRETE_ACPI_POWER = IPMI_EVENT_READING_TYPE_DISCRETE_ACPI_POWER;
+%constant int EVENT_READING_TYPE_SENSOR_SPECIFIC = IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC;
     /*
      * Return the numeric event reading type.  This will return
      * EVENT_READING_TYPE_THRESHOLD for threshold sensors; everthing
@@ -6413,13 +6452,13 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_rate_unit_string(self);
     }
 
-#define RATE_UNIT_NONE		0
-#define RATE_UNIT_PER_US	1
-#define RATE_UNIT_PER_MS	2
-#define RATE_UNIT_PER_SEC	3
-#define RATE_UNIT_MIN		4
-#define RATE_UNIT_HOUR		5
-#define RATE_UNIT_DAY		6
+%constant int RATE_UNIT_NONE = IPMI_RATE_UNIT_NONE;
+%constant int RATE_UNIT_PER_US = IPMI_RATE_UNIT_PER_US;
+%constant int RATE_UNIT_PER_MS = IPMI_RATE_UNIT_PER_MS;
+%constant int RATE_UNIT_PER_SEC = IPMI_RATE_UNIT_PER_SEC;
+%constant int RATE_UNIT_MIN = IPMI_RATE_UNIT_MIN;
+%constant int RATE_UNIT_HOUR = IPMI_RATE_UNIT_HOUR;
+%constant int RATE_UNIT_DAY = IPMI_RATE_UNIT_DAY;
 
     /*
      * Get the rate unit for this sensor.
@@ -6437,99 +6476,99 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_base_unit_string(self);
     }
 
-#define IPMI_UNIT_TYPE_UNSPECIFIED		0
-#define IPMI_UNIT_TYPE_DEGREES_C		1
-#define IPMI_UNIT_TYPE_DEGREES_F		2
-#define IPMI_UNIT_TYPE_DEGREES_K		3
-#define IPMI_UNIT_TYPE_VOLTS			4
-#define IPMI_UNIT_TYPE_AMPS			5
-#define IPMI_UNIT_TYPE_WATTS			6
-#define IPMI_UNIT_TYPE_JOULES			7
-#define IPMI_UNIT_TYPE_COULOMBS			8
-#define IPMI_UNIT_TYPE_VA			9
-#define IPMI_UNIT_TYPE_NITS			10
-#define IPMI_UNIT_TYPE_LUMENS			11
-#define IPMI_UNIT_TYPE_LUX			12
-#define IPMI_UNIT_TYPE_CANDELA			13
-#define IPMI_UNIT_TYPE_KPA			14
-#define IPMI_UNIT_TYPE_PSI			15
-#define IPMI_UNIT_TYPE_NEWTONS			16
-#define IPMI_UNIT_TYPE_CFM			17
-#define IPMI_UNIT_TYPE_RPM			18
-#define IPMI_UNIT_TYPE_HZ			19
-#define IPMI_UNIT_TYPE_USECONDS			20
-#define IPMI_UNIT_TYPE_MSECONDS			21
-#define IPMI_UNIT_TYPE_SECONDS			22
-#define IPMI_UNIT_TYPE_MINUTE			23
-#define IPMI_UNIT_TYPE_HOUR			24
-#define IPMI_UNIT_TYPE_DAY			25
-#define IPMI_UNIT_TYPE_WEEK			26
-#define IPMI_UNIT_TYPE_MIL			27
-#define IPMI_UNIT_TYPE_INCHES			28
-#define IPMI_UNIT_TYPE_FEET			29
-#define IPMI_UNIT_TYPE_CUBIC_INCHS		30
-#define IPMI_UNIT_TYPE_CUBIC_FEET		31
-#define IPMI_UNIT_TYPE_MILLIMETERS		32
-#define IPMI_UNIT_TYPE_CENTIMETERS		33
-#define IPMI_UNIT_TYPE_METERS			34
-#define IPMI_UNIT_TYPE_CUBIC_CENTIMETERS	35
-#define IPMI_UNIT_TYPE_CUBIC_METERS		36
-#define IPMI_UNIT_TYPE_LITERS			37
-#define IPMI_UNIT_TYPE_FL_OZ			38
-#define IPMI_UNIT_TYPE_RADIANS			39
-#define IPMI_UNIT_TYPE_SERADIANS		40
-#define IPMI_UNIT_TYPE_REVOLUTIONS		41
-#define IPMI_UNIT_TYPE_CYCLES			42
-#define IPMI_UNIT_TYPE_GRAVITIES		43
-#define IPMI_UNIT_TYPE_OUNCES			44
-#define IPMI_UNIT_TYPE_POUNDS			45
-#define IPMI_UNIT_TYPE_FOOT_POUNDS		46
-#define IPMI_UNIT_TYPE_OUNCE_INCHES		47
-#define IPMI_UNIT_TYPE_GAUSS			48
-#define IPMI_UNIT_TYPE_GILBERTS			49
-#define IPMI_UNIT_TYPE_HENRIES			50
-#define IPMI_UNIT_TYPE_MHENRIES			51
-#define IPMI_UNIT_TYPE_FARADS			52
-#define IPMI_UNIT_TYPE_UFARADS			53
-#define IPMI_UNIT_TYPE_OHMS			54
-#define IPMI_UNIT_TYPE_SIEMENS			55
-#define IPMI_UNIT_TYPE_MOLES			56
-#define IPMI_UNIT_TYPE_BECQUERELS		57
-#define IPMI_UNIT_TYPE_PPM			58
-#define IPMI_UNIT_TYPE_reserved1		59
-#define IPMI_UNIT_TYPE_DECIBELS			60
-#define IPMI_UNIT_TYPE_DbA			61
-#define IPMI_UNIT_TYPE_DbC			62
-#define IPMI_UNIT_TYPE_GRAYS			63
-#define IPMI_UNIT_TYPE_SIEVERTS			64
-#define IPMI_UNIT_TYPE_COLOR_TEMP_DEG_K		65
-#define IPMI_UNIT_TYPE_BITS			66
-#define IPMI_UNIT_TYPE_KBITS			67
-#define IPMI_UNIT_TYPE_MBITS			68
-#define IPMI_UNIT_TYPE_GBITS			69
-#define IPMI_UNIT_TYPE_BYTES			70
-#define IPMI_UNIT_TYPE_KBYTES			71
-#define IPMI_UNIT_TYPE_MBYTES			72
-#define IPMI_UNIT_TYPE_GBYTES			73
-#define IPMI_UNIT_TYPE_WORDS			74
-#define IPMI_UNIT_TYPE_DWORDS			75
-#define IPMI_UNIT_TYPE_QWORDS			76
-#define IPMI_UNIT_TYPE_LINES			77
-#define IPMI_UNIT_TYPE_HITS			78
-#define IPMI_UNIT_TYPE_MISSES			79
-#define IPMI_UNIT_TYPE_RETRIES			80
-#define IPMI_UNIT_TYPE_RESETS			81
-#define IPMI_UNIT_TYPE_OVERRUNS			82
-#define IPMI_UNIT_TYPE_UNDERRUNS		83
-#define IPMI_UNIT_TYPE_COLLISIONS		84
-#define IPMI_UNIT_TYPE_PACKETS			85
-#define IPMI_UNIT_TYPE_MESSAGES			86
-#define IPMI_UNIT_TYPE_CHARACTERS		87
-#define IPMI_UNIT_TYPE_ERRORS			88
-#define IPMI_UNIT_TYPE_CORRECTABLE_ERRORS	89	
-#define IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS	90
-#define IPMI_UNIT_TYPE_FATAL_ERRORS		91
-#define IPMI_UNIT_TYPE_GRAMS			92
+%constant int UNIT_TYPE_UNSPECIFIED = IPMI_UNIT_TYPE_UNSPECIFIED;
+%constant int UNIT_TYPE_DEGREES_C = IPMI_UNIT_TYPE_DEGREES_C;
+%constant int UNIT_TYPE_DEGREES_F = IPMI_UNIT_TYPE_DEGREES_F;
+%constant int UNIT_TYPE_DEGREES_K = IPMI_UNIT_TYPE_DEGREES_K;
+%constant int UNIT_TYPE_VOLTS = IPMI_UNIT_TYPE_VOLTS;
+%constant int UNIT_TYPE_AMPS = IPMI_UNIT_TYPE_AMPS;
+%constant int UNIT_TYPE_WATTS = IPMI_UNIT_TYPE_WATTS;
+%constant int UNIT_TYPE_JOULES = IPMI_UNIT_TYPE_JOULES;
+%constant int UNIT_TYPE_COULOMBS = IPMI_UNIT_TYPE_COULOMBS;
+%constant int UNIT_TYPE_VA = IPMI_UNIT_TYPE_VA;
+%constant int UNIT_TYPE_NITS = IPMI_UNIT_TYPE_NITS;
+%constant int UNIT_TYPE_LUMENS = IPMI_UNIT_TYPE_LUMENS;
+%constant int UNIT_TYPE_LUX = IPMI_UNIT_TYPE_LUX;
+%constant int UNIT_TYPE_CANDELA = IPMI_UNIT_TYPE_CANDELA;
+%constant int UNIT_TYPE_KPA = IPMI_UNIT_TYPE_KPA;
+%constant int UNIT_TYPE_PSI = IPMI_UNIT_TYPE_PSI;
+%constant int UNIT_TYPE_NEWTONS = IPMI_UNIT_TYPE_NEWTONS;
+%constant int UNIT_TYPE_CFM = IPMI_UNIT_TYPE_CFM;
+%constant int UNIT_TYPE_RPM = IPMI_UNIT_TYPE_RPM;
+%constant int UNIT_TYPE_HZ = IPMI_UNIT_TYPE_HZ;
+%constant int UNIT_TYPE_USECONDS = IPMI_UNIT_TYPE_USECONDS;
+%constant int UNIT_TYPE_MSECONDS = IPMI_UNIT_TYPE_MSECONDS;
+%constant int UNIT_TYPE_SECONDS = IPMI_UNIT_TYPE_SECONDS;
+%constant int UNIT_TYPE_MINUTE = IPMI_UNIT_TYPE_MINUTE;
+%constant int UNIT_TYPE_HOUR = IPMI_UNIT_TYPE_HOUR;
+%constant int UNIT_TYPE_DAY = IPMI_UNIT_TYPE_DAY;
+%constant int UNIT_TYPE_WEEK = IPMI_UNIT_TYPE_WEEK;
+%constant int UNIT_TYPE_MIL = IPMI_UNIT_TYPE_MIL;
+%constant int UNIT_TYPE_INCHES = IPMI_UNIT_TYPE_INCHES;
+%constant int UNIT_TYPE_FEET = IPMI_UNIT_TYPE_FEET;
+%constant int UNIT_TYPE_CUBIC_INCHS = IPMI_UNIT_TYPE_CUBIC_INCHS;
+%constant int UNIT_TYPE_CUBIC_FEET = IPMI_UNIT_TYPE_CUBIC_FEET;
+%constant int UNIT_TYPE_MILLIMETERS = IPMI_UNIT_TYPE_MILLIMETERS;
+%constant int UNIT_TYPE_CENTIMETERS = IPMI_UNIT_TYPE_CENTIMETERS;
+%constant int UNIT_TYPE_METERS = IPMI_UNIT_TYPE_METERS;
+%constant int UNIT_TYPE_CUBIC_CENTIMETERS = IPMI_UNIT_TYPE_CUBIC_CENTIMETERS;
+%constant int UNIT_TYPE_CUBIC_METERS = IPMI_UNIT_TYPE_CUBIC_METERS;
+%constant int UNIT_TYPE_LITERS = IPMI_UNIT_TYPE_LITERS;
+%constant int UNIT_TYPE_FL_OZ = IPMI_UNIT_TYPE_FL_OZ;
+%constant int UNIT_TYPE_RADIANS = IPMI_UNIT_TYPE_RADIANS;
+%constant int UNIT_TYPE_SERADIANS = IPMI_UNIT_TYPE_SERADIANS;
+%constant int UNIT_TYPE_REVOLUTIONS = IPMI_UNIT_TYPE_REVOLUTIONS;
+%constant int UNIT_TYPE_CYCLES = IPMI_UNIT_TYPE_CYCLES;
+%constant int UNIT_TYPE_GRAVITIES = IPMI_UNIT_TYPE_GRAVITIES;
+%constant int UNIT_TYPE_OUNCES = IPMI_UNIT_TYPE_OUNCES;
+%constant int UNIT_TYPE_POUNDS = IPMI_UNIT_TYPE_POUNDS;
+%constant int UNIT_TYPE_FOOT_POUNDS = IPMI_UNIT_TYPE_FOOT_POUNDS;
+%constant int UNIT_TYPE_OUNCE_INCHES = IPMI_UNIT_TYPE_OUNCE_INCHES;
+%constant int UNIT_TYPE_GAUSS = IPMI_UNIT_TYPE_GAUSS;
+%constant int UNIT_TYPE_GILBERTS = IPMI_UNIT_TYPE_GILBERTS;
+%constant int UNIT_TYPE_HENRIES = IPMI_UNIT_TYPE_HENRIES;
+%constant int UNIT_TYPE_MHENRIES = IPMI_UNIT_TYPE_MHENRIES;
+%constant int UNIT_TYPE_FARADS = IPMI_UNIT_TYPE_FARADS;
+%constant int UNIT_TYPE_UFARADS = IPMI_UNIT_TYPE_UFARADS;
+%constant int UNIT_TYPE_OHMS = IPMI_UNIT_TYPE_OHMS;
+%constant int UNIT_TYPE_SIEMENS = IPMI_UNIT_TYPE_SIEMENS;
+%constant int UNIT_TYPE_MOLES = IPMI_UNIT_TYPE_MOLES;
+%constant int UNIT_TYPE_BECQUERELS = IPMI_UNIT_TYPE_BECQUERELS;
+%constant int UNIT_TYPE_PPM = IPMI_UNIT_TYPE_PPM;
+%constant int UNIT_TYPE_reserved1 = IPMI_UNIT_TYPE_reserved1;
+%constant int UNIT_TYPE_DECIBELS = IPMI_UNIT_TYPE_DECIBELS;
+%constant int UNIT_TYPE_DbA = IPMI_UNIT_TYPE_DbA;
+%constant int UNIT_TYPE_DbC = IPMI_UNIT_TYPE_DbC;
+%constant int UNIT_TYPE_GRAYS = IPMI_UNIT_TYPE_GRAYS;
+%constant int UNIT_TYPE_SIEVERTS = IPMI_UNIT_TYPE_SIEVERTS;
+%constant int UNIT_TYPE_COLOR_TEMP_DEG_K = IPMI_UNIT_TYPE_COLOR_TEMP_DEG_K;
+%constant int UNIT_TYPE_BITS = IPMI_UNIT_TYPE_BITS;
+%constant int UNIT_TYPE_KBITS = IPMI_UNIT_TYPE_KBITS;
+%constant int UNIT_TYPE_MBITS = IPMI_UNIT_TYPE_MBITS;
+%constant int UNIT_TYPE_GBITS = IPMI_UNIT_TYPE_GBITS;
+%constant int UNIT_TYPE_BYTES = IPMI_UNIT_TYPE_BYTES;
+%constant int UNIT_TYPE_KBYTES = IPMI_UNIT_TYPE_KBYTES;
+%constant int UNIT_TYPE_MBYTES = IPMI_UNIT_TYPE_MBYTES;
+%constant int UNIT_TYPE_GBYTES = IPMI_UNIT_TYPE_GBYTES;
+%constant int UNIT_TYPE_WORDS = IPMI_UNIT_TYPE_WORDS;
+%constant int UNIT_TYPE_DWORDS = IPMI_UNIT_TYPE_DWORDS;
+%constant int UNIT_TYPE_QWORDS = IPMI_UNIT_TYPE_QWORDS;
+%constant int UNIT_TYPE_LINES = IPMI_UNIT_TYPE_LINES;
+%constant int UNIT_TYPE_HITS = IPMI_UNIT_TYPE_HITS;
+%constant int UNIT_TYPE_MISSES = IPMI_UNIT_TYPE_MISSES;
+%constant int UNIT_TYPE_RETRIES = IPMI_UNIT_TYPE_RETRIES;
+%constant int UNIT_TYPE_RESETS = IPMI_UNIT_TYPE_RESETS;
+%constant int UNIT_TYPE_OVERRUNS = IPMI_UNIT_TYPE_OVERRUNS;
+%constant int UNIT_TYPE_UNDERRUNS = IPMI_UNIT_TYPE_UNDERRUNS;
+%constant int UNIT_TYPE_COLLISIONS = IPMI_UNIT_TYPE_COLLISIONS;
+%constant int UNIT_TYPE_PACKETS = IPMI_UNIT_TYPE_PACKETS;
+%constant int UNIT_TYPE_MESSAGES = IPMI_UNIT_TYPE_MESSAGES;
+%constant int UNIT_TYPE_CHARACTERS = IPMI_UNIT_TYPE_CHARACTERS;
+%constant int UNIT_TYPE_ERRORS = IPMI_UNIT_TYPE_ERRORS;
+%constant int UNIT_TYPE_CORRECTABLE_ERRORS = IPMI_UNIT_TYPE_CORRECTABLE_ERRORS;
+%constant int UNIT_TYPE_UNCORRECTABLE_ERRORS = IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS;
+%constant int UNIT_TYPE_FATAL_ERRORS = IPMI_UNIT_TYPE_FATAL_ERRORS;
+%constant int UNIT_TYPE_GRAMS = IPMI_UNIT_TYPE_GRAMS;
 
     /*
      * Get the sensor's base unit.
@@ -6556,9 +6595,9 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_modifier_unit(self);
     }
 
-#define MODIFIER_UNIT_NONE		0
-#define MODIFIER_UNIT_BASE_DIV_MOD	1
-#define MODIFIER_UNIT_BASE_MULT_MOD	2
+%constant int MODIFIER_UNIT_NONE = IPMI_MODIFIER_UNIT_NONE;
+%constant int MODIFIER_UNIT_BASE_DIV_MOD = IPMI_MODIFIER_UNIT_BASE_DIV_MOD;
+%constant int MODIFIER_UNIT_BASE_MULT_MOD = IPMI_MODIFIER_UNIT_BASE_MULT_MOD;
 
     /*
      * Return the how the modifier unit should be used.  If this
@@ -6694,10 +6733,10 @@ char *get_event_support_string(int val);
     }
 
 
-#define THRESHOLD_ACCESS_SUPPORT_NONE		0
-#define THRESHOLD_ACCESS_SUPPORT_READABLE	1
-#define THRESHOLD_ACCESS_SUPPORT_SETTABLE	2
-#define THRESHOLD_ACCESS_SUPPORT_FIXED		3
+%constant int THRESHOLD_ACCESS_SUPPORT_NONE = IPMI_THRESHOLD_ACCESS_SUPPORT_NONE;
+%constant int THRESHOLD_ACCESS_SUPPORT_READABLE = IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE;
+%constant int THRESHOLD_ACCESS_SUPPORT_SETTABLE = IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE;
+%constant int THRESHOLD_ACCESS_SUPPORT_FIXED = IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED;
 
     /*
      * Get how the thresholds of the sensor may be accessed.
@@ -6707,10 +6746,10 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_threshold_access(self);
     }
 
-#define HYSTERESIS_SUPPORT_NONE		0
-#define HYSTERESIS_SUPPORT_READABLE	1
-#define HYSTERESIS_SUPPORT_SETTABLE	2
-#define HYSTERESIS_SUPPORT_FIXED	3
+%constant int HYSTERESIS_SUPPORT_NONE = IPMI_HYSTERESIS_SUPPORT_NONE;
+%constant int HYSTERESIS_SUPPORT_READABLE = IPMI_HYSTERESIS_SUPPORT_READABLE;
+%constant int HYSTERESIS_SUPPORT_SETTABLE = IPMI_HYSTERESIS_SUPPORT_SETTABLE;
+%constant int HYSTERESIS_SUPPORT_FIXED = IPMI_HYSTERESIS_SUPPORT_FIXED;
 
     /*
      * Get how the hysteresis of the sensor may be accessed.
@@ -6720,10 +6759,10 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_hysteresis_support(self);
     }
 
-#define EVENT_SUPPORT_PER_STATE		0
-#define EVENT_SUPPORT_ENTIRE_SENSOR	1
-#define EVENT_SUPPORT_GLOBAL_ENABLE	2
-#define EVENT_SUPPORT_NONE		3
+%constant int EVENT_SUPPORT_PER_STATE = IPMI_EVENT_SUPPORT_PER_STATE;
+%constant int EVENT_SUPPORT_ENTIRE_SENSOR = IPMI_EVENT_SUPPORT_ENTIRE_SENSOR;
+%constant int EVENT_SUPPORT_GLOBAL_ENABLE = IPMI_EVENT_SUPPORT_GLOBAL_ENABLE;
+%constant int EVENT_SUPPORT_NONE = IPMI_EVENT_SUPPORT_NONE;
 
     /*
      * Get how the events in the sensor may be enabled and disabled.
@@ -6733,9 +6772,9 @@ char *get_event_support_string(int val);
 	return ipmi_sensor_get_event_support(self);
     }
 
-#define SENSOR_DIRECTION_UNSPECIFIED	0
-#define SENSOR_DIRECTION_INPUT		1
-#define SENSOR_DIRECTION_OUTPUT		2
+%constant int SENSOR_DIRECTION_UNSPECIFIED = IPMI_SENSOR_DIRECTION_UNSPECIFIED;
+%constant int SENSOR_DIRECTION_INPUT = IPMI_SENSOR_DIRECTION_INPUT;
+%constant int SENSOR_DIRECTION_OUTPUT = IPMI_SENSOR_DIRECTION_OUTPUT;
 
     /*
      * Get whether the sensor is monitoring an input or an output.
@@ -6978,6 +7017,12 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
+    /* Compare self with other for equality.  */
+    int cmp(ipmi_control_id_t *other)
+    {
+	return ipmi_cmp_control_id(*self, *other);
+    }
+
     /*
      * Convert a control id to a control pointer.  The "control_cb" method
      * will be called on the first parameter with the following parameters:
@@ -7030,17 +7075,17 @@ char *get_event_support_string(int val);
 	return ipmi_control_get_type_string(self);
     }
 
-#define CONTROL_LIGHT		1
-#define CONTROL_RELAY		2
-#define CONTROL_DISPLAY		3
-#define CONTROL_ALARM		4
-#define CONTROL_RESET		5
-#define CONTROL_POWER		6
-#define CONTROL_FAN_SPEED	7
-#define CONTROL_IDENTIFIER	8
-#define CONTROL_ONE_SHOT_RESET	9
-#define CONTROL_OUTPUT		10
-#define CONTROL_ONE_SHOT_OUTPUT	11
+%constant int CONTROL_LIGHT = IPMI_CONTROL_LIGHT;
+%constant int CONTROL_RELAY = IPMI_CONTROL_RELAY;
+%constant int CONTROL_DISPLAY = IPMI_CONTROL_DISPLAY;
+%constant int CONTROL_ALARM = IPMI_CONTROL_ALARM;
+%constant int CONTROL_RESET = IPMI_CONTROL_RESET;
+%constant int CONTROL_POWER = IPMI_CONTROL_POWER;
+%constant int CONTROL_FAN_SPEED = IPMI_CONTROL_FAN_SPEED;
+%constant int CONTROL_IDENTIFIER = IPMI_CONTROL_IDENTIFIER;
+%constant int CONTROL_ONE_SHOT_RESET = IPMI_CONTROL_ONE_SHOT_RESET;
+%constant int CONTROL_OUTPUT = IPMI_CONTROL_OUTPUT;
+%constant int CONTROL_ONE_SHOT_OUTPUT = IPMI_CONTROL_ONE_SHOT_OUTPUT;
 
     /*
      * Get the numeric type of control.
@@ -7209,14 +7254,14 @@ char *get_event_support_string(int val);
 	cb_rm(control, val_event, control_event_val_cb);
     }
 
-#define CONTROL_COLOR_BLACK	0
-#define CONTROL_COLOR_WHITE	1
-#define CONTROL_COLOR_RED	2
-#define CONTROL_COLOR_GREEN	3
-#define CONTROL_COLOR_BLUE	4
-#define CONTROL_COLOR_YELLOW	5
-#define CONTROL_COLOR_ORANGE	6
-#define CONTROL_NUM_COLORS	7
+%constant int CONTROL_COLOR_BLACK = IPMI_CONTROL_COLOR_BLACK;
+%constant int CONTROL_COLOR_WHITE = IPMI_CONTROL_COLOR_WHITE;
+%constant int CONTROL_COLOR_RED = IPMI_CONTROL_COLOR_RED;
+%constant int CONTROL_COLOR_GREEN = IPMI_CONTROL_COLOR_GREEN;
+%constant int CONTROL_COLOR_BLUE = IPMI_CONTROL_COLOR_BLUE;
+%constant int CONTROL_COLOR_YELLOW = IPMI_CONTROL_COLOR_YELLOW;
+%constant int CONTROL_COLOR_ORANGE = IPMI_CONTROL_COLOR_ORANGE;
+%constant int CONTROL_NUM_COLORS = IPMI_CONTROL_COLOR_ORANGE+1;
 
     /*
      * This describes a setting for a light.  There are two types of
@@ -7459,11 +7504,11 @@ char *get_event_support_string(int val);
     }
 
 /* Area numbers */
-#define FRU_INTERNAL_USE_AREA 0
-#define FRU_CHASSIS_INFO_AREA 1
-#define FRU_BOARD_INFO_AREA   2
-#define FRU_PRODUCT_INFO_AREA 3
-#define FRU_MULTI_RECORD_AREA 4
+%constant int FRU_INTERNAL_USE_AREA = IPMI_FRU_FTR_INTERNAL_USE_AREA;
+%constant int FRU_CHASSIS_INFO_AREA = IPMI_FRU_FTR_CHASSIS_INFO_AREA;
+%constant int FRU_BOARD_INFO_AREA = IPMI_FRU_FTR_BOARD_INFO_AREA;
+%constant int FRU_PRODUCT_INFO_AREA = IPMI_FRU_FTR_PRODUCT_INFO_AREA;
+%constant int FRU_MULTI_RECORD_AREA = IPMI_FRU_FTR_MULTI_RECORD_AREA;
 
     %newobject get_domain_id;
     /*
@@ -8216,26 +8261,26 @@ char *get_event_support_string(int val);
 	return ipmi_lanparm_get_channel(self);
     }
 
-#define LANPARM_SET_IN_PROGRESS			0
-#define LANPARM_AUTH_TYPE_SUPPORT		1
-#define LANPARM_AUTH_TYPE_ENABLES		2
-#define LANPARM_IP_ADDRESS			3
-#define LANPARM_IP_ADDRESS_SRC			4
-#define LANPARM_MAX_ADDRESS			5
-#define LANPARM_SUBNET_MASK			6
-#define LANPARM_IPV4_HDR_PARMS			7
-#define LANPARM_PRIMARY_RMCP_PORT		8
-#define LANPARM_SECONDARY_RMCP_PORT		9
-#define LANPARM_BMC_GENERATED_ARP_CNTL		10
-#define LANPARM_GRATUIDOUS_ARP_INTERVAL		11
-#define LANPARM_DEFAULT_GATEWAY_ADDR		12
-#define LANPARM_DEFAULT_GATEWAY_MAC_ADDR	13
-#define LANPARM_BACKUP_GATEWAY_ADDR		14
-#define LANPARM_BACKUP_GATEWAY_MAC_ADDR		15
-#define LANPARM_COMMUNITY_STRING		16
-#define LANPARM_NUM_DESTINATIONS		17
-#define LANPARM_DEST_TYPE			18
-#define LANPARM_DEST_ADDR			19
+%constant int LANPARM_SET_IN_PROGRESS = IPMI_LANPARM_SET_IN_PROGRESS;
+%constant int LANPARM_AUTH_TYPE_SUPPORT = IPMI_LANPARM_AUTH_TYPE_SUPPORT;
+%constant int LANPARM_AUTH_TYPE_ENABLES = IPMI_LANPARM_AUTH_TYPE_ENABLES;
+%constant int LANPARM_IP_ADDRESS = IPMI_LANPARM_IP_ADDRESS;
+%constant int LANPARM_IP_ADDRESS_SRC = IPMI_LANPARM_IP_ADDRESS_SRC;
+%constant int LANPARM_MAX_ADDRESS = IPMI_LANPARM_MAX_ADDRESS;
+%constant int LANPARM_SUBNET_MASK = IPMI_LANPARM_SUBNET_MASK;
+%constant int LANPARM_IPV4_HDR_PARMS = IPMI_LANPARM_IPV4_HDR_PARMS;
+%constant int LANPARM_PRIMARY_RMCP_PORT = IPMI_LANPARM_PRIMARY_RMCP_PORT;
+%constant int LANPARM_SECONDARY_RMCP_PORT = IPMI_LANPARM_SECONDARY_RMCP_PORT;
+%constant int LANPARM_BMC_GENERATED_ARP_CNTL = IPMI_LANPARM_BMC_GENERATED_ARP_CNTL;
+%constant int LANPARM_GRATUIDOUS_ARP_INTERVAL = IPMI_LANPARM_GRATUIDOUS_ARP_INTERVAL;
+%constant int LANPARM_DEFAULT_GATEWAY_ADDR = IPMI_LANPARM_DEFAULT_GATEWAY_ADDR;
+%constant int LANPARM_DEFAULT_GATEWAY_MAC_ADDR = IPMI_LANPARM_DEFAULT_GATEWAY_MAC_ADDR;
+%constant int LANPARM_BACKUP_GATEWAY_ADDR = IPMI_LANPARM_BACKUP_GATEWAY_ADDR;
+%constant int LANPARM_BACKUP_GATEWAY_MAC_ADDR = IPMI_LANPARM_BACKUP_GATEWAY_MAC_ADDR;
+%constant int LANPARM_COMMUNITY_STRING = IPMI_LANPARM_COMMUNITY_STRING;
+%constant int LANPARM_NUM_DESTINATIONS = IPMI_LANPARM_NUM_DESTINATIONS;
+%constant int LANPARM_DEST_TYPE = IPMI_LANPARM_DEST_TYPE;
+%constant int LANPARM_DEST_ADDR = IPMI_LANPARM_DEST_ADDR;
 
     /*
      * Fetch an individual parm from the MC.  The parameter (parm1) ,
@@ -8650,20 +8695,20 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
-#define PEFPARM_SET_IN_PROGRESS			0
-#define PEFPARM_CONTROL				1
-#define PEFPARM_ACTION_GLOBAL_CONTROL		2
-#define PEFPARM_STARTUP_DELAY			3
-#define PEFPARM_ALERT_STARTUP_DELAY		4
-#define PEFPARM_NUM_EVENT_FILTERS		5
-#define PEFPARM_EVENT_FILTER_TABLE		6
-#define PEFPARM_EVENT_FILTER_TABLE_DATA1	7
-#define PEFPARM_NUM_ALERT_POLICIES		8
-#define PEFPARM_ALERT_POLICY_TABLE		9
-#define PEFPARM_SYSTEM_GUID			10
-#define PEFPARM_NUM_ALERT_STRINGS		11
-#define PEFPARM_ALERT_STRING_KEY		12
-#define PEFPARM_ALERT_STRING			13
+%constant int PEFPARM_SET_IN_PROGRESS = IPMI_PEFPARM_SET_IN_PROGRESS;
+%constant int PEFPARM_CONTROL = IPMI_PEFPARM_CONTROL;
+%constant int PEFPARM_ACTION_GLOBAL_CONTROL = IPMI_PEFPARM_ACTION_GLOBAL_CONTROL;
+%constant int PEFPARM_STARTUP_DELAY = IPMI_PEFPARM_STARTUP_DELAY;
+%constant int PEFPARM_ALERT_STARTUP_DELAY = IPMI_PEFPARM_ALERT_STARTUP_DELAY;
+%constant int PEFPARM_NUM_EVENT_FILTERS = IPMI_PEFPARM_NUM_EVENT_FILTERS;
+%constant int PEFPARM_EVENT_FILTER_TABLE = IPMI_PEFPARM_EVENT_FILTER_TABLE;
+%constant int PEFPARM_EVENT_FILTER_TABLE_DATA1 = IPMI_PEFPARM_EVENT_FILTER_TABLE_DATA1;
+%constant int PEFPARM_NUM_ALERT_POLICIES = IPMI_PEFPARM_NUM_ALERT_POLICIES;
+%constant int PEFPARM_ALERT_POLICY_TABLE = IPMI_PEFPARM_ALERT_POLICY_TABLE;
+%constant int PEFPARM_SYSTEM_GUID = IPMI_PEFPARM_SYSTEM_GUID;
+%constant int PEFPARM_NUM_ALERT_STRINGS = IPMI_PEFPARM_NUM_ALERT_STRINGS;
+%constant int PEFPARM_ALERT_STRING_KEY = IPMI_PEFPARM_ALERT_STRING_KEY;
+%constant int PEFPARM_ALERT_STRING = IPMI_PEFPARM_ALERT_STRING;
 
     /*
      * Fetch an individual parm from the MC.  The parameter (parm1) ,

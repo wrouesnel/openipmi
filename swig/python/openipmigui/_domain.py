@@ -495,6 +495,9 @@ class Domain:
             entity.add_control_update_handler(e)
         elif (op == "removed"):
             self.entities[entity.get_name()].remove()
+        else:
+            e = self.find_or_create_entity(entity)
+            e.Changed(entity)
         
     def mc_update_cb(self, op, domain, mc):
         if (op == "added"):
