@@ -39,13 +39,13 @@ import _fru
 
 class EntityOp:
     def __init__(self, e, func):
-        self.e = e;
-        self.func = func;
+        self.e = e
+        self.func = func
 
     def DoOp(self):
         rv = self.e.entity_id.to_entity(self)
         if (rv == 0):
-            rv = self.rv;
+            rv = self.rv
         return rv;
 
     def entity_cb(self, entity):
@@ -53,7 +53,7 @@ class EntityOp:
 
 class EntityFruViewer:
     def __init__(self, e):
-        self.e = e;
+        self.e = e
         self.e.entity_id.to_entity(self)
 
     def entity_cb(self, entity):

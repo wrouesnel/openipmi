@@ -1,5 +1,4 @@
 SEL management
-MC info
 MC commands:
    event enables
    send message
@@ -15,6 +14,9 @@ MC commands:
    pef
 Sensor commands:
    rearm
-Domain info
+Domain
    connections
+   fetch FRU
+   send message
+   pet
 Debug settings

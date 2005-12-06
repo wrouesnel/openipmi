@@ -5000,6 +5000,11 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
+    /*
+     * Find out of the event log is enabled.  The
+     * mc_get_event_log_enable_cb will be called on the supplied
+     * handler with the following parms: <self> <mc> <err> <val>
+     */
     int get_event_log_enable(swig_cb handler)
     {
 	swig_cb_val handler_val;
@@ -5017,6 +5022,11 @@ char *get_event_support_string(int val);
 	return rv;
     }
 
+    /*
+     * Set the MC's event log enable.  The mc_set_event_log_enable_cb
+     * will be called on the supplied handler with the following
+     * parms: <self> <mc> <err>
+     */
     int get_event_log_enable(int val, swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
@@ -5040,7 +5050,8 @@ char *get_event_support_string(int val);
      * device SDRs for that mc (And only for that MC) and change the
      * sensors as necessary.  When the operation completes, the
      * mc_reread_sensors_cb on the first parameter (if supplied) will
-     * be called with the following parms: <self> <mc> <err>. */
+     * be called with the following parms: <self> <mc> <err>.
+     */
     int reread_sensors(swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
@@ -8162,7 +8173,7 @@ char *get_event_support_string(int val);
     /* When you are done with an event, you should delete it.  This
        removes the event from the local event queue and removes it
        from the external system event log. */
-    int delete(swig_cb handler)
+    int delete(swig_cb handler = NULL)
     {
 	swig_cb_val    handler_val = NULL;
 	ipmi_domain_cb done = NULL;

@@ -35,6 +35,7 @@ import OpenIPMI
 import _entity
 import _mc
 import _saveprefs
+import _sel
 import logging
 
 class InvalidDomainError(Exception):
@@ -45,6 +46,19 @@ class InvalidDomainError(Exception):
     def __str__(self):
         return str(self.value)
 
+class DomainOpHandler:
+    def __init__(self, d, func, handler):
+        self.d = d
+        self.func = func
+        self.handler = handler
+
+    def DoOp(self):
+        rv = d.domain_id.to_domain(self)
+        if (rv == 0):
+            rv = self.rv
+
+    def domain_cb(self, domain):
+        self.rv = getattr(domain, self.func)(handler)
 
 class DomainRefreshData:
     def __init__(self, d):
@@ -57,7 +71,8 @@ class DomainRefreshData:
         self.d.ui.set_item_text(self.d.srscn, str(self.d.sel_rescan_time))
         self.d.ui.set_item_text(self.d.dguid, domain.get_guid())
         self.d.ui.set_item_text(self.d.dtype, domain.get_type())
-
+        self.d.ui.set_item_text(self.d.selcnt, str(domain.sel_count()))
+        self.d.ui.set_item_text(self.d.selused, str(domain.sel_entries_used()))
 
 class DomainSelSet:
     def __init__(self, d):
@@ -408,6 +423,8 @@ class Domain:
         self.ui.add_domain(self)
         self.ipmb_rescan_time = 0
         self.sel_rescan_time = 0
+        self.selcnt = self.ui.prepend_item(self, "SEL Count", None)
+        self.selused = self.ui.prepend_item(self, "SEL Entries Used", None)
         self.irscn = self.ui.prepend_item(self, "IPMB Rescan Time", None,
                                           DomainIPMBSet(self))
         self.srscn = self.ui.prepend_item(self, "SEL Rescan Time", None,
@@ -447,11 +464,22 @@ class Domain:
         menu = wx.Menu();
         item = menu.Append(-1, "Close")
         self.ui.Bind(wx.EVT_MENU, self.CloseMenuHandler, item)
+        item = menu.Append(-1, "Reread SELs")
+        self.ui.Bind(wx.EVT_MENU, self.RereadSelsHandler, item)
+        item = menu.Append(-1, "Display SELs")
+        self.ui.Bind(wx.EVT_MENU, self.DisplaySelsHandler, item)
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
 
     def CloseMenuHandler(self, event):
         self.remove()
+
+    def RereadSelsHandler(self, event):
+        dop = DomainOpHandler(self, "reread_sels", None)
+        dop.DoOp()
+
+    def DisplaySelsHandler(self, event):
+        _sel.DomainSELDisplay(self.domain_id)
 
     def Connect(self):
         attr = [ ]
@@ -499,11 +527,21 @@ class Domain:
             e = self.find_or_create_entity(entity)
             e.Changed(entity)
         
+    def find_or_create_mc(self, mc):
+        mname = mc.get_name()
+        if (mname in self.mcs):
+            return self.mcs[mname];
+        else:
+            return _mc.MC(self, mc)
+        
     def mc_update_cb(self, op, domain, mc):
         if (op == "added"):
             _mc.MC(self, mc)
         elif (op == "removed"):
             self.entities[mc.get_name()].remove()
+        else:
+            m = self.find_or_create_mc(mc)
+            m.Changed(mc)
         
     def domain_cb(self, domain):
         domain.close(self)
