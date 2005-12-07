@@ -53,30 +53,49 @@ class DomainOpHandler:
         self.handler = handler
 
     def DoOp(self):
-        rv = d.domain_id.to_domain(self)
+        rv = self.d.domain_id.to_domain(self)
         if (rv == 0):
             rv = self.rv
 
     def domain_cb(self, domain):
         self.rv = getattr(domain, self.func)(handler)
 
+
 class DomainRefreshData:
-    def __init__(self, d):
+    def __init__(self, d, func):
         self.d = d;
+        self.item = None
+        self.func = func
+        return
+
+    def SetItem(self, item):
+        self.item = item
+        return
+
+    def DoUpdate(self):
+        if (not self.item):
+            return
+        if (not self.d.domain_id):
+            return
+        self.d.domain_id.to_domain(self)
+        return
 
     def domain_cb(self, domain):
-        self.d.ipmb_rescan_time = domain.get_ipmb_rescan_time()
-        self.d.sel_rescan_time = domain.get_sel_rescan_time()
-        self.d.ui.set_item_text(self.d.irscn, str(self.d.ipmb_rescan_time))
-        self.d.ui.set_item_text(self.d.srscn, str(self.d.sel_rescan_time))
-        self.d.ui.set_item_text(self.d.dguid, domain.get_guid())
-        self.d.ui.set_item_text(self.d.dtype, domain.get_type())
-        self.d.ui.set_item_text(self.d.selcnt, str(domain.sel_count()))
-        self.d.ui.set_item_text(self.d.selused, str(domain.sel_entries_used()))
+        val = getattr(domain, self.func)()
+        self.d.ui.set_item_text(self.item, str(val))
+        return
 
-class DomainSelSet:
+
+class DomainSelSet(DomainRefreshData):
     def __init__(self, d):
         self.d = d;
+        self.refr = DomainRefreshData(d, "get_sel_rescan_time")
+
+    def DoUpdate(self):
+        self.refr.DoUpdate()
+
+    def SetItem(self, item):
+        self.refr.SetItem(item)
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -87,6 +106,8 @@ class DomainSelSet:
         menu.Destroy()
 
     def modval(self, event):
+        self.init = True
+        self.d.domain_id.to_domain(self)
         dialog = wx.Dialog(None, -1, "Set SEL Rescan Time for " + str(self.d))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -94,7 +115,7 @@ class DomainSelSet:
         box = wx.BoxSizer(wx.HORIZONTAL)
         label = wx.StaticText(dialog, -1, "Value:")
         box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(dialog, -1, str(self.d.sel_rescan_time))
+        self.field = wx.TextCtrl(dialog, -1, str(self.sel_rescan_time))
         box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         
@@ -121,6 +142,7 @@ class DomainSelSet:
             self.ival = int(val)
         except:
             return
+        self.init = False
         self.d.domain_id.to_domain(self)
         self.dialog.Close()
 
@@ -128,14 +150,23 @@ class DomainSelSet:
         self.dialog.Destroy()
 
     def domain_cb(self, domain):
-        domain.set_sel_rescan_time(self.ival)
-        if (self.d.srscn != None):
-            self.d.ui.set_item_text(self.d.srscn,
-                                    str(domain.get_sel_rescan_time()))
+        if self.init:
+            self.sel_rescan_time = domain.get_sel_rescan_time()
+        else:
+            domain.set_sel_rescan_time(self.ival)
+            self.refr.DoUpdate()
+
         
-class DomainIPMBSet:
+class DomainIPMBSet(DomainRefreshData):
     def __init__(self, d):
         self.d = d;
+        self.refr = DomainRefreshData(d, "get_ipmb_rescan_time")
+
+    def DoUpdate(self):
+        self.refr.DoUpdate()
+
+    def SetItem(self, item):
+        self.refr.SetItem(item)
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -146,6 +177,8 @@ class DomainIPMBSet:
         menu.Destroy()
 
     def modval(self, event):
+        self.init = True
+        self.d.domain_id.to_domain(self)
         dialog = wx.Dialog(None, -1, "Set IPMB Rescan Time for " + str(self.d))
         self.dialog = dialog
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -153,7 +186,7 @@ class DomainIPMBSet:
         box = wx.BoxSizer(wx.HORIZONTAL)
         label = wx.StaticText(dialog, -1, "Value:")
         box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(dialog, -1, str(self.d.ipmb_rescan_time))
+        self.field = wx.TextCtrl(dialog, -1, str(self.ipmb_rescan_time))
         box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         
@@ -180,6 +213,7 @@ class DomainIPMBSet:
             self.ival = int(val)
         except:
             return
+        self.init = False
         self.d.domain_id.to_domain(self)
         self.dialog.Close()
 
@@ -187,10 +221,12 @@ class DomainIPMBSet:
         self.dialog.Destroy()
 
     def domain_cb(self, domain):
-        domain.set_ipmb_rescan_time(self.ival)
-        if (self.d.srscn != None):
-            self.d.ui.set_item_text(self.d.irscn,
-                                    str(domain.get_ipmb_rescan_time()))
+        if self.init:
+            self.ipmb_rescan_time = domain.get_ipmb_rescan_time()
+        else:
+            domain.set_ipmb_rescan_time(self.ival)
+            self.refr.DoUpdate()
+
 
 class DomainConnection:
     def __init__(self):
@@ -416,25 +452,29 @@ class Domain:
             con2 = DomainConnection()
         self.connection = [ con1, con2 ]
 
-        self.updater = DomainRefreshData(self)
         self.domain_id = None
         mainhandler.domains[name] = self
         
         self.ui.add_domain(self)
-        self.ipmb_rescan_time = 0
-        self.sel_rescan_time = 0
-        self.selcnt = self.ui.prepend_item(self, "SEL Count", None)
-        self.selused = self.ui.prepend_item(self, "SEL Entries Used", None)
-        self.irscn = self.ui.prepend_item(self, "IPMB Rescan Time", None,
-                                          DomainIPMBSet(self))
-        self.srscn = self.ui.prepend_item(self, "SEL Rescan Time", None,
-                                          DomainSelSet(self))
-        self.dguid = self.ui.prepend_item(self, "GUID", None)
-        self.dtype = self.ui.prepend_item(self, "Type", None)
+
+        self.refreshers = [ ]
+        self.add_refr_item("SEL Count", DomainRefreshData(self, "sel_count"))
+        self.add_refr_item("SEL Entries Used",
+                           DomainRefreshData(self, "sel_entries_used"))
+        self.add_refr_item("IPMB Rescan Time", DomainIPMBSet(self))
+        self.add_refr_item("SEL Rescan Time", DomainSelSet(self))
+        self.add_refr_item("GUID", DomainRefreshData(self, "get_guid"))
+        self.add_refr_item("Type", DomainRefreshData(self, "get_type"))
 
     def __str__(self):
         return self.name
 
+    def add_refr_item(self, name, refr):
+        item = self.ui.prepend_item(self, name, None, refr)
+        refr.SetItem(item)
+        self.refreshers.append(refr)
+        return refr
+        
     def getTag(self):
         return "domain"
 
@@ -452,12 +492,9 @@ class Domain:
                 c2.setAttribute(attr[0], attr[1])
             elem.appendChild(c2)
 
-    def DoUpdate(self):
-        if (self.domain_id != None):
-            self.domain_id.to_domain(self.updater)
-
     def HandleExpand(self, event):
-        self.DoUpdate()
+        for i in self.refreshers:
+            i.DoUpdate()
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -507,7 +544,6 @@ class Domain:
     def connected(self, domain):
         domain.add_entity_update_handler(self)
         domain.add_mc_update_handler(self)
-        DomainRefreshData(self)
 
     def find_or_create_entity(self, entity):
         ename = entity.get_name()

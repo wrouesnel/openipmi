@@ -3058,7 +3058,8 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
-    /* Compare self with other for equality.  */
+    /* Compare self with other, return -1 if self<other, 0 if
+       self==other, or 1 if self>other.  */
     int cmp(ipmi_domain_id_t *other)
     {
 	return ipmi_cmp_domain_id(*self, *other);
@@ -3674,7 +3675,8 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
-    /* Compare self with other for equality.  */
+    /* Compare self with other, return -1 if self<other, 0 if
+       self==other, or 1 if self>other.  */
     int cmp(ipmi_entity_id_t *other)
     {
 	return ipmi_cmp_entity_id(*self, *other);
@@ -4585,7 +4587,8 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
-    /* Compare self with other for equality.  */
+    /* Compare self with other, return -1 if self<other, 0 if
+       self==other, or 1 if self>other.  */
     int cmp(ipmi_mcid_t *other)
     {
 	return ipmi_cmp_mc_id(*self, *other);
@@ -5027,7 +5030,7 @@ char *get_event_support_string(int val);
      * will be called on the supplied handler with the following
      * parms: <self> <mc> <err>
      */
-    int get_event_log_enable(int val, swig_cb handler = NULL)
+    int set_event_log_enable(int val, swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
@@ -5088,7 +5091,7 @@ char *get_event_support_string(int val);
     }
 
     /*
-     * Reread the sel for the MC.  When the hander is called, all the
+     * Reread the sel for the MC.  When the handler is called, all the
      * events in the SEL have been fetched into the local copy of the
      * SEL (with the obvious caveat that this is a distributed system
      * and other things may have come in after the read has finised).
@@ -5892,7 +5895,8 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
-    /* Compare self with other for equality.  */
+    /* Compare self with other, return -1 if self<other, 0 if
+       self==other, or 1 if self>other.  */
     int cmp(ipmi_sensor_id_t *other)
     {
 	return ipmi_cmp_sensor_id(*self, *other);
@@ -7028,7 +7032,8 @@ char *get_event_support_string(int val);
 	free(self);
     }
 
-    /* Compare self with other for equality.  */
+    /* Compare self with other, return -1 if self<other, 0 if
+       self==other, or 1 if self>other.  */
     int cmp(ipmi_control_id_t *other)
     {
 	return ipmi_cmp_control_id(*self, *other);

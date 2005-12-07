@@ -1,12 +1,7 @@
-SEL management
 MC commands:
-   event enables
    send message
-   reset
-   sel rescan
-   SDR fetch
-   event log enables
-   channel commandss
+   SDR fetch and display
+   channel commands
       access controls
       user configuration
    lanparm

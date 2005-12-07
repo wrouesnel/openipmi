@@ -1,3 +1,8 @@
+2005-12-06 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fix wrong name of set_event_log_enable for the
+	MC class.
+
 2005-12-05 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Added compare functions for all entity ids.

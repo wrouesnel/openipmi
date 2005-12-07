@@ -129,15 +129,21 @@ class SELDisplay(wx.Dialog):
 
 class DomainSELDisplay(SELDisplay):
     def __init__(self, domain_id):
+        self.domain_id = domain_id
+        self.init = True
         domain_id.to_domain(self)
 
     def OnClose(self, event):
-        self.Destroy()
+        self.init = False
+        self.domain_id.to_domain(self)
         SELDisplay.OnClose(self, event)
 
     def domain_cb(self, domain):
-        SELDisplay.__init__(self, domain, "domain")
-        domain.add_event_handler(self)
+        if (self.init):
+            SELDisplay.__init__(self, domain, "domain")
+            domain.add_event_handler(self)
+        else:
+            domain.remove_event_handler(self)
 
     def event_cb(self, domain, ev):
         idx = self.listc.InsertStringItem(sys.maxint, str(ev.get_record_id()))
@@ -147,3 +153,34 @@ class DomainSELDisplay(SELDisplay):
         self.events[self.evnum] = ev
         self.listc.SetItemData(idx, self.evnum)
         self.evnum += 1
+
+class MCSELDisplay(SELDisplay):
+    def __init__(self, mc_id):
+        self.init = True
+        self.mc_id = mc_id
+        mc_id.to_mc(self)
+
+    def OnClose(self, event):
+        self.init = False
+        self.mc_id.to_mc(self)
+        SELDisplay.OnClose(self, event)
+
+    def mc_cb(self, mc):
+        domain = mc.get_domain()
+        if self.init:
+            SELDisplay.__init__(self, mc, "MC")
+            domain.add_event_handler(self)
+        else:
+            domain.remove_event_handler(self)
+
+    def event_cb(self, mc, ev):
+        mc_id = ev.get_mc_id()
+        if (mc_id.cmp(self.mc_id) == 0):
+            idx = self.listc.InsertStringItem(sys.maxint,
+                                              str(ev.get_record_id()))
+            self.listc.SetStringItem(idx, 1, str(ev.get_type()))
+            self.listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
+            self.listc.SetStringItem(idx, 3, str(ev.get_data()))
+            self.events[self.evnum] = ev
+            self.listc.SetItemData(idx, self.evnum)
+            self.evnum += 1

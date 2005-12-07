@@ -33,7 +33,10 @@
 
 
 %typemap(in) swig_cb {
-    $1 = $input;
+    if ($input == Py_None)
+	$1 = NULL;
+    else
+	$1 = $input;
 }
 
 %typemap(arginit) intarray {
