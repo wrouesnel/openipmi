@@ -410,6 +410,7 @@ ref_swig_cb_i(swig_cb cb)
     return cb;
 }
 #define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
+#define ref_swig_2cb(cb, func, func2) ref_swig_cb_i(cb)
 
 static swig_cb_val
 deref_swig_cb(swig_cb cb)
@@ -451,6 +452,8 @@ valid_swig_cb_i(swig_cb cb, char *func)
     return 1;
 }
 #define valid_swig_cb(v, func) valid_swig_cb_i(v, #func)
+#define valid_swig_2cb(v, func, func2) \
+  (valid_swig_cb_i(v, #func) && valid_swig_cb_i(v, #func2))
 
 static int
 swig_count_format(char *format)

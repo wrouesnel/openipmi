@@ -35,12 +35,36 @@ import logging
 import wx
 import sys
 
+class EventInfo:
+    def __init__(self):
+        self.sensor = None
+        self.val = None
+
+    def threshold_event_cb(self, sensor, event_spec, raw_set, raw,
+                           value_set, value, event):
+        self.sensor = sensor.get_name()
+        self.val = event_spec;
+        if (value_set):
+            self.val += str(value)
+            pass
+        if (raw_set):
+            self.val += '(' + str(raw) + ')'
+            pass
+        return
+
+    def discrete_event_cb(self, sensor, event_spec, severity, old_severity,
+                          event):
+        self.sensor = sensor.get_name()
+        self.val = (event_spec + ' ' + str(severity) +
+                    '(' + str(old_severity) + ')')
+        return
+
 class SELDisplay(wx.Dialog):
     def __init__(self, o, type):
         self.o = o
         self.type = type
         wx.Dialog.__init__(self, None, -1, "SEL for " + o.get_name(),
-                           size=wx.Size(400, 600),
+                           size=wx.Size(500, 600),
                            style=wx.RESIZE_BORDER)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -49,7 +73,7 @@ class SELDisplay(wx.Dialog):
         listc = self.listc
         listc.InsertColumn(0, "RecNum")
         listc.InsertColumn(1, "Type")
-        listc.InsertColumn(2, "Time")
+        listc.InsertColumn(2, "Time/Sensor")
         listc.InsertColumn(3, "Data")
         
         sizer.Add(listc, 1, wx.GROW, 0)
@@ -68,18 +92,12 @@ class SELDisplay(wx.Dialog):
         
         ev = o.first_event()
         while (ev != None):
-            idx = listc.InsertStringItem(sys.maxint, str(ev.get_record_id()))
-            listc.SetStringItem(idx, 1, str(ev.get_type()))
-            listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
-            listc.SetStringItem(idx, 3, str(ev.get_data()))
-            self.events[self.evnum] = ev
-            listc.SetItemData(idx, self.evnum)
-            self.evnum += 1
+            self.AddEvent(ev)
             ev = o.next_event(ev)
 
         listc.SetColumnWidth(0, 65)
         listc.SetColumnWidth(1, 40)
-        listc.SetColumnWidth(2, 120)
+        listc.SetColumnWidth(2, 200)
         listc.SetColumnWidth(3, 400)
 
         self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.HandleMenu)
@@ -88,7 +106,26 @@ class SELDisplay(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.CenterOnScreen();
         self.Show(True)
+        return
 
+    def AddEvent(self, ev):
+        listc = self.listc
+        evinfo = EventInfo()
+        ev.call_handler(evinfo)
+        idx = listc.InsertStringItem(sys.maxint, str(ev.get_record_id()))
+        listc.SetStringItem(idx, 1, str(ev.get_type()))
+        listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
+        listc.SetStringItem(idx, 3, str(ev.get_data()))
+        self.events[self.evnum] = ev
+        listc.SetItemData(idx, self.evnum)
+        if (evinfo.sensor):
+            idx = listc.InsertStringItem(sys.maxint, "")
+            listc.SetStringItem(idx, 2, evinfo.sensor)
+            listc.SetStringItem(idx, 3, evinfo.val)
+            listc.SetItemData(idx, self.evnum)
+            pass
+        self.evnum += 1
+        
     def ok(self, event):
         self.Close()
 
@@ -146,13 +183,7 @@ class DomainSELDisplay(SELDisplay):
             domain.remove_event_handler(self)
 
     def event_cb(self, domain, ev):
-        idx = self.listc.InsertStringItem(sys.maxint, str(ev.get_record_id()))
-        self.listc.SetStringItem(idx, 1, str(ev.get_type()))
-        self.listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
-        self.listc.SetStringItem(idx, 3, str(ev.get_data()))
-        self.events[self.evnum] = ev
-        self.listc.SetItemData(idx, self.evnum)
-        self.evnum += 1
+        self.AddEvent(ev)
 
 class MCSELDisplay(SELDisplay):
     def __init__(self, mc_id):
@@ -176,11 +207,4 @@ class MCSELDisplay(SELDisplay):
     def event_cb(self, mc, ev):
         mc_id = ev.get_mc_id()
         if (mc_id.cmp(self.mc_id) == 0):
-            idx = self.listc.InsertStringItem(sys.maxint,
-                                              str(ev.get_record_id()))
-            self.listc.SetStringItem(idx, 1, str(ev.get_type()))
-            self.listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
-            self.listc.SetStringItem(idx, 3, str(ev.get_data()))
-            self.events[self.evnum] = ev
-            self.listc.SetItemData(idx, self.evnum)
-            self.evnum += 1
+            self.AddEvent(ev)

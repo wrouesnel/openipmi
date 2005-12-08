@@ -1756,6 +1756,26 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     return IPMI_EVENT_NOT_HANDLED;
 }
 
+/*
+ * For the event method call_handler to use.
+ */
+typedef struct event_call_handler_data_s
+{
+    ipmi_event_t          *event;
+    swig_cb_val           handlers_val;
+    ipmi_event_handlers_t *handlers;
+    int                   rv;
+} event_call_handler_data_t;
+
+static void event_call_handler_mc_cb(ipmi_domain_t *mc, void *cb_data)
+{
+    event_call_handler_data_t *info = cb_data;
+    ipmi_domain_t             *domain = ipmi_mc_get_domain(mc);
+
+    info->rv = ipmi_event_call_handler(domain, info->handlers,
+				       info->event, info->handlers_val);
+}
+
 /* A generic callback for a lot of things. */
 static void
 sensor_event_enable_handler(ipmi_sensor_t *sensor,
@@ -8254,6 +8274,49 @@ char *get_event_support_string(int val);
 	free(data);
 	rv.len = data_len;
 	return rv;
+    }
+
+    /* Call the sensor callback for the event.  If the sensor is a
+     * threshold sensor, the threshold_event_cb method will be called
+     * on the sensor. Otherwise, the sensor is discrete and the
+     * discrete_event_cb will be called.  The threshold_event_cb
+     * method takes the following parameters:
+     * <self> <sensor> <event spec> <raw_set> <raw> <value_set> <value> <event>
+     * The discrete_event_cb method takes the following parameters:
+     * <self> <sensor> <event spec> <severity> <old_severity> <event>
+     *
+     * Note: In the future, this may take control callbacks, too.
+     */
+    int call_handler(swig_cb handler)
+    {
+	event_call_handler_data_t info;
+	int                       rv;
+	
+	if (! valid_swig_2cb(handler, threshold_event_cb, discrete_event_cb))
+	    return EINVAL;
+
+	info.handlers = ipmi_event_handlers_alloc();
+	if (! info.handlers)
+	    return ENOMEM;
+
+	ipmi_event_handlers_set_threshold(info.handlers,
+					  sensor_threshold_event_handler);
+	ipmi_event_handlers_set_discrete(info.handlers,
+					 sensor_discrete_event_handler);
+
+	info.handlers_val = ref_swig_2cb(handler, threshold_event_cb,
+					 discrete_event_cb);
+
+	info.event = self;
+	info.rv = 0;
+	rv = ipmi_mc_pointer_cb(ipmi_event_get_mcid(self),
+				event_call_handler_mc_cb,
+				&info);
+	if (rv == 0)
+	    rv = info.rv;
+	
+	ipmi_event_handlers_free(info.handlers);
+	deref_swig_cb_val(handler);
     }
 }
 

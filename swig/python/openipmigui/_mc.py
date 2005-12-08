@@ -392,7 +392,7 @@ class MC:
         if (err):
             logging.error("Error getting MC event log enable: " + str(err))
             return
-        self.ui.set_item_text(el_item, str(val != 0))
+        self.ui.set_item_text(self.el_item, str(val != 0))
         
     def mc_set_event_log_enable_cb(self, mc, err):
         if (err):

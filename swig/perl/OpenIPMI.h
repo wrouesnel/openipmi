@@ -47,6 +47,7 @@ typedef SV *swig_cb_val;
    check yet. */
 #define nil_swig_cb(v) (((v) == NULL) || (!SvOK(v)) || (! SvOK(SvRV(v))))
 #define valid_swig_cb(v, func) ((v) && (SvOK(v)) && (SvOK(SvRV(v))))
+#define valid_swig_2cb(v, func, func2) valid_swig_cb(v, func)
 #define invalidate_swig_cb(v) ((v) = NULL)
 
 

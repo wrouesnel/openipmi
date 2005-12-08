@@ -277,6 +277,7 @@ ref_swig_cb_i(swig_cb cb)
     return rv;
 }
 #define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
+#define ref_swig_2cb(cb, func, func2) ref_swig_cb_i(cb)
 
 /* Get the underlying callback object reference and decrement its refcount. */
 static swig_cb_val
