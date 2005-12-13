@@ -79,7 +79,7 @@
 7. Entities should be first-class objects, not just inferred.
 
   Entities are the things the user is really interested in.  After
-  all, they are thing things the sensors monitor.  Why doesn't HPI
+  all, they are things the sensors monitor.  Why doesn't HPI
   represent these as first-class objects?  IPMI has ways to give
   entities names (through Entity-Association records), but HPI doesn't
   represent this.

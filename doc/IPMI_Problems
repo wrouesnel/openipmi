@@ -32,7 +32,7 @@
 
  5) In type 9 SDRs, in the entity device address fields, it states that
     it is "Set to 00h if Instace ID is device-relative".  This is
-    almost certainly a mistake.  It shouldbe system-relative, not
+    almost certainly a mistake.  It should be system-relative, not
     device-relative.
 
  6) There is no way to read the user session limit (set by the set user

@@ -126,7 +126,7 @@ Resource Data Record (RDR) repository.
 Inventory
 ---------
 
-OpenIPMI does not currently implement and FRU information, so entity
+OpenIPMI does not currently implement any FRU information, so entity
 inventory capability will be turned off for the first release of this
 HPI implementation.
 

@@ -315,12 +315,10 @@ class DomainConnection:
     def FillinConAttr(self, attr):
         if (self.contype == "smi"):
             if (self.port == ""):
-                print "***A"
                 raise InvalidDomainError("No port specified")
             attr.extend([ "smi", str(self.port) ])
         elif (self.contype == "lan"):
             if (self.address == ""):
-                print "***B"
                 raise InvalidDomainError("No address specified")
             attr.append("lan")
             if (self.port != ""):
@@ -353,7 +351,6 @@ class DomainConnection:
             if (self.address2 != ""):
                 attr.append(self.address2)
         else:
-            print "***C"
             raise InvalidDomainError("Invalid connection type: " + self.contype)
 
     def getAttr(self):
@@ -434,7 +431,6 @@ class DomainConnection:
 class Domain:
     def __init__(self, mainhandler, name, connects=[]):
         if (mainhandler.domains.has_key(name)):
-            print "***D"
             raise InvalidDomainError("Domain name already exists")
         self.name = name
         self.mainhandler = mainhandler
@@ -527,7 +523,6 @@ class Domain:
         self.already_up = False
         self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
         if (self.domain_id == None):
-            print "***E"
             raise InvalidDomainError("Open domain failed, invalid parms")
 
     def domain_up_cb(self, domain):

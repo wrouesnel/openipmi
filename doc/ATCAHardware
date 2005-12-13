@@ -241,7 +241,7 @@ Send Message Errors and Broadcast
 ---------------------------------
 
 IPMI provides a mechanism to scan the IPMB bus to see what management
-controllers are available.  However, many vendors to not properly
+controllers are available.  However, many vendors do not properly
 support the broadcast get device id (section 17.9).  This is required
 by the spec and should be supported.
 
