@@ -1192,95 +1192,129 @@ ipmi_get_cc_string(unsigned int cc,
     return buffer;
 }
 
+int
+ipmi_get_cc_string_len(unsigned int cc)
+{
+    char *cc_fs;
+    char dummy[1];
+
+    if ( cc == 0x00 )
+	cc_fs = ipmi_ccodes[0];
+    else if ( (cc > 0xbf) && (cc < 0xd6) )
+	cc_fs = ipmi_ccodes[cc - 0xc0 + 1];
+    else if ( cc == 0xff )
+	cc_fs = ipmi_ccodes[23];
+    else
+	cc_fs = "Unknown:%02x";
+
+    return snprintf(dummy, 1, cc_fs, cc);
+}
+
 
 static const char *sol_error_codes[] =
 {
-	"SoLCharTransUnavail",
-	"SoLDeactivated",
-	"SoLNotAvailable",
-	"SoLDisconnected",
-	"SoLUnconfirmOp",
-	"SoLFlushed",
-	"SoLUnknown"
+    "SoLCharTransUnavail",
+    "SoLDeactivated",
+    "SoLNotAvailable",
+    "SoLDisconnected",
+    "SoLUnconfirmOp",
+    "SoLFlushed",
+    "SoLUnknown"
 };
 
 static const char *rmcpp_error_codes[] =
 {
-	"InsufResourForSess",
-	"InvalSessID",
-	"InvalPayloadType",
-	"InvalAuthAlg",
-	"InvalIntegAlg",
-	"NoMatchAuthPayld",
-	"NoMatchIntegPayld",
-	"InactSessID",
-	"InvalidRole",
-	"UnauthRoleOrPriv",
-	"InsufResourForRole",
-	"InvalNameLength",
-	"UnauthName",
-	"UnauthGUID",
-	"InvalIntegChkVal",
-	"InvalConfidAlg",
-	"NoCipherSuiteMatch",
-	"IllegalParam",
-	"RMCPPUnknown"
+    "InsufResourForSess",
+    "InvalSessID",
+    "InvalPayloadType",
+    "InvalAuthAlg",
+    "InvalIntegAlg",
+    "NoMatchAuthPayld",
+    "NoMatchIntegPayld",
+    "InactSessID",
+    "InvalidRole",
+    "UnauthRoleOrPriv",
+    "InsufResourForRole",
+    "InvalNameLength",
+    "UnauthName",
+    "UnauthGUID",
+    "InvalIntegChkVal",
+    "InvalConfidAlg",
+    "NoCipherSuiteMatch",
+    "IllegalParam",
+    "RMCPPUnknown"
 };
 
 char *
 ipmi_get_error_string(unsigned int err,
-			char *buffer,
-			unsigned int buf_len)
+		      char         *buffer,
+		      unsigned int buf_len)
 {
-	char *temp_buffer;
-	char *err_type;
+    int  len;
+    char *err_type;
 
-	if (err == 0)
-	{
-		strncpy(buffer, "Success (No error)", buf_len);
-		return buffer;
-	}
-
-	temp_buffer = ipmi_mem_alloc(buf_len);
-	if (!temp_buffer)
-		temp_buffer = buffer;
-
-	if (IPMI_IS_OS_ERR(err))
-	{
-		strncpy(temp_buffer, strerror(IPMI_GET_OS_ERR(err)), buf_len);
-		err_type = "OS";
-	} else if (IPMI_IS_IPMI_ERR(err))
-	{
-		ipmi_get_cc_string(IPMI_GET_IPMI_ERR(err), temp_buffer, buf_len);
-		err_type = "IPMI";
-	} else if (IPMI_IS_RMCPP_ERR(err))
-	{
-		int rmcpp_err = IPMI_GET_RMCPP_ERR(err);
-		if ((rmcpp_err <= 0) && (rmcpp_err > 0x12))
-			rmcpp_err = 0x13;
-		snprintf(temp_buffer, buf_len, "%s (0x%02x)", rmcpp_error_codes[rmcpp_err - 1], IPMI_GET_RMCPP_ERR(err));
-		err_type = "RMCP+";
-	} else if (IPMI_IS_SOL_ERR(err))
-	{
-		int sol_err = IPMI_GET_SOL_ERR(err);
-		if ((sol_err < 1) || (sol_err > 7))
-			sol_err = 7;
-		snprintf(temp_buffer, buf_len, sol_error_codes[sol_err - 1]);
-		err_type = "SoL";
-	}
-	else
-	{
-		strncpy(temp_buffer, "Unknown", buf_len);
-		err_type = "Unknown";
-	}
-
-	if (temp_buffer != buffer)
-	{
-		snprintf(buffer, buf_len, "%s: %s", err_type, temp_buffer);
-		ipmi_mem_free(temp_buffer);
-	}
-
+    if (err == 0) {
+	strncpy(buffer, "Success (No error)", buf_len);
 	return buffer;
+    }
+
+    if (IPMI_IS_OS_ERR(err)) {
+	snprintf(buffer+4, buf_len-4, "%s", strerror(IPMI_GET_OS_ERR(err)));
+	err_type = "OS: ";
+    } else if (IPMI_IS_IPMI_ERR(err)) {
+	ipmi_get_cc_string(IPMI_GET_IPMI_ERR(err), buffer+6, buf_len-6);
+	err_type = "IPMI: ";
+    } else if (IPMI_IS_RMCPP_ERR(err)) {
+	int rmcpp_err = IPMI_GET_RMCPP_ERR(err);
+	if ((rmcpp_err <= 0) && (rmcpp_err > 0x12))
+	    rmcpp_err = 0x13;
+	snprintf(buffer+7, buf_len-7, "%s (0x%02x)",
+		 rmcpp_error_codes[rmcpp_err - 1],
+		 IPMI_GET_RMCPP_ERR(err));
+	err_type = "RMCP+: ";
+    } else if (IPMI_IS_SOL_ERR(err)) {
+	int sol_err = IPMI_GET_SOL_ERR(err);
+	if ((sol_err < 1) || (sol_err > 7))
+	    sol_err = 7;
+	strncpy(buffer+5, sol_error_codes[sol_err - 1], buf_len-5);
+	err_type = "SoL: ";
+    } else {
+	strncpy(buffer+9, "Unknown", buf_len-9);
+	err_type = "Unknown: ";
+    }
+
+    len = strlen(err_type);
+    if (len > buf_len-1) {
+	len = buf_len-1;
+	buffer[buf_len-1] = '\0';
+    }
+    memcpy(buffer, err_type, len);
+
+    return buffer;
+}
+
+int ipmi_get_error_string_len(unsigned int err)
+{
+    if (err == 0)
+	return(strlen("Success (No error)"));
+
+    if (IPMI_IS_OS_ERR(err))
+	return strlen(strerror(IPMI_GET_OS_ERR(err))) + 5;
+    else if (IPMI_IS_IPMI_ERR(err)) {
+	return ipmi_get_cc_string_len(IPMI_GET_IPMI_ERR(err)) + 7;
+    } else if (IPMI_IS_RMCPP_ERR(err)) {
+	int rmcpp_err = IPMI_GET_RMCPP_ERR(err);
+	if ((rmcpp_err <= 0) && (rmcpp_err > 0x12))
+	    rmcpp_err = 0x13;
+	return strlen(rmcpp_error_codes[rmcpp_err - 1]) + 15;
+    } else if (IPMI_IS_SOL_ERR(err)) {
+	int sol_err = IPMI_GET_SOL_ERR(err);
+	if ((sol_err < 1) || (sol_err > 7))
+	    sol_err = 7;
+	return strlen(sol_error_codes[sol_err - 1]) + 6;
+    } else {
+	return strlen("Unknown") + 10;
+    }
 }
 
 /* Get a string name fo the hot swap state. */

@@ -3346,7 +3346,8 @@ void handle_rakp3_payload(lan_data_t *lan, msg_t *msg)
 	if (rv) {
 	    lan->log(NEW_SESSION_FAILED, msg,
 		     "RAKP msg: check3 failed: 0x%x", rv);
-	    return;
+	    err = 0x0f; /* Invalid integrity check */
+	    goto out_err;
 	}
     }
 
@@ -3356,9 +3357,10 @@ void handle_rakp3_payload(lan_data_t *lan, msg_t *msg)
 	return;
     }
 
+ out_err:
     memset(data, 0, sizeof(data));
     data[0] = msg->data[0];
-    data[1] = 0;
+    data[1] = err;
     ipmi_set_uint32(data+4, session->rem_sid);
     len = 8;
     if (session->authh) {
@@ -3367,7 +3369,6 @@ void handle_rakp3_payload(lan_data_t *lan, msg_t *msg)
 	if (rv) {
 	    lan->log(NEW_SESSION_FAILED, msg,
 		     "RAKP msg: set4 failed: 0x%x", rv);
-	    return;
 	}
     }
     

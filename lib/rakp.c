@@ -98,8 +98,16 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 	       unsigned int min_length,
 	       int          addr_num)
 {
-    if (!ipmi) {
+    if (!ipmi)
 	return ECANCELED;
+
+    if (msg->data_len == 1) {
+	/* This is kind of a cheap hack, this can happen when there is
+	   a timeout. */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "rakp.c(%s): IPMI error: %d",
+		 caller, msg->data[0]);
+	return IPMI_IPMI_ERR_VAL(msg->data[0]);
     }
 
     if (msg->data_len < 2) {
@@ -109,10 +117,9 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 	return EINVAL;
     }
 
-    if (msg->data[1]) {
+    if (msg->data[1])
 	/* Got an RMCP+ error. */
 	return IPMI_RMCPP_ERR_VAL(msg->data[1]);
-    }
 
     if (msg->data_len < min_length) {
 	ipmi_log(IPMI_LOG_ERR_INFO,

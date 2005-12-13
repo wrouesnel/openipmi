@@ -1,3 +1,19 @@
+2005-12-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/rakp.c: Add a proper error handler for timeouts.
+
+	* lanserv/lanserv_ipmi.c: return an error on invalid auth to
+	rakp3.
+
+	* cmdlang/ipmish.c, cmdlang/cmd_domain.c: Add useful error
+	reporting.
+
+	* include/OpenIPMI/ipmi_err.h, lib/strings.h: Added a way to get
+	the length of an error string so it can be dynamically allocated
+	to the right size.
+
+	* swig/OpenIPMI.i: Added an error string fetcher.
+
 2005-12-08 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Added the event method call_handlers that allow

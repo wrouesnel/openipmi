@@ -42,6 +42,7 @@
 #include <signal.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
@@ -509,16 +510,19 @@ cmd_done(ipmi_cmdlang_t *info)
     out_data_t *out_data = info->user_data;
 
     if (info->err) {
+	char errval[128];
 	if (!info->location)
 	    info->location = "";
 	if (strlen(info->objstr) == 0) {
-	    fprintf(out_data->stream, "error: %s: %s (0x%x)\n",
+	    fprintf(out_data->stream, "error: %s: %s (0x%x, %s)\n",
 		    info->location, info->errstr,
-		    info->err);
+		    info->err,
+		    ipmi_get_error_string(info->err, errval, sizeof(errval)));
 	} else {
-	    fprintf(out_data->stream, "error: %s %s: %s (0x%x)\n",
+	    fprintf(out_data->stream, "error: %s %s: %s (0x%x, %s)\n",
 		    info->location, info->objstr, info->errstr,
-		    info->err);
+		    info->err,
+		    ipmi_get_error_string(info->err, errval, sizeof(errval)));
 	}
 	if (info->errstr_dynalloc)
 	    ipmi_mem_free(info->errstr);

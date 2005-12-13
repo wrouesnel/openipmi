@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_conn.h>
@@ -1071,6 +1072,12 @@ domain_con_change(ipmi_domain_t *domain,
     ipmi_cmdlang_out_bool(evi, "Any Connection Up", still_connected);
     ipmi_cmdlang_out_int(evi, "Error", err);
 
+    if (err) {
+	char errval[128];
+	ipmi_cmdlang_out(evi, "Error String",
+			 ipmi_get_error_string(err, errval, sizeof(errval)));
+	
+    }
     errstr = NULL; /* Get rid of warning */
 
  out_err:

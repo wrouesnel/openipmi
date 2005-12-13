@@ -51,6 +51,7 @@
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_pet.h>
+#include <OpenIPMI/ipmi_err.h>
 
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -1767,7 +1768,7 @@ typedef struct event_call_handler_data_s
     int                   rv;
 } event_call_handler_data_t;
 
-static void event_call_handler_mc_cb(ipmi_domain_t *mc, void *cb_data)
+static void event_call_handler_mc_cb(ipmi_mc_t *mc, void *cb_data)
 {
     event_call_handler_data_t *info = cb_data;
     ipmi_domain_t             *domain = ipmi_mc_get_domain(mc);
@@ -2942,6 +2943,20 @@ get_event_support_string(int val)
     return ipmi_get_event_support_string(val);
 }
 
+static char *
+get_error_string(unsigned int err)
+{
+    int  len;
+    char *buf;
+
+    len = ipmi_get_error_string_len(err);
+    buf = malloc(len);
+    if (!buf)
+	return NULL;
+    ipmi_get_error_string(err, buf, len);
+    return buf;
+}
+
 static void
 domain_change_handler(ipmi_domain_t      *domain,
 		      enum ipmi_update_e op,
@@ -3065,6 +3080,9 @@ int pef_str_to_parm(char *str);
 char *get_threshold_access_support_string(int val);
 char *get_hysteresis_support_string(int val);
 char *get_event_support_string(int val);
+
+%newobject get_error_string;
+char *get_error_string(unsigned int val);
 
 %constant long long TIMEOUT_FOREVER = IPMI_TIMEOUT_FOREVER;
 
@@ -8317,6 +8335,8 @@ char *get_event_support_string(int val);
 	
 	ipmi_event_handlers_free(info.handlers);
 	deref_swig_cb_val(handler);
+
+	return rv;
     }
 }
 

@@ -164,11 +164,12 @@ extern "C" {
 char *ipmi_get_cc_string(unsigned int cc,
 			 char         *buffer,
 			 unsigned int buf_len);
+int ipmi_get_cc_string_len(unsigned int cc);
 
-char *
-ipmi_get_error_string(unsigned int err,
-			char *buffer,
-			unsigned int buf_len);
+char *ipmi_get_error_string(unsigned int err,
+			    char *buffer,
+			    unsigned int buf_len);
+int ipmi_get_error_string_len(unsigned int err);
 
 #ifdef __cplusplus
 }

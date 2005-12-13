@@ -5260,6 +5260,7 @@ ipmi_entity_get_auto_activate_time(ipmi_entity_t       *ent,
     return ent->hs_cb.get_auto_activate(ent, handler, cb_data);
 }
 
+int
 ipmi_entity_supports_auto_deactivate_time(ipmi_entity_t *ent)
 {
     return (ent->hot_swappable && ent->hs_cb.get_auto_activate);
