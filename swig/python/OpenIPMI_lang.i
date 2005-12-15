@@ -351,6 +351,10 @@
 
 %{
 
+#if PYTHON_HAS_POSIX_THREADS
+#define USE_POSIX_THREADS
+#endif
+
 #ifdef WITH_THREAD
 #define OpenIPMI_HAVE_INIT_LANG
 

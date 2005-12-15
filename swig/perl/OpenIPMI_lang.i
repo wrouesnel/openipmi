@@ -223,6 +223,10 @@
 }
 
 %{
+#if PERL_HAS_POSIX_THREADS
+#define USE_POSIX_THREADS
+#endif
+
 static swig_ref
 swig_make_ref_destruct_i(void *item, swig_type_info *class)
 {

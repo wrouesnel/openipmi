@@ -53,6 +53,8 @@
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_err.h>
 
+#include <signal.h>
+
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
@@ -2551,7 +2553,11 @@ init_posix(void)
 {
     if (swig_os_hnd)
 	return;
+#ifdef USE_POSIX_THREADS
+    swig_os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
+#else
     swig_os_hnd = ipmi_posix_setup_os_handler();
+#endif
     swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
 }

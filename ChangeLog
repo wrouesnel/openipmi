@@ -25,6 +25,11 @@
 	* unix/posix_thread_os_hnd.c: Fix a problem where a wrong
 	function was being called for logging.
 
+	* swig/OpenIPMI.i, configure.in: Modified things to use the
+	right threads library for perl and python.
+	* swig/perl/Makefile.am, swig/perl/OpenIPMI_lang.i: ditto
+	* swig/python/Makefile.am, swig/python/OpenIPMI_lang.i: ditto
+
 	* configure.in: Move to version 2.0.3.
 
 2005-12-13 Corey Minyard <cminyard@mvista.com>

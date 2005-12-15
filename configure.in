@@ -143,10 +143,22 @@ AC_ARG_WITH(perlcflags,
     perlcflags="$withval",
 )
 
+perlusepthreads=
+AC_ARG_WITH(perlusepthreads,
+[  --with-perlusepthreads[=yes|no] Use threads with perl.],
+   if test "x$withval" = "xyes"; then
+      perlusepthreads="yes"
+   elif test "x$withval" = "xno"; then
+      perlusepthreads="no"
+   elif test "x$withval" = "x"; then
+      perlusepthreads="yes"
+   fi,
+)
+
 trypython=yes
 pythondir=
 AC_ARG_WITH(python,
-[  --with-python[=PATH]              Look for python.],
+[  --with-python[=PATH]            Look for python.],
     if test "x$withval" = "xyes"; then
       trypython=yes
     elif test "x$withval" = "xno"; then
@@ -158,14 +170,26 @@ AC_ARG_WITH(python,
 
 pythoninstalldir=
 AC_ARG_WITH(pythoninstall,
-[  --with-pythoninstall=PATH         Install python modules in the given location.],
+[  --with-pythoninstall=PATH       Install python modules in the given location.],
     pythoninstalldir="$withval",
 )
 
 pythoncflags=
 AC_ARG_WITH(pythoncflags,
-[  --with-pythoncflags=PATH          Use the given flags when compiling python parts.],
+[  --with-pythoncflags=PATH        Use the given flags when compiling python parts.],
     pythoncflags="$withval",
+)
+
+pythonusepthreads=
+AC_ARG_WITH(pythonusepthreads,
+[  --with-pythonusepthreads[=yes|no] Use threads with python.],
+   if test "x$withval" = "xyes"; then
+      pythonusepthreads="yes"
+   elif test "x$withval" = "xno"; then
+      pythonusepthreads="no"
+   elif test "x$withval" = "x"; then
+      pythonusepthreads="yes"
+   fi,
 )
 
 tryswig=yes
@@ -311,10 +335,13 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
       else
 	 PERL_INSTALL_DIR="\${prefix}$tpprog"
       fi
+
    else
       PERL_DIR=
       PERL_CFLAGS=
       PERL_INSTALL_DIR=
+      PERL_HAS_POSIX_THREADS=
+      PERL_POSIX_LIB=
    fi
 else
    AC_DEFINE(HAVE_PERL)
@@ -322,9 +349,25 @@ else
    PERL_CFLAGS="$perlcflags"
    PERL_INSTALL_DIR="$perlinstalldir"
 fi
+if test "x$perlprog" != "x"; then
+   if test "x$perlusepthreads" = "x"; then
+      if $perlprog -V:usethreads | grep -q 'define'; then
+         perlusepthreads="yes"
+      fi
+   fi
+fi
+if test "x$perlusepthreads" = "xyes"; then
+   PERL_HAS_POSIX_THREADS=1
+   PERL_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
+else
+   PERL_HAS_POSIX_THREADS=0
+   PERL_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
+fi
 AC_SUBST(PERL_DIR)
 AC_SUBST(PERL_CFLAGS)
 AC_SUBST(PERL_INSTALL_DIR)
+AC_SUBST(PERL_HAS_POSIX_THREADS)
+AC_SUBST(PERL_POSIX_LIB)
 
 # Handle PYTHON support
 if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
@@ -369,9 +412,23 @@ else
    PYTHON_CFLAGS="$pythoncflags"
    PYTHON_INSTALL_DIR="$pythoninstalldir"
 fi
+if test "x$pythonprog" != "x"; then
+   if test "x$pythonusepthreads" = "x"; then
+      pythonusepthreads=`echo -e "try:\n  import thread\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
+   fi
+fi
+if test "x$pythonusepthreads" = "xyes"; then
+   PYTHON_HAS_POSIX_THREADS=1
+   PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
+else
+   PYTHON_HAS_POSIX_THREADS=0
+   PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
+fi
 AC_SUBST(PYTHON_DIR)
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_INSTALL_DIR)
+AC_SUBST(PYTHON_HAS_POSIX_THREADS)
+AC_SUBST(PYTHON_POSIX_LIB)
 
 # Now check for swig
 if test "x$swigprog" = "x" -a "x$tryswig" = "xyes"; then

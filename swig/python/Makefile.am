@@ -8,7 +8,7 @@ AM_CFLAGS = $(PYTHON_CFLAGS) \
 	    -I $(top_srcdir)/swig/python
 
 CC = @CC@ -Wall
-CFLAGS = @CFLAGS@ -fPIC
+CFLAGS = @CFLAGS@ -fPIC -DPYTHON_HAS_POSIX_THREADS=@PYTHON_HAS_POSIX_THREADS@
 DEFS = @DEFS@
 
 COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
@@ -18,10 +18,10 @@ all-local: _OpenIPMI.so
 OpenIPMI_SRC = OpenIPMI_wrap.c
 OpenIPMI_OBJ = OpenIPMI_wrap.o
 
-OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
+OpenIPMI_LIB = @PYTHON_POSIX_LIB@ \
 	       $(top_builddir)/lib/libOpenIPMI.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
-	       $(GLIB_LIB)
+	       $(GLIB_LIB) $(GLIB_LIBS)
 
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
