@@ -2958,6 +2958,42 @@ get_event_support_string(int val)
     return ipmi_get_event_support_string(val);
 }
 
+static const char *
+channel_medium_string(int val)
+{
+    return ipmi_channel_medium_string(val);
+}
+
+static const char *
+channel_protocol_string(int val)
+{
+    return ipmi_channel_protocol_string(val);
+}
+
+static const char *
+channel_session_support_string(int val)
+{
+    return ipmi_channel_session_support_string(val);
+}
+
+static const char *
+channel_access_mode_string(int val)
+{
+    return ipmi_channel_access_mode_string(val);
+}
+
+static const char *
+privilege_string(int val)
+{
+    return ipmi_privilege_string(val);
+}
+
+static const char *
+authtype_string(int val)
+{
+    return ipmi_authtype_string(val);
+}
+
 static char *
 get_error_string(unsigned int err)
 {
@@ -5338,6 +5374,7 @@ char *get_error_string(unsigned int val);
 	return ipmi_mc_sel_get_last_addition_timestamp(self);
     }
 
+%constant int MAX_USED_CHANNELS = MAX_IPMI_USED_CHANNELS;
     /*
      * Get the info for a channel on the MC.  The first parm is the
      * integer channel number.  The second is the handler object,
@@ -8395,6 +8432,12 @@ char *get_error_string(unsigned int val);
 %constant int LANPARM_NUM_DESTINATIONS = IPMI_LANPARM_NUM_DESTINATIONS;
 %constant int LANPARM_DEST_TYPE = IPMI_LANPARM_DEST_TYPE;
 %constant int LANPARM_DEST_ADDR = IPMI_LANPARM_DEST_ADDR;
+%constant int LANPARM_VLAN_ID = IPMI_LANPARM_VLAN_ID
+%constant int LANPARM_VLAN_PRIORITY = IPMI_LANPARM_VLAN_PRIORITY
+%constant int LANPARM_NUM_CIPHER_SUITE_ENTRIES = IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES
+%constant int LANPARM_CIPHER_SUITE_ENTRY_SUPPORT = IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT
+%constant int LANPARM_CIPHER_SUITE_ENTRY_PRIV = IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV
+%constant int LANPARM_DEST_VLAN_TAG = IPMI_LANPARM_DEST_VLAN_TAG
 
     /*
      * Fetch an individual parm from the MC.  The parameter (parm1) ,

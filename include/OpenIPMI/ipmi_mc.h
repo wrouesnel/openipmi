@@ -333,6 +333,7 @@ void ipmi_channel_info_free(ipmi_channel_info_t *info);
  */
 int ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
 				  unsigned int        *channel);
+
 #define IPMI_CHANNEL_MEDIUM_IPMB	1
 #define IPMI_CHANNEL_MEDIUM_ICMB_V10	2
 #define IPMI_CHANNEL_MEDIUM_ICMB_V09	3
@@ -345,6 +346,7 @@ int ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
 #define IPMI_CHANNEL_MEDIUM_USB_v1	10
 #define IPMI_CHANNEL_MEDIUM_USB_v2	11
 #define IPMI_CHANNEL_MEDIUM_SYS_INTF	12
+const char *ipmi_channel_medium_string(int val);
 int ipmi_channel_info_get_medium(ipmi_channel_info_t *info,
 				 unsigned int        *medium);
 #define IPMI_CHANNEL_PROTOCOL_IPMB	1
@@ -355,6 +357,7 @@ int ipmi_channel_info_get_medium(ipmi_channel_info_t *info,
 #define IPMI_CHANNEL_PROTOCOL_BT_v10	7
 #define IPMI_CHANNEL_PROTOCOL_BT_v15	8
 #define IPMI_CHANNEL_PROTOCOL_TMODE	9
+const char *ipmi_channel_protocol_string(int val);
 int ipmi_channel_info_get_protocol_type(ipmi_channel_info_t *info,
 					unsigned int        *prot_type);
 
@@ -362,6 +365,7 @@ int ipmi_channel_info_get_protocol_type(ipmi_channel_info_t *info,
 #define IPMI_CHANNEL_SINGLE_SESSION	1
 #define IPMI_CHANNEL_MULTI_SESSION	2
 #define IPMI_CHANNEL_SESSION_BASED	3
+const char *ipmi_channel_session_support_string(int val);
 int ipmi_channel_info_get_session_support(ipmi_channel_info_t *info,
 					  unsigned int        *sup);
 /* Data is 3 bytes long */

@@ -55,6 +55,10 @@ class ControlSet:
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
         self.c.ui.Bind(wx.EVT_MENU, self.modval, item)
+        item = menu.Append(-1, "Set to 0")
+        self.c.ui.Bind(wx.EVT_MENU, self.SetTo0, item)
+        item = menu.Append(-1, "Set to 1")
+        self.c.ui.Bind(wx.EVT_MENU, self.SetTo1, item)
         self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -96,6 +100,15 @@ class ControlSet:
         dialog.Bind(wx.EVT_CLOSE, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
+        return
+
+    def SetTo0(self, event):
+        self.ival = [ 0 ]
+        self.c.control_id.to_control(self)
+
+    def SetTo1(self, event):
+        self.ival = [ 1 ]
+        self.c.control_id.to_control(self)
 
     def cancel(self, event):
         self.dialog.Close()

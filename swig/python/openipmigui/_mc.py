@@ -292,6 +292,10 @@ class MC:
                                                
         self.ui.set_item_text(self.mguid, mc.get_guid())
 
+        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
+            mc.channel_get_info(i, self)
+            pass
+
     def HandleExpand(self, event):
         for i in self.refreshers:
             i.DoUpdate()
@@ -399,6 +403,18 @@ class MC:
             _oi_logging.error("Error setting MC event log enable: " + str(err))
             return
         self.el_refr.DoUpdate()
+        return
+
+    def mc_channel_got_info_cb(self, mc, err, chan_info):
+        if (err):
+            return
+        val = [ 0 ]
+        rv = chan_info.get_channel(val)
+        if (rv):
+            return
+        channel = val
+        
+        return
 
     def mc_active_cb(self, mc, active):
         if (active):
