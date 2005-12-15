@@ -49,11 +49,10 @@ extern "C" {
    OS-handler function to set your log handler.  If you do not supply
    your own os_vlog handler, logs will go to stderr.  If you supply a
    posix_vlog handler and don't call set_log_handler in the OS handler,
-   posix_vlog() will still be used.
+   posix_vlog() will still be used. */
 void posix_vlog(char *format,
 		enum ipmi_log_type_e log_type,
 		va_list ap);
-*/
 
 /* Non-threaded os handler operations */
 

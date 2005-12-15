@@ -1,6 +1,6 @@
-# _saveprefs.py
+# _oi_logging.py
 #
-# Code to save/restore openipmi GUI preferences
+# openipmi logging handling
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>
@@ -30,42 +30,22 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import xml.dom
-import xml.dom.minidom
-import _oi_logging
+def _error(e):
+    print "ERROR: " + e
 
-taghash = { }
+def _warning(e):
+    print "ERROR: " + e
 
-class RestoreHandler:
-    def __init__(self, tag):
-        taghash[tag] = self
+try:
+    import logging
+    do_error = logging.error
+    do_warning = logging.warning
+except:
+    do_error = _error
+    do_warning = _warning
 
-    def restore(self, attrlist):
-        pass
+def error(e):
+    do_error(e);
 
-
-def save(objlist, file):
-    domimpl = xml.dom.getDOMImplementation()
-    doc = domimpl.createDocument(None, None, None)
-    main = doc.createElement("IPMIPrefs")
-    doc.appendChild(main)
-    for obj in objlist:
-        elem = doc.createElement(obj.getTag())
-        obj.SaveInfo(doc, elem)
-        main.appendChild(elem)
-    # FIXME - need try/except here
-    f = open(file, 'w')
-    doc.writexml(f, indent='', addindent='\t', newl='\n')
-
-def restore(file):
-    try:
-        doc = xml.dom.minidom.parse(file).documentElement
-    except:
-        _oi_logging.error("Unable to parse startup file " + file)
-    else:
-        for child in doc.childNodes:
-            if (child.nodeType == child.ELEMENT_NODE):
-                tag = child.nodeName
-                if (tag in taghash):
-                    taghash[tag].restore(child)
-                    child = child.nextSibling
+def warning(e):
+    do_warning(e)

@@ -117,6 +117,62 @@ typedef struct {
 } sol_configuration_t;
 
 
+
+static void
+my_vlog(os_handler_t *handler, const char *format,
+	enum ipmi_log_type_e log_type, va_list ap)
+{
+    int do_nl = 1;
+
+    switch(log_type)
+    {
+	case IPMI_LOG_INFO:
+		if (verbosity < 3) return;
+	    printf("INFO: ");
+	    break;
+
+	case IPMI_LOG_WARNING:
+		if (verbosity < 1) return;
+	    printf("WARN: ");
+	    break;
+
+	case IPMI_LOG_SEVERE:
+	    printf("SEVR: ");
+	    break;
+
+	case IPMI_LOG_FATAL:
+	    printf("FATL: ");
+	    break;
+
+	case IPMI_LOG_ERR_INFO:
+		if (verbosity < 2) return;
+	    printf("EINF: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_START:
+		if (verbosity < 2) return;
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG:
+		if (verbosity < 2) return;
+	    printf("DEBG: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_CONT:
+		if (verbosity < 2) return;
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG_END:
+		if (verbosity < 2) return;
+	    break;
+    }
+
+    vprintf(format, ap);
+
+    if (do_nl)
+	printf("\n");
+}
+
 static void
 usage(void)
 {
@@ -668,6 +724,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "main: Unable to allocate os handler\n");
 		exit(1);
 	}
+	os_hnd->set_log_handler(os_hnd, my_vlog);
 
 	/* Initialize the OpenIPMI library. */
 	ipmi_init(os_hnd);
@@ -836,58 +893,4 @@ int main(int argc, char *argv[])
 	os_hnd->free_os_handler(os_hnd);
 
 	return 0;
-}
-
-void
-posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
-{
-    int do_nl = 1;
-
-    switch(log_type)
-    {
-	case IPMI_LOG_INFO:
-		if (verbosity < 3) return;
-	    printf("INFO: ");
-	    break;
-
-	case IPMI_LOG_WARNING:
-		if (verbosity < 1) return;
-	    printf("WARN: ");
-	    break;
-
-	case IPMI_LOG_SEVERE:
-	    printf("SEVR: ");
-	    break;
-
-	case IPMI_LOG_FATAL:
-	    printf("FATL: ");
-	    break;
-
-	case IPMI_LOG_ERR_INFO:
-		if (verbosity < 2) return;
-	    printf("EINF: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_START:
-		if (verbosity < 2) return;
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG:
-		if (verbosity < 2) return;
-	    printf("DEBG: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_CONT:
-		if (verbosity < 2) return;
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG_END:
-		if (verbosity < 2) return;
-	    break;
-    }
-
-    vprintf(format, ap);
-
-    if (do_nl)
-	printf("\n");
 }

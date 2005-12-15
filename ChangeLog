@@ -1,3 +1,32 @@
+2005-12-14 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i, swig/python/OpenIPMI_lang.i: Added support for
+	older versions of Python.
+
+	* OpenIPMI.spec.in: Cleaned up some GUI stuff.
+
+	* swig/python/openipmigui: Lots of work in this directory, have a
+	mostly complete GUI now.
+
+	* include/OpenIPMI/ipmi_posix.h; Added posix_vlog() back so
+	openhpi will compile.  posix_vlog() is still considered
+	deprecated, though.
+	* unix/posix_thread_os_hnd.c, unix/posix_os_hnd.c: ditto
+
+	* cmdlang/cmd_domain.c, man/ipmi_cmdlang.7: Fixed some problems
+	with the "domain open" documentation.
+
+	* cmdlang/cmd_domain.c: Fixed a problem with a possible memory
+	leak in one failure scenario.
+
+	* swig/OpenIPMI.i, samples/solterm.c: Switch over to the new log
+	handler.
+
+	* unix/posix_thread_os_hnd.c: Fix a problem where a wrong
+	function was being called for logging.
+
+	* configure.in: Move to version 2.0.3.
+
 2005-12-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/rakp.c: Add a proper error handler for timeouts.

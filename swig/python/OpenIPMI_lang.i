@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-
 %typemap(in) swig_cb {
     if ($input == Py_None)
 	$1 = NULL;
@@ -352,15 +351,101 @@
 
 %{
 
+#ifdef WITH_THREAD
+#define OpenIPMI_HAVE_INIT_LANG
+
+#if PY_VERSION_HEX < 0x02040000
+/* HACK: Only works on POSIX with threads */
+#include <pthread.h>
+
+static PyInterpreterState *OI_py_interp;
+static pthread_key_t OI_py_key;
+struct OI_py_info
+{
+    int           count;
+    PyThreadState *tstate;
+};
+static void init_lang(void)
+{
+    PyThreadState *tstate;
+    PyEval_InitThreads();
+    tstate = PyThreadState_Get();
+    OI_py_interp = tstate->interp;
+    pthread_key_create(&OI_py_key, NULL);
+}
+#define OpenIPMI_HAVE_CLEANUP_LANG
+static void cleanup_lang(void)
+{
+    pthread_key_delete(OI_py_key);
+    OI_py_key = 0;
+}
+static int OI_get_py_state()
+{
+    struct OI_py_info *info;
+    int               current = 0;
+
+    info = pthread_getspecific(OI_py_key);
+    if (!info) {
+	info = malloc(sizeof(*info));
+	if (!info)
+	    Py_FatalError("OpenIPMI: Could not create thread state");
+	info->count = 0;
+	info->tstate = PyThreadState_New(OI_py_interp);
+	if (!info->tstate)
+	    Py_FatalError("OpenIPMI: Could not create thread state");
+    } else 
+	current = (info->tstate == _PyThreadState_Current);
+    if (!current) {
+	PyEval_RestoreThread(info->tstate);
+	pthread_setspecific(OI_py_key, info);
+    }
+    info->count++;
+
+    return current;
+}
+static void OI_put_py_state(int current)
+{
+    struct OI_py_info *info = pthread_getspecific(OI_py_key);
+    if (!info)
+	Py_FatalError("OpenIPMI: Releasing thread state, but none present");
+    if (info->tstate != _PyThreadState_Current)
+	Py_FatalError("OpenIPMI: Releasing incorrect thread state");
+    info->count--;
+    if (info->count == 0) {
+	PyThreadState_Clear(info->tstate);
+	pthread_setspecific(OI_py_key, NULL);
+	PyThreadState_DeleteCurrent();
+	free(info);
+    } else if (!current)
+	PyEval_SaveThread();
+}
+#define OI_PY_STATE int
+#define OI_PY_STATE_GET() OI_get_py_state()
+#define OI_PY_STATE_PUT(s) OI_put_py_state(s)
+#else
+static void init_lang(void)
+{
+    PyEval_InitThreads();
+}
+#define OI_PY_STATE PyGILState_STATE
+#define OI_PY_STATE_GET() PyGILState_Ensure()
+#define OI_PY_STATE_PUT(s) PyGILState_Release(s)
+#endif
+#else
+#define OI_PY_STATE int
+#define OI_PY_STATE_GET() 0
+#define OI_PY_STATE_PUT(s) do { } while(0)
+#endif
+
 static swig_ref
 swig_make_ref_destruct_i(void *item, swig_type_info *class)
 {
-    swig_ref rv;
-    PyGILState_STATE gstate;
+    swig_ref    rv;
+    OI_PY_STATE gstate;
 
-    gstate = PyGILState_Ensure();
+    gstate = OI_PY_STATE_GET();
     rv.val = SWIG_NewPointerObj(item, class, 1);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return rv;
 }
 
@@ -372,12 +457,12 @@ swig_make_ref_destruct_i(void *item, swig_type_info *class)
 static swig_ref
 swig_make_ref_i(void *item, swig_type_info *class)
 {
-    swig_ref rv;
-    PyGILState_STATE gstate;
+    swig_ref    rv;
+    OI_PY_STATE gstate;
 
-    gstate = PyGILState_Ensure();
+    gstate = OI_PY_STATE_GET();
     rv.val = SWIG_NewPointerObj(item, class, 0);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return rv;
 }
 
@@ -387,10 +472,11 @@ swig_make_ref_i(void *item, swig_type_info *class)
 static void
 swig_free_ref(swig_ref ref)
 {
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
+    OI_PY_STATE gstate;
+
+    gstate = OI_PY_STATE_GET();
     Py_DECREF(ref.val);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
 }
 
 static swig_cb_val
@@ -403,10 +489,11 @@ get_swig_cb_i(swig_cb cb)
 static swig_cb_val
 ref_swig_cb_i(swig_cb cb)
 {
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
+    OI_PY_STATE gstate;
+
+    gstate = OI_PY_STATE_GET();
     Py_INCREF(cb);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return cb;
 }
 #define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
@@ -415,40 +502,43 @@ ref_swig_cb_i(swig_cb cb)
 static swig_cb_val
 deref_swig_cb(swig_cb cb)
 {
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
+    OI_PY_STATE gstate;
+
+    gstate = OI_PY_STATE_GET();
     Py_DECREF(cb);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return cb;
 }
 
 static swig_cb_val
 deref_swig_cb_val(swig_cb_val cb)
 {
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
+    OI_PY_STATE gstate;
+
+    gstate = OI_PY_STATE_GET();
     Py_DECREF(cb);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return cb;
 }
 
 static int
 valid_swig_cb_i(swig_cb cb, char *func)
 {
-    PyObject *meth;
-    PyGILState_STATE gstate;
-    gstate = PyGILState_Ensure();
+    PyObject    *meth;
+    OI_PY_STATE gstate;
+
+    gstate = OI_PY_STATE_GET();
     meth = PyObject_GetAttrString(cb, func);
     if (!meth) {
-	PyGILState_Release(gstate);
+	OI_PY_STATE_PUT(gstate);
 	return 0;
     }
     if (!PyMethod_Check(meth)) {
-	PyGILState_Release(gstate);
+	OI_PY_STATE_PUT(gstate);
 	return 0;
     }
     Py_DECREF(meth);
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return 1;
 }
 #define valid_swig_cb(v, func) valid_swig_cb_i(v, #func)
@@ -531,11 +621,11 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     char          *errstr;
     PyObject      *o = NULL;
     PyObject      *p;
-    PyGILState_STATE gstate;
+    OI_PY_STATE   gstate;
+
+    gstate = OI_PY_STATE_GET();
 
     n = swig_count_format(format);
-
-    gstate = PyGILState_Ensure();
 
     args = PyTuple_New(n);
     if (!args) {
@@ -682,14 +772,14 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     }
     Py_DECREF(args);
 
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
     return;
 
  out_err:
     if (o) {
 	Py_DECREF(o);
     }
-    PyGILState_Release(gstate);
+    OI_PY_STATE_PUT(gstate);
 }
 
 %}

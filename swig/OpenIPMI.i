@@ -334,8 +334,9 @@ typedef char **arg_array;
 %{
 swig_cb_val swig_log_handler;
 
-void
-posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
+static void
+openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
+		   enum ipmi_log_type_e log_type, va_list ap)
 {
     char *pfx = "";
     static char log[1024];
@@ -2551,6 +2552,7 @@ init_posix(void)
     if (swig_os_hnd)
 	return;
     swig_os_hnd = ipmi_posix_setup_os_handler();
+    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
 }
 
@@ -2565,6 +2567,7 @@ init_glib(void)
 	return;
     g_thread_init(NULL);
     swig_os_hnd = ipmi_glib_get_os_handler();
+    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
     g_log_set_handler("OpenIPMI",
 		      G_LOG_LEVEL_ERROR
@@ -2586,6 +2589,9 @@ init_glib(void)
 void
 init(void)
 {
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
 #ifdef HAVE_GLIB
     init_glib();
 #else
@@ -2603,6 +2609,9 @@ shutdown_everything()
     ipmi_debug_malloc_cleanup();
     swig_os_hnd->free_os_handler(swig_os_hnd);
     swig_os_hnd = NULL;
+#ifdef OpenIPMI_HAVE_CLENAUP_LANG
+    void cleanup_lang();
+#endif
 }
 
 /*

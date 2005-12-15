@@ -366,6 +366,8 @@ domain_open(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmdlang->errstr = "Unable to setup connection";
 	    cmdlang->err = rv;
+	    for (j=0; j<i; j++)
+		con[j]->close_connection(con[j]);
 	    for (j=0; j<set; j++)
 		ipmi_free_args(con_parms[j]);
 	    goto out;
@@ -1246,9 +1248,9 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "where the number is the IPMI device number to connect to.  LAN parms"
       " are:"
       " lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
-      "     [-L <privilege>] [-s] <host1> [<host2>]\n"
-      "     [-Ra <auth alg>] [-Ri <integ alg>] [-Rc <conf algo>]\n"
-      "     [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
+      "     [-L <privilege>] [-s] [-Ra <auth alg>] [-Ri <integ alg>]\n"
+      "     [-Rc <conf algo>] [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
+      "     <host1> [<host2>]\n"
       " If -s is supplied, then two host names are taken (the second port"
       " may be specified with -p2).  Otherwise, only one hostname is"
       " taken.  The defaults are an empty username and password (anonyous),"

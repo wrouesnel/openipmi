@@ -36,7 +36,7 @@ import _entity
 import _mc
 import _saveprefs
 import _sel
-import logging
+import _oi_logging
 
 class InvalidDomainError(Exception):
     def __init__(self, value):
@@ -602,7 +602,7 @@ def RestoreDomains(mainhandler):
             d.Connect()
         except InvalidDomainError, e:
             d.remove()
-            logging.error("Error making domain connection for " + name + ": " + str(e))
+            _io_logging.error("Error making domain connection for " + name + ": " + str(e))
 
 class _DomainRestore(_saveprefs.RestoreHandler):
     def __init__(self):

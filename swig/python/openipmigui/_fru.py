@@ -31,7 +31,7 @@
 #
 
 import OpenIPMI
-import logging
+import _oi_logging
 import wx
 import wx.gizmos as gizmos
 
@@ -61,7 +61,7 @@ class FruInfoDisplay(wx.Dialog):
         node_s = [ None ]
         rv = fru.get_root_node(name_s, node_s)
         if (rv != 0):
-            logging.error("unable to get FRU node: " + str(rv))
+            _oi_logging.error("unable to get FRU node: " + str(rv))
             self.Destroy();
             return
         treeroot = tree.AddRoot(name_s[0])

@@ -33,7 +33,7 @@ import wx
 import wx.gizmos as gizmos
 import _domainDialog
 import _saveprefs
-import logging
+import _oi_logging
 
 init_treenamewidth = 150
 init_sashposition = 100
@@ -506,7 +506,7 @@ def GetAttrInt(attr, default):
     try:
         return int(attr.nodeValue)
     except Exception, e:
-        logging.error ("Error getting init parm " + attr.nodeName)
+        _oi_logging.error ("Error getting init parm " + attr.nodeName)
         return default
 
 class _GUIRestore(_saveprefs.RestoreHandler):

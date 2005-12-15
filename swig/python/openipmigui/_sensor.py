@@ -32,7 +32,7 @@
 import wx
 import wx.lib.scrolledpanel as scrolled
 import OpenIPMI
-import logging
+import _oi_logging
 
 class SensorRefreshData:
     def __init__(self, s):
@@ -147,7 +147,7 @@ class SensorHysteresisSet(wx.Dialog):
         if (rv == 0):
             rv = self.err
         if (rv != 0):
-            logging.error("Error setting sensor thresholds: " + str(rv))
+            _oi_logging.error("Error setting sensor thresholds: " + str(rv))
             self.Close()
 
     def OnClose(self, event):
@@ -162,7 +162,7 @@ class SensorHysteresisSet(wx.Dialog):
 
     def sensor_get_hysteresis_cb(self, sensor, err, positive, negative):
         if (err != 0):
-            logging.error("Error getting sensor hysteresis: " + str(err))
+            _oi_logging.error("Error getting sensor hysteresis: " + str(err))
             self.Destroy()
         else:
             self.pos.SetValue(str(positive))
@@ -171,7 +171,7 @@ class SensorHysteresisSet(wx.Dialog):
 
     def sensor_set_hysteresis_cb(self, sensor, err):
         if (err):
-            logging.error("Unable to set sensor thresholds: " + str(err))
+            _oi_logging.error("Unable to set sensor thresholds: " + str(err))
         else:
             sensor.get_hysteresis(self.s)
         self.Close()
@@ -225,7 +225,7 @@ class SensorThresholdsSet(wx.Dialog):
         if (rv == 0):
             rv = self.err
         if (rv != 0):
-            logging.error("Error setting sensor thresholds: " + str(rv))
+            _oi_logging.error("Error setting sensor thresholds: " + str(rv))
             self.Close()
 
     def OnClose(self, event):
@@ -237,14 +237,14 @@ class SensorThresholdsSet(wx.Dialog):
         else:
             rv = sensor.get_thresholds(self)
             if (rv != 0):
-                logging.error("Error getting sensor thresholds: " + str(rv))
+                _oi_logging.error("Error getting sensor thresholds: " + str(rv))
                 self.Destroy()
                 return
             self.setting = True
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
         if (err != 0):
-            logging.error("Error getting sensor thresholds: " + str(err))
+            _oi_logging.error("Error getting sensor thresholds: " + str(err))
             self.Destroy()
             return
         for i in th.split(':'):
@@ -254,7 +254,7 @@ class SensorThresholdsSet(wx.Dialog):
 
     def sensor_set_thresholds_cb(self, sensor, err):
         if (err):
-            logging.error("Unable to set sensor thresholds: " + str(err))
+            _oi_logging.error("Unable to set sensor thresholds: " + str(err))
         else:
             sensor.get_thresholds(self.s)
         self.Close()
@@ -325,7 +325,7 @@ class SensorEventEnablesSet(wx.Dialog):
         if (rv == 0):
             rv = self.err
         if (rv != 0):
-            logging.error("Error setting sensor event enables: " + str(rv))
+            _oi_logging.error("Error setting sensor event enables: " + str(rv))
             self.Close()
 
     def OnClose(self, event):
@@ -337,14 +337,14 @@ class SensorEventEnablesSet(wx.Dialog):
         else:
             rv = sensor.get_event_enables(self)
             if (rv != 0):
-                logging.error("Error getting sensor event enables: " + str(rv))
+                _oi_logging.error("Error getting sensor event enables: " + str(rv))
                 self.Destroy()
                 return
             self.setting = True
 
     def sensor_get_event_enable_cb(self, sensor, err, st):
         if (err != 0):
-            logging.error("Error getting sensor event enables: " + str(err))
+            _oi_logging.error("Error getting sensor event enables: " + str(err))
             self.Destroy()
             return
         for i in st.split(' '):
@@ -358,14 +358,14 @@ class SensorEventEnablesSet(wx.Dialog):
                 try:
                     self.event_enables[i].SetValue(True)
                 except:
-                    logging.warning("Sensor " + s.name + " returned enable "
+                    _oi_logging.warning("Sensor " + s.name + " returned enable "
                                     + i + " but the sensor reports it in a"
                                     + " callback.")
         self.Show()
 
     def sensor_event_enable_cb(self, sensor, err):
         if (err):
-            logging.error("Unable to set sensor event enables: " + str(err))
+            _oi_logging.error("Unable to set sensor event enables: " + str(err))
         else:
             sensor.get_event_enables(self.s)
         self.Close()

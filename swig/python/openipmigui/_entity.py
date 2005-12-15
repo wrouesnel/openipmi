@@ -31,7 +31,7 @@
 #
 
 import OpenIPMI
-import logging
+import _oi_logging
 import wx
 import _sensor
 import _control
@@ -101,7 +101,7 @@ class ActivationTimeSetter(wx.Dialog):
         if (rv == 0):
             rv = self.err
         if (rv):
-            logging.error("Error doing entity cb in activation time setter: "
+            _oi_logging.error("Error doing entity cb in activation time setter: "
                           + str(rv))
             self.Destroy()
 
@@ -117,7 +117,7 @@ class ActivationTimeSetter(wx.Dialog):
         if (rv == 0):
             rv = self.err
         if (rv != 0):
-            logging.error("Error setting activation time: " + str(rv))
+            _oi_logging.error("Error setting activation time: " + str(rv))
             self.Close()
 
     def OnClose(self, event):
@@ -210,19 +210,19 @@ class Entity:
         oper = EntityOp(self, "set_activation_requested")
         rv = oper.DoOp()
         if (rv != 0):
-            logging.error("entity set activation failed: " + str(rv))
+            _oi_logging.error("entity set activation failed: " + str(rv))
 
     def Activate(self, event):
         oper = EntityOp(self, "activate")
         rv = oper.DoOp()
         if (rv != 0):
-            logging.error("entity activation failed: " + str(rv))
+            _oi_logging.error("entity activation failed: " + str(rv))
 
     def Deactivate(self, event):
         oper = EntityOp(self, "deactivate")
         rv = oper.DoOp()
         if (rv != 0):
-            logging.error("entity deactivation failed: " + str(rv))
+            _oi_logging.error("entity deactivation failed: " + str(rv))
 
     def SetAutoActTime(self, event):
         ActivationTimeSetter(self, "Activation Time", "auto_activate_time")
@@ -235,7 +235,7 @@ class Entity:
 
     def entity_activate_cb(self, entity, err):
         if (err != 0):
-            logging.error("entity activate operation failed: " + str(err))
+            _oi_logging.error("entity activate operation failed: " + str(err))
         
     def Changed(self, entity):
         self.is_fru = entity.is_fru()
@@ -292,7 +292,7 @@ class Entity:
     
     def entity_hot_swap_cb(self, entity, err, state):
         if (err):
-            logging.error("Error getting entity hot-swap state: " + str(err))
+            _oi_logging.error("Error getting entity hot-swap state: " + str(err))
             return
         self.hot_swap_state = state
         self.ui.set_item_text(self.hotswapitem,

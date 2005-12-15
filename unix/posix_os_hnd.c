@@ -49,7 +49,7 @@
 
 /* CHEAP HACK - we don't want the user to have to provide this any
    more. */
-extern void posix_vlog(const char           *format,
+extern void posix_vlog(char                 *format,
 		       enum ipmi_log_type_e log_type,
 		       va_list              ap);
 #pragma weak posix_vlog
@@ -326,7 +326,7 @@ sposix_vlog(os_handler_t         *handler,
     if (log_handler)
 	log_handler(handler, format, log_type, ap);
     else if (posix_vlog)
-	posix_vlog(format, log_type, ap);
+	posix_vlog((char *) format, log_type, ap);
     else
 	default_vlog(format, log_type, ap);
 }

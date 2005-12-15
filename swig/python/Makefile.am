@@ -25,8 +25,6 @@ OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
 
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
-bin_SCRIPTS = openipmigui.py
-
 _OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
 	rm _OpenIPMI.so
@@ -53,4 +51,4 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL_PROGRAM) OpenIPMI.py $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyc $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyo $(DESTDIR)$(PYTHON_INSTALL_DIR)
-
+	$(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui

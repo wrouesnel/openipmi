@@ -31,7 +31,6 @@
 #
 
 import OpenIPMI
-import logging
 import wx
 import sys
 
