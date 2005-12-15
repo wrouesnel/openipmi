@@ -207,6 +207,18 @@ AC_ARG_WITH(swig,
     fi,
 )
 
+wxpython=
+AC_ARG_WITH(wxpython,
+[  --with-wxpython[=PATH]          Look for wxPython.],
+    if test "x$withval" = "xyes"; then
+      wxpython=yes
+    elif test "x$withval" = "xno"; then
+      wxpython=no
+    elif test -d "$withval"; then
+      wxpython=yes
+    fi,
+)
+
 AC_PROG_CC
 AC_PROG_LIBTOOL
 AC_STDC_HEADERS
@@ -429,6 +441,19 @@ AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_INSTALL_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
+
+# Now check for wxPython
+if test "x$wxpython" == "x"; then
+   if test "x$pythonprog" != "x"; then
+      wxpython=`echo -e "try:\n  import wx\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
+   fi
+fi
+if test "x$wxpython" == "xyes"; then
+   PYTHON_GUI_DIR=openipmigui
+else
+   PYTHON_GUI_DIR=
+fi
+AC_SUBST(PYTHON_GUI_DIR)
 
 # Now check for swig
 if test "x$swigprog" = "x" -a "x$tryswig" = "xyes"; then

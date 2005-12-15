@@ -1,5 +1,5 @@
 
-SUBDIRS = . openipmigui
+SUBDIRS = . @PYTHON_GUI_DIR@
 
 AM_CFLAGS = $(PYTHON_CFLAGS) \
 	    $(GLIB_CFLAGS) \
@@ -51,4 +51,5 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL_PROGRAM) OpenIPMI.py $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyc $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyo $(DESTDIR)$(PYTHON_INSTALL_DIR)
-	$(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui
+	if test "x$(PYTHON_GUI_DIR)" = "xopenipmigui"; then \
+		$(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui

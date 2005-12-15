@@ -3131,6 +3131,8 @@ int pef_str_to_parm(char *str);
 char *get_threshold_access_support_string(int val);
 char *get_hysteresis_support_string(int val);
 char *get_event_support_string(int val);
+
+/* Convert various channel/mc values to strings. */
 char *channel_medium_string(int val);
 char *channel_protocol_string(int val);
 char *channel_session_support_string(int val);
