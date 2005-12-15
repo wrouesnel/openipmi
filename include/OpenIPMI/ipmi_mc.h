@@ -424,6 +424,7 @@ int ipmi_channel_access_set_user_auth(ipmi_channel_access_t *access,
 #define IPMI_CHANNEL_ACCESS_MODE_PRE_BOOT	1
 #define IPMI_CHANNEL_ACCESS_MODE_ALWAYS		2
 #define IPMI_CHANNEL_ACCESS_MODE_SHARED		3
+const char *ipmi_channel_access_mode_string(int val);
 int ipmi_channel_access_get_access_mode(ipmi_channel_access_t *access,
 					unsigned int          *access_mode);
 int ipmi_channel_access_set_access_mode(ipmi_channel_access_t *access,

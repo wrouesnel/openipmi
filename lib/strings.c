@@ -38,6 +38,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <string.h>
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
@@ -1397,29 +1398,29 @@ const char *
 ipmi_channel_medium_string(int val)
 {
     switch (val) {
-    case CHANNEL_MEDIUM_IPMB:
+    case IPMI_CHANNEL_MEDIUM_IPMB:
 	return "IPMB";
-    case CHANNEL_MEDIUM_ICMB_V10:
+    case IPMI_CHANNEL_MEDIUM_ICMB_V10:
 	return "ICMB_V10";
-    case CHANNEL_MEDIUM_ICMB_V09:
+    case IPMI_CHANNEL_MEDIUM_ICMB_V09:
 	return "ICMB_V09";
-    case CHANNEL_MEDIUM_8023_LAN:
+    case IPMI_CHANNEL_MEDIUM_8023_LAN:
 	return "8023_LAN";
-    case CHANNEL_MEDIUM_RS232:
+    case IPMI_CHANNEL_MEDIUM_RS232:
 	return "RS232";
-    case CHANNEL_MEDIUM_OTHER_LAN:
+    case IPMI_CHANNEL_MEDIUM_OTHER_LAN:
 	return "OTHER_LAN";
-    case CHANNEL_MEDIUM_PCI_SMBUS:
+    case IPMI_CHANNEL_MEDIUM_PCI_SMBUS:
 	return "PCI_SMBUS";
-    case CHANNEL_MEDIUM_SMBUS_v1:
+    case IPMI_CHANNEL_MEDIUM_SMBUS_v1:
 	return "SMBUS_v1";
-    case CHANNEL_MEDIUM_SMBUS_v2:
+    case IPMI_CHANNEL_MEDIUM_SMBUS_v2:
 	return "SMBUS_v2";
-    case CHANNEL_MEDIUM_USB_v1:
+    case IPMI_CHANNEL_MEDIUM_USB_v1:
 	return "USB_v1";
-    case CHANNEL_MEDIUM_USB_v2:
+    case IPMI_CHANNEL_MEDIUM_USB_v2:
 	return "USB_v2";
-    case CHANNEL_MEDIUM_SYS_INTF:
+    case IPMI_CHANNEL_MEDIUM_SYS_INTF:
 	return "SYS_INTF";
     default:
 	return "invalid";
@@ -1430,21 +1431,21 @@ const char *
 ipmi_channel_protocol_string(int val)
 {
     switch (val) {
-    case CHANNEL_PROTOCOL_IPMB:
+    case IPMI_CHANNEL_PROTOCOL_IPMB:
 	return "IPMB";
-    case CHANNEL_PROTOCOL_ICMB:
+    case IPMI_CHANNEL_PROTOCOL_ICMB:
 	return "ICMB";
-    case CHANNEL_PROTOCOL_SMBus:
+    case IPMI_CHANNEL_PROTOCOL_SMBus:
 	return "SMBus";
-    case CHANNEL_PROTOCOL_KCS:
+    case IPMI_CHANNEL_PROTOCOL_KCS:
 	return "KCS";
-    case CHANNEL_PROTOCOL_SMIC:
+    case IPMI_CHANNEL_PROTOCOL_SMIC:
 	return "SMIC";
-    case CHANNEL_PROTOCOL_BT_v10:
+    case IPMI_CHANNEL_PROTOCOL_BT_v10:
 	return "BT_v10";
-    case CHANNEL_PROTOCOL_BT_v15:
+    case IPMI_CHANNEL_PROTOCOL_BT_v15:
 	return "BT_v15";
-    case CHANNEL_PROTOCOL_TMODE:
+    case IPMI_CHANNEL_PROTOCOL_TMODE:
 	return "TMODE";
     default:
 	return "invalid";
@@ -1455,13 +1456,13 @@ const char *
 ipmi_channel_session_support_string(int val)
 {
     switch (val) {
-    case CHANNEL_SESSION_LESS:
+    case IPMI_CHANNEL_SESSION_LESS:
 	return "session-less";
-    case CHANNEL_SINGLE_SESSION:
+    case IPMI_CHANNEL_SINGLE_SESSION:
 	return "single-session";
-    case CHANNEL_MULTI_SESSION:
+    case IPMI_CHANNEL_MULTI_SESSION:
 	return "multi-session";
-    case CHANNEL_SESSION_BASED:
+    case IPMI_CHANNEL_SESSION_BASED:
 	return "session-based";
     default:
 	return "invalid";
