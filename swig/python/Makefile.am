@@ -52,4 +52,6 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL_PROGRAM) OpenIPMI.pyc $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyo $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	if test "x$(PYTHON_GUI_DIR)" = "xopenipmigui"; then \
-		$(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui
+	    $(INSTALL) -d $(DESTDIR)$(bindir); \
+	    $(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui;\
+	fi

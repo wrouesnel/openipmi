@@ -66,7 +66,7 @@ AC_ARG_WITH(poptlibs,
 # If UCD SNMP requires OpenSSL, this tells where to find the crypto lib
 tryopenssl=yes
 AC_ARG_WITH(openssl,
-[  --with-openssl=PATH             Look for openssl in PATH.],
+[  --with-openssl[[=yes|no|PATH]]    Look for openssl, with the optional path.],
     if test "x$withval" = "xyes"; then
       tryopenssl=yes
     elif test "x$withval" = "xno"; then
@@ -91,7 +91,7 @@ AC_ARG_WITH(openssllibs,
 
 tryglib=yes
 AC_ARG_WITH(glib,
-[  --with-glib                     Look for glib.],
+[  --with-glib=yes|no              Look for glib.],
     if test "x$withval" = "xyes"; then
       tryglib=yes
     elif test "x$withval" = "xno"; then
@@ -120,7 +120,7 @@ AC_ARG_WITH(gliblibs,
 tryperl=yes
 perldir=
 AC_ARG_WITH(perl,
-[  --with-perl[=PATH]              Look for perl, with the optional path.],
+[  --with-perl[[=yes|no|PATH]]       Look for perl, with the optional path.],
     if test "x$withval" = "xyes"; then
       tryperl=yes
     elif test "x$withval" = "xno"; then
@@ -145,7 +145,7 @@ AC_ARG_WITH(perlcflags,
 
 perlusepthreads=
 AC_ARG_WITH(perlusepthreads,
-[  --with-perlusepthreads[=yes|no] Use threads with perl.],
+[  --with-perlusepthreads[[=yes|no]] Use threads with perl.],
    if test "x$withval" = "xyes"; then
       perlusepthreads="yes"
    elif test "x$withval" = "xno"; then
@@ -158,7 +158,7 @@ AC_ARG_WITH(perlusepthreads,
 trypython=yes
 pythondir=
 AC_ARG_WITH(python,
-[  --with-python[=PATH]            Look for python.],
+[  --with-python[[=yes|no|PATH]]     Look for python, with the optional path.],
     if test "x$withval" = "xyes"; then
       trypython=yes
     elif test "x$withval" = "xno"; then
@@ -182,7 +182,7 @@ AC_ARG_WITH(pythoncflags,
 
 pythonusepthreads=
 AC_ARG_WITH(pythonusepthreads,
-[  --with-pythonusepthreads[=yes|no] Use threads with python.],
+[  --with-pythonusepthreads[[=yes|no]] Use threads with python.],
    if test "x$withval" = "xyes"; then
       pythonusepthreads="yes"
    elif test "x$withval" = "xno"; then
@@ -192,10 +192,22 @@ AC_ARG_WITH(pythonusepthreads,
    fi,
 )
 
+wxpython=
+AC_ARG_WITH(wxpython,
+[  --with-wxpython[[=yes|no]]       Use threads with python.],
+   if test "x$withval" = "xyes"; then
+      wxpython="yes"
+   elif test "x$withval" = "xno"; then
+      wxpython="no"
+   elif test "x$withval" = "x"; then
+      wxpython="yes"
+   fi,
+)
+
 tryswig=yes
 swigprog=
 AC_ARG_WITH(swig,
-[  --with-swig                     Look for swig, either "yes", "no", or the path to swig.],
+[  --with-swig[[=yes|no|PATH]]       Look for swig, with the optional path.],
     if test "x$withval" = "x"; then
       tryswig=yes
     elif test "x$withval" = "xyes"; then
@@ -442,13 +454,13 @@ AC_SUBST(PYTHON_INSTALL_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
 
-# Now check for wxPython
-if test "x$wxpython" == "x"; then
+# Check for wxPython
+if test "x$wxpython" = "x"; then
    if test "x$pythonprog" != "x"; then
       wxpython=`echo -e "try:\n  import wx\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
    fi
 fi
-if test "x$wxpython" == "xyes"; then
+if test "x$wxpython" = "xyes"; then
    PYTHON_GUI_DIR=openipmigui
 else
    PYTHON_GUI_DIR=
