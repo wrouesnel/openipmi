@@ -1,3 +1,10 @@
+2005-12-20 Corey Minyard <cminyard@mvista.com>
+
+	* doc/IPMI.ltx: Fixed a cross reference.
+
+	* doc/Makefile.am: Fixed the latex build to run bibtex and latex
+	the apropriate number of times.
+
 2005-12-14 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i, swig/python/OpenIPMI_lang.i: Added support for

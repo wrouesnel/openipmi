@@ -1,0 +1,185 @@
+SOL Implementation in OpenIPMI
+------------------------------
+
+SOL is designed to sit on top of the RMCP+ interface of IPMI.  RMCP+
+has the concept of a "payload", which is basically like a port number
+in IP terminology.  A certain application sits behind the payload
+number for sending an receiving data.
+
+The current OpenIPMI LAN code has a payload interface that allows
+users to plug in payloads.  So the SOL code should not have to worry
+about the low-level transport of the data.  It has to worry about it's
+data formatting and about the user interface.
+
+
+SOL Basic Design
+----------------
+
+       +--------------------+  	  +--------------------+
+       |                    |     |                    |
+       |  SOL Terminal App  |     |  SWIG (perl) I/F   |
+       |                    |     |                    |
+       +--------------------+     +--------------------+
+                  |			     |
+       	       	  |			     |
+		  +--------+-----------------+
+                           | SOL API
+                           |
+                 +--------------------+
+                 |                    |
+                 | SOL User Interface |
+                 |                    |
+                 +--------------------+
+                    |              |
+       send command |              |
+                    |              | async messages
+     +--------------------+        |
+     |                    |        |
+     |  OpenIPMI Library  |        |
+     |                    |        |
+     +--------------------+        |
+                    |              |
+     +--------------------+     +------------------------+
+     |                    |     |                        |
+     |  IPMI 2.0 LAN      |-----| SOL Payload Formatting |
+     |                    |     |                        |
+     +--------------------+     +------------------------+
+
+The above picture show the basic layout of my proposed SOL design.  It
+is expected the SOL payload formatting will plug into the standard
+payload interface.
+
+The SOL-specific code is in three basic parts.  There is message
+formatting code for taking the SOL data from a message and wrapping it
+into an RMCP+ message, unwrapping incoming RMCP responses for the LAN
+code to deliver, and handle async messages from the LAN code and
+deliver them to the user code.
+
+The user interface provides a nice abstraction to the SOL.  Basically,
+it provides a way to type data and a way to receive data output from
+the other end.  The interfaces are non-blocking with mechanisms to
+allow the user to handle flow-control themselves (eg a non-blocking
+interface, a way to flow-control data from the other end).
+
+The Terminal App is a user application sitting on top of the other
+code that provides a "telnet"-like interface to SOL.
+
+The SOL interface will also be available in the swig (perl) interface.
+
+Note that the main OpenIPMI library may not be required, depending on
+what you need.  Whether that box is required or not is up to your
+needs.
+
+
+Prerequisites to Design
+-----------------------
+
+You will need to know how OpenIPMI works.  This is not a small thing,
+but it is fairly well documented in doc/IPMI.ltx (which can be
+converted to a PDF).  The details of sensors and things like that is
+not necessary, but basic domain function is.
+
+You will need to know swig.  See http://www.swig.org/.  OpenIPMI uses
+the 1.3 version of swig.
+
+
+OpenIPMI Interfaces
+-------------------
+
+If you look at include/OpenIPMI/ipmi_lan.h, there is a section that
+begins with the comment "RMCP+ payload handling".  The ipmi payload is
+formatted using this interface (along with all the RAKP messages).
+You can look in lib/ipmi_payload.c for an example of its use.  You can
+use connection attributes to store data that you need in the
+connection; those are defined in included/OpenIPMI/ipmi_conn.h, see
+the section named "Connection attributes".
+
+This interface is for message formatting.  The interface to the user
+is through standard OpenIPMI messaging, using
+ipmi_send_command_addr().  There is an RMCP+ address type defined in
+include/OpenIPMI/ipmi_addr.h (named ipm_rmcpp_addr).
+
+The basic flow is like this:
+
+   * The user sets up SOL.  The details of this are in the SOL code you
+     will be writing, but it involes payload activation and probably
+     some other details.  I haven't read the SOL info enough to know
+     all the details.
+   * When the user wants to send some SOL data, they will format an
+     ipmi_msg_t message, send it to the RMCP+ address for SOL.  The
+     format of the data in the ipmi_msg_t is up to you.  Your
+     format_for_xmit() method will be called with the message, you
+     should format the outgoing packet for sending.
+   * When a response to a send SOL message comes in, your
+     get_recv_seq() method will first be called.  If it is a response,
+     this should return the sequence number that was given to you in
+     the format_for_xmit() method.
+   * The response will be delivered to the user to the callback they
+     registered when they called ipmi_send_command_addr().
+   * If an asynchronous messages comes in, get_recv_seq() should return
+     an error and your handle_recv_async() method will be called.  You
+     should handle or deliver the message to the user as required.
+
+This will hopefully get you started in thinking about the interface.
+The current interfaces may not be sufficient, we can extend them as
+you need.  I don't know if SOL needs asynchronous sending of messages,
+but if it does then format_for_xmit() will probably need to be
+adjusted.
+
+
+Requirements
+------------
+
+* The SOL code shall support the full options of SOL, including
+  flow-control.
+
+* The SOL code shall have three basic interfaces.  One is a public API
+  that allows other C programs to use the API directly.  The second is
+  the SOL terminal application.  The third is the swig (perl)
+  interface.
+
+* All SOL C public interface shall named ipmi_sol_xxx().  If private
+  interfaces are needed (to register async handlers with the payload
+  code, for instance) they shall be named _ipmi_sol_xxx().  Internal
+  (static) functions may be named with the user's discretion, but
+  should be good names.
+
+* The swig public interface shall be an OO interface (just like the
+  rest of the interfaces in the swig code).
+
+* All programmatic API interface (C and swig) shall be non-blocking
+  asynchronous interfaces.
+
+* The public API shall be based upon an abstract type (probably
+  ipmi_sol_t) with no publically visible structure contents.  This
+  should make the API future-proof; you can make changes to the
+  internals and maintain binary compatability.
+
+* I (corey) would like at least the following review points:
+  * API design
+  * basic design
+  * basic function (ie, it works but is missing some features)
+  * complete
+  These are basic suggestions, feel free to ask for reviews more
+  often.
+
+* All work on SOL shall be done at the head of the OpenIPMI CVS tree.
+
+* Hopefully no changes to other parts of OpenIPMI are required for
+  SOL.  However, the payload interfaces may not have all the features
+  required.  If there is something that would make your life easier,
+  please ask.
+
+* All code shall be in ANSI C.
+
+* Contact should generally be through email, IRC (irc.freenode.net
+  #ipmi).  We can set up conference calls as necessary.
+
+* The public interfaces shall all be in a file named
+  include/OpenIPMI/ipmi_sol.h
+
+* Private interfaces shall all be in a file named
+  include/OpenIPMI/internal/ipmi_sol.h
+
+* The public interfaces added will be documented tersely in the
+  include file and more completely in doc/IPMI.ltx.
