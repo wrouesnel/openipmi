@@ -534,7 +534,7 @@ rakp_hmac_s3(rakp_info_t   *info,
     ipmi_set_uint32(idata+16, ipmi_rmcpp_auth_get_my_session_id(info->ainfo));
     idata[20] = ipmi_rmcpp_auth_get_role(info->ainfo);
     if (info->hacks & IPMI_CONN_HACK_RAKP3_WRONG_ROLEM)
-	/* For the RAKP4 message, the Intel BMC only uses the bottom 4
+	/* For the RAKP3 message, the Intel BMC only uses the bottom 4
 	   nibbles. */
 	idata[20] &= 0xf;
     idata[21] = ipmi_rmcpp_auth_get_username_len(info->ainfo);

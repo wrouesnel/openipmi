@@ -1,3 +1,14 @@
+2005-12-28 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/cmd_domain.c, man/ipmi_cmdlang.7: Add doc info about
+	the authtype and privilege fields.
+
+	* lib/rakp.c: Fix a comment error about the message the rolem hack
+	applies to.
+
+	* swig/python/Makefile.am: Add a way to run the gui from the
+	makefile, to avoid having to set the paths by hand.
+
 2005-12-20 Corey Minyard <cminyard@mvista.com>
 
 	* doc/IPMI.ltx: Fixed a cross reference.

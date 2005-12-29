@@ -55,3 +55,9 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	    $(INSTALL) -d $(DESTDIR)$(bindir); \
 	    $(INSTALL_PROGRAM) openipmigui.py $(DESTDIR)$(bindir)/openipmigui;\
 	fi
+
+PYPATH=$(top_builddir)/swig/python
+PYLDPATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs
+
+rungui:
+	LD_LIBRARY_PATH=$(PYLDPATH) PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
