@@ -232,7 +232,7 @@ things like that.
 Replacable Unit.  This includes things like the manufacturer, the
 serial number, date of manufacture, etc.  A system generally has
 information about the chassis and information about each field
-replacable unit it has.  Field replacable units may include power
+replaceable unit it has.  Field replaceable units may include power
 supplies, DIMMs (memory devices), plug-in-boards, or a host of other
 things.
 
@@ -423,9 +423,9 @@ convenient ways.  The user still needs to understand the capabilities of
 sensors, how the sensors advertise those capabilties, and the things
 that can be done to the sensors.
 
-You may register with an entity to be told when it's physical presence
+You may register with an entity to be told when its physical presence
 in the system changes.  Some devices (like power supplies) are
-field-replacable while the system is running; this type of device is
+field-replaceable while the system is running; this type of device is
 called a hot-swappable \ac{FRU}.  They may have sensors that monitor
 them, but those sensors may not be active if the device is not
 physically present in the system.
@@ -494,7 +494,7 @@ As you see, when you start an operation, you provide the next thing to
 call when the operation completes.  The functions passed around are
 called ``callbacks''.  You allocate and pass around chunks
 of data to be passed to the handlers.  And you register input handlers
-that get called when certain event occur.  So the code runs in short
+that get called when certain event occurs.  So the code runs in short
 non-blocking sections, registers for the next operation, then returns
 back to some invisible main loop that handles the details of scheduling
 operations.  This may seem more complicated than the previous example,
@@ -922,7 +922,7 @@ You have to know what you are doing, but that goes without saying when
 doing multi-threaded programming.
 \end{itemize}
 
-This it is pretty standard in multi-threaded systems.  \ac{HPI}, for
+This is pretty standard in multi-threaded systems.  \ac{HPI}, for
 instance has the same problem.  If you have one thread waiting for
 events from an \ac{HPI} domain, and another iterating the RDRs, or you
 have two threads each doing operations on sensors, you have exactly
@@ -979,7 +979,7 @@ commands defined in the \acs{IPMI} include file.
 
 \paragraph{Device-Relative vs System-Relative Entities}
 
-In \acs{IPMI}, entities may be be either in a fixed place in the system, or
+In \acs{IPMI}, entities may be either in a fixed place in the system, or
 they may be moved about the system.  Fixed entities, are, well, in a
 fixed location in the system.  These are called system relative
 entities.  They have an entity instance less than 60h.
@@ -1195,7 +1195,7 @@ value of a sensor, you call call \verb=ipmi_reading_get()= and you
 give it a handler to call when the reading has been fetched.
 
 This is always done for things that OpenIPMI might have to send a
-message to do.  If it a result of OpenIPMI's requirement to be able to
+message to do.  If it is a result of OpenIPMI's requirement to be able to
 work in non-threaded systems and still be responsive to operations
 while waiting.
 
@@ -1489,7 +1489,7 @@ Table~\vref{domain-options} shows the options available.
 \chapter{IPMI Interfaces}
 \label{ipmi-interfaces}
 
-\acs{IPMI} has a large number of interfaces for talking to to management
+\acs{IPMI} has a large number of interfaces for talking to management
 controllers.  They vary in performance and capability, but the same
 messages work over the top of all of them.  Generally, it does not
 matter how you interface to an \acs{IPMI} system, the messages will work the
@@ -1503,7 +1503,7 @@ connections.  You use a per-interface command to set up the interface,
 but once set up, the interfaces all work the same.  The file shown in
 Appendix \ref{ipmi-conn-h} defines the interface for connections.
 
-Note that not all operations are not available on all interfaces.  \acs{LAN}
+Note that not all operations are available on all interfaces.  \acs{LAN}
 connections, for instance, cannot receive commands.
 
 \section{System Interfaces}
@@ -1667,7 +1667,7 @@ req.msg.netfn = 0x04; /* Sensor/Event netfn */
 req.msg.cmd = 0x2d; /* Get sensor reading */
 req.msg.data = data;
 req.msg.data_len = 1;
-data[1] = 10; /* Read sensor 10 */
+data[0] = 10; /* Read sensor 10 */
 
 rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
 \end{verbatim}
@@ -1857,7 +1857,7 @@ if (rv == -1)
 printf("parms were: %d %d", tparms.retries, tparms.retry_time_ms);
 
 tparms.retries = 0; /* No resends */
-tparms.retry_time = 1000; /* one second */
+tparms.retry_time_ms = 1000; /* one second */
 rv = ioctl(fd, IPMICTL_SET_TIMING_PARMS_CMD, &tparms);
 if (rv == -1)
   error handling...
@@ -1946,7 +1946,7 @@ The \acs{IPMI} interfaces on a management controller are called
 interface, and any other messaging interfaces will each have their own
 channel on the \ac{MC}.
 
-Messages directly sent to the local management controller do nor
+Messages directly sent to the local management controller do not
 require any type of channel information.  When the user sends a
 message out to another interface, it must specify the channel.  This
 is called ``bridging''.  Channels also may have some type of
@@ -2081,7 +2081,7 @@ possible channel.
           \end{tightdefs}
         \end{tightdefs}}
 \msgitem{5-7}{Vendor ID, used to specify the IANA number for the organization
-        the defined the protocol.  This should always be the IPMI IANA,
+        that defined the protocol.  This should always be the IPMI IANA,
         which is 7154 (decimal), or F2H, 1Bh, and 00H for these bytes.}
 \msgitem{8-9}{Auxiliary channel info.
 
@@ -2184,7 +2184,7 @@ Message command described in table \ref{get-msg-cmd}.
 \msgitem{1}{Channel information, bits are:
         \begin{tightdefs}
         \item[0-4] - Channel number
-        \item[4-7] - Inferred privilege leel for the message.  Table
+        \item[4-7] - Inferred privilege level for the message.  Table
           \ref{ipmi-priv-levels} describes the privilege levels.
 
           If the message is received from a session-oriented channel,
@@ -3539,7 +3539,7 @@ Channels 1-7 are used for other IPMB channels, LAN interfaces, serial
 interfaces, and whatnot.  Channel Fh is used for the system interface.
 
 If you specify channel Eh in a command, it will use the channel the
-command comes in on and any returned channel number will be the actual
+command came from; any returned channel number will be the actual
 channel number of the channel.  This can be used to discover the
 channel number of the current channel.
 
@@ -3936,7 +3936,7 @@ Diagnostic Interrupt & 4 & (optional) Send a system-defined diagnostic
         an \ac{NMI}.\\
 \hline
 Send Alert & 5 & Send an alert of some type, via an \acs{SNMP} trap,
-        a page, or a modem dialin.  Note that unlike the rest of the
+        a page, or a modem dialup.  Note that unlike the rest of the
         actions, this action will still be done if a higher priority
         action is done.  Alerts can also be prioritized via the
         Alert Policy Table as described in section \ref{sec-pef-conf-parms}.\\
@@ -4314,7 +4314,7 @@ Alert Strings (some parts are volatile) & 13 &
         byte 3 of an alert policy table entry is set to 0, or indirectly
         through parameter 12 of this table if that bit is one.
 
-        The meanings of the values in this table are dependend on the
+        The meanings of the values in this table are dependent on the
         alert type and channel.
 
         For dial paging, this string will have a carraige return
@@ -4351,10 +4351,10 @@ OEM Parmeters & 96+ &
 
 The \ac{PEF} table is read and written as part of the PEF
 Configuration table, parameter 6, but the contents are documented
-separately in table \ref{pef-table-entry}.  When and event comes in,
+separately in table \ref{pef-table-entry}.  When an event comes in,
 it is compared against each filter in order.  If a match occurs on
 multiple filters, then the highest priority action is done and the
-rest except for alerts are ignored.  After the operation is complete,
+rest except for alerts are ignored.  After the operation is completed,
 any alert operations are done by scanning the alert policy table in
 order.  The order of the alert policy table defines the priority of
 the different alerts.
@@ -4991,7 +4991,7 @@ it has a callback.
 responses.  A user sends a command to an \ac{MC}, and the \ac{MC}
 returns a response.  All commands have responses.  Commands may
 optionally have some data; the data depends on the command.  The same
-goes for responses, except that all responses contain at least on data
+goes for responses, except that all responses contain at least one data
 byte holding the completion code.  Every response has a completion
 code in the first byte.
 
@@ -5635,7 +5635,7 @@ Entity IDs defined by \ac{IPMI} are:
 \hline
 31 & CABLE \_INTERCONNECT & A cable routing device.\\
 \hline
-32 & MEMORY\_DEVICE & A replacable memory device, like a DIMM.  This should
+32 & MEMORY\_DEVICE & A replaceable memory device, like a DIMM.  This should
         not be used for individual memory chips, but for the board that
         holds the memory chips.\\
 \hline
@@ -5680,7 +5680,7 @@ Entity IDs defined by \ac{IPMI} are:
 
 \section{Discovering Entities}
 In OpenIPMI, the entities in a system are part of the domain.  As
-OpenIPMI scans \acs{SDR}s it find, it will create the entities
+OpenIPMI scans \acs{SDR}s it finds, it will create the entities
 referenced in those SDRs.  The user can discover the entities in a
 domain in two ways: iterating or registering callbacks.
 
@@ -5831,7 +5831,7 @@ section~\vref{sec-openipmi-events}.
 Entities come in four different flavors:
 \begin{description}
 \item[\acs{MC}] - An \acs{MC} entity is for a \acs{MC}.
-\item[FRU] - This is for field-replacable entities that are
+\item[FRU] - This is for field-replaceable entities that are
   not \acs{MC}s.
 \item[Generic] - Some other device on the \acs{IPMB} bus.
 \item[Unknown] - This is for entities that do not have an \acs{SDR}
@@ -6048,7 +6048,7 @@ handle_sensor(ipmi_entity_t *ent,
     int  allocated = 0;
 
     if (length == 0)
-        name = ``empty name'';
+        name = "empty name";
     else {
         name = malloc(length+1);
         if (!name) {
@@ -6121,7 +6121,7 @@ handle_sensor(enum ipmi_update_e op,
     int  allocated = 0;
 
     if (length == 0)
-        name = ``empty name'';
+        name = "empty name";
     else {
         name = malloc(length+1);
         if (!name) {
@@ -6401,7 +6401,7 @@ int ipmi_fru_get_root_node(ipmi_fru_t      *fru,
 			   const char      **name,
 			   ipmi_fru_node_t **node);
 \end{verbatim}
-This function returns the name of the FRU (either ``SPD FRU'' or
+This function returns the name of the FRU, either ``SPD FRU'' or
 ``standard FRU'' or some other OEM name and the actual root node.  If
 either of these is NULL, it will be ignored.  The root node is always
 a record node.
@@ -6603,7 +6603,7 @@ int ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
                                   unsigned int area,
                                   unsigned int *used_length);
 \end{verbatim}
-The \verb=used_length= variable tells how much of teh length of the
+The \verb=used_length= variable tells how much of the length of the
 FRU is actually used.  Note that area offsets and length must be
 multiples of 8.
 
@@ -6833,7 +6833,7 @@ OpenIPMI attempts to hide as much of this complexity as it can, but it
 can only do so much.
 
 So starting at the beginning, the first thing you need to know about a
-sensor is it's type.  You fetch that with the function:
+sensor is its type.  You fetch that with the function:
 \begin{verbatim}
 int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
 \end{verbatim}
@@ -7333,7 +7333,7 @@ contains.
 
 \subsubsection{Sensor Name}
 The SDR contains a string giving a name for the sensor.  This is
-useful for printing out sensorinformation.  The functions to get
+useful for printing out sensor information.  The functions to get
 this are:
 \begin{verbatim}
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
@@ -8701,7 +8701,7 @@ dynamic nature of an \ac{IPMI} system dynamically.
 \section{\acs{IPMI} strings}
 \label{appendix-ipmi-strings}
 
-IPMI uses a special format for storing strings.  It allows data two be
+IPMI uses a special format for storing strings.  It allows data to be
 stored in four different formats.  The first byte describes the type
 and length; the format is:
 \begin{tightdefs}
