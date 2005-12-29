@@ -1,3 +1,9 @@
+2005-12-29 Corey Minyard <cminyard@mvista.com>
+	
+	* lib/ipmi_payload.c: Fix things so send message commands can be
+	routed through a LAN channel.  This allows ATCA AMCs to be
+	directly communicated with.
+
 2005-12-28 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_domain.c, man/ipmi_cmdlang.7: Add doc info about

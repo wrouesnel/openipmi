@@ -243,6 +243,19 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 		   payload. */
 		return EINVAL;
 
+	    if ((orig_msg->cmd == IPMI_SEND_MSG_CMD)
+		&& (orig_msg->netfn == IPMI_APP_NETFN))
+	    {
+		/* Boy, I hate IPMI message routing.  If the original
+		   command from the user was a send message, then
+		   assume this was the response the user was looking
+		   for.  This means that you can't route send message
+		   responses through a connection that supports
+		   returning the message data in the send message
+		   response, but that's wrong, anyway. */
+		goto handle_normal_msg;
+	    }
+
 	    if (tmsg[10] == ipmi->ipmb_addr[chan]) {
 		ipmi_system_interface_addr_t *si_addr
 		    = (ipmi_system_interface_addr_t *) addr;
@@ -267,61 +280,67 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	    msg->data = tmsg+13;
 	    msg->data_len = data_len - 15;
 	}
-    } else if ((orig_addr->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	       && (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-		    && (tmsg[3] == 0x20))
-		   || ((! (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		       && (tmsg[3] == ipmi->ipmb_addr[chan]))))
-    {
-        /* In some cases, a message from the IPMB looks like it came
-	   from the BMC itself, IMHO a misinterpretation of the
-	   errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
-	   didn't clear things up at all.  Some manufacturers have
-	   interpreted it this way, but IMHO it is incorrect. */
-        memcpy(addr, orig_addr, orig_addr_len);
-        addr_len = orig_addr_len;
-	if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
-	    addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-        msg->netfn = tmsg[1] >> 2;
-        msg->cmd = tmsg[5];
-        msg->data = tmsg+6;
-        msg->data_len = data_len - 7;
     } else {
-	/* It's not encapsulated in a send message response. */
-
-	if (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-	     && (tmsg[3] == 0x20))
-	    || ((!(ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		&& (tmsg[3] == ipmi->ipmb_addr[chan])))
+    handle_normal_msg:
+	if ((orig_addr->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	    && (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+		 && (tmsg[3] == 0x20))
+		|| ((! (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+		    && (tmsg[3] == ipmi->ipmb_addr[chan]))))
 	{
-	    ipmi_system_interface_addr_t *si_addr
-		= (ipmi_system_interface_addr_t *) addr;
-
-	    /* It's directly from the BMC, so it's a system interface
-	       message. */
-	    si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	    si_addr->channel = 0xf;
-	    si_addr->lun = tmsg[4] & 3;
+	    /* In some cases, a message from the IPMB looks like it came
+	       from the BMC itself, IMHO a misinterpretation of the
+	       errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
+	       didn't clear things up at all.  Some manufacturers have
+	       interpreted it this way, but IMHO it is incorrect. */
+	    /* That said, this is the way things are.  This appears to be
+	       the correct interpretation of the spec, even though it's
+	       crazy. */
+	    memcpy(addr, orig_addr, orig_addr_len);
+	    addr_len = orig_addr_len;
+	    if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+		addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+	    msg->netfn = tmsg[1] >> 2;
+	    msg->cmd = tmsg[5];
+	    msg->data = tmsg+6;
+	    msg->data_len = data_len - 7;
 	} else {
-	    ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) addr;
-	    ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) orig_addr;
+	    /* It's not encapsulated in a send message response. */
 
-	    /* A message from the IPMB. */
-	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	    /* This is a hack, but the channel does not come back in the
-	       message.  So we use the channel from the original
-	       instead. */
-	    ipmb_addr->channel = ipmb2->channel;
-	    ipmb_addr->slave_addr = tmsg[3];
-	    ipmb_addr->lun = tmsg[4] & 0x3;
+	    if (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+		 && (tmsg[3] == 0x20))
+		|| ((!(ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+		    && (tmsg[3] == ipmi->ipmb_addr[chan])))
+	    {
+		ipmi_system_interface_addr_t *si_addr
+		    = (ipmi_system_interface_addr_t *) addr;
+
+		/* It's directly from the BMC, so it's a system interface
+		   message. */
+		si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+		si_addr->channel = 0xf;
+		si_addr->lun = tmsg[4] & 3;
+	    } else {
+		ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) addr;
+		ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) orig_addr;
+
+		/* A message from the IPMB. */
+		ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+		/* This is a hack, but the channel does not come
+		   back in the message.  So we use the channel
+		   from the original instead. */
+		ipmb_addr->channel = ipmb2->channel;
+		ipmb_addr->slave_addr = tmsg[3];
+		ipmb_addr->lun = tmsg[4] & 0x3;
+	    }
+
+	    msg->netfn = tmsg[1] >> 2;
+	    msg->cmd = tmsg[5];
+	    addr_len = sizeof(ipmi_system_interface_addr_t);
+	    msg->data = tmsg+6;
+	    msg->data_len = data_len - 6;
+	    msg->data_len--; /* Remove the checksum */
 	}
-
-	msg->netfn = tmsg[1] >> 2;
-	msg->cmd = tmsg[5];
-	addr_len = sizeof(ipmi_system_interface_addr_t);
-	msg->data = tmsg+6;
-	msg->data_len = data_len - 6;
-	msg->data_len--; /* Remove the checksum */
     }
     
     /* Convert broadcast addresses to regular IPMB addresses, since
