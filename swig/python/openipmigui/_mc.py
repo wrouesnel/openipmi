@@ -33,6 +33,7 @@ import OpenIPMI
 import wx
 import _oi_logging
 import _sel
+import _mc_chan
 
 class MCOpHandler:
     def __init__(self, m, func, handler=None, boolval=None):
@@ -292,10 +293,6 @@ class MC:
                                                
         self.ui.set_item_text(self.mguid, mc.get_guid())
 
-        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
-            mc.channel_get_info(i, self)
-            pass
-
     def HandleExpand(self, event):
         for i in self.refreshers:
             i.DoUpdate()
@@ -327,6 +324,8 @@ class MC:
         self.ui.Bind(wx.EVT_MENU, self.ColdResetHandler, item)
         item = menu.Append(-1, "Warm Reset")
         self.ui.Bind(wx.EVT_MENU, self.WarmResetHandler, item)
+        item = menu.Append(-1, "Channel Info")
+        self.ui.Bind(wx.EVT_MENU, self.ChannelInfoHandler, item)
         
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
@@ -362,9 +361,14 @@ class MC:
         self.cb_state = "warm_reset"
         self.mc_id.to_mc(self)
 
+    def ChannelInfoHandler(self, event):
+        self.cb_state = "channel_info"
+        self.mc_id.to_mc(self)
+
     def RefetchSDRsHandler(self, event):
         self.cb_state = "refetch_sdrs"
         self.mc_id.to_mc(self)
+        return
 
     def mc_cb(self, mc):
         if (self.cb_state == "enable_events"):
@@ -383,8 +387,10 @@ class MC:
             mc.reread_sensors()
         elif (self.cb_state == "reread_sel"):
             mc.reread_sel()
+        elif (self.cb_state == "channel_info"):
+            _mc_chan.MCChan(self, mc)
             pass
-        pass
+        return
 
     def mc_events_enable_cb(self, mc, err):
         if (err):
@@ -403,17 +409,6 @@ class MC:
             _oi_logging.error("Error setting MC event log enable: " + str(err))
             return
         self.el_refr.DoUpdate()
-        return
-
-    def mc_channel_got_info_cb(self, mc, err, chan_info):
-        if (err):
-            return
-        val = [ 0 ]
-        rv = chan_info.get_channel(val)
-        if (rv):
-            return
-        channel = val
-        
         return
 
     def mc_active_cb(self, mc, active):

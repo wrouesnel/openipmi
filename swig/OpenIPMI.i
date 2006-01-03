@@ -1026,8 +1026,9 @@ mc_channel_get_info(ipmi_mc_t           *mc,
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
+    info = ipmi_channel_info_copy(info);
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
-    info_ref = swig_make_ref(info, ipmi_channel_info_t);
+    info_ref = swig_make_ref_destruct(info, ipmi_channel_info_t);
     swig_call_cb(cb, "mc_channel_got_info_cb", "%p%d%p", &mc_ref, err,
 		 &info_ref);
     swig_free_ref_check(mc_ref, ipmi_mc_t);
@@ -1046,8 +1047,9 @@ mc_channel_get_access(ipmi_mc_t             *mc,
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
+    info = ipmi_channel_access_copy(info);
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
-    info_ref = swig_make_ref(info, ipmi_channel_access_t);
+    info_ref = swig_make_ref_destruct(info, ipmi_channel_access_t);
     swig_call_cb(cb, "mc_channel_got_access_cb", "%p%d%p", &mc_ref, err,
 		 &info_ref);
     swig_free_ref_check(mc_ref, ipmi_mc_t);
@@ -5748,6 +5750,12 @@ char *get_error_string(unsigned int val);
 	ipmi_channel_access_free(self);
     }
 
+    %newobject copy;
+    ipmi_channel_access_t *copy()
+    {
+	return ipmi_channel_access_copy(self);
+    }
+
     int get_channel(int *channel)
     {
 	unsigned int val;
@@ -5841,6 +5849,12 @@ char *get_error_string(unsigned int val);
     ~ipmi_user_t()
     {
 	ipmi_user_free(self);
+    }
+
+    %newobject copy;
+    ipmi_user_t *copy()
+    {
+	return ipmi_user_copy(self);
     }
 
     int get_channel(int *channel)
@@ -8499,14 +8513,15 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, lanparm_set_parm_cb);
 	}
 
-	ipmi_lanparm_ref(self);
+	if (handler_val)
+	    ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
 				   lanparm_set_parm, handler_val);
 	free(data);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_lanparm_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -8543,14 +8558,15 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, lanparm_set_parm_cb);
 	}
 
-	ipmi_lanparm_ref(self);
+	if (handler_val)
+	    ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
 				   lanparm_set_parm, handler_val);
 	free(data);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_lanparm_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -8599,13 +8615,14 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, lanparm_set_config_cb);
 	}
 
-	ipmi_lanparm_ref(self);
+	if (handler_val)
+	    ipmi_lanparm_ref(self);
 	rv = ipmi_lan_set_config(self, config,
 				 lanparm_set_config, handler_val);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_lanparm_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -8628,13 +8645,14 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, lanparm_clear_lock_cb);
 	}
 
-	ipmi_lanparm_ref(self);
+	if (handler_val)
+	    ipmi_lanparm_ref(self);
 	rv = ipmi_lan_clear_lock(self, config,
 				 lanparm_clear_lock, handler_val);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_lanparm_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 }
@@ -8927,14 +8945,15 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, pef_set_parm_cb);
 	}
 
-	ipmi_pef_ref(self);
+	if (handler_val)
+	    ipmi_pef_ref(self);
 	rv = ipmi_pef_set_parm(self, parm, data, length,
 			       pef_set_parm, handler_val);
 	free(data);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_pef_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -8969,14 +8988,15 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, pef_set_parm_cb);
 	}
 
-	ipmi_pef_ref(self);
+	if (handler_val)
+	    ipmi_pef_ref(self);
 	rv = ipmi_pef_set_parm(self, parm, data, length,
 			       pef_set_parm, handler_val);
 	free(data);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_pef_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -9027,12 +9047,13 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, pef_set_config_cb);
 	}
 
-	ipmi_pef_ref(self);
+	if (handler_val)
+	    ipmi_pef_ref(self);
 	rv = ipmi_pef_set_config(self, config, done, handler_val);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_pef_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -9055,12 +9076,13 @@ char *get_error_string(unsigned int val);
 	    handler_val = ref_swig_cb(handler, pef_clear_lock_cb);
 	}
 
-	ipmi_pef_ref(self);
+	if (handler_val)
+	    ipmi_pef_ref(self);
 	rv = ipmi_pef_clear_lock(self, config, pef_clear_lock, handler_val);
-	if (rv)
+	if (rv && handler_val) {
 	    ipmi_pef_deref(self);
-	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 }

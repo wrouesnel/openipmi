@@ -745,6 +745,9 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	    {
 		swig_ref *v = va_arg(ap, swig_ref *);
 		o = v->val;
+		/* Create a ref for setting the item, since python
+		   doesn't do that. */
+		Py_INCREF(o);
 	    }
 	    break;
 

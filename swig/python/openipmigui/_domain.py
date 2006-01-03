@@ -602,7 +602,8 @@ def RestoreDomains(mainhandler):
             d.Connect()
         except InvalidDomainError, e:
             d.remove()
-            _io_logging.error("Error making domain connection for " + name + ": " + str(e))
+            _io_logging.error("Error making domain connection for "
+                              + name + ": " + str(e))
 
 class _DomainRestore(_saveprefs.RestoreHandler):
     def __init__(self):

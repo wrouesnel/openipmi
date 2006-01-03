@@ -1,3 +1,30 @@
+2005-12-30 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fix problems with the channel info and
+	channel access data structures provided in callbacks; make
+	copies of those so the use can keep them around in the swig
+	languages.  Also add copy operations on the channel access
+	and user data structures and fix some problems with references
+	on various set operations.
+
+	* swig/python/OpenIPMI_lang.i: Create references for objects
+	passed to Python parameters, since Python doesn't do that
+	automatically.
+
+	* swig/python/openipmigui/Makefile.am: Add _mc_chan.py and
+	_mc_lanparm.py.
+
+	* swig/python/openipmigui/_mc_chan.py: Add MC channel info
+	handling
+
+	* swig/python/openipmigui/_mc_lanparm.py: Add MC lanparm
+	handling.
+
+	* swig/python/openipmigui/_domain.py: Fix some formatting
+
+	* swig/python/openipmigui/_mc.py: Add support for the MC channel
+	and lanparm handling.
+
 2005-12-29 Corey Minyard <cminyard@mvista.com>
 	
 	* lib/ipmi_payload.c: Fix things so send message commands can be
