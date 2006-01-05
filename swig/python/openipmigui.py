@@ -83,7 +83,7 @@ class DomainHandler:
     def savePrefs(self):
         objs = self.domains.values()
         objs.append(self.ui)
-        _saveprefs.save(objs, preffile)
+        _saveprefs.save(objs, self.preffile)
 
     def log(self, level, log):
         self.ui.new_log(level + ": " + log);
@@ -100,7 +100,7 @@ class IPMIGUI_App(wx.App):
         self.name = "IPMI GUI"
         wx.App.__init__(self);
 
-if __name__ == "__main__":
+def run():
     OpenIPMI.enable_debug_malloc()
     OpenIPMI.init()
 #    OpenIPMI.enable_debug_msg()
@@ -125,3 +125,6 @@ if __name__ == "__main__":
     app.MainLoop()
     OpenIPMI.set_log_handler(DummyLogHandler())
     OpenIPMI.shutdown_everything()
+
+if __name__ == "__main__":
+    run()

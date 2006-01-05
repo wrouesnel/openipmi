@@ -1,3 +1,17 @@
+2006-01-05 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Add a way for the languages to plug-in code at
+	the beginning and end of a function that handles callbacks or may
+	block.  This allows Python to release the GIL lock in older
+	versions of Python.
+
+	* swig/python/OpenIPMI_lang.i: Add defines for the previous
+	change;
+	* swig/perl/OpenIPMI_lang.i: ditto
+
+	* swig/OpenIPMI.i: Only initialize gthreads if it is not already
+	initialized.
+
 2005-12-30 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix problems with the channel info and

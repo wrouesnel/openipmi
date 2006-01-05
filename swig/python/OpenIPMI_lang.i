@@ -426,6 +426,12 @@ static void OI_put_py_state(int current)
 #define OI_PY_STATE int
 #define OI_PY_STATE_GET() OI_get_py_state()
 #define OI_PY_STATE_PUT(s) OI_put_py_state(s)
+
+/* For python, we need to release the GIL when doing something that can
+   callback or block, basically any C code with any callback handling. */
+#define IPMI_SWIG_C_CB_ENTRY Py_BEGIN_ALLOW_THREADS
+#define IPMI_SWIG_C_CB_EXIT Py_END_ALLOW_THREADS
+
 #else
 static void init_lang(void)
 {
@@ -434,11 +440,19 @@ static void init_lang(void)
 #define OI_PY_STATE PyGILState_STATE
 #define OI_PY_STATE_GET() PyGILState_Ensure()
 #define OI_PY_STATE_PUT(s) PyGILState_Release(s)
+/* Not required in newer versions of Python, The PyGUILState_Ensure
+   does it all for us. */
+#define IPMI_SWIG_C_CB_ENTRY 
+#define IPMI_SWIG_C_CB_EXIT 
 #endif
 #else
 #define OI_PY_STATE int
 #define OI_PY_STATE_GET() 0
 #define OI_PY_STATE_PUT(s) do { } while(0)
+
+/* No threads */
+#define IPMI_SWIG_C_CB_ENTRY 
+#define IPMI_SWIG_C_CB_EXIT 
 #endif
 
 static swig_ref

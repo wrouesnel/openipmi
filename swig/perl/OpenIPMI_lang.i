@@ -307,5 +307,10 @@ swig_free_ref(swig_ref ref)
     SvREFCNT_dec(ref.val);
 }
 
+/* Not required in Perl, no special C entry or exit handling required
+   for functions that handle callbacks or might block. */
+#define IPMI_SWIG_C_CB_ENTRY 
+#define IPMI_SWIG_C_CB_EXIT 
+
 %}
 
