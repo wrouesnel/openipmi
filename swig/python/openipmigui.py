@@ -131,5 +131,12 @@ def run():
     OpenIPMI.shutdown_everything()
 
 
+#def trace(frame, event, arg):
+#    print (event + ": " + frame.f_code.co_name +
+#           "(" + frame.f_code.co_filename + ":" + str(frame.f_lineno) + ")")
+#    return trace
+
 if __name__ == "__main__":
+    #import sys
+    #sys.settrace(trace)
     run()
