@@ -96,35 +96,40 @@ class DummyLogHandler:
         print level + ": " + log
 
 class IPMIGUI_App(wx.App):
-    def __init__(self):
+    def __init__(self, mainhandler):
         self.name = "IPMI GUI"
+        self.mainhandler = mainhandler
         wx.App.__init__(self);
+
+    def OnInit(self):
+        ui = gui.IPMIGUI(self.mainhandler)
+        self.mainhandler.SetUI(ui)
+    
+        self.SetTopWindow(ui)
+
+        OpenIPMI.add_domain_change_handler(self.mainhandler)
+        OpenIPMI.set_log_handler(self.mainhandler)
+
+        _domain.RestoreDomains(self.mainhandler)
+
+        return True
+
 
 def run():
     OpenIPMI.enable_debug_malloc()
     OpenIPMI.init()
-#    OpenIPMI.enable_debug_msg()
+    #OpenIPMI.enable_debug_msg()
 
-    app = IPMIGUI_App()
-    
     preffile = os.path.join(os.environ['HOME'], '.ipmigui.startup')
     _saveprefs.restore(preffile)
-
     mainhandler = DomainHandler(preffile)
 
-    ui = gui.IPMIGUI(mainhandler)
-    mainhandler.SetUI(ui)
-    
-    app.SetTopWindow(ui)
-
-    OpenIPMI.add_domain_change_handler(mainhandler)
-    OpenIPMI.set_log_handler(mainhandler)
-
-    _domain.RestoreDomains(mainhandler)
-    
+    app = IPMIGUI_App(mainhandler)
+       
     app.MainLoop()
     OpenIPMI.set_log_handler(DummyLogHandler())
     OpenIPMI.shutdown_everything()
+
 
 if __name__ == "__main__":
     run()

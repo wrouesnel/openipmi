@@ -12,6 +12,9 @@
 	* swig/OpenIPMI.i: Only initialize gthreads if it is not already
 	initialized.
 
+	* swig/python/openipmigui.py: Fix the GUI startup to use the
+	proper OnInit structure for wxPython.
+
 2005-12-30 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix problems with the channel info and
