@@ -97,18 +97,18 @@ class IPMIGUI(wx.Frame):
         
         filemenu = wx.Menu()
         filemenu.Append(wx.ID_EXIT, "E&xit\tCtrl-Q", "Exit")
-        self.Bind(wx.EVT_MENU, self.quit, id=wx.ID_EXIT);
+        wx.EVT_MENU(self, wx.ID_EXIT, self.quit);
         item = filemenu.Append(-1, "&Open Domain\tCtrl-O", "Open Domain")
-        self.Bind(wx.EVT_MENU, self.openDomain, item);
+        wx.EVT_MENU(self, item.GetId(), self.openDomain);
         item = filemenu.Append(-1, "&Save Prefs\tCtrl-S", "Save Prefs")
-        self.Bind(wx.EVT_MENU, self.savePrefs, item);
+        wx.EVT_MENU(self, item.GetId(), self.savePrefs);
         menubar.Append(filemenu, "&File")
         
         viewmenu = wx.Menu()
         item = viewmenu.Append(-1, "&Expand All\tCtrl-E", "Expand All")
-        self.Bind(wx.EVT_MENU, self.ExpandAll, item);
+        wx.EVT_MENU(self, item.GetId(), self.ExpandAll);
         item = viewmenu.Append(-1, "&Collapse All\tCtrl-C", "Collapse All")
-        self.Bind(wx.EVT_MENU, self.CollapseAll, item);
+        wx.EVT_MENU(self, item.GetId(), self.CollapseAll);
         menubar.Append(viewmenu, "&View")
 
         self.SetMenuBar(menubar)
@@ -131,8 +131,8 @@ class IPMIGUI(wx.Frame):
         self.splitter.SplitVertically(self.tree, self.logwindow)
         self.splitter.SetSashPosition(init_sashposition)
 
-        self.tree.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.TreeMenu)
-        self.tree.Bind(wx.EVT_TREE_ITEM_EXPANDED, self.TreeExpanded)
+        wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
+        wx.EVT_TREE_ITEM_EXPANDED(self.tree, -1, self.TreeExpanded)
 
         self.Show(True)
 

@@ -110,7 +110,7 @@ class MCSelSet:
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
-        self.m.ui.Bind(wx.EVT_MENU, self.modval, item)
+        wx.EVT_MENU(self.m.ui, item.GetId(), self.modval)
         self.m.ui.PopupMenu(menu, self.m.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -130,15 +130,15 @@ class MCSelSet:
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(dialog, -1, "Cancel")
-        dialog.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(dialog, -1, "Ok")
-        dialog.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        dialog.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
 
@@ -302,30 +302,30 @@ class MC:
         menu = wx.Menu();
         if self.has_sel:
             item = menu.Append(-1, "Reread SELs")
-            self.ui.Bind(wx.EVT_MENU, self.RereadSelsHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.RereadSelsHandler)
             item = menu.Append(-1, "Display SELs")
-            self.ui.Bind(wx.EVT_MENU, self.DisplaySelsHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.DisplaySelsHandler)
             item = menu.Append(-1, "Enable Event Log")
-            self.ui.Bind(wx.EVT_MENU, self.EnableEventLogHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.EnableEventLogHandler)
             item = menu.Append(-1, "Disable Event Log")
-            self.ui.Bind(wx.EVT_MENU, self.DisableEventLogHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.DisableEventLogHandler)
             pass
         if self.event_gen:
             item = menu.Append(-1, "Enable Events")
-            self.ui.Bind(wx.EVT_MENU, self.EnableEventsHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.EnableEventsHandler)
             item = menu.Append(-1, "Disable Events")
-            self.ui.Bind(wx.EVT_MENU, self.DisableEventsHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.DisableEventsHandler)
             pass
         if self.has_dev_sdrs:
             item = menu.Append(-1, "Refetch SDRs")
-            self.ui.Bind(wx.EVT_MENU, self.RefetchSDRsHandler, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.RefetchSDRsHandler)
             pass
         item = menu.Append(-1, "Cold Reset")
-        self.ui.Bind(wx.EVT_MENU, self.ColdResetHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.ColdResetHandler)
         item = menu.Append(-1, "Warm Reset")
-        self.ui.Bind(wx.EVT_MENU, self.WarmResetHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.WarmResetHandler)
         item = menu.Append(-1, "Channel Info")
-        self.ui.Bind(wx.EVT_MENU, self.ChannelInfoHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.ChannelInfoHandler)
         
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()

@@ -54,7 +54,7 @@ class FruInfoDisplay(wx.Dialog):
         sizer.Add(tree, 1, wx.GROW, 0)
 
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok).GetId(), self.ok;
         sizer.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         name_s = [ "" ]
@@ -68,7 +68,7 @@ class FruInfoDisplay(wx.Dialog):
         self.add_fru_data(tree, treeroot, node_s[0])
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         self.Show(True)
 

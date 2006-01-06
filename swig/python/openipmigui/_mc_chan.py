@@ -77,7 +77,7 @@ class MCChanUserAcc:
     def HandleMenu(self, event, eitem, point):
         menu = wx.Menu();
         item = menu.Append(-1, "Set Values")
-        menu.Bind(wx.EVT_MENU, self.setvalues, item)
+        wx.EVT_MENU(menu, item.GetId(), self.setvalues)
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()
         return
@@ -113,12 +113,12 @@ class MCChanData:
     def HandleMenu(self, event, eitem, point):
         menu = wx.Menu();
         item = menu.Append(-1, "User Info")
-        menu.Bind(wx.EVT_MENU, self.users, item)
+        wx.EVT_MENU(menu, item.GetId(), self.users)
         if (self.medium == OpenIPMI.CHANNEL_MEDIUM_8023_LAN):
             item = menu.Append(-1, "LANPARMS")
-            menu.Bind(wx.EVT_MENU, self.lanparms, item)
+            wx.EVT_MENU(menu, item.GetId(), self.lanparms)
             item = menu.Append(-1, "Clear LANPARM lock")
-            menu.Bind(wx.EVT_MENU, self.clr_lanparm_lock, item)
+            wx.EVT_MENU(menu, item.GetId(), self.clr_lanparm_lock)
             pass
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()
@@ -192,7 +192,7 @@ class MCChan(wx.Dialog):
                 pass
             pass
 
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         return
 
@@ -272,7 +272,7 @@ class MCChan(wx.Dialog):
         sizer.Add(self.tree, 1, wx.GROW, 0);
 
         close = wx.Button(self, -1, "Close")
-        self.Bind(wx.EVT_BUTTON, self.close, close)
+        wx.EVT_BUTTON(self, close.GetId(), self.close)
         sizer.Add(close, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 
         for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
@@ -301,7 +301,7 @@ class MCChan(wx.Dialog):
                 pass
             pass
 
-        self.tree.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.TreeMenu)
+        wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
         self.tree.Expand(self.treeroot)
         self.SetSizer(sizer)
         self.Show(True)

@@ -84,15 +84,15 @@ class ActivationTimeSetter(wx.Dialog):
 
         box2 = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         box2.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         box2.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         self.setting = False
 
@@ -181,23 +181,23 @@ class Entity:
 
         if (self.is_fru):
             item = menu.Append(-1, "View FRU Data")
-            self.d.ui.Bind(wx.EVT_MENU, self.ViewFruData, item)
+            wx.EVT_MENU(self.d.ui, item.GetId(), self.ViewFruData)
             doit = True
             
         if (self.hot_swap == "Managed"):
             item = menu.Append(-1, "Request Activation")
-            self.d.ui.Bind(wx.EVT_MENU, self.RequestActivation, item)
+            wx.EVT_MENU(self.d.ui, item.GetId(), self.RequestActivation)
             item = menu.Append(-1, "Activate")
-            self.d.ui.Bind(wx.EVT_MENU, self.Activate, item)
+            wx.EVT_MENU(self.d.ui, item.GetId(), self.Activate)
             item = menu.Append(-1, "Deactivate")
-            self.d.ui.Bind(wx.EVT_MENU, self.Deactivate, item)
+            wx.EVT_MENU(self.d.ui, item.GetId(), self.Deactivate)
             if (self.supports_auto_activate):
                 item = menu.Append(-1, "Set Auto-activate Time")
-                self.d.ui.Bind(wx.EVT_MENU, self.SetAutoActTime, item)
+                wx.EVT_MENU(self.d.ui, item.GetId(), self.SetAutoActTime)
                 pass
             if (self.supports_auto_deactivate):
                 item = menu.Append(-1, "Set Auto-deactivate Time")
-                self.d.ui.Bind(wx.EVT_MENU, self.SetAutoDeactTime, item)
+                wx.EVT_MENU(self.d.ui, item.GetId(), self.SetAutoDeactTime)
                 pass
             doit = True
             pass

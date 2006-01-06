@@ -117,15 +117,15 @@ class SensorHysteresisSet(wx.Dialog):
 
         box = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
@@ -195,15 +195,15 @@ class SensorThresholdsSet(wx.Dialog):
         
         box = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
 
         self.setting = False
@@ -293,15 +293,15 @@ class SensorEventEnablesSet(wx.Dialog):
         
         box = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
 
         self.setting = False
@@ -553,20 +553,20 @@ class Sensor:
         doit = False
         if (self.event_support != OpenIPMI.EVENT_SUPPORT_NONE):
             item = menu.Append(-1, "Rearm")
-            self.ui.Bind(wx.EVT_MENU, self.Rearm, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.Rearm)
             doit = True
         if (self.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE):
             item = menu.Append(-1, "Set Thresholds")
-            self.ui.Bind(wx.EVT_MENU, self.SetThresholds, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.SetThresholds)
             doit = True
         if (self.hysteresis_support == OpenIPMI.HYSTERESIS_SUPPORT_SETTABLE):
             item = menu.Append(-1, "Set Hysteresis")
-            self.ui.Bind(wx.EVT_MENU, self.SetHysteresis, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.SetHysteresis)
             doit = True
         if ((self.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE)
             or (self.event_support == OpenIPMI.EVENT_SUPPORT_ENTIRE_SENSOR)):
             item = menu.Append(-1, "Set Event Enables")
-            self.ui.Bind(wx.EVT_MENU, self.SetEventEnables, item)
+            wx.EVT_MENU(self.ui, item.GetId(), self.SetEventEnables)
             doit = True
 
         if (doit):

@@ -54,11 +54,11 @@ class ControlSet:
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
-        self.c.ui.Bind(wx.EVT_MENU, self.modval, item)
+        wx.EVT_MENU(self.c.ui, item.GetId(), self.modval)
         item = menu.Append(-1, "Set to 0")
-        self.c.ui.Bind(wx.EVT_MENU, self.SetTo0, item)
+        wx.EVT_MENU(self.c.ui, item.GetId(), self.SetTo0)
         item = menu.Append(-1, "Set to 1")
-        self.c.ui.Bind(wx.EVT_MENU, self.SetTo1, item)
+        wx.EVT_MENU(self.c.ui, item.GetId(), self.SetTo1)
         self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -89,15 +89,15 @@ class ControlSet:
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(dialog, -1, "Cancel")
-        dialog.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(dialog, -1, "Ok")
-        dialog.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        dialog.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
         return
@@ -141,7 +141,7 @@ class LightSet:
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
-        self.c.ui.Bind(wx.EVT_MENU, self.modval, item)
+        wx.EVT_MENU(self.c.ui, ite.GetId(), self.modvalm)
         self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -186,15 +186,15 @@ class LightSet:
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(dialog, -1, "Cancel")
-        dialog.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(dialog, -1, "Ok")
-        dialog.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        dialog.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
 

@@ -79,10 +79,10 @@ class SELDisplay(wx.Dialog):
         
         box = wx.BoxSizer(wx.HORIZONTAL)
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         clearall = wx.Button(self, -1, "Clear All")
-        self.Bind(wx.EVT_BUTTON, self.ClearAll, clearall);
+        wx.EVT_BUTTON(self, clearall.GetId(), self.ClearAll)
         box.Add(clearall, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
@@ -99,10 +99,10 @@ class SELDisplay(wx.Dialog):
         listc.SetColumnWidth(2, 200)
         listc.SetColumnWidth(3, 400)
 
-        self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.HandleMenu)
+        wx.EVT_LIST_ITEM_RIGHT_CLICK(self, -1, self.HandleMenu)
 
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         self.Show(True)
         return
@@ -144,7 +144,7 @@ class SELDisplay(wx.Dialog):
         self.curr_idx = event.GetIndex()
         menu = wx.Menu();
         item = menu.Append(-1, "Delete")
-        self.Bind(wx.EVT_MENU, self.DelItem, item)
+        wx.EVT_MENU(self, item.GetId(), self.DelItem)
 
         rect = self.listc.GetItemRect(self.curr_idx)
         if (rect == None):

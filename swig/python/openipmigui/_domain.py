@@ -101,7 +101,7 @@ class DomainSelSet(DomainRefreshData):
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
-        self.d.ui.Bind(wx.EVT_MENU, self.modval, item)
+        wx.EVT_MENU(self.d.ui, item.GetId(), self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -121,15 +121,15 @@ class DomainSelSet(DomainRefreshData):
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(dialog, -1, "Cancel")
-        dialog.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(dialog, -1, "Ok")
-        dialog.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        dialog.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
 
@@ -172,7 +172,7 @@ class DomainIPMBSet(DomainRefreshData):
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Modify Value")
-        self.d.ui.Bind(wx.EVT_MENU, self.modval, item)
+        wx.EVT_MENU(self.d.ui, item.GetId(), self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -192,15 +192,15 @@ class DomainIPMBSet(DomainRefreshData):
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(dialog, -1, "Cancel")
-        dialog.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(dialog, -1, "Ok")
-        dialog.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        dialog.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
 
@@ -496,11 +496,11 @@ class Domain:
         eitem = event.GetItem();
         menu = wx.Menu();
         item = menu.Append(-1, "Close")
-        self.ui.Bind(wx.EVT_MENU, self.CloseMenuHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.CloseMenuHandler)
         item = menu.Append(-1, "Reread SELs")
-        self.ui.Bind(wx.EVT_MENU, self.RereadSelsHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.RereadSelsHandler)
         item = menu.Append(-1, "Display SELs")
-        self.ui.Bind(wx.EVT_MENU, self.DisplaySelsHandler, item)
+        wx.EVT_MENU(self.ui, item.GetId(), self.DisplaySelsHandler)
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
 

@@ -70,10 +70,10 @@ class MCLanParm(wx.Dialog):
 
         box = wx.BoxSizer(wx.HORIZONTAL)
         save = wx.Button(self, -1, "Save")
-        self.Bind(wx.EVT_BUTTON, self.save, save);
+        wx.EVT_BUTTON(self, save.GetId(), self.save)
         box.Add(save, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         box.Add(cancel, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
@@ -115,8 +115,7 @@ class MCLanParm(wx.Dialog):
             pass
         
         self.SetSizer(sizer)
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.Bind(wx.EVT_LIST_BEGIN_LABEL_EDIT, self.editlabel, listc)
+        wx.EVT_CLOSE(self, self.OnClose)
         self.CenterOnScreen();
         self.Show(True)
         return
@@ -127,15 +126,6 @@ class MCLanParm(wx.Dialog):
         self.Destroy();
         return
 
-    def editlabel(self, event):
-        print("Edit " + str(event.GetColumn()))
-        if (event.GetColumn() == 0):
-            event.Allow()
-        else:
-            event.Veto()
-            pass
-        return
-    
     def save(self, event):
         # Don't forget to set self.lp to None when done so OnClose
         # doesn't clear it again

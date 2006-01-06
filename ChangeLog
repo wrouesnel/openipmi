@@ -15,6 +15,12 @@
 	* swig/python/openipmigui.py: Fix the GUI startup to use the
 	proper OnInit structure for wxPython.
 
+	* unix/posix_thread_os_hnd.c, unix/posix_os_hnd.c: Fix the
+	get_random() function to fill in all the data.
+
+	* swig/python/openipmigui/*.py: Convert over from the wxPython 2.6
+	Bind() functions to the older EVT_xxx() bind functions.
+
 2005-12-30 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix problems with the channel info and

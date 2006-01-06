@@ -51,7 +51,7 @@ class ConnInfo(wx.Panel):
         self.contype = wx.RadioBox(self, -1, "Connection Type",
                                    wx.DefaultPosition, wx.DefaultSize,
                                    [ 'smi', 'lan'], 2, wx.RA_SPECIFY_COLS)
-        self.Bind(wx.EVT_RADIOBOX, self.selectType, self.contype);
+        wx.EVT_RADIOBOX(self, self.contype.GetId(), self.selectType)
         self.sizer.Add(self.contype, 0, wx.ALIGN_CENTRE, 2)
 
         self.smiInfo = wx.Panel(self, -1)
@@ -206,10 +206,10 @@ class OpenDomainDialog(wx.Dialog):
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
-        self.Bind(wx.EVT_BUTTON, self.cancel, cancel);
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
         bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         ok = wx.Button(self, -1, "Ok")
-        self.Bind(wx.EVT_BUTTON, self.ok, ok);
+        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
@@ -223,7 +223,7 @@ class OpenDomainDialog(wx.Dialog):
 
         self.SetSizer(self.sizer)
 
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        wx.EVT_CLOSE(self, self.OnClose)
         
     def newField(self, name, initval="", parent=None, style=0):
         if parent == None:
