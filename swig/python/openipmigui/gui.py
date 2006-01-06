@@ -42,6 +42,8 @@ init_windowheight = 400
 
 refresh_timer_time = 10000
 
+id_st = 100
+
 class IPMITreeDummyItem:
     def __init__(self):
         pass
@@ -98,22 +100,22 @@ class IPMIGUI(wx.Frame):
         filemenu = wx.Menu()
         filemenu.Append(wx.ID_EXIT, "E&xit\tCtrl-Q", "Exit")
         wx.EVT_MENU(self, wx.ID_EXIT, self.quit);
-        item = filemenu.Append(-1, "&Open Domain\tCtrl-O", "Open Domain")
-        wx.EVT_MENU(self, item.GetId(), self.openDomain);
-        item = filemenu.Append(-1, "&Save Prefs\tCtrl-S", "Save Prefs")
-        wx.EVT_MENU(self, item.GetId(), self.savePrefs);
+        item = filemenu.Append(id_st+1, "&Open Domain\tCtrl-O", "Open Domain")
+        wx.EVT_MENU(self, id_st+1, self.openDomain);
+        item = filemenu.Append(id_st+2, "&Save Prefs\tCtrl-S", "Save Prefs")
+        wx.EVT_MENU(self, id_st+2, self.savePrefs);
         menubar.Append(filemenu, "&File")
         
         viewmenu = wx.Menu()
-        item = viewmenu.Append(-1, "&Expand All\tCtrl-E", "Expand All")
-        wx.EVT_MENU(self, item.GetId(), self.ExpandAll);
-        item = viewmenu.Append(-1, "&Collapse All\tCtrl-C", "Collapse All")
-        wx.EVT_MENU(self, item.GetId(), self.CollapseAll);
+        item = viewmenu.Append(id_st+3, "&Expand All\tCtrl-E", "Expand All")
+        wx.EVT_MENU(self, id_st+3, self.ExpandAll);
+        item = viewmenu.Append(id_st+4, "&Collapse All\tCtrl-C", "Collapse All")
+        wx.EVT_MENU(self, id_st+4, self.CollapseAll);
         menubar.Append(viewmenu, "&View")
 
         self.SetMenuBar(menubar)
 
-        self.splitter = wx.SplitterWindow(self)
+        self.splitter = wx.SplitterWindow(self, -1)
         self.splitter.SetMinimumPaneSize(10)
 
         self.tree = IPMITreeCtrl(self.splitter)

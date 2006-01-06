@@ -45,7 +45,7 @@ class ConnInfo(wx.Panel):
             sminumval = "0"
         else:
             sminumval = ""
-        wx.Panel.__init__(self, parent, size=wx.Size(400, 300))
+        wx.Panel.__init__(self, parent, -1, size=wx.Size(400, 300))
         self.parent = parent
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.contype = wx.RadioBox(self, -1, "Connection Type",

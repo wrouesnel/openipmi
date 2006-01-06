@@ -34,6 +34,8 @@ import OpenIPMI
 import wx
 import sys
 
+id_st = 600
+
 class EventInfo:
     def __init__(self):
         self.sensor = None
@@ -143,8 +145,8 @@ class SELDisplay(wx.Dialog):
     def HandleMenu(self, event):
         self.curr_idx = event.GetIndex()
         menu = wx.Menu();
-        item = menu.Append(-1, "Delete")
-        wx.EVT_MENU(self, item.GetId(), self.DelItem)
+        item = menu.Append(id_st+1, "Delete")
+        wx.EVT_MENU(self, id_st+1, self.DelItem)
 
         rect = self.listc.GetItemRect(self.curr_idx)
         if (rect == None):

@@ -2555,6 +2555,9 @@ init_posix(void)
 {
     if (swig_os_hnd)
 	return;
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
 #ifdef USE_POSIX_THREADS
     swig_os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
 #else
@@ -2573,6 +2576,9 @@ init_glib(void)
 {
     if (swig_os_hnd)
 	return;
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
     if (!g_thread_supported ())
 	g_thread_init(NULL);
     swig_os_hnd = ipmi_glib_get_os_handler();
@@ -2598,9 +2604,6 @@ init_glib(void)
 void
 init(void)
 {
-#ifdef OpenIPMI_HAVE_INIT_LANG
-    init_lang();
-#endif
 #ifdef HAVE_GLIB
     init_glib();
 #else
@@ -2633,9 +2636,9 @@ void
 wait_io(int timeout)
 {
     struct timeval tv = { (timeout / 1000), ((timeout + 999) % 1000) };
-    IPMI_SWIG_C_CB_ENTRY
+    IPMI_SWIG_C_BLOCK_ENTRY
     swig_os_hnd->perform_one_op(swig_os_hnd, &tv);
-    IPMI_SWIG_C_CB_EXIT
+    IPMI_SWIG_C_BLOCK_EXIT
 }
 
 %}

@@ -1,3 +1,15 @@
+2006-01-06 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Need a separate blocking and callback setup
+	define, as we might need to handle these differently.
+
+	* swig/python/OpenIPMI_lang.i: Add defines for the previous
+	change.
+	* swig/perl/OpenIPMI_lang.i: ditto
+
+	* swig/python/openipmigui/*.py, swig/python/openipmigui.py: More
+	work on getting the 2.4 version of wxPython working.
+
 2006-01-05 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Add a way for the languages to plug-in code at
@@ -6,7 +18,7 @@
 	versions of Python.
 
 	* swig/python/OpenIPMI_lang.i: Add defines for the previous
-	change;
+	change.
 	* swig/perl/OpenIPMI_lang.i: ditto
 
 	* swig/OpenIPMI.i: Only initialize gthreads if it is not already

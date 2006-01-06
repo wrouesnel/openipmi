@@ -37,6 +37,8 @@ import _sensor
 import _control
 import _fru
 
+id_st = 400
+
 class EntityOp:
     def __init__(self, e, func):
         self.e = e
@@ -180,24 +182,24 @@ class Entity:
         doit = False
 
         if (self.is_fru):
-            item = menu.Append(-1, "View FRU Data")
-            wx.EVT_MENU(self.d.ui, item.GetId(), self.ViewFruData)
+            item = menu.Append(id_st+1, "View FRU Data")
+            wx.EVT_MENU(self.d.ui, id_st+1, self.ViewFruData)
             doit = True
             
         if (self.hot_swap == "Managed"):
-            item = menu.Append(-1, "Request Activation")
-            wx.EVT_MENU(self.d.ui, item.GetId(), self.RequestActivation)
-            item = menu.Append(-1, "Activate")
-            wx.EVT_MENU(self.d.ui, item.GetId(), self.Activate)
-            item = menu.Append(-1, "Deactivate")
-            wx.EVT_MENU(self.d.ui, item.GetId(), self.Deactivate)
+            item = menu.Append(id_st+2, "Request Activation")
+            wx.EVT_MENU(self.d.ui, id_st+2, self.RequestActivation)
+            item = menu.Append(id_st+3, "Activate")
+            wx.EVT_MENU(self.d.ui, id_st+3, self.Activate)
+            item = menu.Append(id_st+4, "Deactivate")
+            wx.EVT_MENU(self.d.ui, id_st+4, self.Deactivate)
             if (self.supports_auto_activate):
-                item = menu.Append(-1, "Set Auto-activate Time")
-                wx.EVT_MENU(self.d.ui, item.GetId(), self.SetAutoActTime)
+                item = menu.Append(id_st+5, "Set Auto-activate Time")
+                wx.EVT_MENU(self.d.ui, id_st+5, self.SetAutoActTime)
                 pass
             if (self.supports_auto_deactivate):
-                item = menu.Append(-1, "Set Auto-deactivate Time")
-                wx.EVT_MENU(self.d.ui, item.GetId(), self.SetAutoDeactTime)
+                item = menu.Append(id_st+6, "Set Auto-deactivate Time")
+                wx.EVT_MENU(self.d.ui, id_st+6, self.SetAutoDeactTime)
                 pass
             doit = True
             pass

@@ -431,6 +431,8 @@ static void OI_put_py_state(int current)
    callback or block, basically any C code with any callback handling. */
 #define IPMI_SWIG_C_CB_ENTRY Py_BEGIN_ALLOW_THREADS
 #define IPMI_SWIG_C_CB_EXIT Py_END_ALLOW_THREADS
+#define IPMI_SWIG_C_BLOCK_ENTRY Py_BEGIN_ALLOW_THREADS
+#define IPMI_SWIG_C_BLOCK_EXIT Py_END_ALLOW_THREADS
 
 #else
 static void init_lang(void)
@@ -444,6 +446,10 @@ static void init_lang(void)
    does it all for us. */
 #define IPMI_SWIG_C_CB_ENTRY 
 #define IPMI_SWIG_C_CB_EXIT 
+
+/* We do need to work about blocking, though. */
+#define IPMI_SWIG_C_BLOCK_ENTRY Py_BEGIN_ALLOW_THREADS
+#define IPMI_SWIG_C_BLOCK_EXIT Py_END_ALLOW_THREADS
 #endif
 #else
 #define OI_PY_STATE int
@@ -453,6 +459,8 @@ static void init_lang(void)
 /* No threads */
 #define IPMI_SWIG_C_CB_ENTRY 
 #define IPMI_SWIG_C_CB_EXIT 
+#define IPMI_SWIG_C_BLOCK_ENTRY
+#define IPMI_SWIG_C_BLOCK_EXIT
 #endif
 
 static swig_ref

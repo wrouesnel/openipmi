@@ -39,23 +39,27 @@ taghash = { }
 class RestoreHandler:
     def __init__(self, tag):
         taghash[tag] = self
+        return
 
     def restore(self, attrlist):
-        pass
+        return
+
+    pass
 
 
 def save(objlist, file):
     domimpl = xml.dom.getDOMImplementation()
-    doc = domimpl.createDocument(None, None, None)
-    main = doc.createElement("IPMIPrefs")
-    doc.appendChild(main)
+    doc = domimpl.createDocument(None, "IPMIPrefs", None)
+    main = doc.documentElement
     for obj in objlist:
         elem = doc.createElement(obj.getTag())
         obj.SaveInfo(doc, elem)
         main.appendChild(elem)
+        pass
     # FIXME - need try/except here
     f = open(file, 'w')
     doc.writexml(f, indent='', addindent='\t', newl='\n')
+    return
 
 def restore(file):
     try:
@@ -69,3 +73,8 @@ def restore(file):
                 if (tag in taghash):
                     taghash[tag].restore(child)
                     child = child.nextSibling
+                    pass
+                pass
+            pass
+        pass
+    return

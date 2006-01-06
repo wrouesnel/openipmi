@@ -311,6 +311,8 @@ swig_free_ref(swig_ref ref)
    for functions that handle callbacks or might block. */
 #define IPMI_SWIG_C_CB_ENTRY 
 #define IPMI_SWIG_C_CB_EXIT 
+#define IPMI_SWIG_C_BLOCK_ENTRY
+#define IPMI_SWIG_C_BLOCK_EXIT
 
 %}
 

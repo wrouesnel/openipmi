@@ -34,6 +34,8 @@ import wx.lib.scrolledpanel as scrolled
 import OpenIPMI
 import _oi_logging
 
+id_st = 700
+
 class SensorRefreshData:
     def __init__(self, s):
         self.s = s
@@ -552,21 +554,21 @@ class Sensor:
         menu = wx.Menu();
         doit = False
         if (self.event_support != OpenIPMI.EVENT_SUPPORT_NONE):
-            item = menu.Append(-1, "Rearm")
-            wx.EVT_MENU(self.ui, item.GetId(), self.Rearm)
+            item = menu.Append(id_st+1, "Rearm")
+            wx.EVT_MENU(self.ui, id_st+1, self.Rearm)
             doit = True
         if (self.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE):
-            item = menu.Append(-1, "Set Thresholds")
-            wx.EVT_MENU(self.ui, item.GetId(), self.SetThresholds)
+            item = menu.Append(id_st+2, "Set Thresholds")
+            wx.EVT_MENU(self.ui, id_st+2, self.SetThresholds)
             doit = True
         if (self.hysteresis_support == OpenIPMI.HYSTERESIS_SUPPORT_SETTABLE):
-            item = menu.Append(-1, "Set Hysteresis")
-            wx.EVT_MENU(self.ui, item.GetId(), self.SetHysteresis)
+            item = menu.Append(id_st+3, "Set Hysteresis")
+            wx.EVT_MENU(self.ui, id_st+3, self.SetHysteresis)
             doit = True
         if ((self.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE)
             or (self.event_support == OpenIPMI.EVENT_SUPPORT_ENTIRE_SENSOR)):
-            item = menu.Append(-1, "Set Event Enables")
-            wx.EVT_MENU(self.ui, item.GetId(), self.SetEventEnables)
+            item = menu.Append(id_st+4, "Set Event Enables")
+            wx.EVT_MENU(self.ui, id_st+4, self.SetEventEnables)
             doit = True
 
         if (doit):

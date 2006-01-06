@@ -35,6 +35,8 @@ import _oi_logging
 import _sel
 import _mc_chan
 
+id_st = 600
+
 class MCOpHandler:
     def __init__(self, m, func, handler=None, boolval=None):
         self.m = m
@@ -109,8 +111,8 @@ class MCSelSet:
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Modify Value")
-        wx.EVT_MENU(self.m.ui, item.GetId(), self.modval)
+        item = menu.Append(id_st+1, "Modify Value")
+        wx.EVT_MENU(self.m.ui, id_st+1, self.modval)
         self.m.ui.PopupMenu(menu, self.m.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -301,31 +303,31 @@ class MC:
         eitem = event.GetItem();
         menu = wx.Menu();
         if self.has_sel:
-            item = menu.Append(-1, "Reread SELs")
-            wx.EVT_MENU(self.ui, item.GetId(), self.RereadSelsHandler)
-            item = menu.Append(-1, "Display SELs")
-            wx.EVT_MENU(self.ui, item.GetId(), self.DisplaySelsHandler)
-            item = menu.Append(-1, "Enable Event Log")
-            wx.EVT_MENU(self.ui, item.GetId(), self.EnableEventLogHandler)
-            item = menu.Append(-1, "Disable Event Log")
-            wx.EVT_MENU(self.ui, item.GetId(), self.DisableEventLogHandler)
+            item = menu.Append(id_st+10, "Reread SELs")
+            wx.EVT_MENU(self.ui, id_st+10, self.RereadSelsHandler)
+            item = menu.Append(id_st+11, "Display SELs")
+            wx.EVT_MENU(self.ui, id_st+11, self.DisplaySelsHandler)
+            item = menu.Append(id_st+12, "Enable Event Log")
+            wx.EVT_MENU(self.ui, id_st+12, self.EnableEventLogHandler)
+            item = menu.Append(id_st+13, "Disable Event Log")
+            wx.EVT_MENU(self.ui, id_st+13, self.DisableEventLogHandler)
             pass
         if self.event_gen:
-            item = menu.Append(-1, "Enable Events")
-            wx.EVT_MENU(self.ui, item.GetId(), self.EnableEventsHandler)
-            item = menu.Append(-1, "Disable Events")
-            wx.EVT_MENU(self.ui, item.GetId(), self.DisableEventsHandler)
+            item = menu.Append(id_st+14, "Enable Events")
+            wx.EVT_MENU(self.ui, id_st+14, self.EnableEventsHandler)
+            item = menu.Append(id_st+15, "Disable Events")
+            wx.EVT_MENU(self.ui, id_st+15, self.DisableEventsHandler)
             pass
         if self.has_dev_sdrs:
-            item = menu.Append(-1, "Refetch SDRs")
-            wx.EVT_MENU(self.ui, item.GetId(), self.RefetchSDRsHandler)
+            item = menu.Append(id_st+16, "Refetch SDRs")
+            wx.EVT_MENU(self.ui, id_st+16, self.RefetchSDRsHandler)
             pass
-        item = menu.Append(-1, "Cold Reset")
-        wx.EVT_MENU(self.ui, item.GetId(), self.ColdResetHandler)
-        item = menu.Append(-1, "Warm Reset")
-        wx.EVT_MENU(self.ui, item.GetId(), self.WarmResetHandler)
-        item = menu.Append(-1, "Channel Info")
-        wx.EVT_MENU(self.ui, item.GetId(), self.ChannelInfoHandler)
+        item = menu.Append(id_st+17, "Cold Reset")
+        wx.EVT_MENU(self.ui, id_st+17, self.ColdResetHandler)
+        item = menu.Append(id_st+18, "Warm Reset")
+        wx.EVT_MENU(self.ui, id_st+18, self.WarmResetHandler)
+        item = menu.Append(id_st+19, "Channel Info")
+        wx.EVT_MENU(self.ui, id_st+19, self.ChannelInfoHandler)
         
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()

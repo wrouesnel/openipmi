@@ -34,6 +34,8 @@ import OpenIPMI
 import wx
 import wx.lib.scrolledpanel as scrolled
 
+id_st = 200
+
 class ControlRefreshData:
     def __init__(self, c):
         self.c = c
@@ -53,12 +55,12 @@ class ControlSet:
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Modify Value")
-        wx.EVT_MENU(self.c.ui, item.GetId(), self.modval)
-        item = menu.Append(-1, "Set to 0")
-        wx.EVT_MENU(self.c.ui, item.GetId(), self.SetTo0)
-        item = menu.Append(-1, "Set to 1")
-        wx.EVT_MENU(self.c.ui, item.GetId(), self.SetTo1)
+        item = menu.Append(id_st+1, "Modify Value")
+        wx.EVT_MENU(self.c.ui, id_st+1, self.modval)
+        item = menu.Append(id_st+2, "Set to 0")
+        wx.EVT_MENU(self.c.ui, id_st+2, self.SetTo0)
+        item = menu.Append(id_st+3, "Set to 1")
+        wx.EVT_MENU(self.c.ui, id_st+3, self.SetTo1)
         self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -140,8 +142,8 @@ class LightSet:
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Modify Value")
-        wx.EVT_MENU(self.c.ui, ite.GetId(), self.modvalm)
+        item = menu.Append(id_st+10, "Modify Value")
+        wx.EVT_MENU(self.c.ui, id_st+10, self.modval)
         self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
         menu.Destroy()
 

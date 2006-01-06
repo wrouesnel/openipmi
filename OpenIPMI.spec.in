@@ -48,7 +48,7 @@ A Python interface for OpenIPMI.
 %package gui
 Summary: GUI (in python) for OpenIPMI
 Group: Utilities
-Requires: OpenIPMI-python = %{version}, wxPython
+Requires: OpenIPMI-python = %{version}, wxPython >= 2.4.2
 
 %description gui
 A GUI interface for OpenIPMI.  Written in python an requiring wxWidgets.

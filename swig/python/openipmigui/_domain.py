@@ -38,6 +38,8 @@ import _saveprefs
 import _sel
 import _oi_logging
 
+id_st = 300
+
 class InvalidDomainError(Exception):
     def __init__(self, value):
         self.value = value
@@ -100,8 +102,8 @@ class DomainSelSet(DomainRefreshData):
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Modify Value")
-        wx.EVT_MENU(self.d.ui, item.GetId(), self.modval)
+        item = menu.Append(id_st+1, "Modify Value")
+        wx.EVT_MENU(self.d.ui, id_st+1, self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -171,8 +173,8 @@ class DomainIPMBSet(DomainRefreshData):
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Modify Value")
-        wx.EVT_MENU(self.d.ui, item.GetId(), self.modval)
+        item = menu.Append(id_st+10, "Modify Value")
+        wx.EVT_MENU(self.d.ui, id_st+10, self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -495,12 +497,12 @@ class Domain:
     def HandleMenu(self, event):
         eitem = event.GetItem();
         menu = wx.Menu();
-        item = menu.Append(-1, "Close")
-        wx.EVT_MENU(self.ui, item.GetId(), self.CloseMenuHandler)
-        item = menu.Append(-1, "Reread SELs")
-        wx.EVT_MENU(self.ui, item.GetId(), self.RereadSelsHandler)
-        item = menu.Append(-1, "Display SELs")
-        wx.EVT_MENU(self.ui, item.GetId(), self.DisplaySelsHandler)
+        item = menu.Append(id_st+20, "Close")
+        wx.EVT_MENU(self.ui, id_st+20, self.CloseMenuHandler)
+        item = menu.Append(id_st+21, "Reread SELs")
+        wx.EVT_MENU(self.ui, id_st+21, self.RereadSelsHandler)
+        item = menu.Append(id_st+22, "Display SELs")
+        wx.EVT_MENU(self.ui, id_st+22, self.DisplaySelsHandler)
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
 

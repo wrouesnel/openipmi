@@ -36,6 +36,8 @@ import wx.gizmos as gizmos
 import _oi_logging
 import _mc_lanparm
 
+id_st = 500
+
 class ErrDialog(wx.MessageDialog):
     def __init__(self, str):
         wx.MessageDialog.__init__(self, None, str, "Error", wx.OK)
@@ -76,8 +78,8 @@ class MCChanUserAcc:
 
     def HandleMenu(self, event, eitem, point):
         menu = wx.Menu();
-        item = menu.Append(-1, "Set Values")
-        wx.EVT_MENU(menu, item.GetId(), self.setvalues)
+        item = menu.Append(id_st+1, "Set Values")
+        wx.EVT_MENU(menu, id_st+1, self.setvalues)
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()
         return
@@ -112,13 +114,13 @@ class MCChanData:
 
     def HandleMenu(self, event, eitem, point):
         menu = wx.Menu();
-        item = menu.Append(-1, "User Info")
-        wx.EVT_MENU(menu, item.GetId(), self.users)
+        item = menu.Append(id_st+2, "User Info")
+        wx.EVT_MENU(menu, id_st+2, self.users)
         if (self.medium == OpenIPMI.CHANNEL_MEDIUM_8023_LAN):
-            item = menu.Append(-1, "LANPARMS")
-            wx.EVT_MENU(menu, item.GetId(), self.lanparms)
-            item = menu.Append(-1, "Clear LANPARM lock")
-            wx.EVT_MENU(menu, item.GetId(), self.clr_lanparm_lock)
+            item = menu.Append(id_st+3, "LANPARMS")
+            wx.EVT_MENU(menu, id_st+3, self.lanparms)
+            item = menu.Append(id_st+4, "Clear LANPARM lock")
+            wx.EVT_MENU(menu, id_st+4, self.clr_lanparm_lock)
             pass
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()

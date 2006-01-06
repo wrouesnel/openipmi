@@ -114,8 +114,20 @@ class IPMIGUI_App(wx.App):
 
         return True
 
+def ipmithread():
+    while True:
+        OpenIPMI.wait_io(1000)
+        pass
+    return
 
 def run():
+    if ((wx.VERSION[0] < 2)
+        or ((wx.VERSION[0] == 2) and (wx.VERSION[1] < 4))
+        or ((wx.VERSION[0] == 2) and (wx.VERSION[1] == 4)
+            and (wx.VERSION[2] < 2))):
+        print "Error: wxPython version must be 2.4.2 or greater"
+        return
+
     OpenIPMI.enable_debug_malloc()
     OpenIPMI.init()
     #OpenIPMI.enable_debug_msg()
@@ -125,7 +137,15 @@ def run():
     mainhandler = DomainHandler(preffile)
 
     app = IPMIGUI_App(mainhandler)
-       
+
+    if ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):
+        # Version 2.4 of wxPython uses glib1.2, but OpenIPMI usually
+        # uses 2.0 if available.  That means we need two different
+        # event loops :(.
+        import thread
+        thread.start_new_thread(ipmithread, ())
+        pass
+    
     app.MainLoop()
     OpenIPMI.set_log_handler(DummyLogHandler())
     OpenIPMI.shutdown_everything()
