@@ -10,6 +10,15 @@
 	* swig/python/openipmigui/*.py, swig/python/openipmigui.py: More
 	work on getting the 2.4 version of wxPython working.
 
+	* swig/OpenIPMI.i: Fix a comment, change the users callback
+	and object list reference to pass the proper value.
+	* swig/perl/OpenIPMI_perl.c: Adjust for the previous change.
+
+	* lib/mc.c: Allow a NULL callback in ipmi_mc_channel_set_access().
+
+	* swig/python/openipmigui/*.py: Work on getting the lanparm values
+	and channel values settable.
+	
 2006-01-05 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Add a way for the languages to plug-in code at

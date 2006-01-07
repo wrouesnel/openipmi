@@ -724,16 +724,16 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	    case 'o':
 		/* An array of objects */
 		{
-		    swig_ref **list;
+		    swig_ref *list;
 		    len = va_arg(ap, int);
-		    list = va_arg(ap, swig_ref **);
+		    list = va_arg(ap, swig_ref *);
 		    o = PyList_New(len);
 		    if (!o) {
 			errstr = "cannot allocate list";
 			goto out_err;
 		    }
 		    for (i=0; i<len; i++, list++)
-			PyList_SET_ITEM(o, i, (*list)->val);
+			PyList_SET_ITEM(o, i, list->val);
 		}
 		break;
 

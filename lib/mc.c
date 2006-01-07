@@ -4037,11 +4037,13 @@ set_chan_access(ipmi_mc_t  *mc,
     ipmi_channel_access_t *info = cb_data;
 
     if (rsp->data[0] != 0) {
-	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	if (info->done)
+	    info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
 	goto out;
     }
 
-    info->done(mc, 0, info->cb_data);
+    if (info->done)
+	info->done(mc, 0, info->cb_data);
 
  out:
     ipmi_mem_free(info);

@@ -1108,7 +1108,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
     ipmi_user_list_get_enabled_users(info, &enabled);
     ipmi_user_list_get_fixed_users(info, &fixed);
     swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%d%d%d%*o", &mc_ref, err,
-		 max, enabled, fixed, count, &info_ref);
+		 max, enabled, fixed, count, info_ref);
     swig_free_ref_check(mc_ref, ipmi_mc_t);
     for (i=0; i<count; i++)
 	swig_free_ref(info_ref[i]);
@@ -5677,7 +5677,7 @@ char *get_error_string(unsigned int val);
      * Get the user info for a channel on the MC.  The first parameter
      * is the channel.  The second is the user number; if a valid user
      * number is passed in, then that user is the only one fetched.
-     * If -1 is passed for the user number, then all users are
+     * If 0 is passed for the user number, then all users are
      * fetched.  The third is the handler object, the
      * mc_channel_got_users_cb method will be called on it with the
      * following parameters: <self> <mc> <err> <max users>

@@ -76,17 +76,7 @@ class MCChanUserAcc:
         self.mcchan.done_one()
         return
 
-    def HandleMenu(self, event, eitem, point):
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Set Values")
-        wx.EVT_MENU(menu, id_st+1, self.setvalues)
-        self.mcchan.tree.PopupMenu(menu, point)
-        menu.Destroy()
-        return
-
-    def setvalues(self, event):
-        print "set values"
-        return
+    pass
 
 class MCChanInfo:
     def __init__(self, mcchan, idx):
@@ -143,6 +133,12 @@ class MCChanData:
 
     def mc_cb(self, mc):
         if (self.cb_state == "users"):
+            rv = mc.get_users(self.idx, 0, self)
+            if (rv):
+                self.mcchan.errstr.SetStatusText("Could not get users: " +
+                                                 OpenIPMI.get_error_string(rv),
+                                                 0)
+                pass
             pass
         elif (self.cb_state == "lanparms"):
             lp = mc.get_lanparm(self.idx)
@@ -153,10 +149,22 @@ class MCChanData:
             pass
         return
 
+    def mc_channel_got_users_cb(self, mc, err, max_users, enabled_users,
+                                fixed_users, users):
+        if (err):
+            self.mcchan.errstr.SetStatusText("Error fetching users: " +
+                                             OpenIPMI.get_error_string(err),
+                                             0)
+            return
+        for u in users:
+            print u.get_name()
+            pass
+        return
+    
     def lanparm_got_config_cb(self, lanparm, err, lanconfig):
         if (err):
             if (err == OpenIPMI.eagain):
-                ErrDialog("LANPARMs are lock, clear the lock if necessary")
+                ErrDialog("LANPARMs are locked, clear the lock if necessary")
             else:
                 ErrDialog("Error getting lanparms: "
                           + OpenIPMI.get_error_string(err))
@@ -165,6 +173,149 @@ class MCChanData:
         _mc_lanparm.MCLanParm(self.mcchan.m, lanparm, lanconfig, self.idx)
         return
     
+    pass
+
+class BoolSetter:
+    def __init__(self, mcchan, item, setter):
+        self.mcchan = mcchan
+        self.item = item
+        self.setter = setter
+        mcchan.tree.SetPyData(item, self)
+        return
+    
+    def HandleMenu(self, event, eitem, point):
+        menu = wx.Menu();
+        item = menu.Append(id_st+1, "Toggle Value")
+        wx.EVT_MENU(menu, id_st+1, self.togglevalue)
+        self.mcchan.tree.PopupMenu(menu, point)
+        menu.Destroy()
+        return
+
+    def togglevalue(self, event):
+        val = str(self.mcchan.tree.GetItemText(self.item, 1))
+        if (val == "True") or (val == "true"):
+            val = "false"
+            bval = 0
+        else:
+            val = "true"
+            bval = 1
+            pass
+        rv = self.setter(bval)
+        if (rv):
+            mcchan.errstr.SetStatusText("Could not toggle value: "
+                                        + OpenIPMI.get_error_string(rv), 0)
+            return
+        self.mcchan.tree.SetItemText(self.item, val, 1);
+        return
+
+    pass
+
+class AccessSetter:
+    def __init__(self, mcchan, item, setter):
+        self.mcchan = mcchan
+        self.item = item
+        self.setter = setter
+        mcchan.tree.SetPyData(item, self)
+        return
+    
+    def HandleMenu(self, event, eitem, point):
+        menu = wx.Menu();
+        item = menu.Append(id_st+10, "Disabled")
+        wx.EVT_MENU(menu, id_st+10, self.disabled)
+        item = menu.Append(id_st+11, "PreBoot")
+        wx.EVT_MENU(menu, id_st+11, self.preboot)
+        item = menu.Append(id_st+12, "Always")
+        wx.EVT_MENU(menu, id_st+12, self.always)
+        item = menu.Append(id_st+13, "Shared")
+        wx.EVT_MENU(menu, id_st+13, self.shared)
+        self.mcchan.tree.PopupMenu(menu, point)
+        menu.Destroy()
+        return
+
+    def setval(self, val):
+        rv = self.setter(val)
+        if (rv):
+            mcchan.errstr.SetStatusText("Could not set value: "
+                                        + OpenIPMI.get_error_string(rv), 0)
+            return
+        self.mcchan.tree.SetItemText(self.item, 
+                                     OpenIPMI.channel_access_mode_string(val),
+                                     1)
+        return
+        
+    def disabled(self, event):
+        self.setval(OpenIPMI.CHANNEL_ACCESS_MODE_DISABLED)
+        return
+
+    def preboot(self, event):
+        self.setval(OpenIPMI.CHANNEL_ACCESS_MODE_PRE_BOOT)
+        return
+
+    def always(self, event):
+        self.setval(OpenIPMI.CHANNEL_ACCESS_MODE_ALWAYS)
+        return
+
+    def shared(self, event):
+        self.setval(OpenIPMI.CHANNEL_ACCESS_MODE_SHARED)
+        return
+
+    pass
+
+class PrivSetter:
+    def __init__(self, mcchan, item, setter):
+        self.mcchan = mcchan
+        self.item = item
+        self.setter = setter
+        mcchan.tree.SetPyData(item, self)
+        return
+    
+    def HandleMenu(self, event, eitem, point):
+        menu = wx.Menu();
+        item = menu.Append(id_st+20, "Callback")
+        wx.EVT_MENU(menu, id_st+20, self.callback)
+        item = menu.Append(id_st+21, "User")
+        wx.EVT_MENU(menu, id_st+21, self.user)
+        item = menu.Append(id_st+22, "Operator")
+        wx.EVT_MENU(menu, id_st+22, self.operator)
+        item = menu.Append(id_st+23, "Admin")
+        wx.EVT_MENU(menu, id_st+23, self.admin)
+        item = menu.Append(id_st+24, "OEM")
+        wx.EVT_MENU(menu, id_st+24, self.oem)
+        self.mcchan.tree.PopupMenu(menu, point)
+        menu.Destroy()
+        return
+
+    def setval(self, val):
+        rv = self.setter(val)
+        if (rv):
+            mcchan.errstr.SetStatusText("Could not set value: "
+                                        + OpenIPMI.get_error_string(rv), 0)
+            return
+        self.mcchan.tree.SetItemText(self.item, 
+                                     OpenIPMI.privilege_string(val),
+                                     1)
+        return
+        
+    def callback(self, event):
+        self.setval(OpenIPMI.PRIVILEGE_CALLBACK)
+        return
+
+    def user(self, event):
+        self.setval(OpenIPMI.PRIVILEGE_USER)
+        return
+
+    def operator(self, event):
+        self.setval(OpenIPMI.PRIVILEGE_OPERATOR)
+        return
+
+    def admin(self, event):
+        self.setval(OpenIPMI.PRIVILEGE_ADMIN)
+        return
+
+    def oem(self, event):
+        self.setval(OpenIPMI.PRIVILEGE_OEM)
+        return
+
     pass
 
 class MCChan(wx.Dialog):
@@ -201,7 +352,7 @@ class MCChan(wx.Dialog):
     def add_data(self, parent, name, value):
         item = self.tree.AppendItem(parent, name);
         self.tree.SetItemText(item, value, 1)
-        return
+        return item
 
     def add_info(self, ch, oinfo):
         info = oinfo.info
@@ -209,7 +360,8 @@ class MCChan(wx.Dialog):
         v = [ 0 ]
         rv = info.get_medium(v)
         if (not rv):
-            self.add_data(item, "Medium", OpenIPMI.channel_medium_string(v[0]))
+            self.add_data(item, "Medium",
+                          OpenIPMI.channel_medium_string(v[0]))
             pass
         rv = info.get_protocol_type(v)
         if (not rv):
@@ -238,25 +390,30 @@ class MCChan(wx.Dialog):
         v = [ 0 ]
         rv = info.get_alerting_enabled(v)
         if (not rv):
-            self.add_data(item, "Alerting Enabled", str(v[0] != 0))
+            mitem = self.add_data(item, "Alerting Enabled", str(v[0] != 0))
+            BoolSetter(self, mitem, info.set_alerting_enabled)
             pass
         rv = info.get_per_msg_auth(v)
         if (not rv):
-            self.add_data(item, "Per Msg Auth", str(v[0] != 0))
+            mitem = self.add_data(item, "Per Msg Auth", str(v[0] != 0))
+            BoolSetter(self, mitem, info.set_per_msg_auth)
             pass
         rv = info.get_user_auth(v)
         if (not rv):
-            self.add_data(item, "User Auth", str(v[0] != 0))
+            mitem = self.add_data(item, "User Auth", str(v[0] != 0))
+            BoolSetter(self, mitem, info.set_user_auth)
             pass
         rv = info.get_access_mode(v)
         if (not rv):
-            self.add_data(item, "Access Mode",
-                          OpenIPMI.channel_access_mode_string(v[0]))
+            mitem = self.add_data(item, "Access Mode",
+                                  OpenIPMI.channel_access_mode_string(v[0]))
+            AccessSetter(self, mitem, info.set_access_mode)
             pass
         rv = info.get_privilege_limit(v)
         if (not rv):
-            self.add_data(item, "Privilege Limit",
-                          OpenIPMI.privilege_string(v[0]))
+            mitem = self.add_data(item, "Privilege Limit",
+                                  OpenIPMI.privilege_string(v[0]))
+            PrivSetter(self, mitem, info.set_privilege_limit)
             pass
         return
     
@@ -273,9 +430,17 @@ class MCChan(wx.Dialog):
 
         sizer.Add(self.tree, 1, wx.GROW, 0);
 
-        close = wx.Button(self, -1, "Close")
-        wx.EVT_BUTTON(self, close.GetId(), self.close)
-        sizer.Add(close, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.errstr = wx.StatusBar(self, -1)
+        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        save = wx.Button(self, -1, "Save")
+        wx.EVT_BUTTON(self, save.GetId(), self.save)
+        box.Add(save, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        cancel = wx.Button(self, -1, "Cancel")
+        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
+        box.Add(cancel, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
             chi = self.info[i]
@@ -325,12 +490,35 @@ class MCChan(wx.Dialog):
             else:
                 # FIXME - why do I have to add 25?
                 point = wx.Point(rect.GetLeft(), rect.GetBottom()+25)
+                pass
             data.HandleMenu(event, eitem, point)
             pass
         return
 
-    def close(self, event):
+    def cancel(self, event):
         self.Close()
+        return
+    
+    def save(self, event):
+        self.done = False
+        self.mc_id.to_mc(self)
+        return
+
+    def mc_cb(self, mc):
+        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
+            chi = self.info[i]
+            if (len(chi) > 0):
+                if ("v" in chi):
+                    mc.channel_set_access(chi["v"].access, i, "volatile")
+                    pass
+                if ("n" in chi):
+                    mc.channel_set_access(chi["n"].access, i, "nonvolatile")
+                    pass
+                pass
+            pass
+        self.Close()
+        return
     
     def OnClose(self, event):
         self.Destroy()
+        return

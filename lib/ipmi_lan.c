@@ -4700,10 +4700,11 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     else if (supports_ipmi2)
     {
 	/*
-	 * The BMC has said that it supports RMCP+/IPMI 2.0 in the extended response fields,
-	 * but has not indicated that we should USE the extended response fields!
-	 * The SuperMicro AOC-IPMI20-E currently does this (April 2005), and will do so
-	 * until they provide BMC firmware that supports RMCP+.
+	 * The BMC has said that it supports RMCP+/IPMI 2.0 in the
+	 * extended response fields, but has not indicated that we
+	 * should USE the extended response fields!  The SuperMicro
+	 * AOC-IPMI20-E currently does this (April 2005), and will do
+	 * so until they provide BMC firmware that supports RMCP+.
 	 */
 	ipmi_log(IPMI_LOG_WARNING,
 		"%sipmi_lan.c(auth_cap_done): "

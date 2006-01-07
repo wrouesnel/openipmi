@@ -426,6 +426,8 @@ class IPMIGUI(wx.Frame):
         data = self.tree.GetPyData(item)
         if (data != None) and (hasattr(data, "HandleMenu")):
             data.HandleMenu(event)
+            pass
+        return
 
     # FIXME - expand of parent doesn't affect children...
     def TreeExpanded(self, event):
@@ -433,17 +435,22 @@ class IPMIGUI(wx.Frame):
         data = self.tree.GetPyData(item)
         if (data != None) and (hasattr(data, "HandleExpand")):
             data.HandleExpand(event)
+            pass
+        return
 
     def remove_domain(self, d):
         if (hasattr(d, "treeroot")):
             self.tree.Delete(d.treeroot)
             self.cleanup_item(d.treeroot)
+            pass
+        return
 
     def add_entity(self, d, e, parent=None):
         if (parent == None):
             parent = d.entityroot
         else:
             parent = parent.treeroot
+            pass
         e.name_str = str(e)
         e.treeroot = self.tree.AppendItem(parent, e.name_str)
         self.tree.SetPyData(e.treeroot, e)
@@ -454,39 +461,49 @@ class IPMIGUI(wx.Frame):
         e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
         self.tree.SetPyData(e.controlroot, IPMITreeDummyItem())
         self.setup_item(e.controlroot, active=True)
+        return
     
     def remove_entity(self, e):
         if (hasattr(e, "treeroot")):
             self.tree.Delete(e.treeroot)
             self.cleanup_item(e.treeroot)
+            pass
+        return
 
     def add_mc(self, d, m):
         m.name_str = str(m)
         m.treeroot = self.tree.AppendItem(d.mcroot, m.name_str)
         self.tree.SetPyData(m.treeroot, m)
         self.setup_item(m.treeroot)
+        return
 
     def remove_mc(self, m):
         if (hasattr(m, "treeroot")):
             self.tree.Delete(m.treeroot)
             self.cleanup_item(m.treeroot)
+            pass
+        return
 
     def add_sensor(self, e, s):
         s.name_str = str(s)
         s.treeroot = self.tree.AppendItem(e.sensorroot, s.name_str)
         self.tree.SetPyData(s.treeroot, s)
         self.setup_item(s.treeroot, active=True)
+        return
 
     def remove_sensor(self, s):
         if (hasattr(s, "treeroot")):
             self.tree.Delete(s.treeroot)
             self.cleanup_item(s.treeroot)
+            pass
+        return
 
     def add_control(self, e, c):
         c.name_str = str(c)
         c.treeroot = self.tree.AppendItem(e.controlroot, c.name_str)
         self.tree.SetPyData(c.treeroot, c)
         self.setup_item(c.treeroot, active=True)
+        return
 
     def remove_control(self, c):
         if (hasattr(c, "treeroot")):
