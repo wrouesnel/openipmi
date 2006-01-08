@@ -35,16 +35,9 @@ import wx
 import wx.gizmos as gizmos
 import _oi_logging
 import _mc_lanparm
+import _mc_user
 
 id_st = 500
-
-class ErrDialog(wx.MessageDialog):
-    def __init__(self, str):
-        wx.MessageDialog.__init__(self, None, str, "Error", wx.OK)
-        self.ShowModal()
-        return
-    pass
-
 
 # Collect all the info for the channels of an MC.  For each channel
 # all the info is requested using the types immediately below.  If the
@@ -156,18 +149,24 @@ class MCChanData:
                                              OpenIPMI.get_error_string(err),
                                              0)
             return
-        for u in users:
-            print u.get_name()
-            pass
+        if (len(users) == 0):
+            self.mcchan.errstr.SetStatusText("No users", 0)
+            return
+        v = [ 0 ]
+        users[0].get_channel(v)
+        ch = v[0]
+        _mc_user.MCUsers(mc, ch, max_users, enabled_users, fixed_users, users)
         return
     
     def lanparm_got_config_cb(self, lanparm, err, lanconfig):
         if (err):
             if (err == OpenIPMI.eagain):
-                ErrDialog("LANPARMs are locked, clear the lock if necessary")
+                self.mcchan.errstr.SetStatusText(
+                    "LANPARMs are locked, clear the lock if necessary", 0)
             else:
-                ErrDialog("Error getting lanparms: "
-                          + OpenIPMI.get_error_string(err))
+                self.mcchan.errstr.SetStatusText(
+                    "Error getting lanparms: "
+                    + OpenIPMI.get_error_string(err), 0)
                 pass
             return
         _mc_lanparm.MCLanParm(self.mcchan.m, lanparm, lanconfig, self.idx)
@@ -500,11 +499,11 @@ class MCChan(wx.Dialog):
         return
     
     def save(self, event):
-        self.done = False
         self.mc_id.to_mc(self)
         return
 
     def mc_cb(self, mc):
+        # FIXME - add error handling
         for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
             chi = self.info[i]
             if (len(chi) > 0):

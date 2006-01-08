@@ -142,6 +142,7 @@ class ControlSet:
 
     def OnClose(self, event):
         self.dialog.Destroy()
+        self.dialog = None
         return
 
     def control_cb(self, control):
