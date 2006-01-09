@@ -2546,8 +2546,8 @@ cmp_int(const void *v1, const void *v2)
 	return 0;
 }
 
-static void
-start_mc_scan(ipmi_domain_t *domain)
+void
+ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain)
 {
     int i, j;
     int rv;
@@ -2590,12 +2590,14 @@ start_mc_scan(ipmi_domain_t *domain)
        system address for that connection. */
     for (i=0; i<MAX_CONS; i++) {
 	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
-	    _ipmi_get_domain_fully_up(domain, "start_mc_scan");
+	    _ipmi_get_domain_fully_up(domain,
+				      "ipmi_domain_start_full_ipmb_scan");
 	    domain->scanning_bus_count++;
 	    rv = ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
 	    if (rv) {
 		domain->scanning_bus_count--;
-		_ipmi_put_domain_fully_up(domain, "start_mc_scan");
+		_ipmi_put_domain_fully_up(domain,
+					  "ipmi_domain_start_full_ipmb_scan");
 	    }
 	}
     }
@@ -2689,7 +2691,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	/* Rescan all the presence sensors to make sure they are valid. */
 	ipmi_detect_domain_presence_changes(domain, 1);
 
-	start_mc_scan(domain);
+	ipmi_domain_start_full_ipmb_scan(domain);
 
 	/* Also check to see if the SDRs have changed. */
 	check_main_sdrs(domain);
@@ -3857,7 +3859,7 @@ con_up_complete(ipmi_domain_t *domain)
     if (con_up_handler)
 	con_up_handler(domain, con_up_handler_cb_data);
 
-    start_mc_scan(domain);
+    ipmi_domain_start_full_ipmb_scan(domain);
 
     ipmi_detect_ents_presence_changes(domain->entities, 1);
 

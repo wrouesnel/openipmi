@@ -66,6 +66,7 @@ class FruInfoDisplay(wx.Dialog):
             return
         treeroot = tree.AddRoot(name_s[0])
         self.add_fru_data(tree, treeroot, node_s[0])
+        tree.Expand(treeroot)
 
         self.SetSizer(sizer)
         wx.EVT_CLOSE(self, self.OnClose)

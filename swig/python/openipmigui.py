@@ -132,7 +132,7 @@ def run():
     OpenIPMI.init()
     #OpenIPMI.enable_debug_msg()
 
-    preffile = os.path.join(os.environ['HOME'], '.ipmigui.startup')
+    preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     _saveprefs.restore(preffile)
     mainhandler = DomainHandler(preffile)
 

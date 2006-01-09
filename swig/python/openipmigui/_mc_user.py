@@ -154,6 +154,13 @@ class IntSetter:
 
     pass
 
+def GetPrivilegeString(val):
+    if (val == 15):
+        return "NO ACCESS"
+    else:
+        return OpenIPMI.privilege_string(val)
+    return
+
 class StrSetter:
     def __init__(self, mcusers, user, item, setter, name, currval, prompt):
         self.mcusers = mcusers
@@ -249,6 +256,8 @@ class PrivSetter:
         wx.EVT_MENU(menu, id_st+23, self.admin)
         item = menu.Append(id_st+24, "OEM")
         wx.EVT_MENU(menu, id_st+24, self.oem)
+        item = menu.Append(id_st+25, "NO ACCESS")
+        wx.EVT_MENU(menu, id_st+25, self.noaccess)
         self.mcusers.tree.PopupMenu(menu, point)
         menu.Destroy()
         return
@@ -260,9 +269,7 @@ class PrivSetter:
                                         + OpenIPMI.get_error_string(rv), 0)
             return
         self.user.changed = True
-        self.mcusers.tree.SetItemText(self.item, 
-                                     OpenIPMI.privilege_string(val),
-                                     1)
+        self.mcusers.tree.SetItemText(self.item, GetPrivilegeString(val), 1)
         return
         
     def callback(self, event):
@@ -283,6 +290,10 @@ class PrivSetter:
 
     def oem(self, event):
         self.setval(OpenIPMI.PRIVILEGE_OEM)
+        return
+
+    def noaccess(self, event):
+        self.setval(15)
         return
 
     pass
@@ -415,7 +426,7 @@ class MCUsers(wx.Dialog):
 
                 rv = u.get_privilege_limit(v)
                 if (rv == 0):
-                    s = OpenIPMI.privilege_string(v[0])
+                    s = GetPrivilegeString(v[0])
                 else:
                     s = "?"
                     pass

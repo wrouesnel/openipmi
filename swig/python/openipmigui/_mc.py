@@ -396,19 +396,25 @@ class MC:
 
     def mc_events_enable_cb(self, mc, err):
         if (err):
-            _oi_logging.error("Error setting MC events: " + str(err))
+            _oi_logging.error("Error setting MC events for "
+                              + self.name + ": "
+                              + OpenIPMI.get_error_string(err))
             return
         self.ee_refr.DoUpdate()
 
     def mc_get_event_log_enable_cb(self, mc, err, val):
         if (err):
-            _oi_logging.error("Error getting MC event log enable: " + str(err))
+            _oi_logging.error("Error getting MC event log enable for "
+                              + self.name + ": "
+                              + OpenIPMI.get_error_string(err))
             return
         self.ui.set_item_text(self.el_item, str(val != 0))
         
     def mc_set_event_log_enable_cb(self, mc, err):
         if (err):
-            _oi_logging.error("Error setting MC event log enable: " + str(err))
+            _oi_logging.error("Error setting MC event log enable for"
+                              + self.name + ": "
+                              + OpenIPMI.get_error_string(err))
             return
         self.el_refr.DoUpdate()
         return

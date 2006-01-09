@@ -2455,29 +2455,29 @@ static lanparm_gendata_t gdata[] =
     F_BOOLR(support_auth_md2),
     F_BOOLR(support_auth_none),
     F_INT(ip_addr_source),				/* 5 */
-    F_INTR(num_alert_destinations),
     F_INTV(ipv4_ttl),
     F_INTV(ipv4_flags),
     F_INTV(ipv4_precedence),
-    F_INTV(ipv4_tos),					/* 10 */
-    F_BOOLIV(enable_auth_oem, ret_user_cnt),
+    F_INTV(ipv4_tos),
+    F_BOOLIV(enable_auth_oem, ret_user_cnt),		/* 10 */
     F_BOOLIV(enable_auth_straight, ret_user_cnt),
     F_BOOLIV(enable_auth_md5, ret_user_cnt),
     F_BOOLIV(enable_auth_md2, ret_user_cnt),
-    F_BOOLIV(enable_auth_none, ret_user_cnt),		/* 15 */
-    F_IP(ip_addr),
+    F_BOOLIV(enable_auth_none, ret_user_cnt),
+    F_IP(ip_addr),					/* 15 */
     F_MAC(mac_addr),
     F_IP(subnet_mask),
     F_INTV(port_rmcp_primary),
-    F_INTV(port_rmcp_secondary),			/* 20 */
-    F_BOOLV(bmc_generated_arps),
+    F_INTV(port_rmcp_secondary),
+    F_BOOLV(bmc_generated_arps),			/* 20 */
     F_BOOLV(bmc_generated_garps),
     F_INTV(garp_interval),
     F_IP(default_gateway_ip_addr),
-    F_MAC(default_gateway_mac_addr),			/* 25 */
-    F_IP(backup_gateway_ip_addr),
+    F_MAC(default_gateway_mac_addr),
+    F_IP(backup_gateway_ip_addr),			/* 25 */
     F_MAC(backup_gateway_mac_addr),
     F_DATA(community_string),
+    F_INTR(num_alert_destinations),
     F_BOOLIV(alert_ack, ipmi_lanconfig_get_num_alert_destinations),
     F_INTIV(dest_type, ipmi_lanconfig_get_num_alert_destinations), /* 30 */
     F_INTIV(alert_retry_interval, ipmi_lanconfig_get_num_alert_destinations),

@@ -1,3 +1,22 @@
+2006-01-09 Corey Minyard <cminyard@mvista.com>
+
+	* man/openipmigui.1, man/Makefile.am: Started a man page for the
+	GUI.
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h: Added a way to rescan
+	all IPMB busses known by the domain.
+
+	* swig/OpenIPMI.i: Added the rescan all IPMB busses function.
+
+	* lib/lanparm.c: Moved the num_alert_destinations field to a
+	location that makes more sense.
+
+	* swig/python/openipmigui.py: Renamed "~/.ipmigui.startup" to
+	"~/.openipmigui.startup"
+
+	* swig/python/openipmigui/*.py: Finish up user handling, clean up
+	a bunch of other things.
+
 2006-01-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Added handling of checking if the channel support

@@ -3516,6 +3516,12 @@ char *get_error_string(unsigned int val);
 	return rv;
     }
 
+    /* Scan all IPMB busses for new/lost MCs. */
+    void start_full_ipmb_scan()
+    {
+	ipmi_domain_start_full_ipmb_scan(self);
+    }
+
     /*
      * Send a command to a given address (parm 1) with the given lun
      * (parm 2), netfn (parm 3), command (parm 4).  Parm 5 is the

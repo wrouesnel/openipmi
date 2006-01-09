@@ -53,14 +53,22 @@ class DomainOpHandler:
         self.d = d
         self.func = func
         self.handler = handler
+        return
 
     def DoOp(self):
+        self.rv = 0
         rv = self.d.domain_id.to_domain(self)
-        if (rv == 0):
+        if ((rv == 0) and (self.rv != None)):
             rv = self.rv
+            pass
+        return
 
     def domain_cb(self, domain):
-        self.rv = getattr(domain, self.func)(handler)
+        if (self.handler):
+            self.rv = getattr(domain, self.func)(self.handler)
+        else:
+            self.rv = getattr(domain, self.func)()
+        return
 
 
 class DomainRefreshData:
@@ -87,17 +95,21 @@ class DomainRefreshData:
         self.d.ui.set_item_text(self.item, str(val))
         return
 
+    pass
 
 class DomainSelSet(DomainRefreshData):
     def __init__(self, d):
         self.d = d;
         self.refr = DomainRefreshData(d, "get_sel_rescan_time")
+        return
 
     def DoUpdate(self):
         self.refr.DoUpdate()
+        return
 
     def SetItem(self, item):
         self.refr.SetItem(item)
+        return
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -106,6 +118,7 @@ class DomainSelSet(DomainRefreshData):
         wx.EVT_MENU(self.d.ui, id_st+1, self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
+        return
 
     def modval(self, event):
         self.init = True
@@ -131,12 +144,14 @@ class DomainSelSet(DomainRefreshData):
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
+        wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
+        return
 
     def cancel(self, event):
         self.dialog.Close()
+        return
 
     def ok(self, event):
         val = self.field.GetValue()
@@ -147,28 +162,37 @@ class DomainSelSet(DomainRefreshData):
         self.init = False
         self.d.domain_id.to_domain(self)
         self.dialog.Close()
+        return
 
     def OnClose(self, event):
         self.dialog.Destroy()
+        return
 
     def domain_cb(self, domain):
         if self.init:
             self.sel_rescan_time = domain.get_sel_rescan_time()
         else:
             domain.set_sel_rescan_time(self.ival)
+            self.d.sel_rescan_time = self.ival
             self.refr.DoUpdate()
+            pass
+        return
 
+    pass
         
 class DomainIPMBSet(DomainRefreshData):
     def __init__(self, d):
         self.d = d;
         self.refr = DomainRefreshData(d, "get_ipmb_rescan_time")
+        return
 
     def DoUpdate(self):
         self.refr.DoUpdate()
+        return
 
     def SetItem(self, item):
         self.refr.SetItem(item)
+        return
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -177,6 +201,7 @@ class DomainIPMBSet(DomainRefreshData):
         wx.EVT_MENU(self.d.ui, id_st+10, self.modval)
         self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
         menu.Destroy()
+        return
 
     def modval(self, event):
         self.init = True
@@ -205,9 +230,11 @@ class DomainIPMBSet(DomainRefreshData):
         wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
+        return
 
     def cancel(self, event):
         self.dialog.Close()
+        return
 
     def ok(self, event):
         val = self.field.GetValue()
@@ -218,16 +245,23 @@ class DomainIPMBSet(DomainRefreshData):
         self.init = False
         self.d.domain_id.to_domain(self)
         self.dialog.Close()
+        return
 
     def OnClose(self, event):
         self.dialog.Destroy()
+        return
 
     def domain_cb(self, domain):
         if self.init:
             self.ipmb_rescan_time = domain.get_ipmb_rescan_time()
         else:
             domain.set_ipmb_rescan_time(self.ival)
+            self.d.ipmb_rescan_time = self.ival
             self.refr.DoUpdate()
+            pass
+        return
+
+    pass
 
 
 class DomainConnection:
@@ -247,64 +281,86 @@ class DomainConnection:
         self.port2 = ""
         self.hacks = [ ]
         self.lookup_uses_priv = False
+        return
 
     def SetType(self, contype):
         self.contype = contype
+        return
 
     def SetAddress(self, addr):
         self.address = addr
+        return
 
     def SetPort(self, port):
         self.port = port
+        return
 
     def SetUsername(self, username):
         self.username = username
+        return
 
     def SetPassword(self, password):
         self.password = password
+        return
 
     def SetPrivilege(self, value):
         if (value == 'default'):
             value = ''
+            pass
         self.privilege = value
+        return
         
     def SetAuthtype(self, value):
         if (value == 'default'):
             value = ''
+            pass
         self.authtype = value
+        return
         
     def SetAuth_alg(self, value):
         if (value == 'default'):
             value = ''
+            pass
         self.auth_alg = value
+        return
         
     def SetInteg_alg(self, value):
         if (value == 'default'):
             value = ''
+            pass
         self.integ_alg = value
+        return
         
     def SetConf_alg(self, value):
         if (value == 'default'):
             value = ''
+            pass
         self.conf_alg = value
+        return
         
     def SetBmc_key(self, value):
         self.bmc_key = value
+        return
         
     def SetAddress2(self, value):
         self.address2 = value
+        return
         
     def SetPort2(self, value):
         self.port2 = value
+        return
         
     def AddHack(self, value):
         self.hacks.append(value)
+        return
         
     def AddHacks(self, values):
         self.hacks.extend(values.split())
+        return
         
     def Lookup_uses_priv(self, value):
         self.lookup_uses_priv = value
+        return
 
     def Valid(self):
         if (self.contype == "smi"):
@@ -313,47 +369,65 @@ class DomainConnection:
             return (self.address != "")
         else:
             return False
+        return
 
     def FillinConAttr(self, attr):
         if (self.contype == "smi"):
             if (self.port == ""):
                 raise InvalidDomainError("No port specified")
             attr.extend([ "smi", str(self.port) ])
+            pass
         elif (self.contype == "lan"):
             if (self.address == ""):
                 raise InvalidDomainError("No address specified")
             attr.append("lan")
             if (self.port != ""):
                 attr.extend(["-p", self.port])
+                pass
             if (self.username != ""):
                 attr.extend(["-U", self.username])
+                pass
             if (self.password != ""):
                 attr.extend(["-P", self.password])
+                pass
             if (self.authtype != ""):
                 attr.extend(["-A", self.authtype])
+                pass
             if (self.privilege != ""):
                 attr.extend(["-L", self.privilege])
+                pass
             if (self.auth_alg != ""):
                 attr.extend(["-Ra", self.auth_alg])
+                pass
             if (self.integ_alg != ""):
                 attr.extend(["-Ri", self.integ_alg])
+                pass
             if (self.conf_alg != ""):
                 attr.extend(["-Rc", self.conf_alg])
+                pass
             if (self.bmc_key != ""):
                 attr.extend(["-Rk", self.bmc_key])
+                pass
             if (self.lookup_uses_priv):
                 attr.append("-Rl")
+                pass
             for h in self.hacks:
                 attr.extend(["-H", h])
+                pass
             if (self.address2 != ""):
                 attr.append("-s")
                 if (self.port2 != ""):
                     attr.extend(["-p2", self.port2])
+                    pass
+                pass
             attr.append(self.address)
             if (self.address2 != ""):
                 attr.append(self.address2)
+                pass
+            pass
         else:
             raise InvalidDomainError("Invalid connection type: " + self.contype)
+        return
 
     def getAttr(self):
         if (self.contype == ""):
@@ -361,34 +435,48 @@ class DomainConnection:
         attrl = [ ("contype", self.contype) ]
         if (self.address != ""):
             attrl.append(("address", self.address))
+            pass
         if (self.port != ""):
             attrl.append(("port", self.port))
+            pass
         if (self.username != ""):
             attrl.append(("username", self.username))
+            pass
         if (self.password != ""):
             attrl.append(("password", self.password))
+            pass
         if (self.privilege != ""):
             attrl.append(("privilege", self.privilege))
+            pass
         if (self.authtype != ""):
             attrl.append(("authtype", self.authtype))
+            pass
         if (self.auth_alg != ""):
             attrl.append(("auth_alg", self.auth_alg))
+            pass
         if (self.integ_alg != ""):
             attrl.append(("integ_alg", self.integ_alg))
+            pass
         if (self.conf_alg != ""):
             attrl.append(("conf_alg", self.conf_alg))
+            pass
         if (self.bmc_key != ""):
             attrl.append(("bmc_key", self.bmc_key))
+            pass
         if (self.address2 != ""):
             attrl.append(("address2", self.address2))
             if (self.port2 != ""):
                 attrl.append(("port2", self.port2))
+                pass
+            pass
         hlen = len(self.hacks)
         if (hlen > 0):
             hvals = self.hacks[0]
             for i in range(1, hlen):
                 hvals = hvals + ' ' + self.hacks[i]
+                pass
             attrl.append(("hacks", hvals))
+            pass
         return attrl
 
     def restore(self, mainhandler, attrhash):
@@ -429,6 +517,11 @@ class DomainConnection:
                 self.AddHacks(value)
             elif (attrn == "lookup_uses_priv"):
                 self.Lookup_uses_priv(True)
+                pass
+            pass
+        return
+
+    pass
 
 class Domain:
     def __init__(self, mainhandler, name, connects=[]):
@@ -444,10 +537,12 @@ class Domain:
             con1 = connects[0]
         else:
             con1 = DomainConnection()
+            pass
         if (len(connects) > 1):
             con2 = connects[1]
         else:
             con2 = DomainConnection()
+            pass
         self.connection = [ con1, con2 ]
 
         self.domain_id = None
@@ -463,6 +558,7 @@ class Domain:
         self.add_refr_item("SEL Rescan Time", DomainSelSet(self))
         self.add_refr_item("GUID", DomainRefreshData(self, "get_guid"))
         self.add_refr_item("Type", DomainRefreshData(self, "get_type"))
+        return
 
     def __str__(self):
         return self.name
@@ -482,17 +578,33 @@ class Domain:
         attrs = self.connection[0].getAttr()
         for attr in attrs:
             c1.setAttribute(attr[0], attr[1])
+            pass
         elem.appendChild(c1)
         if self.connection[1].Valid():
             c2 = doc.createElement("connection")
             attrs = self.connections[1].getAttr()
             for attr in attrs:
                 c2.setAttribute(attr[0], attr[1])
+                pass
             elem.appendChild(c2)
+            pass
+        if (hasattr(self, "ipmb_rescan_time")):
+            e = doc.createElement("IPMB_rescan_time")
+            e.setAttribute("time", str(self.ipmb_rescan_time))
+            elem.appendChild(e)
+            pass
+        if (hasattr(self, "sel_rescan_time")):
+            e = doc.createElement("SEL_rescan_time")
+            e.setAttribute("time", str(self.sel_rescan_time))
+            elem.appendChild(e)
+            pass
+        return
 
     def HandleExpand(self, event):
         for i in self.refreshers:
             i.DoUpdate()
+            pass
+        return
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -503,33 +615,47 @@ class Domain:
         wx.EVT_MENU(self.ui, id_st+21, self.RereadSelsHandler)
         item = menu.Append(id_st+22, "Display SELs")
         wx.EVT_MENU(self.ui, id_st+22, self.DisplaySelsHandler)
+        item = menu.Append(id_st+23, "Rescan IPMB")
+        wx.EVT_MENU(self.ui, id_st+23, self.RescanIPMBHandler)
         self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
+        return
 
     def CloseMenuHandler(self, event):
         self.remove()
+        return
 
     def RereadSelsHandler(self, event):
         dop = DomainOpHandler(self, "reread_sels", None)
         dop.DoOp()
+        return
 
     def DisplaySelsHandler(self, event):
         _sel.DomainSELDisplay(self.domain_id)
+        return
+
+    def RescanIPMBHandler(self, event):
+        dop = DomainOpHandler(self, "start_full_ipmb_scan", None)
+        dop.DoOp()
+        return
 
     def Connect(self):
         attr = [ ]
         self.connection[0].FillinConAttr(attr)
         if self.connection[1].Valid():
             self.connection[1].FillinConAttr(attr)
+            pass
         #print str(attr)
         self.already_up = False
         self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
         if (self.domain_id == None):
             raise InvalidDomainError("Open domain failed, invalid parms")
+        return
 
     def domain_up_cb(self, domain):
         self.already_up = True;
         self.ui.set_item_active(self.treeroot)
+        return
 
     def conn_change_cb(self, domain, err, connum, portnum, connected):
         if (self.already_up):
@@ -537,10 +663,22 @@ class Domain:
                 self.ui.set_item_active(self.treeroot)
             else:
                 self.ui.set_item_inactive(self.treeroot)
+                pass
+            pass
+        else:
+            if (hasattr(self, "ipmb_rescan_time")):
+                domain.set_ipmb_rescan_time(self.ipmb_rescan_time)
+                pass
+            if (hasattr(self, "sel_rescan_time")):
+                domain.set_sel_rescan_time(self.sel_rescan_time)
+                pass
+            pass
+        return
     
     def connected(self, domain):
         domain.add_entity_update_handler(self)
         domain.add_mc_update_handler(self)
+        return
 
     def find_or_create_entity(self, entity):
         ename = entity.get_name()
@@ -548,6 +686,7 @@ class Domain:
             return self.entities[ename];
         else:
             return _entity.Entity(self, entity)
+        return
         
     def entity_update_cb(self, op, domain, entity):
         if (op == "added"):
@@ -559,6 +698,8 @@ class Domain:
         else:
             e = self.find_or_create_entity(entity)
             e.Changed(entity)
+            pass
+        return
         
     def find_or_create_mc(self, mc):
         mname = mc.get_name()
@@ -566,64 +707,109 @@ class Domain:
             return self.mcs[mname];
         else:
             return _mc.MC(self, mc)
+        return
         
     def mc_update_cb(self, op, domain, mc):
         if (op == "added"):
             _mc.MC(self, mc)
+            pass
         elif (op == "removed"):
             self.entities[mc.get_name()].remove()
         else:
             m = self.find_or_create_mc(mc)
             m.Changed(mc)
+            pass
+        return
         
     def domain_cb(self, domain):
         domain.close(self)
+        return
 
     def domain_close_done_cb(self):
-        pass
+        return
         
     def remove(self):
         if (self.domain_id != None):
             self.domain_id.to_domain(self)
+            pass
         self.mainhandler.domains.pop(self.name);
         self.ui.remove_domain(self)
+        return
 
 defaultDomains = [ ]
+
+class OtherDomainInfo:
+    pass
 
 def RestoreDomains(mainhandler):
     for i in defaultDomains:
         name = i[0]
         attrhashes = i[1]
+        other = i[2]
         connects = [ ]
         for attrhash in attrhashes:
             connect = DomainConnection()
             connect.restore(mainhandler, attrhash)
             connects.append(connect)
+            pass
         d = Domain(mainhandler, name, connects=connects)
+        if (hasattr(other, "ipmb_rescan_time")):
+            d.ipmb_rescan_time = other.ipmb_rescan_time
+            pass
+        if (hasattr(other, "sel_rescan_time")):
+            d.sel_rescan_time = other.sel_rescan_time
+            pass
         try:
             d.Connect()
         except InvalidDomainError, e:
             d.remove()
             _oi_logging.error("Error making domain connection for "
                               + name + ": " + str(e))
+            pass
+        pass
+    return
 
 class _DomainRestore(_saveprefs.RestoreHandler):
     def __init__(self):
         _saveprefs.RestoreHandler.__init__(self, "domain")
+        return
 
     def restore(self, node):
         name = str(node.getAttribute("name"));
         if (name == ""):
             return
         connects = [ ]
+        other = OtherDomainInfo()
         for c in node.childNodes:
-            if ((c.nodeType == c.ELEMENT_NODE)
-                and (c.nodeName == "connection")):
-                attrhash = { }
-                for i in range(0, c.attributes.length):
-                    attr = c.attributes.item(i)
-                    attrhash[attr.nodeName] = attr.nodeValue
-                connects.append(attrhash)
-        defaultDomains.append([name, connects])
+            if (c.nodeType == c.ELEMENT_NODE):
+                if (c.nodeName == "connection"):
+                    attrhash = { }
+                    for i in range(0, c.attributes.length):
+                        attr = c.attributes.item(i)
+                        attrhash[attr.nodeName] = attr.nodeValue
+                        pass
+                    connects.append(attrhash)
+                    pass
+                elif (c.nodeName == "IPMB_rescan_time"):
+                    try:
+                        other.ipmb_rescan_time = int(c.getAttribute("time"))
+                    except:
+                        _oi_logging.error("Error restoring IPMB rescan time"
+                                          + " in a domain")
+                        pass
+                    pass
+                elif (c.nodeName == "SEL_rescan_time"):
+                    try:
+                        other.sel_rescan_time = int(c.getAttribute("time"))
+                    except:
+                        _oi_logging.error("Error restoring SEL rescan time"
+                                          + " in a domain")
+                        pass
+                    pass
+                pass
+            pass
+        defaultDomains.append([name, connects, other])
+        return
+    pass
 
 _DomainRestore()

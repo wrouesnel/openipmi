@@ -2,17 +2,12 @@ Event Log interpretation
 MC commands:
    send message
    SDR fetch and display
-   channel commands
-      access controls
-      user configuration
-   lanparm
-   pet
    pef
-Sensor commands:
-   rearm
 Domain
    connections
    fetch FRU
    send message
-   pet
-Debug settings
+   pet - including the ability to save and restore them
+snmp trap handling (saved as a stored configuration)
+Debug settings (--dmem, --dmsg, etc)
+command-line interface

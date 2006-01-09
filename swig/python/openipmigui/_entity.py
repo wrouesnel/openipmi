@@ -281,7 +281,8 @@ class Entity:
         self.ui.set_item_text(self.idstringitem, self.id_str)
         self.ui.set_item_text(self.psatitem,
                            str(entity.get_presence_sensor_always_there() != 0))
-        self.ui.set_item_text(self.slotnumitem, self.id_str)
+        if (self.slot_number != None):
+            self.ui.set_item_text(self.slotnumitem, str(self.slot_number))
         self.ui.set_item_text(self.mcitem, self.mc_name)
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
