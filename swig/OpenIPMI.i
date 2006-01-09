@@ -5710,9 +5710,8 @@ char *get_error_string(unsigned int val);
      * is passed in, then that user is the only one fetched.  The
      * fourth is the handler object, the mc_channel_set_user_cb
      * method will be called on it with the following parameters:
-     * <self> <mc> <err> <user1> [<user2> ...]  where the users are
-     * ipmi_user_t objects.  Note that some info is channel-specific.
-     * Just the name and password are global to the MC.
+     * <self> <mc> <err>.  Note that some info is channel-specific.
+     * Just the name and password and enable are global to the MC.
      */
     int set_user(ipmi_user_t *userinfo,
 		 int         channel,
@@ -5724,14 +5723,19 @@ char *get_error_string(unsigned int val);
 	ipmi_mc_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
-	if (valid_swig_cb(handler, mc_channel_set_user_cb)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_channel_set_user_cb)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
 	    handler_val = ref_swig_cb(handler, mc_channel_set_user_cb);
 	    done = mc_channel_set_user;
 	}
 	rv = ipmi_mc_set_user(self, channel, usernum, userinfo,
 			      done, handler_val);
-	if (rv)
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+    out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return rv;
     }
@@ -6119,6 +6123,16 @@ char *get_error_string(unsigned int val);
     int set_password2(char *pw)
     {
 	return ipmi_user_set_password2(self, pw, strlen(pw));
+    }
+
+    /* Set the password, using either set_password or set_password2,
+       depending on the length of the password. */
+    int set_password_auto(char *pw)
+    {
+	if (strlen(pw) > 16)
+	    return ipmi_user_set_password2(self, pw, strlen(pw));
+	else
+	    return ipmi_user_set_password(self, pw, strlen(pw));
     }
 
     int get_enable(int *enable)

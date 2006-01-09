@@ -4252,6 +4252,7 @@ struct ipmi_user_s
     char name[17];
     unsigned int pw_set : 1;
     unsigned int pw2_set : 1;
+    unsigned int can_use_pw2 : 1;
     char pw[20];
 
     unsigned int channel : 4;
@@ -4268,6 +4269,7 @@ struct ipmi_user_list_s
     int               enabled;
     int               fixed;
     ipmi_user_t       *users;
+    int               supports_rmcpp;
 
     ipmi_user_list_cb handler;
     void              *cb_data;
@@ -4450,6 +4452,7 @@ got_user1(ipmi_mc_t  *mc,
     list->users[idx].msg_enabled = (rsp->data[4] >> 4) & 1;
     list->users[idx].privilege_limit = rsp->data[4] & 0x0f;
     list->users[idx].channel = list->channel;
+    list->users[idx].can_use_pw2 = list->supports_rmcpp;
 
     if (list->curr == 1) {
 	/* User 1 does not have a name, don't try to fetch it. */
@@ -4501,6 +4504,28 @@ list_next_user(ipmi_mc_t *mc, ipmi_user_list_t *info)
     return ipmi_mc_send_command(mc, 0, &msg, got_user1, info);
 }
 
+static void
+got_user0(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_list_t *list = cb_data;
+    int              rv;
+
+    if (rsp->data[0] != 0) {
+	/* We possibly have 2.0 support. */
+	 list->supports_rmcpp
+	     = ((rsp->data[2] & (1 << 7)) /* Supports 2.0 capabilities */
+		&& (rsp->data[4] & (1 << 1))); /* 2.0 connection support */
+    }
+
+    rv = list_next_user(mc, list);
+    if (rv) {
+	list->handler(mc, rv, list, list->cb_data);
+	ipmi_mem_free(list);
+    }
+}
+
 int
 ipmi_mc_get_users(ipmi_mc_t         *mc,
 		  unsigned int      channel,
@@ -4510,6 +4535,8 @@ ipmi_mc_get_users(ipmi_mc_t         *mc,
 {
     int              rv;
     ipmi_user_list_t *list = NULL;
+    ipmi_msg_t       msg;
+    unsigned char    data[2];
 
     if (channel > 15)
 	return EINVAL;
@@ -4532,7 +4559,15 @@ ipmi_mc_get_users(ipmi_mc_t         *mc,
 	list->max = 0;
     }
 
-    rv = list_next_user(mc, list);
+    /* First determine if we have 2.0 (RMCP+) support. */
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = (channel & 0xf) | (1 << 7); /* Request IPMI 2.0 data */
+    data[1] = 2; /* Request user level access */
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_user0, list);
     if (rv)
 	ipmi_mem_free(list);
     return rv;
@@ -4558,7 +4593,8 @@ ipmi_user_free(ipmi_user_t *user)
 static void
 set_user_done(ipmi_mc_t *mc, int err, ipmi_user_t *user)
 {
-    user->handler(mc, err, user->cb_data);
+    if (user->handler)
+	user->handler(mc, err, user->cb_data);
     ipmi_user_free(user);
 }
 
@@ -4847,6 +4883,8 @@ ipmi_user_set_password(ipmi_user_t *user, char *pw, unsigned int len)
 int
 ipmi_user_set_password2(ipmi_user_t *user, char *pw, unsigned int len)
 {
+    if (! user->can_use_pw2)
+	return ENOSYS;
     if (len > 20)
 	return EINVAL;
     memcpy(user->pw, pw, len);

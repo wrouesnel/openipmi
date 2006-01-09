@@ -1,3 +1,11 @@
+2006-01-08 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Added handling of checking if the channel support
+	RMCP+ before allowing setting of 20-bit passwords.  Also allow
+	a null handler for ipmi_mc_set_user().
+	
+	* swig/python/openipmigui/*.py: Work on IPMI user handling.
+
 2006-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Need a separate blocking and callback setup
