@@ -525,6 +525,15 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 }
 
 static void
+parse_args_iter_help_hnd(const char *name, const char *help, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+
+    swig_call_cb(cb, "parse_args_iter_help_cb", "%s%s", name, help);
+    deref_swig_cb_val(cb);
+}
+
+static void
 domain_close_done(void *cb_data)
 {
     swig_cb_val cb = cb_data;
@@ -3125,6 +3134,29 @@ ipmi_domain_id_t *open_domain(char *name, arg_array args,
  */
 ipmi_domain_id_t *open_domain2(char *name,  arg_array args,
 			       swig_cb done = NULL, swig_cb up = NULL);
+
+/*
+ * Iterate through the help for the various connection types used with
+ * open_domain2()
+ */
+void parse_args_iter_help(swig_cb help_cb)
+{
+    swig_cb_val handler_val;
+
+    IPMI_SWIG_C_CB_ENTRY
+    if (! valid_swig_cb(help_cb, parse_args_iter_help_cb))
+	rv = EINVAL;
+    else {
+	handler_val = get_swig_cb(help_cb, parse_args_iter_help_cb);
+	ipmi_parse_args_iter_help(parse_args_iter_help_hnd, handler_val);
+    }
+    IPMI_SWIG_C_CB_EXIT
+}
+
+const char *parse_option_help()
+{
+    return ipmi_parse_options_help();
+}
 
 /*
  * Add a handler to be called whenever a domain is added or removed.

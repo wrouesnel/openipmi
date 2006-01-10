@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <linux/ipmi.h>
 #include <net/af_ipmi.h>
@@ -1542,6 +1543,70 @@ ipmi_smi_setup_con(int          if_num,
     return err;
 }
 
+typedef struct smi_args_s
+{
+    int ifnum;
+} smi_args_t;
+
+static int
+smi_connect_args(ipmi_args_t  *args,
+		 os_handler_t *handler,
+		 void         *user_data,
+		 ipmi_con_t   **new_con)
+{
+    smi_args_t  *sargs = _ipmi_args_get_extra_data(args);
+
+    return ipmi_smi_setup_con(sargs->ifnum, handler, user_data, new_con);
+}
+
+#define CHECK_ARG \
+    do { \
+        if (*curr_arg >= arg_count) { \
+	    rv = EINVAL; \
+	    goto out_err; \
+        } \
+    } while(0)
+
+static int
+smi_parse_args(int         *curr_arg,
+	       int         arg_count,
+	       char        * const *args,
+	       ipmi_args_t **iargs)
+{
+    int         rv;
+    ipmi_args_t *p = NULL;
+    smi_args_t  *sargs;
+
+    CHECK_ARG;
+
+    rv = _ipmi_args_alloc(NULL, smi_connect_args,
+			  sizeof(smi_args_t), &p);
+    if (rv)
+	goto out_err;
+
+    sargs = _ipmi_args_get_extra_data(p);
+    sargs->ifnum = atoi(args[*curr_arg]);
+    *iargs = p;
+    (*curr_arg)++;
+    return 0;
+
+ out_err:
+    if (p)
+	ipmi_free_args(p);
+    return rv;
+}
+
+static const char *
+smi_parse_help(void)
+{
+    return
+	"\n"
+	" smi <num>\n"
+	"where the <num> is the IPMI device number to connect to.";
+}
+
+static ipmi_con_setup_t *smi_setup;
+
 int
 _ipmi_smi_init(os_handler_t *os_hnd)
 {
@@ -1550,12 +1615,30 @@ _ipmi_smi_init(os_handler_t *os_hnd)
     rv = ipmi_create_global_lock(&smi_list_lock);
     if (rv)
 	return rv;
+
+    smi_setup = _ipmi_alloc_con_setup(smi_parse_args, smi_parse_help);
+    if (! smi_setup) {
+	ipmi_destroy_lock(smi_list_lock);
+	return ENOMEM;
+    }
+    rv = _ipmi_register_con_type("smi", smi_setup);
+    if (rv) {
+	_ipmi_free_con_setup(smi_setup);
+	smi_setup = NULL;
+	ipmi_destroy_lock(smi_list_lock);
+	return rv;
+    }
+
     return 0;
 }
 
 void
 _ipmi_smi_shutdown(void)
 {
+    _ipmi_unregister_con_type("smi", smi_setup);
+    _ipmi_free_con_setup(smi_setup);
+    smi_setup = NULL;
+
     if (smi_list_lock) {
 	ipmi_destroy_lock(smi_list_lock);
 	smi_list_lock = NULL;

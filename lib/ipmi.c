@@ -48,6 +48,7 @@
 #include <OpenIPMI/internal/ipmi_mc.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/locked_list.h>
 
 #if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void
@@ -903,10 +904,16 @@ int _ipmi_smi_shutdown(void);
 int _ipmi_lan_shutdown(void);
 
 
+static locked_list_t *con_type_list;
+static int ipmi_initialized;
+
 int
 ipmi_init(os_handler_t *handler)
 {
     int rv;
+
+    if (ipmi_initialized)
+	return 0;
 
     ipmi_os_handler = handler;
 
@@ -915,6 +922,8 @@ ipmi_init(os_handler_t *handler)
 
     /* Set up logging in malloc code. */
     ipmi_malloc_log = ipmi_log;
+
+    con_type_list = locked_list_alloc(handler);
 
     rv = _ipmi_conn_init(handler);
     if (rv)
@@ -975,6 +984,8 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_atca_init();
     init_oem_test();
 
+    ipmi_initialized = 1;
+
     return 0;
 
  out_err:
@@ -991,6 +1002,8 @@ ipmi_init(os_handler_t *handler)
     _ipmi_fru_shutdown();
     if (seq_lock)
 	handler->destroy_lock(ipmi_os_handler, seq_lock);
+    if (con_type_list)
+	locked_list_destroy(con_type_list);
     ipmi_os_handler = NULL;
     return rv;
 }
@@ -998,6 +1011,9 @@ ipmi_init(os_handler_t *handler)
 void
 ipmi_shutdown(void)
 {
+    if (! ipmi_initialized)
+	return;
+
     _ipmi_lan_shutdown();
 #ifdef HAVE_OPENIPMI_SMI
     _ipmi_smi_shutdown();
@@ -1013,48 +1029,11 @@ ipmi_shutdown(void)
     _ipmi_fru_shutdown();
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
+    if (con_type_list)
+	locked_list_destroy(con_type_list);
+
+    ipmi_initialized = 0;
 }
-
-enum con_type_e { SMI, LAN };
-
-struct ipmi_args_s
-{
-    enum con_type_e con_type;
-
-    int             smi_intf;
-
-    char            *str_addr[2];
-    char            *str_port[2];
-    int             num_addr;
-    int             authtype_set;
-    int             authtype;
-    int             privilege;
-    int             privilege_set;
-    int             username_set;
-    char            username[16];
-    unsigned int    username_len;
-    int             password_set;
-    char            password[20];
-    unsigned int    password_len;
-
-    int             auth_alg_set;
-    unsigned int    auth_alg;
-    int             integ_alg_set;
-    unsigned int    integ_alg;
-    int		    conf_alg_set;
-    unsigned int    conf_alg;
-    int             name_lookup_only_set;
-    int             name_lookup_only;
-    int             bmc_key_set;
-    char            bmc_key[20];
-    unsigned int    bmc_key_len;
-
-    unsigned char   swid;
-    struct in_addr  lan_addr[2];
-    int             lan_port[2];
-
-    unsigned int    hacks;
-};
 
 #define CHECK_ARG \
     do { \
@@ -1070,119 +1049,168 @@ ipmi_parse_args(int         *curr_arg,
 		char        * const *args,
 		ipmi_args_t **iargs)
 {
-    ipmi_args_t *p;
-    int         rv;
-    int         len;
-    
-    p = ipmi_mem_alloc(sizeof(*p));
-    if (!p)
-	return ENOMEM;
-    memset(p, 0, sizeof(*p));
-
+    int rv;
     CHECK_ARG;
 
     if (strcmp(args[*curr_arg], "smi") == 0) {
-	(*curr_arg)++; CHECK_ARG;
-
-	p->con_type = SMI;
-
-	p->smi_intf = atoi(args[*curr_arg]);
-	(*curr_arg)++;
+	/* Format is unchanged. */
+	return ipmi_parse_args2(curr_arg, arg_count, args, iargs);
     } else if (strcmp(args[*curr_arg], "lan") == 0) {
+	/* Convert the format over to the new one and call the new
+	   handler. */
+	char *largs[16];
+	int  c = 0;
+	int  newcarg = 0;
+	char *addr, *addr2 = NULL;
+	char *port, *port2 = NULL;
+	char *auth;
+	char *priv;
+	char *username;
+	char *pw;
+
+	largs[c] = args[*curr_arg];
+	(*curr_arg)++; CHECK_ARG;
+	c++;
+
+	addr = args[*curr_arg];
 	(*curr_arg)++; CHECK_ARG;
 
-	p->con_type = LAN;
-	p->num_addr = 1;
-
-	p->str_addr[0] = ipmi_strdup(args[*curr_arg]);
-	if (p->str_addr[0] == NULL) {
-	    rv = ENOMEM;
-	    goto out_err;
-	}
-	(*curr_arg)++; CHECK_ARG;
-	p->str_port[0] = ipmi_strdup(args[*curr_arg]);
-	if (p->str_port[0] == NULL) {
-	    rv = ENOMEM;
-	    goto out_err;
-	}
+	port = args[*curr_arg];
 	(*curr_arg)++; CHECK_ARG;
 
-    doauth:
-	if (strcmp(args[*curr_arg], "none") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_NONE;
-	} else if (strcmp(args[*curr_arg], "md2") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_MD2;
-	} else if (strcmp(args[*curr_arg], "md5") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_MD5;
-	} else if (strcmp(args[*curr_arg], "straight") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
-	} else if (strcmp(args[*curr_arg], "rmcp+") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
-	} else if (p->num_addr == 1) {
-	    p->num_addr++;
-	    p->str_addr[1] = ipmi_strdup(args[*curr_arg]);
-	    if (p->str_addr[1] == NULL) {
-		rv = ENOMEM;
-		goto out_err;
-	    }
+	if ((strcmp(args[*curr_arg], "none") != 0)
+	    && (strcmp(args[*curr_arg], "md2") != 0)
+	    && (strcmp(args[*curr_arg], "md5") != 0)
+	    && (strcmp(args[*curr_arg], "straight") != 0)
+	    && (strcmp(args[*curr_arg], "rmcp+") != 0))
+	{
+	    addr2 = args[*curr_arg];
 	    (*curr_arg)++; CHECK_ARG;
-	    p->str_port[1] = ipmi_strdup(args[*curr_arg]);
-	    if (p->str_port[1] == NULL) {
-		rv = ENOMEM;
-		goto out_err;
-	    }
+
+	    port2 = args[*curr_arg];
 	    (*curr_arg)++; CHECK_ARG;
-	    goto doauth;
-	} else {
-	    rv = EINVAL;
-	    goto out_err;
 	}
-	(*curr_arg)++; CHECK_ARG;
-	p->authtype_set = 1;
 
-	if (strcmp(args[*curr_arg], "callback") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_CALLBACK;
-	} else if (strcmp(args[*curr_arg], "user") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_USER;
-	} else if (strcmp(args[*curr_arg], "operator") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_OPERATOR;
-	} else if (strcmp(args[*curr_arg], "admin") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_ADMIN;
-	} else if (strcmp(args[*curr_arg], "oem") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_OEM;
-	} else {
-	    rv = EINVAL;
-	    goto out_err;
-	}
-	p->privilege_set = 1;
+	auth = args[*curr_arg];
 	(*curr_arg)++; CHECK_ARG;
 
-	len = strlen(args[*curr_arg]);
-	if (len > 16)
-	    len = 16;
-	memcpy(p->username, args[*curr_arg], len);
-	p->username_len = len;
-	p->username_set = 1;
+	priv = args[*curr_arg];
 	(*curr_arg)++; CHECK_ARG;
 
-	len = strlen(args[*curr_arg]);
-	if (len > 16)
-	    len = 16;
-	memcpy(p->password, args[*curr_arg], len);
-	p->password_len = len;
-	p->password_set = 1;
+	username = args[*curr_arg];
+	(*curr_arg)++; CHECK_ARG;
+
+	pw = args[*curr_arg];
 	(*curr_arg)++;
+
+	largs[c] = "-U"; c++; largs[c] = username; c++;
+	largs[c] = "-P"; c++; largs[c] = pw; c++;
+	largs[c] = "-A"; c++; largs[c] = auth; c++;
+	largs[c] = "-L"; c++; largs[c] = priv; c++;
+	if (addr2) {
+	    largs[c] = "-s"; c++;
+	}
+	largs[c] = "-p"; c++; largs[c] = port; c++;
+	if (port2) {
+	    largs[c] = "-p2"; c++; largs[c] = port2; c++;
+	}
+	largs[c] = addr; c++;
+	if (addr2) {
+	    largs[c] = addr2; c++;
+	}
+
+	return ipmi_parse_args2(&newcarg, c, largs, iargs);
     } else {
 	rv = EINVAL;
 	goto out_err;
     }
-
-    *iargs = p;
     return 0;
 
  out_err:
-    ipmi_free_args(p);
     return rv;
+}
+
+struct ipmi_args_s
+{
+    ipmi_args_free_cb    free;
+    ipmi_args_connect_cb connect;
+};
+
+struct ipmi_con_setup_s
+{
+    ipmi_con_parse_args_cb parse;
+    ipmi_con_get_help_cb   help;
+};
+ipmi_con_setup_t *
+_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
+		      ipmi_con_get_help_cb   help)
+{
+    ipmi_con_setup_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+    memset(rv, 0, sizeof(*rv));
+    rv->parse = parse;
+    rv->help = help;
+    return rv;
+}
+
+void
+_ipmi_free_con_setup(ipmi_con_setup_t *v)
+{
+    ipmi_mem_free(v);
+}
+
+typedef struct con_type_help_data_s
+{
+    ipmi_iter_help_cb help_cb;
+    void              *cb_data;
+} con_type_help_data_t;
+
+static int
+con_type_help_handler(void *cb_data, void *item1, void *item2)
+{
+    ipmi_con_setup_t     *setup = item2;
+    con_type_help_data_t *data = cb_data;
+
+    data->help_cb(item1, setup->help(), data->cb_data);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_parse_args_iter_help(ipmi_iter_help_cb help_cb, void *cb_data)
+{
+    con_type_help_data_t data;
+
+    data.help_cb = help_cb;
+    data.cb_data = cb_data;
+    locked_list_iterate(con_type_list, con_type_help_handler, &data);
+}
+
+typedef struct con_setup_data_s
+{
+    const char  *name;
+    int         err;
+
+    int         *curr_arg;
+    int         arg_count;
+    char        * const *args;
+    ipmi_args_t *iargs;
+} con_setup_data_t;
+
+static int
+con_type_check_parse(void *cb_data, void *item1, void *item2)
+{
+    con_setup_data_t *data = cb_data;
+
+    if (strcmp(item1, data->name) == 0) {
+	ipmi_con_setup_t *setup = item2;
+	data->err = setup->parse(data->curr_arg, data->arg_count, data->args,
+				 &data->iargs);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 int
@@ -1191,221 +1219,106 @@ ipmi_parse_args2(int         *curr_arg,
 		 char        * const *args,
 		 ipmi_args_t **iargs)
 {
-    ipmi_args_t *p;
-    int rv;
-    
-    p = ipmi_mem_alloc(sizeof(*p));
-    if (!p)
-	return ENOMEM;
-    memset(p, 0, sizeof(*p));
+    con_setup_data_t data;
+    int              rv;
 
     CHECK_ARG;
-
-    if (strcmp(args[*curr_arg], "smi") == 0) {
-	(*curr_arg)++; CHECK_ARG;
-
-	p->con_type = SMI;
-
-	p->smi_intf = atoi(args[*curr_arg]);
-	(*curr_arg)++;
-    } else if (strcmp(args[*curr_arg], "lan") == 0) {
-	int i;
-	int len;
-
-	(*curr_arg)++; CHECK_ARG;
-
-	p->con_type = LAN;
-	p->num_addr = 1;
-
-	while (*curr_arg < arg_count) {
-	    if (args[*curr_arg][0] != '-') {
-		break;
-	    }
-
-	    if (strcmp(args[*curr_arg], "-U") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		len = strlen(args[*curr_arg]);
-		if (len > 16)
-		    len = 16;
-		memcpy(p->username, args[*curr_arg], len);
-		p->username_set = 1;
-		p->username_len = len;
-	    } else if (strcmp(args[*curr_arg], "-P") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		len = strlen(args[*curr_arg]);
-		if (len > 20)
-		    len = 20;
-		memcpy(p->password, args[*curr_arg], len);
-		p->password_set = 1;
-		p->password_len = len;
-	    } else if (strcmp(args[*curr_arg], "-H") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		if (strcmp(args[*curr_arg], "intelplus") == 0)
-		    p->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
-		else if (strcmp(args[*curr_arg], "rakp3_wrong_rolem") == 0)
-		    p->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
-		else if (strcmp(args[*curr_arg], "rmcpp_integ_sik") == 0)
-		    p->hacks |= IPMI_CONN_HACK_RMCPP_INTEG_SIK;
-		/* Ignore unknown hacks. */
-	    } else if (strcmp(args[*curr_arg], "-s") == 0) {
-		p->num_addr = 2;
-	    } else if (strcmp(args[*curr_arg], "-A") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		if (strcmp(args[*curr_arg], "none") == 0) {
-		    p->authtype = IPMI_AUTHTYPE_NONE;
-		} else if (strcmp(args[*curr_arg], "md2") == 0) {
-		    p->authtype = IPMI_AUTHTYPE_MD2;
-		} else if (strcmp(args[*curr_arg], "md5") == 0) {
-		    p->authtype = IPMI_AUTHTYPE_MD5;
-		} else if (strcmp(args[*curr_arg], "straight") == 0) {
-		    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
-		} else if (strcmp(args[*curr_arg], "rmcp+") == 0) {
-		    p->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
-		} else {
-		    rv = EINVAL;
-		    goto out_err;
-		}
-		p->authtype_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-L") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-
-		if (strcmp(args[*curr_arg], "callback") == 0) {
-		    p->privilege = IPMI_PRIVILEGE_CALLBACK;
-		} else if (strcmp(args[*curr_arg], "user") == 0) {
-		    p->privilege = IPMI_PRIVILEGE_USER;
-		} else if (strcmp(args[*curr_arg], "operator") == 0) {
-		    p->privilege = IPMI_PRIVILEGE_OPERATOR;
-		} else if (strcmp(args[*curr_arg], "admin") == 0) {
-		    p->privilege = IPMI_PRIVILEGE_ADMIN;
-		} else if (strcmp(args[*curr_arg], "oem") == 0) {
-		    p->privilege = IPMI_PRIVILEGE_OEM;
-		} else {
-		    rv = EINVAL;
-		    goto out_err;
-		}
-		p->privilege_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-p") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		p->str_port[0] = ipmi_strdup(args[*curr_arg]);
-		if (p->str_port[0] == NULL) {
-		    rv = ENOMEM;
-		    goto out_err;
-		}
-	    } else if (strcmp(args[*curr_arg], "-p2") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		p->str_port[1] = ipmi_strdup(args[*curr_arg]);
-		if (p->str_port[1] == NULL) {
-		    rv = ENOMEM;
-		    goto out_err;
-		}
-	    } else if (strcmp(args[*curr_arg], "-Ra") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-
-		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
-		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK;
-		} else if (strcmp(args[*curr_arg], "rakp_none") == 0) {
-		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE;
-		} else if (strcmp(args[*curr_arg], "rakp_hmac_sha1") == 0) {
-		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
-		} else if (strcmp(args[*curr_arg], "rakp_hmac_md5") == 0) {
-		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5;
-		} else {
-		    rv = EINVAL;
-		    goto out_err;
-		}
-		p->auth_alg_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-Ri") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-
-		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
-		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK;
-		} else if (strcmp(args[*curr_arg], "none") == 0) {
-		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
-		} else if (strcmp(args[*curr_arg], "hmac_sha1") == 0) {
-		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-		} else if (strcmp(args[*curr_arg], "hmac_md5") == 0) {
-		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128;
-		} else if (strcmp(args[*curr_arg], "md5") == 0) {
-		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128;
-		} else {
-		    rv = EINVAL;
-		    goto out_err;
-		}
-		p->integ_alg_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-Rc") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-
-		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
-		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK;
-		} else if (strcmp(args[*curr_arg], "none") == 0) {
-		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
-		} else if (strcmp(args[*curr_arg], "aes_cbc_128") == 0) {
-		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
-		} else if (strcmp(args[*curr_arg], "xrc4_128") == 0) {
-		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128;
-		} else if (strcmp(args[*curr_arg], "xrc4_40") == 0) {
-		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40;
-		} else {
-		    rv = EINVAL;
-		    goto out_err;
-		}
-		p->conf_alg_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-Rl") == 0) {
-		p->name_lookup_only = 0;
-		p->name_lookup_only_set = 1;
-	    } else if (strcmp(args[*curr_arg], "-Rk") == 0) {
-		(*curr_arg)++; CHECK_ARG;
-		len = strlen(args[*curr_arg]);
-		if (len > 20)
-		    len = 20;
-		memcpy(p->bmc_key, args[*curr_arg], len);
-		p->bmc_key_set = 1;
-		p->bmc_key_len = len;
-	    }
-	    (*curr_arg)++;
-	}
-
-	for (i=0; i<p->num_addr; i++) {
-	    CHECK_ARG;
-	    p->str_addr[i] = ipmi_strdup(args[*curr_arg]);
-	    if (p->str_addr[0] == NULL) {
-		rv = ENOMEM;
-		goto out_err;
-	    }
-	    (*curr_arg)++;
-	    if (! p->str_port[i]) {
-		p->str_port[i] = ipmi_strdup("623");
-		if (p->str_port[0] == NULL) {
-		    rv = ENOMEM;
-		    goto out_err;
-		}
-	    }
-	}
-    } else {
-	rv = EINVAL;
+    data.err = EINVAL;
+    data.name = args[*curr_arg];
+    (*curr_arg)++;
+    data.curr_arg = curr_arg;
+    data.arg_count = arg_count;
+    data.args = args;
+    locked_list_iterate(con_type_list, con_type_check_parse, &data);
+    if (data.err) {
+	rv = data.err;
 	goto out_err;
     }
 
-    *iargs = p;
+    *iargs = data.iargs;
     return 0;
 
  out_err:
-    ipmi_free_args(p);
     return rv;
 }
 
 void
 ipmi_free_args(ipmi_args_t *args)
 {
-    if (args->str_addr[0])
-	ipmi_mem_free(args->str_addr[0]);
-    if (args->str_addr[1])
-	ipmi_mem_free(args->str_addr[1]);
-    if (args->str_port[0])
-	ipmi_mem_free(args->str_port[0]);
-    if (args->str_port[1])
-	ipmi_mem_free(args->str_port[1]);
+    if (args->free)
+	args->free(args);
     ipmi_mem_free(args);
+}
+
+int
+ipmi_args_setup_con(ipmi_args_t  *args,
+		    os_handler_t *handlers,
+		    void         *user_data,
+		    ipmi_con_t   **con)
+{
+    return args->connect(args, handlers, user_data, con);
+}
+
+int
+_ipmi_args_alloc(ipmi_args_free_cb    free,
+		 ipmi_args_connect_cb connect,
+		 unsigned int         extra_data_len,
+		 ipmi_args_t          **args)
+{
+    ipmi_args_t *val;
+
+    val = ipmi_mem_alloc(sizeof(*val) + extra_data_len);
+    if (!val)
+	return ENOMEM;
+    memset(val, 0, sizeof(*val) + extra_data_len);
+    val->free = free;
+    val->connect = connect;
+    *args = val;
+    return 0;
+}
+
+void *
+_ipmi_args_get_extra_data(ipmi_args_t *args)
+{
+    return ((char *) args) + sizeof(*args);
+}
+
+int
+_ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup)
+{
+    if (locked_list_add(con_type_list, (void *) name, setup))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+typedef struct con_type_check_remover_s
+{
+    const char *name;
+    int        err;
+} con_type_check_remover_t;
+
+static int
+con_type_check_remove(void *cb_data, void *item1, void *item2)
+{
+    con_type_check_remover_t *data = cb_data;
+
+    if (strcmp(item1, data->name) == 0) {
+	locked_list_remove(con_type_list, item1, item2);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+_ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup)
+{
+    con_type_check_remover_t data;
+
+    data.err = EINVAL;
+    data.name = name;
+    locked_list_iterate(con_type_list, con_type_check_remove, &data);
+    return data.err;
 }
 
 int
@@ -1478,97 +1391,20 @@ ipmi_parse_options(ipmi_open_option_t *option,
     return 0;
 }
 
-int
-ipmi_args_setup_con(ipmi_args_t  *args,
-		    os_handler_t *handlers,
-		    void         *user_data,
-		    ipmi_con_t   **con)
+const char *
+ipmi_parse_options_help(void)
 {
-    int rv;
-
-    switch(args->con_type) {
-#ifdef HAVE_OPENIPMI_SMI
-    case SMI:
-	rv = ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
-	if (!rv)
-	    (*con)->hacks = args->hacks;
-	break;
-#endif
-
-    case LAN:
-    {
-	int              i;
-	ipmi_lanp_parm_t parms[11];
-
-	i = 0;
-	parms[i].parm_id = IPMI_LANP_PARMID_ADDRS;
-	parms[i].parm_data = args->str_addr;
-	parms[i].parm_data_len = args->num_addr;
-	i++;
-	parms[i].parm_id = IPMI_LANP_PARMID_PORTS;
-	parms[i].parm_data = args->str_port;
-	parms[i].parm_data_len = args->num_addr;
-	i++;
-	if (args->authtype_set) {
-	    parms[i].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
-	    parms[i].parm_val = args->authtype;
-	    i++;
-	}
-	if (args->privilege_set) {
-	    parms[i].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
-	    parms[i].parm_val = args->privilege;
-	    i++;
-	}
-	if (args->username_set) {
-	    parms[i].parm_id = IPMI_LANP_PARMID_USERNAME;
-	    parms[i].parm_data = args->username;
-	    parms[i].parm_data_len = args->username_len;
-	    i++;
-	}
-	if (args->password_set) {
-	    parms[i].parm_id = IPMI_LANP_PARMID_PASSWORD;
-	    parms[i].parm_data = args->password;
-	    parms[i].parm_data_len = args->password_len;
-	    i++;
-	}
-	if (args->auth_alg_set) {
-	    parms[i].parm_id = IPMI_LANP_AUTHENTICATION_ALGORITHM;
-	    parms[i].parm_val = args->auth_alg;
-	    i++;
-	}
-	if (args->integ_alg_set) {
-	    parms[i].parm_id = IPMI_LANP_INTEGRITY_ALGORITHM;
-	    parms[i].parm_val = args->integ_alg;
-	    i++;
-	}
-	if (args->conf_alg_set) {
-	    parms[i].parm_id = IPMI_LANP_CONFIDENTIALITY_ALGORITHM;
-	    parms[i].parm_val = args->conf_alg;
-	    i++;
-	}
-	if (args->name_lookup_only_set) {
-	    parms[i].parm_id = IPMI_LANP_NAME_LOOKUP_ONLY;
-	    parms[i].parm_val = args->name_lookup_only;
-	    i++;
-	}
-	if (args->bmc_key_set) {
-	    parms[i].parm_id = IPMI_LANP_BMC_KEY;
-	    parms[i].parm_data = args->bmc_key;
-	    parms[i].parm_data_len = args->bmc_key_len;
-	    i++;
-	}
-	rv = ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
-	if (!rv)
-	    (*con)->hacks = args->hacks;
-	break;
-    }
-
-    default:
-	rv = EINVAL;
-	break;
-    }
-
-    return rv;
+    return
+	"-[no]all - all automatic handling\n"
+	"-[no]sdrs - sdr fetching\n"
+	"-[no]frus - FRU fetching\n"
+	"-[no]sel - SEL fetching\n"
+	"-[no]ipmbscan - IPMB bus scanning\n"
+	"-[no]oeminit - special OEM processing (like ATCA)\n"
+	"-[no]seteventrcvr - setting event receivers\n"
+	"-[no]activate - connection activation\n"
+	"-[no]localonly - Just talk to the local BMC, (ATCA-only, for blades)\n"
+	"-wait_til_up - wait until the domain is up before returning";
 }
 
 /* This is the number of seconds between 1/1/70 (IPMI event date) and

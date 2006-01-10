@@ -5398,12 +5398,6 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     return rv;
 }
 
-/* Another cheap hack so the MXP code can call this. */
-void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv, int addr_num)
-{
-    handle_connected(ipmi, rv, addr_num);
-}
-
 static void
 snmp_got_match(lan_data_t          *lan,
 	       const ipmi_msg_t    *msg,
@@ -5520,6 +5514,378 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
     return next != NULL;
 }
 
+typedef struct lan_args_s
+{
+    char            *str_addr[2];
+    char            *str_port[2];
+    int             num_addr;
+    int             authtype_set;
+    int             authtype;
+    int             privilege;
+    int             privilege_set;
+    int             username_set;
+    char            username[16];
+    unsigned int    username_len;
+    int             password_set;
+    char            password[20];
+    unsigned int    password_len;
+
+    int             auth_alg_set;
+    unsigned int    auth_alg;
+    int             integ_alg_set;
+    unsigned int    integ_alg;
+    int		    conf_alg_set;
+    unsigned int    conf_alg;
+    int             name_lookup_only_set;
+    int             name_lookup_only;
+    int             bmc_key_set;
+    char            bmc_key[20];
+    unsigned int    bmc_key_len;
+
+    unsigned char   swid;
+    struct in_addr  lan_addr[2];
+    int             lan_port[2];
+
+    unsigned int    hacks;
+} lan_args_t;
+
+static void
+lan_free_args(ipmi_args_t *args)
+{
+    lan_args_t *largs = _ipmi_args_get_extra_data(args);
+
+    if (largs->str_addr[0])
+	ipmi_mem_free(largs->str_addr[0]);
+    if (largs->str_addr[1])
+	ipmi_mem_free(largs->str_addr[1]);
+    if (largs->str_port[0])
+	ipmi_mem_free(largs->str_port[0]);
+    if (largs->str_port[1])
+	ipmi_mem_free(largs->str_port[1]);
+}
+
+static int
+lan_connect_args(ipmi_args_t  *args,
+		 os_handler_t *handlers,
+		 void         *user_data,
+		 ipmi_con_t   **con)
+{
+    lan_args_t       *largs = _ipmi_args_get_extra_data(args);
+    int              i;
+    ipmi_lanp_parm_t parms[11];
+    int              rv;
+
+    i = 0;
+    parms[i].parm_id = IPMI_LANP_PARMID_ADDRS;
+    parms[i].parm_data = largs->str_addr;
+    parms[i].parm_data_len = largs->num_addr;
+    i++;
+    parms[i].parm_id = IPMI_LANP_PARMID_PORTS;
+    parms[i].parm_data = largs->str_port;
+    parms[i].parm_data_len = largs->num_addr;
+    i++;
+    if (largs->authtype_set) {
+	parms[i].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
+	parms[i].parm_val = largs->authtype;
+	i++;
+    }
+    if (largs->privilege_set) {
+	parms[i].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
+	parms[i].parm_val = largs->privilege;
+	i++;
+    }
+    if (largs->username_set) {
+	parms[i].parm_id = IPMI_LANP_PARMID_USERNAME;
+	parms[i].parm_data = largs->username;
+	parms[i].parm_data_len = largs->username_len;
+	i++;
+    }
+    if (largs->password_set) {
+	parms[i].parm_id = IPMI_LANP_PARMID_PASSWORD;
+	parms[i].parm_data = largs->password;
+	parms[i].parm_data_len = largs->password_len;
+	i++;
+    }
+    if (largs->auth_alg_set) {
+	parms[i].parm_id = IPMI_LANP_AUTHENTICATION_ALGORITHM;
+	parms[i].parm_val = largs->auth_alg;
+	i++;
+    }
+    if (largs->integ_alg_set) {
+	parms[i].parm_id = IPMI_LANP_INTEGRITY_ALGORITHM;
+	parms[i].parm_val = largs->integ_alg;
+	i++;
+    }
+    if (largs->conf_alg_set) {
+	parms[i].parm_id = IPMI_LANP_CONFIDENTIALITY_ALGORITHM;
+	parms[i].parm_val = largs->conf_alg;
+	i++;
+    }
+    if (largs->name_lookup_only_set) {
+	parms[i].parm_id = IPMI_LANP_NAME_LOOKUP_ONLY;
+	parms[i].parm_val = largs->name_lookup_only;
+	i++;
+    }
+    if (largs->bmc_key_set) {
+	parms[i].parm_id = IPMI_LANP_BMC_KEY;
+	parms[i].parm_data = largs->bmc_key;
+	parms[i].parm_data_len = largs->bmc_key_len;
+	i++;
+    }
+    rv = ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
+    if (!rv)
+	(*con)->hacks = largs->hacks;
+    return rv;
+}
+
+#define CHECK_ARG \
+    do { \
+        if (*curr_arg >= arg_count) { \
+	    rv = EINVAL; \
+	    goto out_err; \
+        } \
+    } while(0)
+
+static int
+lan_parse_args(int         *curr_arg,
+	       int         arg_count,
+	       char        * const *args,
+	       ipmi_args_t **iargs)
+{
+    int         rv;
+    ipmi_args_t *p = NULL;
+    lan_args_t  *largs;
+    int         i;
+    int         len;
+
+    CHECK_ARG;
+
+    rv = _ipmi_args_alloc(lan_free_args, lan_connect_args,
+			  sizeof(lan_args_t), &p);
+    if (rv)
+	return rv;
+
+    largs = _ipmi_args_get_extra_data(p);
+    largs->num_addr = 1;
+
+    while (*curr_arg < arg_count) {
+	if (args[*curr_arg][0] != '-') {
+	    break;
+	}
+
+	if (strcmp(args[*curr_arg], "-U") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    len = strlen(args[*curr_arg]);
+	    if (len > 16)
+		len = 16;
+	    memcpy(largs->username, args[*curr_arg], len);
+	    largs->username_set = 1;
+	    largs->username_len = len;
+	} else if (strcmp(args[*curr_arg], "-P") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    len = strlen(args[*curr_arg]);
+	    if (len > 20)
+		len = 20;
+	    memcpy(largs->password, args[*curr_arg], len);
+	    largs->password_set = 1;
+	    largs->password_len = len;
+	} else if (strcmp(args[*curr_arg], "-H") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    if (strcmp(args[*curr_arg], "intelplus") == 0)
+		largs->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
+	    else if (strcmp(args[*curr_arg], "rakp3_wrong_rolem") == 0)
+		largs->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
+	    else if (strcmp(args[*curr_arg], "rmcpp_integ_sik") == 0)
+		largs->hacks |= IPMI_CONN_HACK_RMCPP_INTEG_SIK;
+	    /* Ignore unknown hacks. */
+	} else if (strcmp(args[*curr_arg], "-s") == 0) {
+	    largs->num_addr = 2;
+	} else if (strcmp(args[*curr_arg], "-A") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    if (strcmp(args[*curr_arg], "none") == 0) {
+		largs->authtype = IPMI_AUTHTYPE_NONE;
+	    } else if (strcmp(args[*curr_arg], "md2") == 0) {
+		largs->authtype = IPMI_AUTHTYPE_MD2;
+	    } else if (strcmp(args[*curr_arg], "md5") == 0) {
+		largs->authtype = IPMI_AUTHTYPE_MD5;
+	    } else if (strcmp(args[*curr_arg], "straight") == 0) {
+		largs->authtype = IPMI_AUTHTYPE_STRAIGHT;
+	    } else if (strcmp(args[*curr_arg], "rmcp+") == 0) {
+		largs->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
+	    } else {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->authtype_set = 1;
+	} else if (strcmp(args[*curr_arg], "-L") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+
+	    if (strcmp(args[*curr_arg], "callback") == 0) {
+		largs->privilege = IPMI_PRIVILEGE_CALLBACK;
+	    } else if (strcmp(args[*curr_arg], "user") == 0) {
+		largs->privilege = IPMI_PRIVILEGE_USER;
+	    } else if (strcmp(args[*curr_arg], "operator") == 0) {
+		largs->privilege = IPMI_PRIVILEGE_OPERATOR;
+	    } else if (strcmp(args[*curr_arg], "admin") == 0) {
+		largs->privilege = IPMI_PRIVILEGE_ADMIN;
+	    } else if (strcmp(args[*curr_arg], "oem") == 0) {
+		largs->privilege = IPMI_PRIVILEGE_OEM;
+	    } else {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->privilege_set = 1;
+	} else if (strcmp(args[*curr_arg], "-p") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    largs->str_port[0] = ipmi_strdup(args[*curr_arg]);
+	    if (largs->str_port[0] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	} else if (strcmp(args[*curr_arg], "-p2") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    largs->str_port[1] = ipmi_strdup(args[*curr_arg]);
+	    if (largs->str_port[1] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	} else if (strcmp(args[*curr_arg], "-Ra") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+
+	    if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK;
+	    } else if (strcmp(args[*curr_arg], "rakp_none") == 0) {
+		largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE;
+	    } else if (strcmp(args[*curr_arg], "rakp_hmac_sha1") == 0) {
+		largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
+	    } else if (strcmp(args[*curr_arg], "rakp_hmac_md5") == 0) {
+		largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5;
+	    } else {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->auth_alg_set = 1;
+	} else if (strcmp(args[*curr_arg], "-Ri") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+
+	    if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK;
+	    } else if (strcmp(args[*curr_arg], "none") == 0) {
+		largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
+	    } else if (strcmp(args[*curr_arg], "hmac_sha1") == 0) {
+		largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+	    } else if (strcmp(args[*curr_arg], "hmac_md5") == 0) {
+		largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128;
+	    } else if (strcmp(args[*curr_arg], "md5") == 0) {
+		largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128;
+	    } else {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->integ_alg_set = 1;
+	} else if (strcmp(args[*curr_arg], "-Rc") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+
+	    if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK;
+	    } else if (strcmp(args[*curr_arg], "none") == 0) {
+		largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
+	    } else if (strcmp(args[*curr_arg], "aes_cbc_128") == 0) {
+		largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
+	    } else if (strcmp(args[*curr_arg], "xrc4_128") == 0) {
+		largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128;
+	    } else if (strcmp(args[*curr_arg], "xrc4_40") == 0) {
+		largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40;
+	    } else {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->conf_alg_set = 1;
+	} else if (strcmp(args[*curr_arg], "-Rl") == 0) {
+	    largs->name_lookup_only = 0;
+	    largs->name_lookup_only_set = 1;
+	} else if (strcmp(args[*curr_arg], "-Rk") == 0) {
+	    (*curr_arg)++; CHECK_ARG;
+	    len = strlen(args[*curr_arg]);
+	    if (len > 20)
+		len = 20;
+	    memcpy(largs->bmc_key, args[*curr_arg], len);
+	    largs->bmc_key_set = 1;
+	    largs->bmc_key_len = len;
+	}
+	(*curr_arg)++;
+    }
+
+    for (i=0; i<largs->num_addr; i++) {
+	CHECK_ARG;
+	largs->str_addr[i] = ipmi_strdup(args[*curr_arg]);
+	if (largs->str_addr[0] == NULL) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	(*curr_arg)++;
+	if (! largs->str_port[i]) {
+	    largs->str_port[i] = ipmi_strdup("623");
+	    if (largs->str_port[0] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	}
+    }
+
+    *iargs = p;
+    return 0;
+
+ out_err:
+    if (p)
+	ipmi_free_args(p);
+    return rv;
+}
+
+static const char *
+lan_parse_help(void)
+{
+    return
+	"\n"
+	" lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
+	"     [-L <privilege>] [-s] [-Ra <auth alg>] [-Ri <integ alg>]\n"
+	"     [-Rc <conf algo>] [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
+	"     <host1> [<host2>]\n"
+	"If -s is supplied, then two host names are taken (the second port\n"
+	"may be specified with -p2).  Otherwise, only one hostname is\n"
+	"taken.  The defaults are an empty username and password (anonymous),\n"
+	"port 623, admin privilege, and authtype defaulting to the most\n"
+	"secure one available.\n"
+	"privilege is one of: callback, user, operator, admin, or oem.  These\n"
+	"select the specific commands that are available to the connection.\n"
+	"Higher privileges (ones further to the right in the above list) have\n"
+	"more commands available to them.\n"
+	"authtype is one of the following: rmcp+, md5, md2, straight, or none.\n"
+	"Setting this to anything but rmcp+ forces normal rmcp\n"
+	"authentication.  By default the most secure method available is\n"
+	"chosen, in the order given above.\n"
+	"For RMCP+ connections, the authentication algorithms supported (-Ra)\n"
+	"are: bmcpick, rakp_none, rakp_hmac_sha1, and rakp_hmac_md5.  The\n"
+	"integrity algorithms (-Ri) supported are: bmcpick, none, hmac_sha1,\n"
+	"hmac_md5, and md5.  The confidentiality algorithms (-Rc) are: bmcpick,\n"
+	"aes_cbc_128, xrc4_128, and xrc_40.  The defaults are\n"
+	"rackp_hmac_sha1, hmac_sha1, and aes_cb_128.  -Rl turns on lookup up\n"
+	"names by the name and the privilege level (allowing the same name with\n"
+	"different privileges and different passwords), the default is straight\n"
+	"name lookup.  -Rk sets the BMC key, needed if the system does two-key\n"
+	"lookups.\n"
+	"The -H option enables certain hacks for broken platforms.  This may\n"
+	"be listed multiple times to enable multiple hacks.  The currently\n"
+	"available hacks are:\n"
+	"  intelplus - For Intel platforms that have broken RMCP+.\n"
+	"  rakp3_wrong_rolem - For systems that truncate role(m) in the RAKP3"
+	" msg.\n"
+	"  rmcpp_integ_sik - For systems that use SIK instead of K(1) for"
+	" integrity.";
+}
+
+static ipmi_con_setup_t *lan_setup;
+
 int
 _ipmi_lan_init(os_handler_t *os_hnd)
 {
@@ -5565,6 +5931,14 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
+    lan_setup = _ipmi_alloc_con_setup(lan_parse_args, lan_parse_help);
+    if (! lan_setup)
+	return ENOMEM;
+
+    rv = _ipmi_register_con_type("lan", lan_setup);
+    if (rv)
+	return rv;
+
     lan_os_hnd = os_hnd;
 
     return 0;
@@ -5573,6 +5947,10 @@ _ipmi_lan_init(os_handler_t *os_hnd)
 void
 _ipmi_lan_shutdown(void)
 {
+    _ipmi_unregister_con_type("lan", lan_setup);
+    _ipmi_free_con_setup(lan_setup);
+    lan_setup = NULL;
+
     if (lan_list_lock) {
 	ipmi_destroy_lock(lan_list_lock);
 	lan_list_lock = NULL;

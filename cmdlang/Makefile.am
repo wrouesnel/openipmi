@@ -23,10 +23,10 @@ libOpenIPMIcmdlang_la_LIBADD = -lm \
 libOpenIPMIcmdlang_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIcmdlang.map
 
-bin_PROGRAMS = ipmish
+bin_PROGRAMS = openipmish
 
-ipmish_SOURCES = ipmish.c
-ipmish_LDADD =  libOpenIPMIcmdlang.la \
+openipmish_SOURCES = ipmish.c
+openipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
@@ -34,3 +34,8 @@ ipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(GDBM_LIB)
 
 CLEANFILES = libOpenIPMIcmdlang.map
+
+# We need to make a link from ipmish to openipmish for backwards
+# compatability.
+install-data-local:
+	$(LN_S) openipmish $(DESTDIR)$(bindir)/ipmish

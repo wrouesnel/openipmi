@@ -127,6 +127,7 @@ int ipmi_cmdlang_get_evinfo(void);
 typedef struct ipmi_cmdlang_cmd_s ipmi_cmdlang_cmd_t;
 
 typedef void (*ipmi_cmdlang_handler_cb)(ipmi_cmd_info_t *cmd_info);
+typedef void (*ipmi_help_finisher_cb)(ipmi_cmdlang_t *cmdlang);
 
 /* Register a command as a subcommand of the parent, or into the main
    command list if parent is NULL.  The command will have the given
@@ -140,6 +141,7 @@ int ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
 			 char                    *help,
 			 ipmi_cmdlang_handler_cb handler,
 			 void                    *handler_data,
+			 ipmi_help_finisher_cb   help_finish,
 			 ipmi_cmdlang_cmd_t      **rv);
 
 /* Register a table of commands. */
@@ -151,6 +153,7 @@ typedef struct ipmi_cmdlang_init_s
     ipmi_cmdlang_handler_cb handler;
     void                    *cb_data;
     ipmi_cmdlang_cmd_t      **new_val;
+    ipmi_help_finisher_cb   help_finish;
 } ipmi_cmdlang_init_t;
 int ipmi_cmdlang_reg_table(ipmi_cmdlang_init_t *table, int len);
 

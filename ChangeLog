@@ -1,3 +1,52 @@
+2006-01-10 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Add support
+	for connection-type registration for parsing, to remove all the
+	connection-specific code from ipmi.c.  This is very important
+	because it allows OEM connection handlers to register themselves
+	fully and interact with standard mechanisms for connection
+	setup/teardown.  Also add a help interface.
+
+	* lib/ipmi.c: Added handling for multiple calls to ipmi_init() and
+	ipmi_shutdown().
+
+	* lib/ipmi_lan.c: Add support for the new parsing interface,
+	basically moving stuff from ipmi.c.
+	* lib/ipmi_smi.c: ditto
+
+	* lib/ipm_lan.c: Remove _ipmi_lan_handle_connected, as it is not
+	needed any more as MXP is gone.
+
+	* swig/python/openipmigui/_conn.py: Add support for connection
+	handling in domains.
+	* swig/python/openipmigui/_domain.py: ditto
+	* swig/python/openipmigui/gui.py: ditto
+	
+	* swig/python/openipmigui/Makefile.am: Add the _conn.py file.
+
+	* sample/ipmicmd.c, sample/Makefile.am: Remove the popt parsing
+	code, it could not properly handle the new-style arguments (that
+	had "-<c>" after popt finished parsing the options.  It's a lot
+	shorter without popt, anyway.
+
+	* include/OpenIPMI/ipmiif.h.in: Added parse args and option help
+	interfaces.
+
+	* swig/OpenIPMI.i: Added parse args and option help interfaces.
+
+	* cmdlang/cmdlang.c, include/OpenIPMI/ipmi_cmdlang.h: Add a
+	"help_finish" function to commands to allow dynamic help
+	content.
+
+	* cmdlang/ipmish.c: Adjust for previous changes.
+
+	* cmdlang/cmd_domain.c: Make the "domain open" help dynamic based
+	upon the new help interfaces.
+
+	* include/OpenIPMI/ipmi_conn.h: Add an interface to the connection
+	for returning the current arguments that could be fed to a new
+	connection.
+	
 2006-01-09 Corey Minyard <cminyard@mvista.com>
 
 	* man/openipmigui.1, man/Makefile.am: Started a man page for the

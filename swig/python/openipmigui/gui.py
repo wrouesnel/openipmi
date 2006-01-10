@@ -240,13 +240,16 @@ class IPMIGUI(wx.Frame):
         d.name_str = str(d)
         d.treeroot = self.tree.AppendItem(self.treeroot, d.name_str)
         self.tree.SetPyData(d.treeroot, d)
-        self.setup_item(d.treeroot)
+        self.setup_item(d.treeroot, active=True)
         d.entityroot = self.tree.AppendItem(d.treeroot, "Entities")
         self.tree.SetPyData(d.entityroot, IPMITreeDummyItem())
         self.setup_item(d.entityroot, active=True)
         d.mcroot = self.tree.AppendItem(d.treeroot, "MCs")
         self.tree.SetPyData(d.mcroot, IPMITreeDummyItem())
         self.setup_item(d.mcroot, active=True)
+        d.conns = self.tree.AppendItem(d.treeroot, "Connections")
+        self.tree.SetPyData(d.conns, IPMITreeDummyItem())
+        self.setup_item(d.conns, active=True)
         self.tree.Expand(self.treeroot)
 
     def prepend_item(self, o, name, value, data=None, parent=None):
@@ -445,6 +448,22 @@ class IPMIGUI(wx.Frame):
             pass
         return
 
+    def add_connection(self, d, c):
+        parent = d.conns
+        c.name_str = str(c)
+        c.treeroot = self.tree.AppendItem(parent, c.name_str)
+        self.tree.SetPyData(c.treeroot, c)
+        self.setup_item(c.treeroot, active=True)
+        return
+        
+    def add_port(self, c, p):
+        parent = c.treeroot
+        p.name_str = str(p)
+        p.treeroot = self.tree.AppendItem(parent, p.name_str)
+        self.tree.SetPyData(p.treeroot, p)
+        self.setup_item(p.treeroot, active=True)
+        return
+        
     def add_entity(self, d, e, parent=None):
         if (parent == None):
             parent = d.entityroot

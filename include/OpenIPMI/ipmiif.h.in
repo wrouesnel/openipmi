@@ -1918,6 +1918,8 @@ void ipmi_shutdown(void);
 /* Parse a possible option, returns EINVAL if the option is not valid. */
 int ipmi_parse_options(ipmi_open_option_t *option,
 		       char               *arg);
+/* Help text for the options available from the above command */
+const char *ipmi_parse_options_help(void);
 
 /* Parse the arguments and extract a connection.  curr_arg should be
    passed in as the current argument, it will be set to the argument
@@ -1956,10 +1958,15 @@ int ipmi_parse_args(int         *curr_arg,
 int ipmi_parse_args2(int         *curr_arg,
 		     int         arg_count,
 		     char        * const *args,
-		     ipmi_args_t **iargs);	 
+		     ipmi_args_t **iargs);
 
 /* Free an argument structure. */
 void ipmi_free_args(ipmi_args_t *args);
+
+/* Iterate the help for all registered connection types (smi, lan, etc.) */
+typedef void (*ipmi_iter_help_cb)(const char *name, const char *help,
+				  void *cb_data);
+void ipmi_parse_args_iter_help(ipmi_iter_help_cb help_cb, void *cb_data);
 
 /* Set up a connection from an argument structure. */
 int ipmi_args_setup_con(ipmi_args_t  *args,

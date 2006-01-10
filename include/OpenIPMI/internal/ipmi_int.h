@@ -40,6 +40,7 @@
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_log.h>
+#include <OpenIPMI/ipmiif.h> /* for ipmi_args_t, sigh */
 
 #include <OpenIPMI/internal/ipmi_malloc.h>
 #include <OpenIPMI/internal/ipmi_locks.h>
@@ -143,6 +144,32 @@ void ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)
      __attribute__ ((__format__ (__printf__, 2, 3)))
 #endif
 ;
+
+/* Information for connection handlers. */
+typedef struct ipmi_con_setup_s ipmi_con_setup_t;
+typedef int (*ipmi_con_parse_args_cb)(int         *curr_arg,
+				      int         arg_count,
+				      char        * const *args,
+				      ipmi_args_t **iargs);
+typedef const char *(*ipmi_con_get_help_cb)(void);
+ipmi_con_setup_t *_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
+					ipmi_con_get_help_cb   help);
+void _ipmi_free_con_setup(ipmi_con_setup_t *v);
+
+int _ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup);
+int _ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup);
+
+typedef void (*ipmi_args_free_cb)(ipmi_args_t *args);
+typedef int (*ipmi_args_connect_cb)(ipmi_args_t  *args,
+				    os_handler_t *handler,
+				    void         *user_data,
+				    ipmi_con_t   **new_con);
+int _ipmi_args_alloc(ipmi_args_free_cb    free,
+		     ipmi_args_connect_cb connect,
+		     unsigned int         extra_data_len,
+		     ipmi_args_t          **args);
+void *_ipmi_args_get_extra_data(ipmi_args_t *args);
+
 
 /* Internal function to get the name of a domain. */
 const char *_ipmi_domain_name(const ipmi_domain_t *domain);

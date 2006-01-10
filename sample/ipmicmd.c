@@ -45,7 +45,6 @@
 #include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
-#include <popt.h> /* Option parsing made easy */
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_lan.h>
@@ -61,40 +60,10 @@
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 
-static char* sOp		= NULL;
 static int   interactive        = 1;
 static int   interactive_done   = 0;
 
-struct poptOption poptOpts[]=
-{
-    {
-	"command",
-	'k',
-	POPT_ARG_STRING,
-	&sOp,
-	'k',
-	"Command string to be send",
-	""
-    },
-    {
-	"version",
-	'v',
-	POPT_ARG_NONE,
-	NULL,
-	'v',
-	"Display version info about the program",
-	NULL
-    },
-    POPT_AUTOHELP
-    {
-	NULL,
-	0,
-	0,
-	NULL,
-	0		 
-    }	
-};
-
+char *progname;
 selector_t *sel;
 os_handler_t *os_hnd;
 static ipmi_con_t *con;
@@ -136,13 +105,25 @@ leave(int ret)
     exit(ret);
 }
 
-void printInfo( )
+void printInfo(void)
 {
     printf("ipmicmd\n");
     printf("This little utility is an ipmi command tool ;-)\n");
     printf("It can be used to send commands to an IPMI interface\n");
-    printf("It uses popt for command line parsing, type -? for usage info.\n");
+    printf("type -? for usage info.\n");
     printf("Enjoy!\n");
+}
+
+void con_usage(const char *name, const char *help, void *cb_data)
+{
+    printf("\n%s%s", name, help);
+}
+
+void usage(void)
+{
+    printf("%s [-k <command>] [-v] <con_parms>\n", progname);
+    printf("Where <con_parms> is one of:");
+    ipmi_parse_args_iter_help(con_usage, NULL);
 }
 
 char *
@@ -639,7 +620,7 @@ user_input_ready(int fd, void *data)
     }
 }
 
-char buf[256];
+char *cmdstr;
 
 static void
 con_changed_handler(ipmi_con_t   *ipmi,
@@ -655,7 +636,7 @@ con_changed_handler(ipmi_con_t   *ipmi,
 	}
 	if (!interactive_done) {
 	    interactive_done = 1;
-	    process_input_line(buf);
+	    process_input_line(cmdstr);
 	}
     } else {
 	if (err)
@@ -673,51 +654,14 @@ main(int argc, char *argv[])
 {
     int         rv;
     int         pos;
-    int         o;
-    char        *bufline = NULL;
     int         curr_arg;
     ipmi_args_t *args;
-    const char  **oargv = (const char **) argv;
+    int         i;
 
+    progname = argv[0];
 
-    poptContext poptCtx = poptGetContext("ipmicmd", argc, oargv, poptOpts, 0);
-
-    while (( o = poptGetNextOpt(poptCtx)) >= 0)
-    {   
-	switch( o )
-	{
-	    case 'k':
-		strcpy( buf, poptGetOptArg(poptCtx) );
-		bufline = buf;
-		interactive = 0;
-		break;
-
-	    case 'v':
-		printInfo();
-		exit(0);
-		break;
-
-	    default:
-		poptPrintUsage(poptCtx, stderr, 0);
-		exit(1);
-		break;
-	}
-    }
-
-    argv = (char **) poptGetArgs(poptCtx);
-
-    if (!argv) {
-	fprintf(stderr, "Not enough arguments\n");
-	exit(1);
-    }
-
-    for (argc=0; argv[argc]!= NULL; argc++)
-	;
-
-    if (argc < 1) {
-	fprintf(stderr, "Not enough arguments\n");
-	exit(1);
-    }
+    /* Have to initalize this first so the usage help will work, since
+       it needs OpenIPMI initialized. */
 
     /* OS handler allocated first. */
     os_hnd = ipmi_posix_get_os_handler();
@@ -739,9 +683,45 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    curr_arg = 0;
+    for (i=1; i<argc; i++) {
+	if (argv[i][0] != '-')
+	    break;
+	if (strcmp(argv[i], "--") == 0) {
+	    i++;
+	    break;
+	} else if ((strcmp(argv[i], "-k") == 0)
+		   || (strcmp(argv[i], "--command") == 0))
+	{
+	    i++;
+	    if (i >= argc) {
+		usage();
+		exit(1);
+	    }
+	    cmdstr = argv[i];
+	    interactive = 0;
+	} else if ((strcmp(argv[i], "-v") == 0)
+		   || (strcmp(argv[i], "--version") == 0))
+	{
+	    printInfo();
+	    exit(0);
+	} else {
+	    usage();
+	    exit(1);
+	}
+    }
 
-    rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
+    if (i >= argc) {
+	fprintf(stderr, "Not enough arguments\n");
+	exit(1);
+    }
+
+    curr_arg = i;
+
+    if (strcmp(argv[0], "ipmicmd") == 0)
+	/* Backwards compatible interface */
+	rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
+    else
+	rv = ipmi_parse_args2(&curr_arg, argc, argv, &args);
     if (rv) {
 	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
 		curr_arg, strerror(rv));

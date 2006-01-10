@@ -848,7 +848,7 @@ setup_cmds(void)
 			      "on|off - If an asynchronous event comes in,"
 			      " redisplay the current working command.  This"
 			      " is on by default.",
-			      redisp_cmd, NULL, NULL);
+			      redisp_cmd, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "Error adding exit command: 0x%x\n", rv);
 	exit(1);
@@ -857,7 +857,7 @@ setup_cmds(void)
     rv = ipmi_cmdlang_reg_cmd(NULL,
 			      "exit",
 			      "- leave the program",
-			      exit_cmd, NULL, NULL);
+			      exit_cmd, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "Error adding exit command: 0x%x\n", rv);
 	exit(1);
@@ -867,7 +867,7 @@ setup_cmds(void)
 			      "read",
 			      "<file> - Read commands from the file and"
 			      " execute them",
-			      read_cmd, NULL, NULL);
+			      read_cmd, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "Error adding read command: 0x%x\n", rv);
 	exit(1);

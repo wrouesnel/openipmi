@@ -1,7 +1,7 @@
 
 AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-bin_PROGRAMS = ipmicmd solterm
+bin_PROGRAMS = openipmicmd solterm
 
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3
 
@@ -23,12 +23,12 @@ ipmisample3_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)
 
-ipmicmd_SOURCES = ipmicmd.c
-ipmicmd_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
+openipmicmd_SOURCES = ipmicmd.c
+openipmicmd_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)
-ipmicmd_LDFLAGS = -rdynamic
+openipmicmd_LDFLAGS = -rdynamic
 
 solterm_SOURCES = solterm.c
 solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
@@ -37,3 +37,8 @@ solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
                 $(OPENSSLLIBS)
 
 EXTRA_DIST = example_oem.c
+
+# We need to make a link from ipmicmd to openipmicmd for backwards
+# compatability.
+install-data-local:
+	$(LN_S) openipmicmd $(DESTDIR)$(bindir)/ipmicmd

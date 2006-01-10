@@ -88,8 +88,9 @@ struct ipmi_cmd_info_s
 
 struct ipmi_cmdlang_cmd_s
 {
-    char               *name;
-    char               *help;
+    char                  *name;
+    char                  *help;
+    ipmi_help_finisher_cb help_finish;
 
     /* Only one of handler or subcmds may be non-NULL. */
     ipmi_cmdlang_handler_cb handler;
@@ -1236,9 +1237,11 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	next_help:
 	    if (argc == curr_arg) {
 		rv = 0;
-		if (parent)
+		if (parent) {
 		    cmdlang->out(cmdlang, parent->name, parent->help);
-		else
+		    if (parent->help_finish)
+			parent->help_finish(cmdlang);
+		}else
 		    cmdlang->out(cmdlang, "help", NULL);
 		if (cmdlang->err)
 		    goto done_help;
@@ -1249,6 +1252,8 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 			cmdlang->up(cmdlang);
 			goto done_help;
 		    }
+		    if (cmd->help_finish)
+			cmd->help_finish(cmdlang);
 		    cmd = cmd->next;
 		}
 		cmdlang->up(cmdlang);
@@ -1330,6 +1335,7 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
 		     char                    *help,
 		     ipmi_cmdlang_handler_cb handler,
 		     void                    *cb_data,
+		     ipmi_help_finisher_cb   help_finish,
 		     ipmi_cmdlang_cmd_t      **new_val)
 {
     ipmi_cmdlang_cmd_t *rv;
@@ -1355,6 +1361,7 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
     rv->handler = handler;
     rv->subcmds = NULL;
     rv->handler_data = cb_data;
+    rv->help_finish = help_finish;
     rv->next = NULL;
 
     if (parent) {
@@ -1396,6 +1403,7 @@ ipmi_cmdlang_reg_table(ipmi_cmdlang_init_t *table, int len)
 				  table[i].help,
 				  table[i].handler,
 				  table[i].cb_data,
+				  table[i].help_finish,
 				  table[i].new_val);
 	if (rv)
 	    return rv;

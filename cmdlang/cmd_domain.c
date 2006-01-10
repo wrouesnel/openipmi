@@ -404,6 +404,19 @@ domain_open(ipmi_cmd_info_t *cmd_info)
     return;
 }
 
+void con_usage(const char *name, const char *help, void *cb_data)
+{
+    ipmi_cmdlang_t *cmdlang = cb_data;
+
+    cmdlang->out(cmdlang, name, help);
+}
+
+static void
+domain_open_help(ipmi_cmdlang_t *cmdlang)
+{
+    ipmi_parse_args_iter_help(con_usage, cmdlang);
+    cmdlang->out(cmdlang, "Options are:\n", ipmi_parse_options_help());
+}
 
 static void
 domain_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru,
@@ -1228,73 +1241,13 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "<domain> - Dump information about a domain",
       ipmi_cmdlang_domain_handler, domain_info, NULL },
     { "new", &domain_cmds,
-      "<domain name> [<options>] <domain parms> - Set up a new domain."
-      "  Options enable and disable various automatic processing and are:\n"
-      "-[no]all - all automatic handling\n"
-      "-[no]sdrs - sdr fetching\n"
-      "-[no]frus - FRU fetching\n"
-      "-[no]sel - SEL fetching\n"
-      "-[no]ipmbscan - IPMB bus scanning\n"
-      "-[no]oeminit - special OEM processing (like ATCA)\n"
-      "-[no]seteventrcvr - setting event receivers\n"
-      "-[no]activate - connection activation\n"
-      "-[no]setseltime - setting time of the SEL\n"
-      "-wait_til_up - wait until the domain is up before returning",
+      "Obsolete, use domain open",
       domain_new, NULL, NULL },
     { "open", &domain_cmds,
       "<domain name> [<options>] <domain parms> - Set up a new domain using."
-      " a different style argument parser.  Format for SMI connections is:\n"
-      " smi <num>\n"
-      "where the number is the IPMI device number to connect to.  LAN parms"
-      " are:"
-      " lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
-      "     [-L <privilege>] [-s] [-Ra <auth alg>] [-Ri <integ alg>]\n"
-      "     [-Rc <conf algo>] [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
-      "     <host1> [<host2>]\n"
-      " If -s is supplied, then two host names are taken (the second port"
-      " may be specified with -p2).  Otherwise, only one hostname is"
-      " taken.  The defaults are an empty username and password (anonymous),"
-      " port 623, admin privilege, and authtype defaulting to the most"
-      " secure one available.\n"
-      " privilege is one of: callback, user, operator, admin, or oem.  These"
-      " select the specific commands that are available to the connection."
-      " Higher privileges (ones further to the right in the above list) have"
-      " more commands available to them.\n"
-      " authtype is one of the following: rmcp+, md5, md2, straight, or none."
-      " Setting this to anything but rmcp+ forces normal rmcp"
-      " authentication.  By default the most secure method available is"
-      " chosen, in the order given above.\n"
-      " For RMCP+ connections, the authentication algorithms supported (-Ra)"
-      " are: bmcpick, rakp_none, rakp_hmac_sha1, and rakp_hmac_md5.  The"
-      " integrity algorithms (-Ri) supported are: bmcpick, none, hmac_sha1,"
-      " hmac_md5, and md5.  The confidentiality algorithms (-Rc) are: bmcpick,"
-      " aes_cbc_128, xrc4_128, and xrc_40.    The defaults are"
-      " rackp_hmac_sha1, hmac_sha1, and aes_cb_128.  -Rl turns on lookup up"
-      " names by"
-      " the name and the privilege level (allowing the same name with"
-      " different privileges and different passwords), the default is straight"
-      " name lookup.  -Rk sets the BMC key, needed if the system does two-key"
-      " lookups.\n"
-      " The -H option enables certain hacks for broken platforms.  This may"
-      " be listed multiple times to enable multiple hacks.  The currently"
-      " available hacks are:\n"
-      "   intelplus - For Intel platforms that have broken RMCP+.\n"
-      "   rakp3_wrong_rolem - For systems that truncate role(m) in the RAKP3"
-      " msg.\n"
-      "   rmcpp_integ_sik - For systems that use SIK instead of K(1) for"
-      " integrity.\n"
-      " Options enable and disable various automatic processing and are:\n"
-      "-[no]all - all automatic handling\n"
-      "-[no]sdrs - sdr fetching\n"
-      "-[no]frus - FRU fetching\n"
-      "-[no]sel - SEL fetching\n"
-      "-[no]ipmbscan - IPMB bus scanning\n"
-      "-[no]oeminit - special OEM processing (like ATCA)\n"
-      "-[no]seteventrcvr - setting event receivers\n"
-      "-[no]activate - connection activation\n"
-      "-[no]localonly - Just talk to the local BMC, (ATCA-only, for blades)\n"
-      "-wait_til_up - wait until the domain is up before returning",
-      domain_open, NULL, NULL },
+      " a different style argument parser.  Format for the connections depends"
+      " on the connections type.  Connections types are:",
+      domain_open, NULL, NULL, domain_open_help },
     { "close", &domain_cmds,
       "<domain> - Close the domain",
       ipmi_cmdlang_domain_handler, domain_close, NULL },

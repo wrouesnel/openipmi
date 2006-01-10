@@ -36,6 +36,7 @@ import _entity
 import _mc
 import _saveprefs
 import _sel
+import _conn
 import _oi_logging
 
 id_st = 300
@@ -532,6 +533,7 @@ class Domain:
         self.ui = mainhandler.ui
         self.entities = { }
         self.mcs = { }
+        self.connections = { }
 
         if (len(connects) > 0):
             con1 = connects[0]
@@ -558,6 +560,7 @@ class Domain:
         self.add_refr_item("SEL Rescan Time", DomainSelSet(self))
         self.add_refr_item("GUID", DomainRefreshData(self, "get_guid"))
         self.add_refr_item("Type", DomainRefreshData(self, "get_type"))
+        
         return
 
     def __str__(self):
@@ -582,7 +585,7 @@ class Domain:
         elem.appendChild(c1)
         if self.connection[1].Valid():
             c2 = doc.createElement("connection")
-            attrs = self.connections[1].getAttr()
+            attrs = self.connection[1].getAttr()
             for attr in attrs:
                 c2.setAttribute(attr[0], attr[1])
                 pass
@@ -647,6 +650,9 @@ class Domain:
             pass
         #print str(attr)
         self.already_up = False
+        self.first_conn = False
+        self.any_con_up = False
+        self.ui.incr_item_critical(self.treeroot)
         self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
         if (self.domain_id == None):
             raise InvalidDomainError("Open domain failed, invalid parms")
@@ -658,21 +664,36 @@ class Domain:
         return
 
     def conn_change_cb(self, domain, err, connum, portnum, connected):
-        if (self.already_up):
-            if (connected):
-                self.ui.set_item_active(self.treeroot)
-            else:
-                self.ui.set_item_inactive(self.treeroot)
-                pass
-            pass
-        else:
+        if (not self.first_conn):
+            self.first_conn = True
             if (hasattr(self, "ipmb_rescan_time")):
                 domain.set_ipmb_rescan_time(self.ipmb_rescan_time)
                 pass
             if (hasattr(self, "sel_rescan_time")):
                 domain.set_sel_rescan_time(self.sel_rescan_time)
                 pass
+            domain.iterate_connections(self)
             pass
+        self.connections[connum].SetPortUp(portnum, connected)
+        any_con_up = False
+        for c in self.connections.itervalues():
+            any_con_up = c.IsUp() or any_con_up
+            pass
+        if (any_con_up):
+            if (not self.any_con_up):
+                self.ui.decr_item_critical(self.treeroot)
+                pass
+            pass
+        else:
+            if (self.any_con_up):
+                self.ui.incr_item_critical(self.treeroot)
+                pass
+            pass
+        self.any_con_up = any_con_up
+        return
+
+    def domain_iter_connection_cb(self, domain, conn):
+        _conn.Connection(domain, self, conn)
         return
     
     def connected(self, domain):
