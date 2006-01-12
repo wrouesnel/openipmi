@@ -1244,9 +1244,11 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "Obsolete, use domain open",
       domain_new, NULL, NULL },
     { "open", &domain_cmds,
-      "<domain name> [<options>] <domain parms> - Set up a new domain using."
-      " a different style argument parser.  Format for the connections depends"
-      " on the connections type.  Connections types are:",
+      "<domain name> [<options>] <domain parms> [<domain parms>]- Set up a"
+      " new domain using an argument parser.  Format for the connection's"
+      " <domain parms> depends on the connections type.  Two connections"
+      " (to two different MCs) can be done by specifying two sets of parms."
+      " Connections types are:",
       domain_open, NULL, NULL, domain_open_help },
     { "close", &domain_cmds,
       "<domain> - Close the domain",

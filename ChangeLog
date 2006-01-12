@@ -1,3 +1,35 @@
+2006-01-12 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi.c, include/OpenIPMI/internal/ipmi_int.h: Massive
+	restructure of the way connections done.  All the connection-type
+	specific code was moved out of ipmi.c and into the individual
+	connection code.  A way to register connections was added, and
+	ways to query argument fields from connection types was added.
+	Basically, it completely abstract connection type information so
+	new connections can be seamlessly added to OpenIPMI without
+	changing the core code, GUI, or anything else like that.
+	
+	* include/OpenIPMI/ipmi_conn.h, lib/domain.c, lib/ipmiif.h.in:
+	Added a way to get the arguments for a connections.
+
+	* lib/ipmi_lan.c, lib/ipmi_smi.c: Adjusted for the previous
+	changes.
+
+	* include/OpenIPMI/ipmiif.h.in, swig/OpenIPMI.i: Added interfaces
+	for the connection abstraction.
+
+	* swig/perl/OpenIPMI_lang.i, swig/python/OpenIPMI_lang.i: Added
+	types necessary for the new connection abstractions.
+
+	* swig/perl/test_lanparm, swig/perl/test_pet: Modified due to
+	a previous renumbering of the LAN parameters.
+
+	* swig/python/openipmigui.py, swig/python/openipmigui/*.py:
+	Massive restructure to use all the previous changes to support
+	dynamically determining connection type content for saving
+	parameters and for querying the user for new connections.  Also
+	switched over to using domain watching to detect new domains.
+
 2006-01-10 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Add support

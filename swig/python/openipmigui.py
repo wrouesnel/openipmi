@@ -136,6 +136,8 @@ def run():
     _saveprefs.restore(preffile)
     mainhandler = DomainHandler(preffile)
 
+    OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
+
     app = IPMIGUI_App(mainhandler)
 
     if ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):

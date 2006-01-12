@@ -191,6 +191,9 @@ int ipmi_control_id_is_invalid(const ipmi_control_id_t *id);
  *
  ***********************************************************************/
 
+/* This type holds the arguments for an IPMI connection. */
+typedef struct ipmi_args_s ipmi_args_t;
+
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
@@ -262,6 +265,9 @@ int ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 			    unsigned int   end_addr,
 			    ipmi_domain_cb done_handler,
 			    void           *cb_data);
+
+/* Rescan every channel in the domain. */
+void ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain);
 
 /* Register a handler to be called when an MC is added to the domain
    or removed from the domain. */
@@ -459,6 +465,10 @@ int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
 				      unsigned int  connection,
 				      unsigned int  port,
 				      unsigned int  *up);
+
+/* Get the args for a domain's connection. */
+ipmi_args_t *ipmi_domain_get_connection_args(ipmi_domain_t *domain,
+					     unsigned int  connection);
 
 
 /* Domain statistics are used to track information about things
@@ -1900,12 +1910,63 @@ int ipmi_domain_add_domain_change_handler(ipmi_domain_change_cb handler,
 int ipmi_domain_remove_domain_change_handler(ipmi_domain_change_cb handler,
 					     void                  *cb_data);
 
-/* The following is a convenience function for parsing IPMI arguments
-   in some standard manner. */
+/* The following are functions for parsing IPMI arguments for
+   connections in some standard manner.  These can be used to discover
+   and set the valid arguments for any connection type. */
 
-/* This type holds the arguments for a standard IPMI connection. */
-typedef struct ipmi_args_s ipmi_args_t;
+/* Allocate an args object for the given connection type. */
+int ipmi_args_alloc(char *con_type, ipmi_args_t **args);
 
+/* Returns the type (smi, lan, etc) of the connextion. */
+const char *ipmi_args_get_type(ipmi_args_t *args);
+
+/* The following lets you discover the valid fields in an args array.
+   The fields in an ipmi_arg_t are indexed sequentially from zero by
+   argnum.  When the argnum is invalid (past the end) this will return
+   E2BIG.  The name, type, and current value of the field is returned.
+   The name field will not contain spaces, but will contain "_" where
+   a space would be.  All data passed back and forth is in strings.
+   The type fields are currently: bool, enum, and str.  The returned
+   value is allocated, you must free it with ipmi_args_free_str (if
+   not NULL).  A NULL value is allowed for all values (though it may
+   not be supported if the value is required): it basically means "not
+   set".  Values for bool are "true" and "false".  The range is only
+   currently used for enums, it returns an array of string values
+   terminated by NULL.  The value will be one of these in the range.
+   The help field returns extra helpful information about the field.
+   If the first character of the help field is "*", then the value is
+   required, otherwise it is optional.  If the next character is '!',
+   then it is a password. */
+int ipmi_args_get_val(ipmi_args_t  *args,
+		      unsigned int argnum,
+		      const char   **name,
+		      const char   **type,
+		      const char   **help,
+		      char         **value,
+		      const char   ***range);
+/* Set the value of the field in the argument.  If "name" is non-NULL,
+   it is used to find the field with that name.  If "name" is NULL,
+   then argnum is used for the field.  A NULL value means the value is
+   not set; an argument may or may not support this.  Otherwise the
+   value must be "true" or "false" for bools and one of the valid enum
+   values for an enum.  There may be other interpretation behind a
+   string value (such as an integer), so setting the value may fail if
+   the semantics are incorrect. */
+int ipmi_args_set_val(ipmi_args_t  *args,
+		      unsigned int argnum,
+		      const char   *name,
+		      const char   *value);
+
+/* Used to free the string returned as a value from ipmi_args_get_val(). */
+void ipmi_args_free_str(ipmi_args_t *args, char *str);
+
+/* Create a new copy of the arguments */
+ipmi_args_t *ipmi_args_copy(ipmi_args_t *args);
+
+/* Returns true if the argument has all the info to form a connection,
+   false if not.  The argnum of the first argument with a problem is
+   returned in argnum if false is returned. */
+int ipmi_args_validate(ipmi_args_t *args, int *argnum);
 
 /* This must be called before calling any other IPMI functions.  It
    sets a mutex and mutex operations for the smi.  You must provide
@@ -1963,7 +2024,9 @@ int ipmi_parse_args2(int         *curr_arg,
 /* Free an argument structure. */
 void ipmi_free_args(ipmi_args_t *args);
 
-/* Iterate the help for all registered connection types (smi, lan, etc.) */
+/* Iterate the help for all registered connection types (smi, lan,
+   etc.).  This can also be used to find out all the supported
+   connection types, as each name is retuned in the name field. */
 typedef void (*ipmi_iter_help_cb)(const char *name, const char *help,
 				  void *cb_data);
 void ipmi_parse_args_iter_help(ipmi_iter_help_cb help_cb, void *cb_data);

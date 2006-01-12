@@ -313,10 +313,8 @@ struct ipmi_con_s
     void (*add_stat)(void *user_data, void *stat, int value);
     void (*finished_with_stat)(void *user_data, void *stat);
 
-    /* Return an array of pointers to characters that will recreate
-       the connection if fed to ipmi_parse_args2(). */
-    char **(*get_startup_args)(ipmi_con_t *con, unsigned int *argc);
-    void (*free_startup_args)(ipmi_con_t *con, char *args, unsigned int argc);
+    /* Return the arguments or the connection. */
+    ipmi_args_t *(*get_startup_args)(ipmi_con_t *con);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

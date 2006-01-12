@@ -31,6 +31,7 @@
 #
 import wx
 import wx.lib.scrolledpanel as scrolled
+import OpenIPMI
 import _domain
 
 authtypes = [ 'default', 'none', 'md2', 'md5', 'straight', 'rmcp+' ]
@@ -39,155 +40,197 @@ auth_algs = [ 'default', 'rakp_none', 'rakp_hmac_sha1', 'rakp_hmac_md5' ]
 integ_algs = [ 'default', 'none', 'hmac_sha1', 'hmac_md5', 'md5' ]
 conf_algs = [ 'default', 'none', 'aes_cbc_128', 'xrc4_128', 'xrc4_40' ]
 
+class ConnTypeInfo(scrolled.ScrolledPanel):
+    def __init__(self, contype, parent):
+        scrolled.ScrolledPanel.__init__(self, parent, -1,
+                                        size=wx.Size(400, 200))
+        self.contype = contype
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.fields = [ ]
+
+        args = OpenIPMI.alloc_empty_args(str(contype))
+        self.args = args
+
+        self.errstr = wx.StatusBar(self, -1)
+        self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+
+        i = 0
+        rv = 0
+        box = None
+        while (rv == 0):
+            name = [ "" ]
+            vtype = [ "" ]
+            vrange = [ "" ]
+            vhelp = [ "" ]
+            value = [ "" ]
+            rv = args.get_val(i, name, vtype, vhelp, value, vrange)
+            if (rv == 0):
+                if (vhelp[0][0] == '*'):
+                    optional = False
+                    vhelp[0] = vhelp[0][1:]
+                else:
+                    optional = True
+                    pass
+                if (vhelp[0][0] == '!'):
+                    password = True
+                    vhelp[0] = vhelp[0][1:]
+                else:
+                    password = False
+                    pass
+                
+                do_box = True
+                if (vtype[0] == "bool"):
+                    fw = wx.CheckBox(self, -1, name[0])
+                    if ((value[0] != None) and (value[0] == "true")):
+                        fw.SetValue(1)
+                        pass
+                    sw = fw
+                    pass
+                elif (vtype[0] == "enum"):
+                    do_box = False
+                    fw = wx.RadioBox(self, -1, name[0],
+                                     wx.DefaultPosition, wx.DefaultSize,
+                                     vrange, 3, wx.RA_SPECIFY_COLS)
+                    if (value[0] != None):
+                        fw.SetStringSelection(value[0])
+                        pass
+                    sw = fw
+                    pass
+                elif (vtype[0] == "str"):
+                    bbox = wx.BoxSizer(wx.HORIZONTAL)
+                    label = wx.StaticText(self, -1, name[0] + ":")
+                    bbox.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                    if (value[0] == None):
+                        value[0] = ""
+                        pass
+                    style = 0
+                    if (password):
+                        style = wx.TE_PASSWORD
+                    fw = wx.TextCtrl(self, -1, value[0], style=style);
+                    bbox.Add(fw, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                    sw = bbox
+                    pass
+                else:
+                    continue
+
+                if (do_box):
+                    if (box == None):
+                        box = wx.BoxSizer(wx.HORIZONTAL)
+                        self.sizer.Add(box, 0, wx.LEFT | wx.ALL, 2)
+                        done = False
+                        pass
+                    else:
+                        done = True;
+                        pass
+                    box.Add(sw, 0, wx.LEFT | wx.ALL, 2)
+                    if (done):
+                        box = None
+                    pass
+                else:
+                    self.sizer.Add(sw, 0, wx.LEFT | wx.ALL, 2)
+                    box = None;
+                    pass
+                self.fields.append( (i, name[0], vtype[0], fw) )
+                pass
+            i += 1
+            pass
+        self.SetupScrolling()
+        self.SetSizer(self.sizer)
+        return
+
+    def SetupArgs(self):
+        args = self.args
+        for f in self.fields:
+            idx = f[0]
+            vtype = f[2]
+            fw = f[3]
+            if (vtype == "bool"):
+                if (fw.IsChecked()):
+                    val = "true"
+                else:
+                    val = "false"
+                    pass
+                pass
+            elif (vtype == "enum"):
+                val = str(fw.GetStringSelection())
+                pass
+            elif (vtype == "str"):
+                val = str(fw.GetValue())
+                if (val == ""):
+                    val = None
+                    pass
+                pass
+            else:
+                continue
+            rv = args.set_val(idx, None, val);
+            if (rv != 0):
+                self.errstr.SetStatusText("Error setting field " + f[1] + ": "
+                                          + OpenIPMI.get_error_string(rv), 0)
+                raise Exception()
+            pass
+        return args
+    pass
+
 class ConnInfo(wx.Panel):
     def __init__(self, parent, mainhandler, enable=True):
-        if enable:
-            sminumval = "0"
-        else:
-            sminumval = ""
+        self.contypes = { }
+        OpenIPMI.parse_args_iter_help(self)
+        if (len(self.contypes) == 0):
+            return
+        
         wx.Panel.__init__(self, parent, -1, size=wx.Size(400, 300))
         self.parent = parent
         self.sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = self.sizer
+        self.enable = enable;
+        if (not enable):
+            self.enable_box = wx.CheckBox(self, -1, "Enable")
+            sizer.Add(self.enable_box, 0, wx.ALIGN_CENTRE | wx.ALL, 5);
+            pass
+
         self.contype = wx.RadioBox(self, -1, "Connection Type",
                                    wx.DefaultPosition, wx.DefaultSize,
-                                   [ 'smi', 'lan'], 2, wx.RA_SPECIFY_COLS)
+                                   self.contypes.keys(), 3, wx.RA_SPECIFY_COLS)
         wx.EVT_RADIOBOX(self, self.contype.GetId(), self.selectType)
         self.sizer.Add(self.contype, 0, wx.ALIGN_CENTRE, 2)
 
-        self.smiInfo = wx.Panel(self, -1)
-        self.smiInfo_sizer = wx.BoxSizer(wx.VERTICAL)
-        box, self.smiNum = self.newField("SMI Number", sminumval,
-                                         parent=self.smiInfo)
-        self.smiInfo_sizer.Add(box, 0, wx.LEFT | wx.ALL, 2)
-        self.sizer.Add(self.smiInfo, 0, wx.ALIGN_CENTRE, 2)
-        self.smiInfo.Show(True)
+        self.coninfos = [ ]
+        self.currcon = 0
+        show = True
+        for ct in self.contypes.keys():
+            cti = ConnTypeInfo(ct, self)
+            self.sizer.Add(cti, 0, wx.ALIGN_CENTRE, 2)
+            if (show):
+                cti.Show(True)
+                show = False
+            else:
+                cti.Show(False)
+                pass
+            self.coninfos.append(cti)
+            pass
 
-        self.lanInfo = scrolled.ScrolledPanel(self, -1, size=wx.Size(400, 200))
-        self.lanInfo_sizer = wx.BoxSizer(wx.VERTICAL)
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        box, self.address = self.newField("Address", parent=self.lanInfo)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        box, self.port = self.newField("Port", "623", parent=self.lanInfo)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        box, self.username = self.newField("Username", parent=self.lanInfo)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        box, self.password = self.newField("Password", parent=self.lanInfo,
-                                           style=wx.TE_PASSWORD)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-
-        self.authtype = wx.RadioBox(self.lanInfo, -1, "Authentication Type",
-                                   wx.DefaultPosition, wx.DefaultSize,
-                                   authtypes, 3, wx.RA_SPECIFY_COLS)
-        self.lanInfo_sizer.Add(self.authtype, 0, wx.ALIGN_CENTRE, 2)
-
-        self.privilege = wx.RadioBox(self.lanInfo, -1, "Privilege",
-                                     wx.DefaultPosition, wx.DefaultSize,
-                                     privileges, 3, wx.RA_SPECIFY_COLS)
-        self.lanInfo_sizer.Add(self.privilege, 0, wx.ALIGN_CENTRE, 2)
-
-        self.auth_alg = wx.RadioBox(self.lanInfo, -1,
-                                    "Authentication Algorithm",
-                                    wx.DefaultPosition, wx.DefaultSize,
-                                    auth_algs, 2, wx.RA_SPECIFY_COLS)
-        self.lanInfo_sizer.Add(self.auth_alg, 0, wx.ALIGN_CENTRE, 2)
-
-        self.integ_alg = wx.RadioBox(self.lanInfo, -1,
-                                     "Integrity Algorithm",
-                                     wx.DefaultPosition, wx.DefaultSize,
-                                     integ_algs, 3, wx.RA_SPECIFY_COLS)
-        self.lanInfo_sizer.Add(self.integ_alg, 0, wx.ALIGN_CENTRE, 2)
-
-        self.conf_alg = wx.RadioBox(self.lanInfo, -1,
-                                    "Confidentiality Algorithm",
-                                    wx.DefaultPosition, wx.DefaultSize,
-                                    conf_algs, 3, wx.RA_SPECIFY_COLS)
-        self.lanInfo_sizer.Add(self.conf_alg, 0, wx.ALIGN_CENTRE, 2)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        box, self.bmc_key = self.newField("BMC Key", parent=self.lanInfo,
-                                           style=wx.TE_PASSWORD)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lookup_uses_priv = wx.CheckBox(self.lanInfo, -1,
-                                            "Lookup Uses Privilege")
-        bbox.Add(self.lookup_uses_priv, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        self.h_intelplus = wx.CheckBox(self.lanInfo, -1,
-                                       "Intel Plus Bug")
-        self.h_intelplus.SetValue(True)
-        bbox.Add(self.h_intelplus, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.h_rakp_wrong_rolem = wx.CheckBox(self.lanInfo, -1,
-                                              "RAKP3 Wrong Role(m)")
-        bbox.Add(self.h_rakp_wrong_rolem, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-
-        self.h_rmcpp_integ_sik = wx.CheckBox(self.lanInfo, -1,
-                                             "Integrity Uses SIK instead of K(1) ")
-        self.lanInfo_sizer.Add(self.h_rmcpp_integ_sik, 0, wx.LEFT | wx.ALL, 2)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        box, self.address2 = self.newField("Address2", parent=self.lanInfo)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        box, self.port2 = self.newField("Port2", "623", parent=self.lanInfo)
-        bbox.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
-        
-        self.lanInfo.SetSizer(self.lanInfo_sizer)
-        self.sizer.Add(self.lanInfo, 0, wx.ALIGN_CENTRE, 2)
-        self.lanInfo.SetupScrolling()
-        self.lanInfo.Show(False)
         self.SetSizer(self.sizer)
+        return
 
-    def newField(self, name, initval="", parent=None, style=0):
-        if parent == None:
-            parent = self
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(parent, -1, name + ":")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        field = wx.TextCtrl(parent, -1, initval, style=style);
-        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        return box, field;
+    def parse_args_iter_help_cb(self, name, help):
+        self.contypes[name] = help
+        return
 
     def selectType(self, event):
-        if event.GetInt() == 0:
-            self.smiInfo.Show(True)
-            self.lanInfo.Show(False)
-        else:
-            self.smiInfo.Show(False)
-            self.lanInfo.Show(True)
+        oldcurr = self.currcon
+        self.currcon = event.GetInt()
+        self.coninfos[oldcurr].Show(False)
+        self.coninfos[self.currcon].Show(True)
         self.parent.Layout()
+        return
 
-    def FillinConn(self, con):
-        contype = self.contype.GetSelection()
-        if (contype == 0):
-            con.SetType("smi")
-            con.SetPort(str(self.smiNum.GetValue()))
-        elif (contype == 1):
-            con.SetType("lan")
-            con.SetAddress(str(self.address.GetValue()))
-            con.SetPort(str(self.port.GetValue()))
-            con.SetUsername(str(self.username.GetValue()))
-            con.SetPassword(str(self.password.GetValue()))
-            con.SetPrivilege(privileges[self.privilege.GetSelection()])
-            con.SetAuthtype(authtypes[self.authtype.GetSelection()])
-            con.SetAuth_alg(auth_algs[self.auth_alg.GetSelection()])
-            con.SetInteg_alg(integ_algs[self.integ_alg.GetSelection()])
-            con.SetConf_alg(conf_algs[self.conf_alg.GetSelection()])
-            con.SetBmc_key(str(self.bmc_key.GetValue()))
-            con.Lookup_uses_priv(self.lookup_uses_priv.GetValue())
-            con.SetAddress2(str(self.address2.GetValue()))
-            con.SetPort2(str(self.port2.GetValue()))
-            if (self.h_intelplus.GetValue()):
-                con.AddHack("intelplus")
-            if (self.h_rakp_wrong_rolem.GetValue()):
-                con.AddHack("rakp3_wrong_rolem")
-            if (self.h_rmcpp_integ_sik.GetValue()):
-                con.AddHack("rmcpp_intek_sik")
+    def FillinConn(self):
+        if (not self.enable):
+            if (not self.enable_box.IsChecked()):
+                return None
+            pass
+        cti = self.coninfos[self.contype.GetSelection()]
+        return cti.SetupArgs()
 
 class OpenDomainDialog(wx.Dialog):
     def __init__(self, mainhandler):
@@ -238,27 +281,25 @@ class OpenDomainDialog(wx.Dialog):
     def cancel(self, event):
         self.Close(True)
 
-
     def ok(self, event):
         name = str(self.name.GetValue())
         if (name == ""):
             self.status.SetStatusText("No name specified")
             return
-        d = _domain.Domain(self.mainhandler, name);
         try:
-            self.conn[0].FillinConn(d.connection[0])
-            self.conn[1].FillinConn(d.connection[1])
-            d.Connect()
-        except _domain.InvalidDomainError, e:
-            d.remove()
-            self.status.SetStatusText(str(e))
+            args = [ self.conn[0].FillinConn() ]
+            arg = self.conn[1].FillinConn()
+            if (arg != None):
+                args.append(arg);
+                pass
+            pass
+        except:
             return
-        except Exception, e:
-            d.remove()
-            self.status.SetStatusText("Unknown error: " + str(e))
-            raise e
+        domain_id = OpenIPMI.open_domain3(name, [], args, None, None)
+        if (domain_id == None):
+            self.status.SetStatusText("Error opening domain")
             return
-            
+
         self.Close(True)
 
     def OnClose(self, event):

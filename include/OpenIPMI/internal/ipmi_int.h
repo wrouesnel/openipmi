@@ -152,8 +152,10 @@ typedef int (*ipmi_con_parse_args_cb)(int         *curr_arg,
 				      char        * const *args,
 				      ipmi_args_t **iargs);
 typedef const char *(*ipmi_con_get_help_cb)(void);
+typedef ipmi_args_t *(*ipmi_con_alloc_args_cb)(void);
 ipmi_con_setup_t *_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
-					ipmi_con_get_help_cb   help);
+					ipmi_con_get_help_cb   help,
+					ipmi_con_alloc_args_cb alloc);
 void _ipmi_free_con_setup(ipmi_con_setup_t *v);
 
 int _ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup);
@@ -164,10 +166,30 @@ typedef int (*ipmi_args_connect_cb)(ipmi_args_t  *args,
 				    os_handler_t *handler,
 				    void         *user_data,
 				    ipmi_con_t   **new_con);
-int _ipmi_args_alloc(ipmi_args_free_cb    free,
-		     ipmi_args_connect_cb connect,
-		     unsigned int         extra_data_len,
-		     ipmi_args_t          **args);
+typedef int (*ipmi_args_get_val_cb)(ipmi_args_t  *args,
+				    unsigned int argnum,
+				    const char   **name,
+				    const char   **type,
+				    const char   **help,
+				    char         **value,
+				    const char   ***range);
+typedef int (*ipmi_args_set_val_cb)(ipmi_args_t  *args,
+				    unsigned int argnum,
+				    const char   *name,
+				    const char   *value);
+typedef ipmi_args_t *(*ipmi_args_copy_cb)(ipmi_args_t *args);
+typedef int (*ipmi_args_validate_cb)(ipmi_args_t *args, int *argnum);
+typedef void (*ipmi_args_free_val_cb)(ipmi_args_t *args, char *value);
+typedef const char *(*ipmi_args_get_type_cb)(ipmi_args_t *args);
+ipmi_args_t *_ipmi_args_alloc(ipmi_args_free_cb     free,
+			      ipmi_args_connect_cb  connect,
+			      ipmi_args_get_val_cb  get_val,
+			      ipmi_args_set_val_cb  set_val,
+			      ipmi_args_copy_cb     copy,
+			      ipmi_args_validate_cb validate,
+			      ipmi_args_free_val_cb free_val,
+			      ipmi_args_get_type_cb get_type,
+			      unsigned int          extra_data_len);
 void *_ipmi_args_get_extra_data(ipmi_args_t *args);
 
 

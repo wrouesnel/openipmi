@@ -265,267 +265,56 @@ class DomainIPMBSet(DomainRefreshData):
     pass
 
 
-class DomainConnection:
-    def __init__(self):
-        self.contype = ""
-        self.address = ""
-        self.port = ""
-        self.username = ""
-        self.password = ""
-        self.privilege = ""
-        self.authtype = ""
-        self.auth_alg = ""
-        self.integ_alg = ""
-        self.conf_alg = ""
-        self.bmc_key = ""
-        self.address2 = ""
-        self.port2 = ""
-        self.hacks = [ ]
-        self.lookup_uses_priv = False
-        return
-
-    def SetType(self, contype):
-        self.contype = contype
-        return
-
-    def SetAddress(self, addr):
-        self.address = addr
-        return
-
-    def SetPort(self, port):
-        self.port = port
-        return
-
-    def SetUsername(self, username):
-        self.username = username
-        return
-
-    def SetPassword(self, password):
-        self.password = password
-        return
-
-    def SetPrivilege(self, value):
-        if (value == 'default'):
-            value = ''
+class DomainSaver:
+    def __init__(self, d, doc, elem):
+        self.d = d
+        self.doc = doc
+        self.elem = elem
+        elem.setAttribute("name", self.d.name)
+        self.d.domain_id.to_domain(self)
+        if (hasattr(self.d, "ipmb_rescan_time")):
+            e = doc.createElement("IPMB_rescan_time")
+            e.setAttribute("time", str(self.d.ipmb_rescan_time))
+            elem.appendChild(e)
             pass
-        self.privilege = value
-        return
-        
-    def SetAuthtype(self, value):
-        if (value == 'default'):
-            value = ''
+        if (hasattr(self.d, "sel_rescan_time")):
+            e = doc.createElement("SEL_rescan_time")
+            e.setAttribute("time", str(self.d.sel_rescan_time))
+            elem.appendChild(e)
             pass
-        self.authtype = value
-        return
-        
-    def SetAuth_alg(self, value):
-        if (value == 'default'):
-            value = ''
-            pass
-        self.auth_alg = value
-        return
-        
-    def SetInteg_alg(self, value):
-        if (value == 'default'):
-            value = ''
-            pass
-        self.integ_alg = value
-        return
-        
-    def SetConf_alg(self, value):
-        if (value == 'default'):
-            value = ''
-            pass
-        self.conf_alg = value
-        return
-        
-    def SetBmc_key(self, value):
-        self.bmc_key = value
-        return
-        
-    def SetAddress2(self, value):
-        self.address2 = value
-        return
-        
-    def SetPort2(self, value):
-        self.port2 = value
-        return
-        
-    def AddHack(self, value):
-        self.hacks.append(value)
-        return
-        
-    def AddHacks(self, values):
-        self.hacks.extend(values.split())
-        return
-        
-    def Lookup_uses_priv(self, value):
-        self.lookup_uses_priv = value
         return
 
-    def Valid(self):
-        if (self.contype == "smi"):
-            return (self.port != "")
-        elif (self.contype == "lan"):
-            return (self.address != "")
-        else:
-            return False
+    def domain_cb(self, domain):
+        domain.iterate_connections(self)
         return
 
-    def FillinConAttr(self, attr):
-        if (self.contype == "smi"):
-            if (self.port == ""):
-                raise InvalidDomainError("No port specified")
-            attr.extend([ "smi", str(self.port) ])
-            pass
-        elif (self.contype == "lan"):
-            if (self.address == ""):
-                raise InvalidDomainError("No address specified")
-            attr.append("lan")
-            if (self.port != ""):
-                attr.extend(["-p", self.port])
-                pass
-            if (self.username != ""):
-                attr.extend(["-U", self.username])
-                pass
-            if (self.password != ""):
-                attr.extend(["-P", self.password])
-                pass
-            if (self.authtype != ""):
-                attr.extend(["-A", self.authtype])
-                pass
-            if (self.privilege != ""):
-                attr.extend(["-L", self.privilege])
-                pass
-            if (self.auth_alg != ""):
-                attr.extend(["-Ra", self.auth_alg])
-                pass
-            if (self.integ_alg != ""):
-                attr.extend(["-Ri", self.integ_alg])
-                pass
-            if (self.conf_alg != ""):
-                attr.extend(["-Rc", self.conf_alg])
-                pass
-            if (self.bmc_key != ""):
-                attr.extend(["-Rk", self.bmc_key])
-                pass
-            if (self.lookup_uses_priv):
-                attr.append("-Rl")
-                pass
-            for h in self.hacks:
-                attr.extend(["-H", h])
-                pass
-            if (self.address2 != ""):
-                attr.append("-s")
-                if (self.port2 != ""):
-                    attr.extend(["-p2", self.port2])
+    def domain_iter_connection_cb(self, domain, connum):
+        args = domain.get_connection_args(connum)
+        if (args == None):
+            return
+        celem = self.doc.createElement("connection")
+        celem.setAttribute("contype", args.get_type())
+        i = 0
+        rv = 0
+        while (rv == 0):
+            name = [ "" ]
+            vtype = [ "" ]
+            vrange = [ "" ]
+            vhelp = [ "" ]
+            value = [ "" ]
+            rv = args.get_val(i, name, vtype, vhelp, value, vrange)
+            if (rv == 0):
+                if (value[0] != None):
+                    celem.setAttribute(name[0], value[0])
                     pass
                 pass
-            attr.append(self.address)
-            if (self.address2 != ""):
-                attr.append(self.address2)
-                pass
+            i += 1
             pass
-        else:
-            raise InvalidDomainError("Invalid connection type: " + self.contype)
-        return
-
-    def getAttr(self):
-        if (self.contype == ""):
-            return None
-        attrl = [ ("contype", self.contype) ]
-        if (self.address != ""):
-            attrl.append(("address", self.address))
-            pass
-        if (self.port != ""):
-            attrl.append(("port", self.port))
-            pass
-        if (self.username != ""):
-            attrl.append(("username", self.username))
-            pass
-        if (self.password != ""):
-            attrl.append(("password", self.password))
-            pass
-        if (self.privilege != ""):
-            attrl.append(("privilege", self.privilege))
-            pass
-        if (self.authtype != ""):
-            attrl.append(("authtype", self.authtype))
-            pass
-        if (self.auth_alg != ""):
-            attrl.append(("auth_alg", self.auth_alg))
-            pass
-        if (self.integ_alg != ""):
-            attrl.append(("integ_alg", self.integ_alg))
-            pass
-        if (self.conf_alg != ""):
-            attrl.append(("conf_alg", self.conf_alg))
-            pass
-        if (self.bmc_key != ""):
-            attrl.append(("bmc_key", self.bmc_key))
-            pass
-        if (self.address2 != ""):
-            attrl.append(("address2", self.address2))
-            if (self.port2 != ""):
-                attrl.append(("port2", self.port2))
-                pass
-            pass
-        hlen = len(self.hacks)
-        if (hlen > 0):
-            hvals = self.hacks[0]
-            for i in range(1, hlen):
-                hvals = hvals + ' ' + self.hacks[i]
-                pass
-            attrl.append(("hacks", hvals))
-            pass
-        return attrl
-
-    def restore(self, mainhandler, attrhash):
-        if "contype" not in attrhash:
-            return
-        contype = str(attrhash["contype"])
-        del attrhash["contype"]
-        self.SetType(contype)
-        
-        for attr in attrhash.items():
-            attrn = str(attr[0])
-            value = str(attr[1])
-            if (attrn == "password"):
-                self.SetPassword(value)
-            elif (attrn == "username"):
-                self.SetUsername(value)
-            elif (attrn == "address"):
-                self.SetAddress(value)
-            elif (attrn == "port"):
-                self.SetPort(value)
-            elif (attrn == "privilege"):
-                self.SetPrivilege(value)
-            elif (attrn == "authtype"):
-                self.SetAuthtype(value)
-            elif (attrn == "auth_alg"):
-                self.SetAuth_alg(value)
-            elif (attrn == "integ_alg"):
-                self.SetInteg_alg(value)
-            elif (attrn == "conf_alg"):
-                self.SetConf_alg(value)
-            elif (attrn == "bmc_key"):
-                self.SetBmc_key(value)
-            elif (attrn == "address2"):
-                self.SetAddress2(value)
-            elif (attrn == "port2"):
-                self.SetPort2(value)
-            elif (attrn == "hacks"):
-                self.AddHacks(value)
-            elif (attrn == "lookup_uses_priv"):
-                self.Lookup_uses_priv(True)
-                pass
-            pass
-        return
-
-    pass
+        self.elem.appendChild(celem)
 
 class Domain:
-    def __init__(self, mainhandler, name, connects=[]):
+    def __init__(self, mainhandler, domain):
+        name = domain.get_name()
         if (mainhandler.domains.has_key(name)):
             raise InvalidDomainError("Domain name already exists")
         self.name = name
@@ -534,20 +323,8 @@ class Domain:
         self.entities = { }
         self.mcs = { }
         self.connections = { }
-
-        if (len(connects) > 0):
-            con1 = connects[0]
-        else:
-            con1 = DomainConnection()
-            pass
-        if (len(connects) > 1):
-            con2 = connects[1]
-        else:
-            con2 = DomainConnection()
-            pass
-        self.connection = [ con1, con2 ]
-
-        self.domain_id = None
+        self.domain_id = domain.get_id()
+        
         mainhandler.domains[name] = self
         
         self.ui.add_domain(self)
@@ -561,6 +338,11 @@ class Domain:
         self.add_refr_item("GUID", DomainRefreshData(self, "get_guid"))
         self.add_refr_item("Type", DomainRefreshData(self, "get_type"))
         
+        self.first_conn = False
+        self.any_con_up = False
+        self.ui.incr_item_critical(self.treeroot)
+
+        domain.add_connect_change_handler(self)
         return
 
     def __str__(self):
@@ -576,31 +358,7 @@ class Domain:
         return "domain"
 
     def SaveInfo(self, doc, elem):
-        c1 = doc.createElement("connection")
-        elem.setAttribute("name", self.name)
-        attrs = self.connection[0].getAttr()
-        for attr in attrs:
-            c1.setAttribute(attr[0], attr[1])
-            pass
-        elem.appendChild(c1)
-        if self.connection[1].Valid():
-            c2 = doc.createElement("connection")
-            attrs = self.connection[1].getAttr()
-            for attr in attrs:
-                c2.setAttribute(attr[0], attr[1])
-                pass
-            elem.appendChild(c2)
-            pass
-        if (hasattr(self, "ipmb_rescan_time")):
-            e = doc.createElement("IPMB_rescan_time")
-            e.setAttribute("time", str(self.ipmb_rescan_time))
-            elem.appendChild(e)
-            pass
-        if (hasattr(self, "sel_rescan_time")):
-            e = doc.createElement("SEL_rescan_time")
-            e.setAttribute("time", str(self.sel_rescan_time))
-            elem.appendChild(e)
-            pass
+        DomainSaver(self, doc, elem)
         return
 
     def HandleExpand(self, event):
@@ -625,7 +383,7 @@ class Domain:
         return
 
     def CloseMenuHandler(self, event):
-        self.remove()
+        self.domain_id.to_domain(self)
         return
 
     def RereadSelsHandler(self, event):
@@ -643,24 +401,12 @@ class Domain:
         return
 
     def Connect(self):
-        attr = [ ]
-        self.connection[0].FillinConAttr(attr)
-        if self.connection[1].Valid():
-            self.connection[1].FillinConAttr(attr)
-            pass
-        #print str(attr)
         self.already_up = False
-        self.first_conn = False
-        self.any_con_up = False
-        self.ui.incr_item_critical(self.treeroot)
-        self.domain_id = OpenIPMI.open_domain2(self.name, attr, self, self)
+        self.domain_id = OpenIPMI.open_domain3(self.name, [], self.connection,
+                                               self, self)
+        del self.connection
         if (self.domain_id == None):
             raise InvalidDomainError("Open domain failed, invalid parms")
-        return
-
-    def domain_up_cb(self, domain):
-        self.already_up = True;
-        self.ui.set_item_active(self.treeroot)
         return
 
     def conn_change_cb(self, domain, err, connum, portnum, connected):
@@ -759,8 +505,41 @@ class Domain:
 
 defaultDomains = [ ]
 
+# Catch new and removed domains here
+class DomainWatcher:
+    def __init__(self, mainhandler):
+        self.mainhandler = mainhandler
+        return
+
+    def domain_change_cb(self, change, domain):
+        if (change == "added"):
+            Domain(self.mainhandler, domain)
+            pass
+        elif (change == "deleted"):
+            name = domain.get_name();
+            if (name in self.mainhandler.domains):
+                self.mainhandler.domains[name].remove()
+                pass
+            pass
+        return
+
 class OtherDomainInfo:
     pass
+
+class DomainInfoSetup:
+    def __init__(self, other, domain_id):
+        self.other = other
+        domain_id.to_domain(self)
+        return
+
+    def domain_cb(self, domain):
+        if (hasattr(self.other, "ipmb_rescan_time")):
+            domain.set_ipmb_rescan_time(self.other.ipmb_rescan_time)
+            pass
+        if (hasattr(self.other, "sel_rescan_time")):
+            domain.set_sel_rescan_time(self.other.sel_rescan_time)
+            pass
+        return
 
 def RestoreDomains(mainhandler):
     for i in defaultDomains:
@@ -769,26 +548,30 @@ def RestoreDomains(mainhandler):
         other = i[2]
         connects = [ ]
         for attrhash in attrhashes:
-            connect = DomainConnection()
-            connect.restore(mainhandler, attrhash)
-            connects.append(connect)
+            if ("contype" not in attrhash):
+                continue
+            args = OpenIPMI.alloc_empty_args(str(attrhash["contype"]))
+            if (args == None):
+                continue
+            for attr in attrhash.items():
+                vname = str(attr[0])
+                if (vname == "contype"):
+                    continue
+                value = str(attr[1])
+                args.set_val(0, vname, value)
+                pass
+            connects.append(args)
             pass
-        d = Domain(mainhandler, name, connects=connects)
-        if (hasattr(other, "ipmb_rescan_time")):
-            d.ipmb_rescan_time = other.ipmb_rescan_time
+        domain_id = OpenIPMI.open_domain3(name, [], connects, None, None)
+        if (domain_id != None):
+            DomainInfoSetup(other, domain_id)
             pass
-        if (hasattr(other, "sel_rescan_time")):
-            d.sel_rescan_time = other.sel_rescan_time
-            pass
-        try:
-            d.Connect()
-        except InvalidDomainError, e:
-            d.remove()
-            _oi_logging.error("Error making domain connection for "
-                              + name + ": " + str(e))
+        else:
+            _oi_logging.error("Error making domain connection for " + name)
             pass
         pass
     return
+
 
 class _DomainRestore(_saveprefs.RestoreHandler):
     def __init__(self):

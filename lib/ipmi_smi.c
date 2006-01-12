@@ -44,6 +44,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include <linux/ipmi.h>
 #include <net/af_ipmi.h>
@@ -57,6 +58,8 @@
 #include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/internal/locked_list.h>
+
+static ipmi_args_t *smi_con_alloc_args(void);
 
 /* We time the SMI messages, but we have a long timer. */
 #define SMI_TIMEOUT 60000
@@ -1399,6 +1402,8 @@ smi_start_con(ipmi_con_t *ipmi)
     return rv;
 }
 
+static ipmi_args_t *get_startup_args(ipmi_con_t *ipmi);
+
 static int
 setup(int          if_num,
       os_handler_t *handlers,
@@ -1496,6 +1501,7 @@ setup(int          if_num,
     ipmi->close_connection = smi_close_connection;
     ipmi->close_connection_done = smi_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
+    ipmi->get_startup_args = get_startup_args;
 
     rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
 				      smi->fd,
@@ -1548,15 +1554,128 @@ typedef struct smi_args_s
     int ifnum;
 } smi_args_t;
 
+static ipmi_args_t *
+get_startup_args(ipmi_con_t *ipmi)
+{
+    ipmi_args_t *args;
+    smi_args_t  *sargs;
+    smi_data_t  *smi;
+
+    args = smi_con_alloc_args();
+    if (! args)
+	return NULL;
+    sargs = _ipmi_args_get_extra_data(args);
+    smi = (smi_data_t *) ipmi->con_data;
+    sargs->ifnum = smi->if_num;
+    return args;
+}
+
 static int
 smi_connect_args(ipmi_args_t  *args,
 		 os_handler_t *handler,
 		 void         *user_data,
 		 ipmi_con_t   **new_con)
 {
-    smi_args_t  *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t *sargs = _ipmi_args_get_extra_data(args);
 
     return ipmi_smi_setup_con(sargs->ifnum, handler, user_data, new_con);
+}
+
+static const char *
+smi_args_get_type(ipmi_args_t  *args)
+{
+    return "smi";
+}
+
+static int
+smi_args_get_val(ipmi_args_t  *args,
+		 unsigned int argnum,
+		 const char   **name,
+		 const char   **type,
+		 const char   **help,
+		 char         **value,
+		 const char   ***range)
+{
+    smi_args_t *sargs = _ipmi_args_get_extra_data(args);
+    char       dummy[1];
+    char       *sval;
+
+    if (argnum > 0)
+	return E2BIG;
+
+    if (name)
+	*name = "Interface_Number";
+    if (type)
+	*type = "str";
+    if (help)
+	*help = "*The interface number to open.  For instance, /dev/ipmi0"
+	    " would be 0.  This is an integer value.";
+    if (*value) {
+	int len;
+	len = snprintf(dummy, 1, "%d", sargs->ifnum);
+	sval = ipmi_mem_alloc(len+1);
+	if (! sval)
+	    return ENOMEM;
+	len = snprintf(sval, len+1, "%d", sargs->ifnum);
+	*value = sval;
+    }
+    return 0;
+}
+
+static int
+smi_args_set_val(ipmi_args_t  *args,
+		 unsigned int argnum,
+		 const char   *name,
+		 const char   *value)
+{
+    smi_args_t   *sargs = _ipmi_args_get_extra_data(args);
+    const char   *should_be_end;
+    char         *end;
+    unsigned int val;
+
+    if (name) {
+	if (strcmp(name, "Interface_Number") != 0)
+	    return EINVAL;
+    } else if (argnum > 0) {
+	return E2BIG;
+    }
+
+    if (!value)
+	return EINVAL;
+
+    should_be_end = value + strlen(value) - 1;
+    while ((should_be_end >= value) && isspace(*should_be_end))
+	should_be_end--;
+    should_be_end++;
+    if (should_be_end <= value)
+	return EINVAL;
+
+    val = strtoul(value, &end, 0);
+    if (end != should_be_end)
+	return EINVAL;
+    sargs->ifnum = val;
+    return 0;
+}
+
+static ipmi_args_t *
+smi_args_copy(ipmi_args_t *args)
+{
+    ipmi_args_t *nargs;
+    smi_args_t  *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t  *nsargs;
+
+    nargs = smi_con_alloc_args();
+    if (!nargs)
+	return NULL;
+    nsargs = _ipmi_args_get_extra_data(nargs);
+    *nsargs = *sargs;
+    return nargs;
+}
+
+static int
+smi_args_validate(ipmi_args_t *args, int *argnum)
+{
+    return 1; /* Can't be invalid */
 }
 
 #define CHECK_ARG \
@@ -1579,10 +1698,9 @@ smi_parse_args(int         *curr_arg,
 
     CHECK_ARG;
 
-    rv = _ipmi_args_alloc(NULL, smi_connect_args,
-			  sizeof(smi_args_t), &p);
-    if (rv)
-	goto out_err;
+    p = smi_con_alloc_args();
+    if (!p)
+	return ENOMEM;
 
     sargs = _ipmi_args_get_extra_data(p);
     sargs->ifnum = atoi(args[*curr_arg]);
@@ -1596,6 +1714,12 @@ smi_parse_args(int         *curr_arg,
     return rv;
 }
 
+static void
+smi_args_free_val(ipmi_args_t *args, char *value)
+{
+    ipmi_mem_free(value);
+}
+
 static const char *
 smi_parse_help(void)
 {
@@ -1603,6 +1727,16 @@ smi_parse_help(void)
 	"\n"
 	" smi <num>\n"
 	"where the <num> is the IPMI device number to connect to.";
+}
+
+static ipmi_args_t *
+smi_con_alloc_args(void)
+{
+    return _ipmi_args_alloc(NULL, smi_connect_args,
+			    smi_args_get_val, smi_args_set_val,
+			    smi_args_copy, smi_args_validate,
+			    smi_args_free_val, smi_args_get_type,
+			    sizeof(smi_args_t));
 }
 
 static ipmi_con_setup_t *smi_setup;
@@ -1616,7 +1750,8 @@ _ipmi_smi_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
-    smi_setup = _ipmi_alloc_con_setup(smi_parse_args, smi_parse_help);
+    smi_setup = _ipmi_alloc_con_setup(smi_parse_args, smi_parse_help,
+				      smi_con_alloc_args);
     if (! smi_setup) {
 	ipmi_destroy_lock(smi_list_lock);
 	return ENOMEM;

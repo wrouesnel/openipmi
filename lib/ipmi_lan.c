@@ -162,6 +162,8 @@ struct ipmi_rmcpp_auth_s
 typedef struct lan_conn_parms_s
 {
     unsigned int  num_ip_addr;
+    char          *ip_addr_str[MAX_IP_ADDR];
+    char          *ip_port_str[MAX_IP_ADDR];
     sockaddr_ip_t ip_addr[MAX_IP_ADDR];
     unsigned int  authtype;
     unsigned int  privilege;
@@ -172,7 +174,7 @@ typedef struct lan_conn_parms_s
     unsigned int  conf;
     unsigned int  integ;
     unsigned int  auth;
-    int           name_lookup_only;
+    unsigned int  name_lookup_only;
     unsigned char bmc_key[IPMI_PASSWORD_MAX];
     unsigned int  bmc_key_len;
 } lan_conn_parms_t;
@@ -3751,6 +3753,12 @@ lan_cleanup(ipmi_con_t *ipmi)
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
     ipmi_con_attr_cleanup(ipmi);
+    for (i=0; i<lan->cparm.num_ip_addr; i++) {
+	if (lan->cparm.ip_addr_str[i])
+	    ipmi_mem_free(lan->cparm.ip_addr_str[i]);
+	if (lan->cparm.ip_port_str[i])
+	    ipmi_mem_free(lan->cparm.ip_port_str[i]);
+    }
     if (lan->con_change_lock)
 	ipmi_destroy_lock(lan->con_change_lock);
     if (lan->ip_lock)
@@ -3848,6 +3856,13 @@ cleanup_con(ipmi_con_t *ipmi)
 	/* This is only called in the case of an error at startup, so
 	   there is no need to remove it from the LAN lists (hashes),
 	   because it won't be there yet. */
+
+	for (i=0; i<lan->cparm.num_ip_addr; i++) {
+	    if (lan->cparm.ip_addr_str[i])
+		ipmi_mem_free(lan->cparm.ip_addr_str[i]);
+	    if (lan->cparm.ip_port_str[i])
+		ipmi_mem_free(lan->cparm.ip_port_str[i]);
+	}
 
 	if (lan->con_change_lock)
 	    ipmi_destroy_lock(lan->con_change_lock);
@@ -5102,6 +5117,8 @@ find_matching_lan(lan_conn_parms_t *cparm)
     return NULL;
 }
 
+static ipmi_args_t *get_startup_args(ipmi_con_t *ipmi);
+
 int
 ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		    unsigned int     num_parms,
@@ -5158,6 +5175,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    if (cparm.num_ip_addr
 		&& (cparm.num_ip_addr != parms[i].parm_data_len))
 		return EINVAL;
+	    if (parms[i].parm_data_len > MAX_IP_ADDR)
+		return EINVAL;
 	    ip_addrs = parms[i].parm_data;
 	    cparm.num_ip_addr = parms[i].parm_data_len;
 	    break;
@@ -5165,6 +5184,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	case IPMI_LANP_PARMID_PORTS:
 	    if (cparm.num_ip_addr
 		&& (cparm.num_ip_addr != parms[i].parm_data_len))
+		return EINVAL;
+	    if (parms[i].parm_data_len > MAX_IP_ADDR)
 		return EINVAL;
 	    ports = parms[i].parm_data;
 	    cparm.num_ip_addr = parms[i].parm_data_len;
@@ -5231,9 +5252,17 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     if ((cparm.num_ip_addr < 1) || (cparm.num_ip_addr > MAX_IP_ADDR))
 	return EINVAL;
 
-    if (!ports) {
+    if (ports) {
+	for (i=0; i<MAX_IP_ADDR; i++)
+	    tports[i] = ports[i];
+	ports = tports;
+    } else {
 	ports = tports;
 	for (i=0; i<MAX_IP_ADDR; i++)
+	    ports[i] = NULL;
+    }
+    for (i=0; i<MAX_IP_ADDR; i++) {
+	if (!ports[i])
 	    ports[i] = IPMI_LAN_STD_PORT_STR;
     }
 
@@ -5313,6 +5342,18 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     memset(lan, 0, sizeof(*lan));
     ipmi->con_data = lan;
     lan->cparm = cparm;
+    for (i=0; i<cparm.num_ip_addr; i++) {
+	lan->cparm.ip_addr_str[i] = ipmi_strdup(ip_addrs[i]);
+	if (!lan->cparm.ip_addr_str[i]) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	lan->cparm.ip_port_str[i] = ipmi_strdup(ports[i]);
+	if (!lan->cparm.ip_port_str[i]) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+    }
 
     lan->refcount = 1;
     lan->users = 1;
@@ -5384,6 +5425,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->close_connection = lan_close_connection;
     ipmi->close_connection_done = lan_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
+    ipmi->get_startup_args = get_startup_args;
 
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */
@@ -5516,38 +5558,129 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
 
 typedef struct lan_args_s
 {
-    char            *str_addr[2];
-    char            *str_port[2];
+    char            *str_addr[2];	/* parms 0, 1 */
+    char            *str_port[2];	/* parms 2, 3 */
     int             num_addr;
-    int             authtype_set;
-    int             authtype;
-    int             privilege;
-    int             privilege_set;
+    unsigned int    authtype;		/* parm 4 */
+    unsigned int    privilege;		/* parm 5 */
     int             username_set;
-    char            username[16];
+    char            username[16];	/* parm 6 */
     unsigned int    username_len;
     int             password_set;
-    char            password[20];
+    char            password[20];	/* parm 7 */
     unsigned int    password_len;
 
-    int             auth_alg_set;
-    unsigned int    auth_alg;
-    int             integ_alg_set;
-    unsigned int    integ_alg;
-    int		    conf_alg_set;
-    unsigned int    conf_alg;
-    int             name_lookup_only_set;
-    int             name_lookup_only;
+    unsigned int    auth_alg;		/* parm 8 */
+    unsigned int    integ_alg;		/* parm 9 */
+    unsigned int    conf_alg;		/* parm 10 */
+    unsigned int    name_lookup_only;	/* parm 11 */
     int             bmc_key_set;
-    char            bmc_key[20];
+    char            bmc_key[20];	/* parm 12 */
     unsigned int    bmc_key_len;
 
-    unsigned char   swid;
-    struct in_addr  lan_addr[2];
-    int             lan_port[2];
-
-    unsigned int    hacks;
+    unsigned int    hacks;		/* parms 13, 14 */
 } lan_args_t;
+
+static const char *auth_range[] = { "default", "none", "md2", "md5",
+				    "straight", "oem", "rmcp+", NULL };
+static int auth_vals[] = { IPMI_AUTHTYPE_DEFAULT,
+			   IPMI_AUTHTYPE_NONE,
+			   IPMI_AUTHTYPE_MD2,
+			   IPMI_AUTHTYPE_MD5,
+			   IPMI_AUTHTYPE_STRAIGHT,
+			   IPMI_AUTHTYPE_OEM,
+			   IPMI_AUTHTYPE_RMCP_PLUS };
+
+static const char *priv_range[] = { "callback", "user", "operator", "admin",
+				    "oem", NULL };
+static int priv_vals[] = { IPMI_PRIVILEGE_CALLBACK,
+			   IPMI_PRIVILEGE_USER,
+			   IPMI_PRIVILEGE_OPERATOR,
+			   IPMI_PRIVILEGE_ADMIN,
+			   IPMI_PRIVILEGE_OEM };
+
+static const char *auth_alg_range[] = { "bmcpick", "rakp_none",
+					"rakp_hmac_sha1", "rakp_hmac_md5",
+					NULL };
+static int auth_alg_vals[] = { IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK,
+			       IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE,
+			       IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1,
+			       IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5 };
+static const char *integ_alg_range[] = { "bmcpick", "none", "hmac_sha1",
+					"hmac_md5", "md5", NULL };
+static int integ_alg_vals[] = { IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK,
+				IPMI_LANP_INTEGRITY_ALGORITHM_NONE,
+				IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+				IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128,
+				IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128 };
+
+static const char *conf_alg_range[] = { "bmcpick", "none", "aes_cbc_128",
+					"xrc4_128", "xrc4_40", NULL };
+static int conf_alg_vals[] = { IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK,
+			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE,
+			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128,
+			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128,
+			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40 };
+
+static struct lan_argnum_info_s
+{
+    const char *name;
+    const char *type;
+    const char *help;
+    const char **range;
+    const int  *values;
+} lan_argnum_info[17] =
+{
+    { "Address",	"str",
+      "*IP name or address of the MC",
+      NULL, NULL },
+    { "Port",		"str",
+      "*IP port or port name for the MC",
+      NULL, NULL },
+    { "Address2",	"str",
+      "IP name or address of a second connection to the same MC",
+      NULL, NULL },
+    { "Port2",		"str",
+      "IP port or portname for a second connection to the same MC",
+      NULL, NULL },
+    { "Authtype",	"enum",
+      "Authentication to use for the connection",
+      auth_range, auth_vals },
+    { "Privilege",	"enum",
+      "Privilege level to use for the connection",
+      priv_range, priv_vals },
+    { "Username",	"str",
+      "The user name to use for the connection",
+      NULL, NULL },
+    { "Password",	"str",
+      "!The password to use for the connection",
+      NULL, NULL },
+    { "Authentication_Algorithm",	"enum",
+      "Authentication algorithm to use for the connection, for RMCP+ only",
+      auth_alg_range, auth_alg_vals },
+    { "Integrity_Algorithm",	"enum",
+      "Integrity algorithm to use for the connection, for RMCP+ only",
+      integ_alg_range, integ_alg_vals },
+    { "Confidentiality_Algorithm",	"enum",
+      "Confidentiality algorithm to use for the connection, for RMCP+ only",
+      conf_alg_range, conf_alg_vals },
+    { "Name_Lookup_Only",	"bool",
+      "Use only the name, not the privilege, for selecting the password",
+      NULL, NULL },
+    { "BMC_Key",		"str",
+      "The key to use for connecting to the BMC, may or may not be required",
+      NULL, NULL },
+    { "RAKP3_Wrong_RoleM",	"bool",
+      "Some systems use the wrong RoleM value for RAKP3, a common problem",
+      NULL, NULL },
+    { "RMCP_Integ_SIK",		"bool",
+      "The IPMI 2.0 Spec was unclear which integrity key to use",
+      NULL, NULL },
+
+    { NULL },
+};
+
+static ipmi_args_t *lan_con_alloc_args(void);
 
 static void
 lan_free_args(ipmi_args_t *args)
@@ -5562,6 +5695,67 @@ lan_free_args(ipmi_args_t *args)
 	ipmi_mem_free(largs->str_port[0]);
     if (largs->str_port[1])
 	ipmi_mem_free(largs->str_port[1]);
+    /* paranoia */
+    memset(largs->password, 0, sizeof(largs->password));
+    memset(largs->bmc_key, 0, sizeof(largs->bmc_key));
+}
+
+ipmi_args_t *
+get_startup_args(ipmi_con_t *ipmi)
+{
+    ipmi_args_t      *args;
+    lan_args_t       *largs;
+    lan_data_t       *lan;
+    lan_conn_parms_t *cparm;
+
+    args = lan_con_alloc_args();
+    if (! args)
+	return NULL;
+    largs = _ipmi_args_get_extra_data(args);
+    lan = (lan_data_t *) ipmi->con_data;
+    cparm = &lan->cparm;
+    largs->str_addr[0] = ipmi_strdup(cparm->ip_addr_str[0]);
+    if (!largs->str_addr[0])
+	goto out_err;
+    largs->str_port[0] = ipmi_strdup(cparm->ip_port_str[0]);
+    if (!largs->str_port[0])
+	goto out_err;
+    if (cparm->num_ip_addr > 1) {
+	largs->str_addr[1] = ipmi_strdup(cparm->ip_addr_str[1]);
+	if (!largs->str_addr[1])
+	    goto out_err;
+	largs->str_port[1] = ipmi_strdup(cparm->ip_port_str[1]);
+	if (!largs->str_port[1])
+	    goto out_err;
+    }
+    largs->num_addr = cparm->num_ip_addr;
+    largs->authtype = cparm->authtype;
+    largs->privilege = cparm->privilege;
+    if (cparm->username_len) {
+	largs->username_len = cparm->username_len ;
+	memcpy(largs->username, cparm->username, cparm->username_len);
+	largs->username_set = 1;
+    }
+    if (cparm->password_len) {
+	largs->password_len = cparm->password_len ;
+	memcpy(largs->password, cparm->password, cparm->password_len);
+	largs->password_set = 1;
+    }
+    largs->conf_alg = cparm->conf;
+    largs->auth_alg = cparm->auth;
+    largs->integ_alg = cparm->integ;
+    largs->name_lookup_only = cparm->name_lookup_only;
+    largs->hacks = ipmi->hacks;
+    if (cparm->bmc_key_len) {
+	largs->bmc_key_len = cparm->bmc_key_len ;
+	memcpy(largs->bmc_key, cparm->bmc_key, cparm->bmc_key_len);
+	largs->bmc_key_set = 1;
+    }
+    return args;
+
+ out_err:
+    lan_free_args(args);
+    return NULL;
 }
 
 static int
@@ -5584,16 +5778,12 @@ lan_connect_args(ipmi_args_t  *args,
     parms[i].parm_data = largs->str_port;
     parms[i].parm_data_len = largs->num_addr;
     i++;
-    if (largs->authtype_set) {
-	parms[i].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
-	parms[i].parm_val = largs->authtype;
-	i++;
-    }
-    if (largs->privilege_set) {
-	parms[i].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
-	parms[i].parm_val = largs->privilege;
-	i++;
-    }
+    parms[i].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
+    parms[i].parm_val = largs->authtype;
+    i++;
+    parms[i].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
+    parms[i].parm_val = largs->privilege;
+    i++;
     if (largs->username_set) {
 	parms[i].parm_id = IPMI_LANP_PARMID_USERNAME;
 	parms[i].parm_data = largs->username;
@@ -5606,26 +5796,18 @@ lan_connect_args(ipmi_args_t  *args,
 	parms[i].parm_data_len = largs->password_len;
 	i++;
     }
-    if (largs->auth_alg_set) {
-	parms[i].parm_id = IPMI_LANP_AUTHENTICATION_ALGORITHM;
-	parms[i].parm_val = largs->auth_alg;
-	i++;
-    }
-    if (largs->integ_alg_set) {
-	parms[i].parm_id = IPMI_LANP_INTEGRITY_ALGORITHM;
-	parms[i].parm_val = largs->integ_alg;
-	i++;
-    }
-    if (largs->conf_alg_set) {
-	parms[i].parm_id = IPMI_LANP_CONFIDENTIALITY_ALGORITHM;
-	parms[i].parm_val = largs->conf_alg;
-	i++;
-    }
-    if (largs->name_lookup_only_set) {
-	parms[i].parm_id = IPMI_LANP_NAME_LOOKUP_ONLY;
-	parms[i].parm_val = largs->name_lookup_only;
-	i++;
-    }
+    parms[i].parm_id = IPMI_LANP_AUTHENTICATION_ALGORITHM;
+    parms[i].parm_val = largs->auth_alg;
+    i++;
+    parms[i].parm_id = IPMI_LANP_INTEGRITY_ALGORITHM;
+    parms[i].parm_val = largs->integ_alg;
+    i++;
+    parms[i].parm_id = IPMI_LANP_CONFIDENTIALITY_ALGORITHM;
+    parms[i].parm_val = largs->conf_alg;
+    i++;
+    parms[i].parm_id = IPMI_LANP_NAME_LOOKUP_ONLY;
+    parms[i].parm_val = largs->name_lookup_only;
+    i++;
     if (largs->bmc_key_set) {
 	parms[i].parm_id = IPMI_LANP_BMC_KEY;
 	parms[i].parm_data = largs->bmc_key;
@@ -5636,6 +5818,409 @@ lan_connect_args(ipmi_args_t  *args,
     if (!rv)
 	(*con)->hacks = largs->hacks;
     return rv;
+}
+
+static int
+get_str_val(char **dest, const char *data, int *is_set, unsigned int *len)
+{
+    char *rval = NULL;
+    if (!dest)
+	return 0;
+    if (is_set && (! *is_set)) {
+	*dest = NULL;
+	return 0;
+    }
+    if (data) {
+	if (len) {
+	    rval = ipmi_mem_alloc(*len+1);
+	    if (!rval)
+		return ENOMEM;
+	    memcpy(rval, data, *len);
+	    rval[*len] = '\0';
+	} else {
+	    rval = ipmi_strdup(data);
+	    if (!rval)
+		return ENOMEM;
+	}
+	*dest = rval;
+    } else {
+	*dest = NULL;
+    }
+    return 0;
+}
+
+static int
+get_enum_val(int argnum, char **dest, int data, const char ***rrange)
+{
+    char       *rval = NULL;
+    const int  *values;
+    const char **range;
+    int        i;
+
+    if (rrange)
+	*rrange = lan_argnum_info[argnum].range;
+
+    if (!dest)
+	return 0;
+
+    values = lan_argnum_info[argnum].values;
+    range = lan_argnum_info[argnum].range;
+    for (i=0; range[i]; i++) {
+	if (values[i] == data) {
+	    rval = ipmi_strdup(lan_argnum_info[argnum].range[i]);
+	    if (!rval)
+		return ENOMEM;
+	    *dest = rval;
+	    return 0;
+	}
+    }
+    return EINVAL;
+}
+
+static int
+get_bool_val(char **dest, int data, unsigned int bit)
+{
+    char *rval = NULL;
+
+    if (!dest)
+	return 0;
+    if (data & bit)
+	rval = ipmi_strdup("true");
+    else
+	rval = ipmi_strdup("false");
+    if (!rval)
+	return ENOMEM;
+    *dest = rval;
+    return 0;
+}
+
+static const char *
+lan_args_get_type(ipmi_args_t *args)
+{
+    return "lan";
+}
+
+static int
+lan_args_get_val(ipmi_args_t  *args,
+		 unsigned int argnum,
+		 const char   **name,
+		 const char   **type,
+		 const char   **help,
+		 char         **value,
+		 const char   ***range)
+{
+    lan_args_t *largs = _ipmi_args_get_extra_data(args);
+    int        rv;
+
+    switch(argnum) {
+    case 0:
+	rv = get_str_val(value, largs->str_addr[0], NULL, NULL);
+	break;
+
+    case 1:
+	rv = get_str_val(value, largs->str_port[0], NULL, NULL);
+	break;
+
+    case 2:
+	rv = get_str_val(value, largs->str_addr[1], NULL, NULL);
+	break;
+
+    case 3:
+	rv = get_str_val(value, largs->str_port[1], NULL, NULL);
+	break;
+
+    case 4:
+	rv = get_enum_val(argnum, value, largs->authtype, range);
+	break;
+
+    case 5:
+	rv = get_enum_val(argnum, value, largs->privilege, range);
+	break;
+
+    case 6:
+	rv = get_str_val(value, largs->username, &largs->username_set,
+			 &largs->username_len);
+	break;
+
+    case 7:
+	rv = get_str_val(value, largs->password, &largs->password_set,
+			 &largs->password_len);
+	break;
+
+    case 8:
+	rv = get_enum_val(argnum, value, largs->auth_alg, range);
+	break;
+
+    case 9:
+	rv = get_enum_val(argnum, value, largs->integ_alg, range);
+	break;
+
+    case 10:
+	rv = get_enum_val(argnum, value, largs->conf_alg, range);
+	break;
+
+    case 11:
+	rv = get_bool_val(value, largs->name_lookup_only, 1);
+	break;
+
+    case 12:
+	rv = get_str_val(value, largs->bmc_key, &largs->bmc_key_set,
+			 &largs->bmc_key_len);
+	break;
+
+    case 13:
+	rv = get_bool_val(value, largs->hacks,
+			  IPMI_CONN_HACK_RAKP3_WRONG_ROLEM);
+	break;
+
+    case 14:
+	rv = get_bool_val(value, largs->hacks,
+			  IPMI_CONN_HACK_RMCPP_INTEG_SIK);
+	break;
+
+    default:
+	return E2BIG;
+    }
+
+    if (rv)
+	return rv;
+
+    if (name)
+	*name = lan_argnum_info[argnum].name;
+    if (type)
+	*type = lan_argnum_info[argnum].type;
+    if (help)
+	*help = lan_argnum_info[argnum].help;
+
+    return 0;
+}
+
+static int
+set_str_val(char **dest, const char *value, int null_ok, int *is_set,
+	    unsigned int *len, unsigned int max_len)
+{
+    char *rval;
+
+    if (! value) {
+	if (! null_ok)
+	    return EINVAL;
+	*dest = NULL;
+	if (is_set)
+	    *is_set = 0;
+	return 0;
+    }
+
+    if (len) {
+	int nlen = strlen(value);
+	if (nlen > max_len)
+	    return EINVAL;
+	memcpy(*dest, value, nlen);
+	*len = nlen;
+    } else {
+	rval = ipmi_strdup(value);
+	if (!rval)
+	    return ENOMEM;
+	if (*dest)
+	    ipmi_mem_free(*dest);
+	*dest = rval;
+    }
+    if (is_set)
+	*is_set = 1;
+    return 0;
+}
+
+static int
+set_enum_val(int argnum, unsigned int *dest, const char *value)
+{
+    const char **range;
+    int        i;
+
+    if (! value)
+	return EINVAL;
+
+    range = lan_argnum_info[argnum].range;
+    for (i=0; range[i]; i++) {
+	if (strcmp(range[i], value) == 0) {
+	    *dest = lan_argnum_info[argnum].values[i];
+	    return 0;
+	}
+    }
+    return EINVAL;
+}
+
+static int
+set_bool_val(unsigned int *dest, const char *value, unsigned int bit)
+{
+    if (! value)
+	return EINVAL;
+
+    if (strcmp(value, "true") == 0)
+	*dest |= bit;
+    else if (strcmp(value, "false") == 0)
+	*dest &= ~bit;
+    else
+	return EINVAL;
+    return 0;
+}
+
+static int
+lan_args_set_val(ipmi_args_t  *args,
+		 unsigned int argnum,
+		 const char   *name,
+		 const char   *value)
+{
+    lan_args_t   *largs = _ipmi_args_get_extra_data(args);
+    int          rv;
+    char         *sval;
+
+    if (name) {
+	int i;
+	for (i=0; lan_argnum_info[i].name; i++) {
+	    if (strcmp(lan_argnum_info[i].name, name) == 0)
+		break;
+	}
+	if (! lan_argnum_info[i].name)
+	    return EINVAL;
+	argnum = i;
+    }
+
+    switch (argnum) {
+    case 0:
+	rv = set_str_val(&(largs->str_addr[0]), value, 0, NULL, NULL, 0);
+	if (!rv && (largs->num_addr == 0))
+	    largs->num_addr = 1;
+	break;
+
+    case 1:
+	rv = set_str_val(&(largs->str_port[0]), value, 1, NULL, NULL, 0);
+	break;
+
+    case 2:
+	rv = set_str_val(&(largs->str_addr[1]), value, 1, NULL, NULL, 0);
+	if (!rv) {
+	    if (largs->str_addr[1]) {
+		if (largs->num_addr < 2)
+		    largs->num_addr = 2;
+	    } else {
+		if (largs->str_addr[0])
+		    largs->num_addr = 1;
+		else
+		    largs->num_addr = 0;
+	    }
+	}
+	break;
+
+    case 3:
+	rv = set_str_val(&(largs->str_port[1]), value, 1, NULL, NULL, 0);
+	break;
+
+    case 4:
+	rv = set_enum_val(argnum, &largs->authtype, value);
+	break;
+
+    case 5:
+	rv = set_enum_val(argnum, &largs->privilege, value);
+	break;
+
+    case 6:
+	sval = largs->username;
+	rv = set_str_val(&sval, value, 1, &largs->username_set,
+			 &largs->username_len, 16);
+	break;
+
+    case 7:
+	sval = largs->password;
+	rv = set_str_val(&sval, value, 1, &largs->password_set,
+			 &largs->password_len, 20);
+	break;
+
+    case 8:
+	rv = set_enum_val(argnum, &largs->auth_alg, value);
+	break;
+
+    case 9:
+	rv = set_enum_val(argnum, &largs->integ_alg, value);
+	break;
+
+    case 10:
+	rv = set_enum_val(argnum, &largs->conf_alg, value);
+	break;
+
+    case 11:
+	rv = set_bool_val(&largs->name_lookup_only, value, 1);
+	break;
+
+    case 12:
+	sval = largs->bmc_key;
+	rv = set_str_val(&sval, value, 1, &largs->bmc_key_set,
+			 &largs->bmc_key_len, 20);
+	break;
+
+    case 13:
+	rv = set_bool_val(&largs->hacks, value,
+			  IPMI_CONN_HACK_RAKP3_WRONG_ROLEM);
+	break;
+
+    case 14:
+	rv = set_bool_val(&largs->hacks, value,
+			  IPMI_CONN_HACK_RMCPP_INTEG_SIK);
+	break;
+
+    default:
+	rv = E2BIG;
+    }
+
+    return rv;
+}
+
+static ipmi_args_t *
+lan_args_copy(ipmi_args_t *args)
+{
+    ipmi_args_t *nargs;
+    lan_args_t  *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t  *nlargs;
+
+    nargs = lan_con_alloc_args();
+    if (!nargs)
+	return NULL;
+    nlargs = _ipmi_args_get_extra_data(nargs);
+    *nlargs = *largs;
+
+    nlargs->str_addr[0] = NULL;
+    nlargs->str_addr[1] = NULL;
+    nlargs->str_port[0] = NULL;
+    nlargs->str_port[1] = NULL;
+
+    nlargs->str_addr[0] = ipmi_strdup(largs->str_addr[0]);
+    if (! nlargs->str_addr[0])
+	goto out_err;
+    nlargs->str_addr[1] = ipmi_strdup(largs->str_addr[1]);
+    if (! nlargs->str_addr[1])
+	goto out_err;
+    nlargs->str_port[0] = ipmi_strdup(largs->str_port[0]);
+    if (! nlargs->str_port[0])
+	goto out_err;
+    nlargs->str_port[1] = ipmi_strdup(largs->str_port[1]);
+    if (! nlargs->str_port[1])
+	goto out_err;
+    
+    return nargs;
+
+ out_err:
+    lan_free_args(nargs);
+    return NULL;
+}
+
+static int
+lan_args_validate(ipmi_args_t *args, int *argnum)
+{
+    return 1; /* Can't be invalid */
+}
+
+static void
+lan_args_free_val(ipmi_args_t *args, char *value)
+{
+    ipmi_mem_free(value);
 }
 
 #define CHECK_ARG \
@@ -5660,10 +6245,9 @@ lan_parse_args(int         *curr_arg,
 
     CHECK_ARG;
 
-    rv = _ipmi_args_alloc(lan_free_args, lan_connect_args,
-			  sizeof(lan_args_t), &p);
-    if (rv)
-	return rv;
+    p = lan_con_alloc_args();
+    if (!p)
+	return ENOMEM;
 
     largs = _ipmi_args_get_extra_data(p);
     largs->num_addr = 1;
@@ -5716,7 +6300,6 @@ lan_parse_args(int         *curr_arg,
 		rv = EINVAL;
 		goto out_err;
 	    }
-	    largs->authtype_set = 1;
 	} else if (strcmp(args[*curr_arg], "-L") == 0) {
 	    (*curr_arg)++; CHECK_ARG;
 
@@ -5734,7 +6317,6 @@ lan_parse_args(int         *curr_arg,
 		rv = EINVAL;
 		goto out_err;
 	    }
-	    largs->privilege_set = 1;
 	} else if (strcmp(args[*curr_arg], "-p") == 0) {
 	    (*curr_arg)++; CHECK_ARG;
 	    largs->str_port[0] = ipmi_strdup(args[*curr_arg]);
@@ -5764,7 +6346,6 @@ lan_parse_args(int         *curr_arg,
 		rv = EINVAL;
 		goto out_err;
 	    }
-	    largs->auth_alg_set = 1;
 	} else if (strcmp(args[*curr_arg], "-Ri") == 0) {
 	    (*curr_arg)++; CHECK_ARG;
 
@@ -5782,7 +6363,6 @@ lan_parse_args(int         *curr_arg,
 		rv = EINVAL;
 		goto out_err;
 	    }
-	    largs->integ_alg_set = 1;
 	} else if (strcmp(args[*curr_arg], "-Rc") == 0) {
 	    (*curr_arg)++; CHECK_ARG;
 
@@ -5800,10 +6380,8 @@ lan_parse_args(int         *curr_arg,
 		rv = EINVAL;
 		goto out_err;
 	    }
-	    largs->conf_alg_set = 1;
 	} else if (strcmp(args[*curr_arg], "-Rl") == 0) {
 	    largs->name_lookup_only = 0;
-	    largs->name_lookup_only_set = 1;
 	} else if (strcmp(args[*curr_arg], "-Rk") == 0) {
 	    (*curr_arg)++; CHECK_ARG;
 	    len = strlen(args[*curr_arg]);
@@ -5819,14 +6397,14 @@ lan_parse_args(int         *curr_arg,
     for (i=0; i<largs->num_addr; i++) {
 	CHECK_ARG;
 	largs->str_addr[i] = ipmi_strdup(args[*curr_arg]);
-	if (largs->str_addr[0] == NULL) {
+	if (largs->str_addr[i] == NULL) {
 	    rv = ENOMEM;
 	    goto out_err;
 	}
 	(*curr_arg)++;
 	if (! largs->str_port[i]) {
 	    largs->str_port[i] = ipmi_strdup("623");
-	    if (largs->str_port[0] == NULL) {
+	    if (largs->str_port[i] == NULL) {
 		rv = ENOMEM;
 		goto out_err;
 	    }
@@ -5884,6 +6462,32 @@ lan_parse_help(void)
 	" integrity.";
 }
 
+static ipmi_args_t *
+lan_con_alloc_args(void)
+{
+    ipmi_args_t *args;
+    lan_args_t  *largs;
+    args = _ipmi_args_alloc(lan_free_args, lan_connect_args,
+			    lan_args_get_val, lan_args_set_val,
+			    lan_args_copy, lan_args_validate,
+			    lan_args_free_val, lan_args_get_type,
+			    sizeof(lan_args_t));
+    if (!args)
+	return NULL;
+
+    largs = _ipmi_args_get_extra_data(args);
+
+    /* Set defaults */
+    largs->authtype = IPMI_AUTHTYPE_DEFAULT;
+    largs->privilege = IPMI_PRIVILEGE_ADMIN;
+    largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK;
+    largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK;
+    largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK;
+    largs->name_lookup_only = 1;
+    /* largs->hacks = IPMI_CONN_HACK_RAKP3_WRONG_ROLEM; */
+    return args;
+}
+
 static ipmi_con_setup_t *lan_setup;
 
 int
@@ -5931,7 +6535,8 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
-    lan_setup = _ipmi_alloc_con_setup(lan_parse_args, lan_parse_help);
+    lan_setup = _ipmi_alloc_con_setup(lan_parse_args, lan_parse_help,
+				      lan_con_alloc_args);
     if (! lan_setup)
 	return ENOMEM;
 

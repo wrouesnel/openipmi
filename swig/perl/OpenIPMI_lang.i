@@ -83,31 +83,91 @@
     argvi++;
 }
 
-%typemap(in) arg_array {
+%typemap(in) argarray * (argarray argval) {
     AV *tempav;
-    I32 len;
     int i;
     SV  **tv;
+    $1 = &argval;
     if (!SvROK($input))
 	croak("Argument $argnum is not a reference.");
     if (SvTYPE(SvRV($input)) != SVt_PVAV)
 	croak("Argument $argnum is not an array.");
     tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1 = (arg_array) malloc((len+2)*sizeof(char *));
-    for (i = 0; i <= len; i++) {
+    $1->len = av_len(tempav) + 1;
+    $1->val = malloc(($1->len)*sizeof(char *));
+    for (i = 0; i < $1->len; i++) {
 	tv = av_fetch(tempav, i, 0);
-	$1[i] = (char *) SvPV(*tv,PL_na);
+	$1->val[i] = (char *) SvPV(*tv,PL_na);
     }
-    $1[i] = NULL;
 };
 
-%typemap(out) arg_array {
+%typemap(out) argarray * {
     /* Nothing to do, input only */
 };
 
-%typemap(freearg) arg_array {
-    free($1);
+%typemap(freearg) argarray * {
+    free($1->val);
+};
+
+%typemap(in) iargarray * (iargarray argval) {
+    AV *tempav;
+    int i;
+    SV  **tv;
+    $1 = &argval;
+    if (!SvROK($input))
+	croak("Argument $argnum is not a reference.");
+    if (SvTYPE(SvRV($input)) != SVt_PVAV)
+	croak("Argument $argnum is not an array.");
+    tempav = (AV*)SvRV($input);
+    $1->len = av_len(tempav) + 1;
+    $1->val = malloc(($1->len)*sizeof(char *));
+    for (i = 0; i < $1->len; i++) {
+	tv = av_fetch(tempav, i, 0);
+        if (SWIG_ConvertPtr(*tv, (void **) &($1->val[i]),
+			    SWIGTYPE_p_ipmi_args_t,0) < 0)
+            SWIG_croak("Type error. Expected _p_ipmi_args_t");
+	if (! $1->val[i])
+            SWIG_croak("Type error. NULL not allowed for _p_ipmi_args_t");
+    }
+};
+
+%typemap(out) iargarray * {
+    /* Nothing to do, input only */
+};
+
+%typemap(freearg) iargarray * {
+    free($1->val);
+};
+
+%typemap(in) strconstarray * (strconstarray argval) {
+    $1 = &argval;
+    if (!SvROK($input))
+	croak("Argument $argnum is not a reference.");
+    if (SvTYPE(SvRV($input)) != SVt_PVAV)
+	croak("Argument $argnum is not an array.");
+    $1->len = 0;
+    $1->val = NULL;
+};
+
+%typemap(out) strconstarray * {
+    AV *tempav;
+    SV **svs;
+    int i;
+
+    svs = (SV **) malloc($1->len*sizeof(SV *));
+    for (i=0; i<$1->len; i++) {
+	svs[i] = sv_newmortal();
+	sv_setpv(svs[i], $1->val[i]);
+    }
+    tempav = av_make($1->len, svs);
+    free(svs);
+    $result = newRV((SV *) tempav);
+    sv_2mortal($result);
+    argvi++;
+};
+
+%typemap(freearg) strconstarray * {
+    free($1->val);
 };
 
 %typemap(in) double * (double dvalue) {

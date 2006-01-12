@@ -167,7 +167,8 @@ class IPMIGUI(wx.Frame):
             self.Close(True)
             return
         closer = IPMICloser(self, self.closecount)
-        for v in self.mainhandler.domains.itervalues():
+        ds = self.mainhandler.domains.values()
+        for v in ds:
             v.domain_id.to_domain(closer)
 
     def openDomain(self, event):
@@ -227,7 +228,7 @@ class IPMIGUI(wx.Frame):
         if not parent.IsOk():
             return
         while (data.num_warning > 0):
-            data.num_warn = data.num_warn - 1;
+            data.num_warning = data.num_warning - 1;
             self.decr_item_warning(parent); 
         while (data.num_severe > 0):
             data.num_severe = data.num_severe - 1;

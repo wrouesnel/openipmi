@@ -325,9 +325,42 @@ parse_mac_addr(char *str, unsigned char *addr)
 %}
 
 %{
-typedef char **arg_array;
+/* For output returning an array of constant strings */
+typedef struct strconstarray
+{
+    const char **val;
+    int len;
+} strconstarray;
+
+/* For input only */
+typedef struct argarray
+{
+    char **val;
+    int len;
+} argarray;
+
+/* For input only */
+typedef struct iargarray
+{
+    ipmi_args_t **val;
+    int         len;
+} iargarray;
 %}
-typedef char **arg_array;
+typedef struct strconstarray
+{
+    char **val;
+    int len;
+} strconstarray;
+typedef struct argarray
+{
+    char **val;
+    int len;
+} argarray;
+typedef struct iargarray
+{
+    ipmi_args_t **val;
+    int        len;
+} iargarray;
 
 %include "OpenIPMI_lang.i"
 
@@ -2472,6 +2505,9 @@ typedef struct {
 } ipmi_domain_id_t;
 
 typedef struct {
+} ipmi_args_t;
+
+typedef struct {
 } ipmi_entity_t;
 
 typedef struct {
@@ -2710,10 +2746,9 @@ wait_io(int timeout)
  */
 %{
 static ipmi_domain_id_t *
-open_domain(char *name, arg_array args, swig_cb done, swig_cb up)
+open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
 {
     int                i, j;
-    int                len;
     int                num_options = 0;
     ipmi_open_option_t options[10];
     int                set = 0;
@@ -2727,25 +2762,22 @@ open_domain(char *name, arg_array args, swig_cb done, swig_cb up)
     ipmi_domain_ptr_cb domain_up = NULL;
 
     IPMI_SWIG_C_CB_ENTRY
-    for (len=0; args[len]; len++)
-	;
-
     nd = malloc(sizeof(*nd));
 
-    for (i=0; args[i]; i++) {
+    for (i=0; i<args->len; i++) {
 	if (num_options >= 10) {
 	    free(nd);
 	    nd = NULL;
 	    goto out_err;
 	}
 
-	if (! ipmi_parse_options(options+num_options, args[i]))
+	if (! ipmi_parse_options(options+num_options, args->val[i]))
 	    num_options++;
 	else
 	    break;
     }
 
-    rv = ipmi_parse_args(&i, len, args, &con_parms[set]);
+    rv = ipmi_parse_args(&i, args->len, args->val, &con_parms[set]);
     if (rv) {
 	free(nd);
 	nd = NULL;
@@ -2753,8 +2785,8 @@ open_domain(char *name, arg_array args, swig_cb done, swig_cb up)
     }
     set++;
 
-    if (i < len) {
-	rv = ipmi_parse_args(&i, len, args, &con_parms[set]);
+    if (i < args->len) {
+	rv = ipmi_parse_args(&i, args->len, args->val, &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
 	    free(nd);
@@ -2824,10 +2856,9 @@ open_domain(char *name, arg_array args, swig_cb done, swig_cb up)
 }
 
 static ipmi_domain_id_t *
-open_domain2(char *name, arg_array args, swig_cb done, swig_cb up)
+open_domain2(char *name, argarray *args, swig_cb done, swig_cb up)
 {
     int                i, j;
-    int                len;
     int                num_options = 0;
     ipmi_open_option_t options[10];
     int                set = 0;
@@ -2841,25 +2872,22 @@ open_domain2(char *name, arg_array args, swig_cb done, swig_cb up)
     ipmi_domain_ptr_cb domain_up = NULL;
 
     IPMI_SWIG_C_CB_ENTRY
-    for (len=0; args[len]; len++)
-	;
-
     nd = malloc(sizeof(*nd));
 
-    for (i=0; args[i]; i++) {
+    for (i=0; i<args->len; i++) {
 	if (num_options >= 10) {
 	    free(nd);
 	    nd = NULL;
 	    goto out_err;
 	}
 
-	if (! ipmi_parse_options(options+num_options, args[i]))
+	if (! ipmi_parse_options(options+num_options, args->val[i]))
 	    num_options++;
 	else
 	    break;
     }
 
-    rv = ipmi_parse_args2(&i, len, args, &con_parms[set]);
+    rv = ipmi_parse_args2(&i, args->len, args->val, &con_parms[set]);
     if (rv) {
 	free(nd);
 	nd = NULL;
@@ -2867,8 +2895,8 @@ open_domain2(char *name, arg_array args, swig_cb done, swig_cb up)
     }
     set++;
 
-    if (i < len) {
-	rv = ipmi_parse_args2(&i, len, args, &con_parms[set]);
+    if (i < args->len) {
+	rv = ipmi_parse_args2(&i, args->len, args->val, &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
 	    free(nd);
@@ -2931,6 +2959,96 @@ open_domain2(char *name, arg_array args, swig_cb done, swig_cb up)
  out:
     for (i=0; i<set; i++)
 	ipmi_free_args(con_parms[i]);
+
+ out_err:
+    IPMI_SWIG_C_CB_EXIT
+    return nd;
+}
+
+static ipmi_domain_id_t *
+open_domain3(char *name, argarray *ioptions, iargarray *args,
+	     swig_cb done, swig_cb up)
+{
+    int                i, j;
+    int                num_options = 0;
+    ipmi_open_option_t options[10];
+    int                set = 0;
+    ipmi_con_t         *con[2];
+    ipmi_domain_id_t   *nd;
+    int                rv;
+    swig_cb_val        done_val = NULL;
+    swig_cb_val        up_val = NULL;
+    ipmi_domain_con_cb con_change = NULL;
+    ipmi_domain_ptr_cb domain_up = NULL;
+
+    IPMI_SWIG_C_CB_ENTRY
+    nd = malloc(sizeof(*nd));
+
+    for (i=0; i<ioptions->len; i++) {
+	if (num_options >= 10) {
+	    free(nd);
+	    nd = NULL;
+	    goto out_err;
+	}
+	
+	if (! ipmi_parse_options(options+num_options, ioptions->val[i]))
+	    num_options++;
+	else
+	    break;
+    }
+
+    for (i=0; i<args->len; i++) {
+	rv = ipmi_args_setup_con(args->val[i],
+				 swig_os_hnd,
+				 NULL,
+				 &con[i]);
+	if (rv) {
+	    for (j=0; j<i; j++)
+		con[j]->close_connection(con[j]);
+            free(nd);
+	    nd = NULL;
+	    goto out;
+	}
+	set++;
+    }
+
+    if (!nil_swig_cb(up)) {
+	if (valid_swig_cb(up, domain_up_cb)) {
+	    up_val = ref_swig_cb(up, domain_up_cb);
+	    domain_up = domain_fully_up;
+	} else {
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
+    }
+    if (!nil_swig_cb(done)){
+	if (valid_swig_cb(done, conn_change_cb)) {
+	    done_val = ref_swig_cb(done, conn_change_cb);
+	    con_change = domain_connect_change_handler;
+	} else {
+	    if (domain_up)
+		deref_swig_cb(up);
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
+    }
+    rv = ipmi_open_domain(name, con, set, con_change, done_val,
+			  domain_up, up_val,
+			  options, num_options, nd);
+    if (rv) {
+	if (domain_up)
+	    deref_swig_cb(up);
+	if (con_change)
+	    deref_swig_cb(done);
+	for (i=0; i<set; i++)
+	    con[i]->close_connection(con[i]);
+	free(nd);
+	nd = NULL;
+    }
+
+ out:
 
  out_err:
     IPMI_SWIG_C_CB_EXIT
@@ -3100,6 +3218,7 @@ remove_domain_change_handler(swig_cb handler)
 
 %newobject open_domain;
 %newobject open_domain2;
+%newobject open_domain3;
 /*
  * Create a new domain.  The domain will be named with the first parm,
  * the startup arguments are in a reference to a list in the second
@@ -3125,43 +3244,61 @@ remove_domain_change_handler(swig_cb handler)
  * allow you to turn on and off various automatic operations that
  * OpenIPMI does, such as scanning SDRs, fetching the SEL, etc.
  */
-ipmi_domain_id_t *open_domain(char *name, arg_array args,
+ipmi_domain_id_t *open_domain(char *name, argarray *args,
 			      swig_cb done = NULL, swig_cb up = NULL);
 
 /*
  * Like open_domain, but takes the new parameter types and is more
  * flexible.  This is required for RMCP+.
  */
-ipmi_domain_id_t *open_domain2(char *name,  arg_array args,
+ipmi_domain_id_t *open_domain2(char *name, argarray *args,
+			       swig_cb done = NULL, swig_cb up = NULL);
+
+/*
+ * Like open_domain2, but takes ipmi_args_t.  Works with RMCP+.
+ */
+ipmi_domain_id_t *open_domain3(char *name, argarray *options,
+			       iargarray *args,
 			       swig_cb done = NULL, swig_cb up = NULL);
 
 /*
  * Iterate through the help for the various connection types used with
- * open_domain2()
+ * open_domain2() and open_domain3() and argument parsing and
+ * allocating.  This will call the parse_args_iter_help_cb method on
+ * the supplied object for each registered connection type.  The
+ * parameters are <self> <name> <help>.  This can also be used to find
+ * the names of all registered connections.
  */
-void parse_args_iter_help(swig_cb help_cb)
-{
-    swig_cb_val handler_val;
+void parse_args_iter_help(swig_cb help_cb);
+%{
+    void parse_args_iter_help(swig_cb help_cb)
+    {
+	int         rv;
+	swig_cb_val handler_val;
 
-    IPMI_SWIG_C_CB_ENTRY
-    if (! valid_swig_cb(help_cb, parse_args_iter_help_cb))
-	rv = EINVAL;
-    else {
-	handler_val = get_swig_cb(help_cb, parse_args_iter_help_cb);
-	ipmi_parse_args_iter_help(parse_args_iter_help_hnd, handler_val);
+	IPMI_SWIG_C_CB_ENTRY
+	if (! valid_swig_cb(help_cb, parse_args_iter_help_cb))
+	    rv = EINVAL;
+	else {
+	    handler_val = get_swig_cb(help_cb, parse_args_iter_help_cb);
+	    ipmi_parse_args_iter_help(parse_args_iter_help_hnd, handler_val);
+	}
+	IPMI_SWIG_C_CB_EXIT
     }
-    IPMI_SWIG_C_CB_EXIT
-}
+%}
 
-const char *parse_option_help()
-{
-    return ipmi_parse_options_help();
-}
+const char *parse_option_help();
+%{
+    const char *parse_option_help(void)
+    {
+	return ipmi_parse_options_help();
+    }
+ %}
 
 /*
- * Add a handler to be called whenever a domain is added or removed.
- * The handler will be called with the following parameters:
- *   <self> added|deleted|changed <domain>
+ * Add a handler whose domain_change_cb method will be called whenever
+ * a domain is added or removed.  The handler will be called with the
+ * following parameters: <self> added|deleted|changed <domain>
  */
 int add_domain_change_handler(swig_cb handler);
 
@@ -3421,6 +3558,12 @@ char *get_error_string(unsigned int val);
 			      unsigned int *up)
     {
 	return ipmi_domain_is_connection_port_up(self, connection, port, up);
+    }
+
+    %newobject get_connection_args;
+    ipmi_args_t *get_connection_args(int connection)
+    {
+	return ipmi_domain_get_connection_args(self, connection);
     }
 
     /*
@@ -3878,6 +4021,87 @@ char *get_error_string(unsigned int val);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return pet;
+    }
+}
+
+%newobject alloc_empty_args;
+ipmi_args_t *alloc_empty_args(char *con_type);
+%{
+    ipmi_args_t *
+    alloc_empty_args(char *con_type)
+    {
+	int         rv;
+	ipmi_args_t *argv;
+	rv = ipmi_args_alloc(con_type, &argv);
+	if (rv)
+	    return NULL;
+	return argv;
+    }
+%}
+
+%newobject alloc_parse_args;
+ipmi_args_t *alloc_parse_args(argarray *args);
+%{
+    ipmi_args_t *
+    alloc_parse_args(argarray *args)
+    {
+	int         rv;
+	ipmi_args_t *argv;
+	int         i = 0;
+
+	rv = ipmi_parse_args(&i, args->len, args->val, &argv);
+	if (rv)
+	    return NULL;
+	return argv;
+    }
+%}
+
+%extend ipmi_args_t {
+    ~ipmi_args_t()
+    {
+	ipmi_free_args(self);
+    }
+
+    const char *get_type()
+    {
+	return ipmi_args_get_type(self);
+    }
+
+    int get_val(int           argnum,
+		const char    **name,
+		const char    **type,
+		const char    **help,
+		char          **value,
+		strconstarray *range)
+    {
+	int        rv;
+	const char **irange = NULL;
+	char       *ivalue = NULL;
+
+	rv = ipmi_args_get_val(self, argnum, name, type, help,
+			       &ivalue, &irange);
+	if (rv)
+	    return rv;
+	if (ivalue) {
+	    /* Convert it to a normal malloc() so char ** will work. */
+	    char *ivalue2 = strdup(ivalue);
+	    ipmi_args_free_str(self, ivalue);
+	    ivalue = ivalue2;
+	}
+	*value = ivalue;
+	if (irange) {
+	    int len;
+	    for (len=0; irange[len]; len++)
+		;
+	    range->len = len;
+	    range->val = irange;
+	}
+	return 0;
+    }
+
+    int set_val(int argnum, const char *name, const char *value)
+    {
+	return ipmi_args_set_val(self, argnum, name, value);
     }
 }
 

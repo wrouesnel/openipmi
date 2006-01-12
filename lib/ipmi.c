@@ -1132,18 +1132,26 @@ ipmi_parse_args(int         *curr_arg,
 
 struct ipmi_args_s
 {
-    ipmi_args_free_cb    free;
-    ipmi_args_connect_cb connect;
+    ipmi_args_free_cb     free;
+    ipmi_args_connect_cb  connect;
+    ipmi_args_get_val_cb  get_val;
+    ipmi_args_set_val_cb  set_val;
+    ipmi_args_copy_cb     copy;
+    ipmi_args_validate_cb validate;
+    ipmi_args_free_val_cb free_val;
+    ipmi_args_get_type_cb get_type;
 };
 
 struct ipmi_con_setup_s
 {
     ipmi_con_parse_args_cb parse;
     ipmi_con_get_help_cb   help;
+    ipmi_con_alloc_args_cb alloc;
 };
 ipmi_con_setup_t *
 _ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
-		      ipmi_con_get_help_cb   help)
+		      ipmi_con_get_help_cb   help,
+		      ipmi_con_alloc_args_cb alloc)
 {
     ipmi_con_setup_t *rv;
 
@@ -1153,6 +1161,7 @@ _ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
     memset(rv, 0, sizeof(*rv));
     rv->parse = parse;
     rv->help = help;
+    rv->alloc = alloc;
     return rv;
 }
 
@@ -1160,6 +1169,43 @@ void
 _ipmi_free_con_setup(ipmi_con_setup_t *v)
 {
     ipmi_mem_free(v);
+}
+
+typedef struct con_type_alloc_data_s
+{
+    char        *con_type;
+    ipmi_args_t *args;
+    int         err;
+} con_type_alloc_data_t;
+
+static int
+con_type_alloc_handler(void *cb_data, void *item1, void *item2)
+{
+    ipmi_con_setup_t      *setup = item2;
+    con_type_alloc_data_t *data = cb_data;
+
+    if (strcmp(data->con_type, item1) == 0) {
+	data->args = setup->alloc();
+	if (!data->args)
+	    data->err = ENOMEM;
+	else
+	    data->err = 0;
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_args_alloc(char *con_type, ipmi_args_t **args)
+{
+    con_type_alloc_data_t data;
+
+    data.con_type = con_type;
+    data.err = EINVAL;
+    locked_list_iterate(con_type_list, con_type_alloc_handler, &data);
+    if (!data.err)
+	*args = data.args;
+    return data.err;
 }
 
 typedef struct con_type_help_data_s
@@ -1259,22 +1305,77 @@ ipmi_args_setup_con(ipmi_args_t  *args,
     return args->connect(args, handlers, user_data, con);
 }
 
+const char *
+ipmi_args_get_type(ipmi_args_t *args)
+{
+    return args->get_type(args);
+}
+
 int
-_ipmi_args_alloc(ipmi_args_free_cb    free,
-		 ipmi_args_connect_cb connect,
-		 unsigned int         extra_data_len,
-		 ipmi_args_t          **args)
+ipmi_args_get_val(ipmi_args_t  *args,
+		  unsigned int argnum,
+		  const char   **name,
+		  const char   **type,
+		  const char   **help,
+		  char         **value,
+		  const char   ***range)
+{
+    return args->get_val(args, argnum, name, type, help, value, range);
+}
+
+int
+ipmi_args_set_val(ipmi_args_t  *args,
+		  unsigned int argnum,
+		  const char   *name,
+		  const char   *value)
+{
+    return args->set_val(args, argnum, name, value);
+}
+
+void
+ipmi_args_free_str(ipmi_args_t *args, char *str)
+{
+    args->free_val(args, str);
+}
+
+ipmi_args_t *
+ipmi_args_copy(ipmi_args_t *args)
+{
+    return args->copy(args);
+}
+
+int
+ipmi_args_validate(ipmi_args_t *args, int *argnum)
+{
+    return args->validate(args, argnum);
+}
+
+ipmi_args_t *
+_ipmi_args_alloc(ipmi_args_free_cb     free,
+		 ipmi_args_connect_cb  connect,
+		 ipmi_args_get_val_cb  get_val,
+		 ipmi_args_set_val_cb  set_val,
+		 ipmi_args_copy_cb     copy,
+		 ipmi_args_validate_cb validate,
+		 ipmi_args_free_val_cb free_val,
+		 ipmi_args_get_type_cb get_type,
+		 unsigned int          extra_data_len)
 {
     ipmi_args_t *val;
 
     val = ipmi_mem_alloc(sizeof(*val) + extra_data_len);
     if (!val)
-	return ENOMEM;
+	return NULL;
     memset(val, 0, sizeof(*val) + extra_data_len);
     val->free = free;
     val->connect = connect;
-    *args = val;
-    return 0;
+    val->get_val = get_val;
+    val->set_val = set_val;
+    val->copy = copy;
+    val->validate = validate;
+    val->free_val = free_val;
+    val->get_type = get_type;
+    return val;
 }
 
 void *
@@ -1305,6 +1406,7 @@ con_type_check_remove(void *cb_data, void *item1, void *item2)
 
     if (strcmp(item1, data->name) == 0) {
 	locked_list_remove(con_type_list, item1, item2);
+	data->err = 0;
 	return LOCKED_LIST_ITER_STOP;
     }
     return LOCKED_LIST_ITER_CONTINUE;

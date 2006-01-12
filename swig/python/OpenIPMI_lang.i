@@ -102,16 +102,17 @@
     $result = list;
 }
 
-%typemap(in) arg_array {
-    int i, len;
+%typemap(in) argarray * (argarray argval) {
+    int i;
 
+    $1 = &argval;
     if (!PySequence_Check($input)) {
 	PyErr_SetString(PyExc_TypeError,"Expecting a sequence");
 	return NULL;
     }
-    len = PyObject_Length($input);
-    $1 = (arg_array) malloc((len+1)*sizeof(char *));
-    for (i=0; i<len; i++) {
+    $1->len = PyObject_Length($input);
+    $1->val = malloc($1->len*sizeof(char *));
+    for (i=0; i<$1->len; i++) {
 	PyObject *o = PySequence_GetItem($input,i);
 	if (!o) {
 	    PyErr_SetString(PyExc_ValueError, "Expecting a sequence of strings");
@@ -122,18 +123,80 @@
 	    Py_DECREF(o);
 	    return NULL;
 	}
-	$1[i] = PyString_AS_STRING(o);
+	$1->val[i] = PyString_AS_STRING(o);
 	Py_DECREF(o);
     }
-    $1[i] = NULL;
 };
 
-%typemap(argout) arg_array {
-  /* Nothing to do, no output. */
+%typemap(argout) argarray {
+    /* No output */
 }
 
-%typemap(freearg) arg_array {
-    free($1);
+%typemap(freearg) argarray {
+    free($1->val);
+};
+
+%typemap(in) iargarray * (iargarray argval) {
+    int i;
+
+    $1 = &argval;
+    if (!PySequence_Check($input)) {
+	PyErr_SetString(PyExc_TypeError,"Expecting a sequence");
+	return NULL;
+    }
+    $1->len = PyObject_Length($input);
+    $1->val = malloc($1->len*sizeof(char *));
+    for (i=0; i<$1->len; i++) {
+	PyObject *o = PySequence_GetItem($input,i);
+	if (!o) {
+	    PyErr_SetString(PyExc_ValueError, "Expecting a sequence of strings");
+	    return NULL;
+	}
+	SWIG_Python_ConvertPtr(o, (void **)&($1->val[i]),
+			       SWIGTYPE_p_ipmi_args_t,
+			       SWIG_POINTER_EXCEPTION | 0);
+	if (!$1->val[i]) {
+	    PyErr_SetString(PyExc_ValueError, "Invalid NULL element");
+	    return NULL;
+	}
+	Py_DECREF(o);
+    }
+};
+
+%typemap(argout) argarray {
+    /* No output */
+}
+
+%typemap(freearg) argarray {
+    free($1->val);
+};
+
+%typemap(in) strconstarray * (strconstarray argval)  {
+    int i;
+
+    $1 = &argval;
+    if (!PyList_Check($input)) {
+	PyErr_SetString(PyExc_TypeError, "Expecting a list");
+	return NULL;
+    }
+    $1->len = 0;
+    $1->val = NULL;
+};
+
+%typemap(argout) strconstarray * {
+    int i, len;
+
+    len = PySequence_Size($input);
+    PySequence_DelSlice($input, 0, len);
+    for (i=0; i<$1->len; i++) {
+	PyObject *o = PyString_FromString($1->val[i]);
+	PyList_Append($input, o);
+	Py_DECREF(o);
+    }
+}
+
+%typemap(freearg) strconstarray * {
+  /* holder is const, nothing to do */
 };
 
 %typemap(in) double * (double dvalue) {

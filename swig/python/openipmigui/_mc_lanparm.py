@@ -236,7 +236,7 @@ class MCLanParm(wx.Dialog):
                               data.ptype, newval)
         if (rv != 0):
             self.errstr.SetStatusText("Could not toggle value: "
-                                      + OpenIPMI.get_error_string(rv))
+                                      + OpenIPMI.get_error_string(rv), 0)
             return
             
         data.currval = newval
@@ -247,7 +247,7 @@ class MCLanParm(wx.Dialog):
         rv = self.lp.set_config(self.lpc)
         if (rv != 0):
             self.errstr.SetStatusText("Error setting config: "
-                                      + OpenIPMI.get_error_string(rv))
+                                      + OpenIPMI.get_error_string(rv), 0)
             return
 
         # Don't forget to set self.lp to None when done so OnClose
