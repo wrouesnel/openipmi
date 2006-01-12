@@ -130,7 +130,7 @@ def run():
 
     OpenIPMI.enable_debug_malloc()
     OpenIPMI.init()
-    #OpenIPMI.enable_debug_msg()
+    #OpenIPMI.enable_debug_rawmsg()
 
     preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     _saveprefs.restore(preffile)

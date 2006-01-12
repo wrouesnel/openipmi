@@ -90,7 +90,7 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
                     do_box = False
                     fw = wx.RadioBox(self, -1, name[0],
                                      wx.DefaultPosition, wx.DefaultSize,
-                                     vrange, 3, wx.RA_SPECIFY_COLS)
+                                     vrange, 2, wx.RA_SPECIFY_COLS)
                     if (value[0] != None):
                         fw.SetStringSelection(value[0])
                         pass
@@ -116,18 +116,18 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
                 if (do_box):
                     if (box == None):
                         box = wx.BoxSizer(wx.HORIZONTAL)
-                        self.sizer.Add(box, 0, wx.LEFT | wx.ALL, 2)
+                        self.sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
                         done = False
                         pass
                     else:
                         done = True;
                         pass
-                    box.Add(sw, 0, wx.LEFT | wx.ALL, 2)
+                    box.Add(sw, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
                     if (done):
                         box = None
                     pass
                 else:
-                    self.sizer.Add(sw, 0, wx.LEFT | wx.ALL, 2)
+                    self.sizer.Add(sw, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
                     box = None;
                     pass
                 self.fields.append( (i, name[0], vtype[0], fw) )
@@ -190,16 +190,17 @@ class ConnInfo(wx.Panel):
 
         self.contype = wx.RadioBox(self, -1, "Connection Type",
                                    wx.DefaultPosition, wx.DefaultSize,
-                                   self.contypes.keys(), 3, wx.RA_SPECIFY_COLS)
+                                   self.contypes.keys(), 2, wx.RA_SPECIFY_COLS)
         wx.EVT_RADIOBOX(self, self.contype.GetId(), self.selectType)
         self.sizer.Add(self.contype, 0, wx.ALIGN_CENTRE, 2)
 
         self.coninfos = [ ]
         self.currcon = 0
         show = True
+        panel = wx.Panel(self, -1, size=wx.Size(400, 200))
+        self.sizer.Add(panel, 0, wx.ALIGN_CENTRE, 0)
         for ct in self.contypes.keys():
-            cti = ConnTypeInfo(ct, self)
-            self.sizer.Add(cti, 0, wx.ALIGN_CENTRE, 2)
+            cti = ConnTypeInfo(ct, panel)
             if (show):
                 cti.Show(True)
                 show = False

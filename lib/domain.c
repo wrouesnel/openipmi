@@ -730,10 +730,7 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->entities_lock)
 	ipmi_destroy_lock(domain->entities_lock);
 
-    /* If it has not been reported yet, in_startup will be true and we
-       don't want to report the delete. */
-    if (!domain->in_startup)
-	call_domain_change(domain, IPMI_DELETED);
+    call_domain_change(domain, IPMI_DELETED);
 
     /* The MC list should no longer have anything in it. */
     if (domain->mc_upd_handlers)
@@ -3804,12 +3801,6 @@ call_con_fails(ipmi_domain_t *domain,
     } else if (domain->in_startup) {
 	domain->in_startup = 0;
 	ipmi_unlock(domain->con_lock);
-
-	/* We have to call the domain change before we call the
-	   connection change handlers.  This way, the user is informed
-	   of the domain before any OEM handlers get called to start
-	   adding entities and the like. */
-	call_domain_change(domain, IPMI_ADDED);
     } else
 	ipmi_unlock(domain->con_lock);
 
@@ -4885,6 +4876,8 @@ ipmi_open_domain(char               *name,
 		 "Out of memory, could not add domain to the domains list",
 		 DOMAIN_NAME(domain));
     }
+
+    call_domain_change(domain, IPMI_ADDED);
 
  out:
     _ipmi_domain_put(domain);

@@ -410,14 +410,14 @@ class Domain:
         return
 
     def conn_change_cb(self, domain, err, connum, portnum, connected):
+        if (err):
+            self.ui.new_log("Connection error for " + self.name
+                            + ": " + OpenIPMI.get_error_string(err))
+            pass
         if (not self.first_conn):
             self.first_conn = True
-            if (hasattr(self, "ipmb_rescan_time")):
-                domain.set_ipmb_rescan_time(self.ipmb_rescan_time)
-                pass
-            if (hasattr(self, "sel_rescan_time")):
-                domain.set_sel_rescan_time(self.sel_rescan_time)
-                pass
+            self.ipmb_rescan_time = domain.get_ipmb_rescan_time()
+            self.sel_rescan_time = domain.get_sel_rescan_time()
             domain.iterate_connections(self)
             pass
         self.connections[connum].SetPortUp(portnum, connected)

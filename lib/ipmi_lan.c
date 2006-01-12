@@ -6480,9 +6480,9 @@ lan_con_alloc_args(void)
     /* Set defaults */
     largs->authtype = IPMI_AUTHTYPE_DEFAULT;
     largs->privilege = IPMI_PRIVILEGE_ADMIN;
-    largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK;
-    largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK;
-    largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK;
+    largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
+    largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+    largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
     largs->name_lookup_only = 1;
     /* largs->hacks = IPMI_CONN_HACK_RAKP3_WRONG_ROLEM; */
     return args;
