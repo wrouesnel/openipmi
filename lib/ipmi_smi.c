@@ -1209,7 +1209,7 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
-    call_con_change_handlers(smi, 0, 1, 1);
+    call_con_change_handlers(smi, 0, 0, 1);
 }
 
 static void

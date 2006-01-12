@@ -316,6 +316,7 @@ class Domain:
     def __init__(self, mainhandler, domain):
         name = domain.get_name()
         if (mainhandler.domains.has_key(name)):
+            domain.close()
             raise InvalidDomainError("Domain name already exists")
         self.name = name
         self.mainhandler = mainhandler
