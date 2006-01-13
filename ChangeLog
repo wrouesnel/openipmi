@@ -16,7 +16,9 @@
 
 	* swig/python/openipmigui/*.py, swig/python/openipmigui.py: Add a
 	command line interface to the GUI.
-	
+
+	* lib/mc: Fixed a memory leak that occurred in certain situations
+	when a shutdown occurs during startup.
 
 2006-01-12 Corey Minyard <cminyard@mvista.com>
 

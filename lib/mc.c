@@ -130,7 +130,7 @@ typedef struct domain_up_info_s
  *  put_done
  *	state = MC_ACTIVE_IN_STARTUP
  *	startup MC
- *      startup_count = True
+ *      startup_count = 1
  *      startup_called = False
  *      active = 1
  *      call active handlers
@@ -1940,7 +1940,7 @@ _ipmi_mc_startup_put(ipmi_mc_t *mc, char *name)
     if (mc->state == MC_ACTIVE_IN_STARTUP)
 	mc->state = MC_ACTIVE_PEND_FULLY_UP;
     ipmi_unlock(mc->lock);
-    _ipmi_put_domain_fully_up(mc->domain, "_ipmi_mc_startup_get");
+    _ipmi_put_domain_fully_up(mc->domain, "_ipmi_mc_startup_put");
 }
 
 static void
@@ -1962,8 +1962,13 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
     unsigned int event_rcvr = 0;
 
-    if (!mc)
-	return;
+    if (!mc) {
+	/* MC data is still valid, but the MC is not good any more.
+	   We saved it in rsp_data. */
+        mc = cb_data;
+	_ipmi_mc_startup_put(mc, "sensors_reread");
+	return; /* domain went away while processing. */
+    }
 
     /* See if any presence has changed with the new sensors. */ 
     ipmi_detect_domain_presence_changes(mc->domain, 0);
@@ -1999,8 +2004,13 @@ got_guid(ipmi_mc_t  *mc,
 {
     int rv;
 
-    if (!mc)
+    if (!mc) {
+	/* MC data is still valid, but the MC is not good any more.
+	   We saved it in rsp_data. */
+        mc = rsp_data;
+	_ipmi_mc_startup_put(mc, "got_guid");
 	return; /* domain went away while processing. */
+    }
 
     if ((rsp->data[0] == 0) && (rsp->data_len >= 17)) {
 	/* We have a GUID, save it */
@@ -2010,7 +2020,7 @@ got_guid(ipmi_mc_t  *mc,
     if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc)))
     {
-	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+	rv = ipmi_mc_reread_sensors(mc, sensors_reread, mc);
 	if (rv)
 	    sensors_reread(mc, 0, NULL);
     } else
@@ -2046,7 +2056,7 @@ mc_startup(ipmi_mc_t *mc)
     msg.data = NULL;
 
     _ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
-    rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, NULL);
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, mc);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%smc.c(ipmi_mc_setup_new): "
@@ -2168,7 +2178,7 @@ _ipmi_mc_put(ipmi_mc_t *mc)
     still_in_startup:
 	mc->usecount--;
 
-	/* Only attemp the destroy if no one else has gotten the MC
+	/* Only attempt the destroy if no one else has gotten the MC
 	   while we were holding it. */
 	if (mc->usecount == 1) {
 	    ipmi_lock(mc->lock);
@@ -2687,7 +2697,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
     info->sdrs = sdrs;
     rv = ipmi_mc_pointer_cb(info->source_mc, sdrs_fetched_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 0);
+	sdr_reread_done(info, NULL, ECANCELED, 1);
 }
 
 static void
@@ -2717,7 +2727,7 @@ sensor_read_handler(void *cb_data, int shutdown)
 
     rv = ipmi_mc_pointer_cb(info->source_mc, sensor_read_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 0);
+	sdr_reread_done(info, NULL, ECANCELED, 1);
     return OPQ_HANDLER_STARTED;
 }
 
