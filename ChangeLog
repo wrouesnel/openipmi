@@ -1,3 +1,23 @@
+2006-01-13 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/Makefile.am: Add os_debug.c into the openipmish build,
+	and remove it from the main library build, to allow the command
+	language to be used elsewhere.
+
+	* swig/OpenIPMI.i: Add command language interfaces for the swig
+	interfaces.
+
+	* swig/perl/Makefile.am, swig/python/Makefile.am: Now we need to
+	link with libOpenIPMIcmdlang.
+
+	* swig/perl/OpenIPMI_lang.i, swig/python/OpenIPMI_lang.i: Add
+	defines for a generic callback (assuming we have already checked
+	it for valid functions).
+
+	* swig/python/openipmigui/*.py, swig/python/openipmigui.py: Add a
+	command line interface to the GUI.
+	
+
 2006-01-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c, include/OpenIPMI/internal/ipmi_int.h: Massive

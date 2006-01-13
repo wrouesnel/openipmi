@@ -33,12 +33,14 @@ import wx
 import wx.gizmos as gizmos
 import _domainDialog
 import _saveprefs
+import _cmdwin
 import _oi_logging
 
 init_treenamewidth = 150
 init_sashposition = 100
+init_bsashposition = 400
 init_windowwidth = 400
-init_windowheight = 400
+init_windowheight = 500
 
 refresh_timer_time = 10000
 
@@ -115,7 +117,10 @@ class IPMIGUI(wx.Frame):
 
         self.SetMenuBar(menubar)
 
-        self.splitter = wx.SplitterWindow(self, -1)
+        self.bsplitter = wx.SplitterWindow(self, -1)
+        self.bsplitter.SetMinimumPaneSize(10)
+
+        self.splitter = wx.SplitterWindow(self.bsplitter, -1)
         self.splitter.SetMinimumPaneSize(10)
 
         self.tree = IPMITreeCtrl(self.splitter)
@@ -132,6 +137,16 @@ class IPMIGUI(wx.Frame):
 
         self.splitter.SplitVertically(self.tree, self.logwindow)
         self.splitter.SetSashPosition(init_sashposition)
+
+        self.bpanel = wx.Panel(self.bsplitter, -1)
+        bpsizer = wx.BoxSizer(wx.VERTICAL)
+        self.errstr = wx.StatusBar(self.bpanel, -1)
+        bpsizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.cmdwindow = _cmdwin.CommandWindow(self.bpanel)
+        bpsizer.Add(self.cmdwindow, 1, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
+        self.bpanel.SetSizer(bpsizer)
+        self.bsplitter.SplitHorizontally(self.splitter, self.bpanel)
+        self.bsplitter.SetSashPosition(init_bsashposition)
 
         wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
         wx.EVT_TREE_ITEM_EXPANDED(self.tree, -1, self.TreeExpanded)
@@ -529,6 +544,8 @@ class IPMIGUI(wx.Frame):
         if (hasattr(c, "treeroot")):
             self.tree.Delete(c.treeroot)
             self.cleanup_item(c.treeroot)
+            pass
+        return
 
     # XML preferences handling
     def getTag(self):
@@ -539,7 +556,10 @@ class IPMIGUI(wx.Frame):
         elem.setAttribute("windowwidth", str(width))
         elem.setAttribute("windowheight", str(height))
         elem.setAttribute("sashposition", str(self.splitter.GetSashPosition()))
+        elem.setAttribute("bsashposition", str(self.bsplitter.GetSashPosition()))
         elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
+        return
+    pass
 
 def GetAttrInt(attr, default):
     try:
@@ -551,6 +571,7 @@ def GetAttrInt(attr, default):
 class _GUIRestore(_saveprefs.RestoreHandler):
     def __init__(self):
         _saveprefs.RestoreHandler.__init__(self, "guiparms")
+        return
 
     def restore(self, node):
         global init_windowheight
@@ -566,8 +587,14 @@ class _GUIRestore(_saveprefs.RestoreHandler):
                 init_windowheight = GetAttrInt(attr, init_windowheight)
             elif (attr.nodeName == "sashposition"):
                 init_sashposition = GetAttrInt(attr, init_sashposition)
+            elif (attr.nodeName == "bsashposition"):
+                init_sashposition = GetAttrInt(attr, init_bsashposition)
             elif (attr.nodeName == "treenamewidth"):
                 init_treenamewidth = GetAttrInt(attr, init_treenamewidth)
+                pass
+            pass
+        return
+    pass
 
 _GUIRestore()
     

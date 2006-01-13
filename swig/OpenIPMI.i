@@ -52,6 +52,7 @@
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_cmdlang.h>
 
 #include <signal.h>
 
@@ -2564,6 +2565,12 @@ typedef struct {
 typedef struct {
 } ipmi_pet_t;
 
+typedef struct {
+} ipmi_cmdlang_t;
+
+typedef struct {
+} ipmi_cmdlang_event_t;
+
 %inline %{
 void enable_debug_malloc()
 {
@@ -2610,6 +2617,7 @@ init_posix(void)
 #endif
     swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
+    ipmi_cmdlang_init(swig_os_hnd);
 }
 
 #ifdef HAVE_GLIB
@@ -2629,6 +2637,7 @@ init_glib(void)
     swig_os_hnd = ipmi_glib_get_os_handler();
     swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
+    ipmi_cmdlang_init(swig_os_hnd);
     g_log_set_handler("OpenIPMI",
 		      G_LOG_LEVEL_ERROR
 		      | G_LOG_LEVEL_CRITICAL
@@ -2663,6 +2672,7 @@ void
 shutdown_everything()
 {
     IPMI_SWIG_C_CB_ENTRY
+    ipmi_cmdlang_cleanup();
     ipmi_shutdown();
     ipmi_debug_malloc_cleanup();
     swig_os_hnd->free_os_handler(swig_os_hnd);
@@ -3271,7 +3281,7 @@ ipmi_domain_id_t *open_domain3(char *name, argarray *options,
  */
 void parse_args_iter_help(swig_cb help_cb);
 %{
-    void parse_args_iter_help(swig_cb help_cb)
+    static void parse_args_iter_help(swig_cb help_cb)
     {
 	int         rv;
 	swig_cb_val handler_val;
@@ -3289,7 +3299,7 @@ void parse_args_iter_help(swig_cb help_cb);
 
 const char *parse_option_help();
 %{
-    const char *parse_option_help(void)
+    static const char *parse_option_help(void)
     {
 	return ipmi_parse_options_help();
     }
@@ -4027,7 +4037,7 @@ char *get_error_string(unsigned int val);
 %newobject alloc_empty_args;
 ipmi_args_t *alloc_empty_args(char *con_type);
 %{
-    ipmi_args_t *
+    static ipmi_args_t *
     alloc_empty_args(char *con_type)
     {
 	int         rv;
@@ -4042,7 +4052,7 @@ ipmi_args_t *alloc_empty_args(char *con_type);
 %newobject alloc_parse_args;
 ipmi_args_t *alloc_parse_args(argarray *args);
 %{
-    ipmi_args_t *
+    static ipmi_args_t *
     alloc_parse_args(argarray *args)
     {
 	int         rv;
@@ -9975,5 +9985,335 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     int get_lan_dest_sel()
     {
 	return ipmi_pet_get_lan_dest_sel(self);
+    }
+}
+
+%newobject alloc_cmdlang;
+ipmi_cmdlang_t *alloc_cmdlang(swig_cb handler);
+void cmdlang_set_evinfo(int evinfo);
+int cmdlang_get_evinfo(void);
+void set_cmdlang_global_err_handler(swig_cb handler);
+void set_cmdlang_event_handler(swig_cb handler);
+%{
+    static void cmdlang_set_evinfo(int evinfo)
+    {
+	ipmi_cmdlang_set_evinfo(evinfo);
+    }
+
+    static int cmdlang_get_evinfo(void)
+    {
+	return ipmi_cmdlang_get_evinfo();
+    }
+
+    static void cmdlang_down(ipmi_cmdlang_t *info)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	swig_call_cb(cb, "cmdlang_down", "%p", &ref);
+	swig_free_ref(ref);
+    }
+
+    static void cmdlang_up(ipmi_cmdlang_t *info)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	swig_call_cb(cb, "cmdlang_up", "%p", &ref);
+	swig_free_ref(ref);
+    }
+
+    static void cmdlang_done(ipmi_cmdlang_t *info)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	swig_call_cb(cb, "cmdlang_done", "%p", &ref);
+	swig_free_ref(ref);
+
+	/* Clean up the cmdlang information */
+	if (info->errstr_dynalloc)
+	    ipmi_mem_free(info->errstr);
+	info->errstr_dynalloc = 0;
+	info->errstr = NULL;
+	info->objstr[0] = '\0';
+	info->err = 0;
+    }
+
+    static void cmdlang_out(ipmi_cmdlang_t *info,
+			    const char     *name,
+			    const char     *value)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	if (!value)
+	    value = "";
+	swig_call_cb(cb, "cmdlang_out", "%p%s%s", &ref, name, value);
+	swig_free_ref(ref);
+    }
+
+    static void cmdlang_out_binary(ipmi_cmdlang_t *info,
+				   const char     *name,
+				   const char     *value,
+				   unsigned int   len)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	swig_call_cb(cb, "cmdlang_out_binary", "%p%s%*s", &ref, name,
+		     len, value);
+	swig_free_ref(ref);
+    }
+    
+    static void cmdlang_out_unicode(ipmi_cmdlang_t *info,
+				    const char     *name,
+				    const char     *value,
+				    unsigned int   len)
+    {
+	swig_cb_val cb = info->user_data;
+	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
+
+	swig_call_cb(cb, "cmdlang_out_unicode", "%p%s%*s", &ref, name,
+		     len, value);
+	swig_free_ref(ref);
+    }
+
+    static ipmi_cmdlang_t *
+    alloc_cmdlang(swig_cb handler)
+    {
+	ipmi_cmdlang_t *cmdlang;
+
+	if (nil_swig_cb(handler))
+	    return NULL;
+
+	if (!valid_swig_cb(handler, cmdlang_out))
+	    return NULL;
+	if (!valid_swig_cb(handler, cmdlang_out_binary))
+	    return NULL;
+	if (!valid_swig_cb(handler, cmdlang_out_unicode))
+	    return NULL;
+	if (!valid_swig_cb(handler, cmdlang_down))
+	    return NULL;
+	if (!valid_swig_cb(handler, cmdlang_up))
+	    return NULL;
+	if (!valid_swig_cb(handler, cmdlang_done))
+	    return NULL;
+
+	cmdlang = malloc(sizeof(*cmdlang));
+	if (!cmdlang)
+	    return NULL;
+	memset(cmdlang, 0, sizeof(*cmdlang));
+
+	cmdlang->out = cmdlang_out;
+	cmdlang->down = cmdlang_down;
+	cmdlang->up = cmdlang_up;
+	cmdlang->done = cmdlang_done;
+	cmdlang->out_binary = cmdlang_out_binary;
+	cmdlang->out_unicode = cmdlang_out_unicode;
+
+	cmdlang->os_hnd = swig_os_hnd;
+
+	cmdlang->objstr = malloc(IPMI_MAX_NAME_LEN);
+	if (!cmdlang->objstr) {
+	    free(cmdlang);
+	    return NULL;
+	}
+	cmdlang->objstr[0] = '\0';
+	cmdlang->objstr_len = IPMI_MAX_NAME_LEN;
+
+	cmdlang->user_data = ref_swig_gencb(handler);
+
+	return cmdlang;
+    }
+
+    swig_cb_val cmdlang_global_err_handler = NULL;
+
+    void ipmi_cmdlang_global_err(char *objstr,
+				 char *location,
+				 char *errstr,
+				 int  errval)
+    {
+	swig_cb_val handler = cmdlang_global_err_handler;
+
+	if (!location)
+	    location = "";
+	if (! handler) {
+	    fprintf(stderr, "Global IPMI cmdlang error: %s(%s): %s (%d)\n",
+		    objstr, location, errstr, errval);
+	} else {
+	    swig_call_cb(cmdlang_global_err_handler,
+			 "global_cmdlang_err",
+			 "%s%s%s%d", objstr, location, errstr, errval);
+	}
+    }
+
+    swig_cb_val cmdlang_event_handler = NULL;
+
+    void ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
+    {
+	swig_ref event_ref;
+	swig_cb_val handler = cmdlang_event_handler;
+
+	if (! handler)
+	    return;
+
+	event_ref = swig_make_ref(event, ipmi_cmdlang_event_t);
+	swig_call_cb(cmdlang_event_handler, "cmdlang_event", "%p", &event_ref);
+	/* User shouldn't keep these around. */
+	swig_free_ref_check(event_ref, ipmi_cmdlang_event_t);
+    }
+
+    void set_cmdlang_global_err_handler(swig_cb handler)
+    {
+	swig_cb_val old_handler = cmdlang_global_err_handler;
+	IPMI_SWIG_C_CB_ENTRY
+	if (valid_swig_cb(handler, global_cmdlang_err))
+	    cmdlang_global_err_handler = ref_swig_cb(handler,
+						     global_cmdlang_err);
+	else
+	    cmdlang_global_err_handler = NULL;
+	if (old_handler)
+	    deref_swig_cb_val(old_handler);
+	IPMI_SWIG_C_CB_EXIT
+    }
+
+    void set_cmdlang_event_handler(swig_cb handler)
+    {
+	swig_cb_val old_handler = cmdlang_event_handler;
+	IPMI_SWIG_C_CB_ENTRY
+	if (valid_swig_cb(handler, cmdlang_event))
+	    cmdlang_event_handler = ref_swig_cb(handler, cmdlang_event);
+	else
+	    cmdlang_event_handler = NULL;
+	if (old_handler)
+	    deref_swig_cb_val(old_handler);
+	IPMI_SWIG_C_CB_EXIT
+    }
+%}
+
+
+%extend ipmi_cmdlang_t {
+    ~ipmi_cmdlang()
+    {
+	swig_cb_val handler_val = self->user_data;
+
+	if (handler_val)
+	    deref_swig_cb_val(handler_val);
+	if (self->objstr)
+	    free(self->objstr);
+	free(self);
+    }
+
+    void handle(const char *icmd)
+    {
+	char *cmd = strdup(icmd);
+
+	IPMI_SWIG_C_CB_ENTRY
+	ipmi_cmdlang_handle(self, cmd);
+	IPMI_SWIG_C_CB_EXIT
+    }
+
+    int is_help()
+    {
+	return self->help;
+    }
+
+    int get_err()
+    {
+	return self->err;
+    }
+
+    %newobject get_errstr;
+    char *get_errstr()
+    {
+	return strdup(self->errstr);
+    }
+
+    %newobject get_objstr;
+    char *get_objstr()
+    {
+	return strdup(self->objstr);
+    }
+
+    %newobject get_location;
+    char *get_location()
+    {
+	return strdup(self->location);
+    }
+}
+
+%extend ipmi_cmdlang_event_t {
+    void restart()
+    {
+	ipmi_cmdlang_event_restart(self);
+    }
+
+    int next_field(unsigned int *level,
+		   const char   **type,
+		   char         **name,
+		   char         **value)
+    {
+	int rv;
+	unsigned int len;
+	char         *n, *v;
+	char         *np, *vp;
+	enum ipmi_cmdlang_out_types t;
+	char         *tp;
+	int          i;
+	char         *s;
+
+
+	rv = ipmi_cmdlang_event_next_field(self, level, &t, &n, &len, &v);
+	if (!rv)
+	    return rv;
+
+	if (!v)
+	    v = "";
+
+	np = strdup(n);
+	if (!np)
+	    return ENOMEM;
+
+	switch (t) {
+	case IPMI_CMDLANG_STRING:
+	    tp = "string";
+	    vp = strdup(v);
+	    break;
+	case IPMI_CMDLANG_BINARY:
+	    tp = "binary";
+	    vp = malloc(len * 5);
+	    if (!vp)
+		break;
+	    s = vp;
+	    s += sprintf(s, "0x%2.2x", v[0]);
+	    for (i=1; i<len; i++)
+		s += sprintf(s, " 0x%2.2x", v[0]);
+	    break;
+	case IPMI_CMDLANG_UNICODE:
+	    tp = "unicode";
+	    vp = malloc(len * 5);
+	    if (!vp)
+		break;
+	    s = vp;
+	    s += sprintf(s, "0x%2.2x", v[0]);
+	    for (i=1; i<len; i++)
+		s += sprintf(s, " 0x%2.2x", v[0]);
+	    break;
+	default:
+	    free(np);
+	    return EINVAL;
+	}
+
+	if (!vp) {
+	    free(np);
+	    return ENOMEM;
+	}
+
+	*name = np;
+	*value = vp;
+	*type = tp;
+
+	return 1;
     }
 }

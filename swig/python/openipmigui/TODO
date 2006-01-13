@@ -4,10 +4,8 @@ MC commands:
    SDR fetch and display
    pef
 Domain
-   connections
    fetch FRU
    send message
-   pet - including the ability to save and restore them
+   pet - including the ability to save and restore them in the configuration
 snmp trap handling (saved as a stored configuration)
 Debug settings (--dmem, --dmsg, etc)
-command-line interface

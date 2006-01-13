@@ -587,6 +587,7 @@ ref_swig_cb_i(swig_cb cb)
 }
 #define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
 #define ref_swig_2cb(cb, func, func2) ref_swig_cb_i(cb)
+#define ref_swig_gencb(cb) ref_swig_cb_i(cb)
 
 static swig_cb_val
 deref_swig_cb(swig_cb cb)

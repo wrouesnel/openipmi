@@ -102,10 +102,10 @@ class IPMIGUI_App(wx.App):
         wx.App.__init__(self);
 
     def OnInit(self):
-        ui = gui.IPMIGUI(self.mainhandler)
-        self.mainhandler.SetUI(ui)
+        self.ui = gui.IPMIGUI(self.mainhandler)
+        self.mainhandler.SetUI(self.ui)
     
-        self.SetTopWindow(ui)
+        self.SetTopWindow(self.ui)
 
         OpenIPMI.add_domain_change_handler(self.mainhandler)
         OpenIPMI.set_log_handler(self.mainhandler)
@@ -119,6 +119,27 @@ def ipmithread():
         OpenIPMI.wait_io(1000)
         pass
     return
+
+class CmdlangEventHandler:
+    def __init__(self, app):
+        self.app = app
+        return
+    
+    def cmdlang_event(self, event):
+        name = [ "" ]
+        value = [ "" ]
+        vtype = [ "" ]
+        level = [ 0 ]
+        event.restart()
+        estr = "Event:"
+        more = event.next_field(level, vtype, name, value)
+        while (more != 0):
+            estr += "\n  %*s%s: %s" % (level[0], "", name[0], value[0])
+            more = event.next_field(level, vtype, name, value)
+            pass
+        self.app.ui.new_log(estr)
+        return
+    pass
 
 def run():
     if ((wx.VERSION[0] < 2)
@@ -140,6 +161,8 @@ def run():
 
     app = IPMIGUI_App(mainhandler)
 
+    OpenIPMI.set_cmdlang_event_handler(CmdlangEventHandler(app))
+
     if ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):
         # Version 2.4 of wxPython uses glib1.2, but OpenIPMI usually
         # uses 2.0 if available.  That means we need two different
@@ -147,7 +170,7 @@ def run():
         import thread
         thread.start_new_thread(ipmithread, ())
         pass
-    
+
     app.MainLoop()
     OpenIPMI.set_log_handler(DummyLogHandler())
     OpenIPMI.shutdown_everything()
