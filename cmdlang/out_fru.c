@@ -158,6 +158,10 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     if (!rv) {
 	ipmi_cmdlang_out(cmd_info, "Type", type);
 	rv = traverse_fru_node_tree(cmd_info, node, MAXINT);
+	if (rv)
+	    cmdlang->errstr = "Error traversing FRU node tree";
+    } else {
+	cmdlang->errstr = "Error getting root node of FRU";
     }
 
     ipmi_cmdlang_up(cmd_info);

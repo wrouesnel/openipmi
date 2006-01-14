@@ -126,6 +126,8 @@ class CmdlangEventHandler:
         return
     
     def cmdlang_event(self, event):
+        if (not self.app.ui.logevents):
+            return
         name = [ "" ]
         value = [ "" ]
         vtype = [ "" ]

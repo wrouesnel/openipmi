@@ -31,6 +31,7 @@
 #
 import wx
 import wx.gizmos as gizmos
+import OpenIPMI
 import _domainDialog
 import _saveprefs
 import _cmdwin
@@ -41,6 +42,8 @@ init_sashposition = 100
 init_bsashposition = 400
 init_windowwidth = 400
 init_windowheight = 500
+init_logevents = False
+init_fullevents = False
 
 refresh_timer_time = 10000
 
@@ -96,6 +99,10 @@ class IPMIGUI(wx.Frame):
                           size=wx.Size(init_windowwidth, init_windowheight))
 
         self.mainhandler = mainhandler
+
+        self.logevents = init_logevents
+        self.fullevents = init_fullevents
+        OpenIPMI.cmdlang_set_evinfo(self.fullevents)
         
         menubar = wx.MenuBar()
         
@@ -111,9 +118,22 @@ class IPMIGUI(wx.Frame):
         viewmenu = wx.Menu()
         item = viewmenu.Append(id_st+3, "&Expand All\tCtrl-E", "Expand All")
         wx.EVT_MENU(self, id_st+3, self.ExpandAll);
-        item = viewmenu.Append(id_st+4, "&Collapse All\tCtrl-C", "Collapse All")
+        item = viewmenu.Append(id_st+4,"&Collapse All\tCtrl-C", "Collapse All")
         wx.EVT_MENU(self, id_st+4, self.CollapseAll);
         menubar.Append(viewmenu, "&View")
+
+        self.settingsmenu = wx.Menu()
+        self.EnabEvent = self.settingsmenu.AppendCheckItem(id_st+5,
+                                                           "Enable Events",
+                                                           "Enable Events")
+        wx.EVT_MENU(self, id_st+5, self.EnableEvents);
+        self.settingsmenu.Check(id_st+5, self.logevents)
+        self.EnabEvent = self.settingsmenu.AppendCheckItem(id_st+6,
+                                                           "Full Event Info",
+                                                           "Full Event Info")
+        wx.EVT_MENU(self, id_st+6, self.FullEventInfo);
+        self.settingsmenu.Check(id_st+6, self.fullevents)
+        menubar.Append(self.settingsmenu, "&Settings")
 
         self.SetMenuBar(menubar)
 
@@ -217,6 +237,15 @@ class IPMIGUI(wx.Frame):
     def CollapseAll(self, event):
         self.CollapseItem(self.treeroot)
         
+    def EnableEvents(self, event):
+        self.logevents = self.settingsmenu.IsChecked(id_st+5)
+        return
+    
+    def FullEventInfo(self, event):
+        self.fullevents = self.settingsmenu.IsChecked(id_st+6)
+        OpenIPMI.cmdlang_set_evinfo(self.fullevents)
+        return
+    
     def new_log(self, log):
         newlines = log.count('\n') + 1
         self.logwindow.AppendText(log + "\n")
@@ -558,6 +587,8 @@ class IPMIGUI(wx.Frame):
         elem.setAttribute("sashposition", str(self.splitter.GetSashPosition()))
         elem.setAttribute("bsashposition", str(self.bsplitter.GetSashPosition()))
         elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
+        elem.setAttribute("logevents", str(self.logevents))
+        elem.setAttribute("fullevents", str(self.fullevents))
         return
     pass
 
@@ -568,6 +599,14 @@ def GetAttrInt(attr, default):
         _oi_logging.error ("Error getting init parm " + attr.nodeName)
         return default
 
+def GetAttrBool(attr, default):
+    try:
+        return bool(attr.nodeValue)
+    except Exception, e:
+        _oi_logging.error ("Error getting init parm " + attr.nodeName)
+        return default
+    return
+
 class _GUIRestore(_saveprefs.RestoreHandler):
     def __init__(self):
         _saveprefs.RestoreHandler.__init__(self, "guiparms")
@@ -577,7 +616,10 @@ class _GUIRestore(_saveprefs.RestoreHandler):
         global init_windowheight
         global init_windowwidth
         global init_sashposition
+        global init_bsashposition
         global init_treenamewidth
+        global init_fullevents
+        global init_logevents
         
         for i in range(0, node.attributes.length):
             attr = node.attributes.item(i)
@@ -591,6 +633,10 @@ class _GUIRestore(_saveprefs.RestoreHandler):
                 init_sashposition = GetAttrInt(attr, init_bsashposition)
             elif (attr.nodeName == "treenamewidth"):
                 init_treenamewidth = GetAttrInt(attr, init_treenamewidth)
+            elif (attr.nodeName == "logevents"):
+                init_logevents = GetAttrBool(attr, init_logevents)
+            elif (attr.nodeName == "fullevents"):
+                init_fullevents = GetAttrBool(attr, init_fullevents)
                 pass
             pass
         return

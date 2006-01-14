@@ -8825,7 +8825,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    len = data_len * 5;
 	    str = malloc(len + 1);
 	    s = str;
-	    s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    if (data_len > 0)
+		s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
 	    for (i=1; i<data_len; i++)
 		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    *type = "binary";
@@ -8835,7 +8836,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    len = data_len * 5;
 	    str = malloc(len + 1);
 	    s = str;
-	    s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    if (data_len > 0)
+		s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
 	    for (i=1; i<data_len; i++)
 		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    *type = "unicode";
@@ -10136,13 +10138,15 @@ void set_cmdlang_event_handler(swig_cb handler);
     {
 	swig_cb_val handler = cmdlang_global_err_handler;
 
+	if (!objstr)
+	    objstr = "";
 	if (!location)
 	    location = "";
 	if (! handler) {
 	    fprintf(stderr, "Global IPMI cmdlang error: %s(%s): %s (%d)\n",
 		    objstr, location, errstr, errval);
 	} else {
-	    swig_call_cb(cmdlang_global_err_handler,
+	    swig_call_cb(handler,
 			 "global_cmdlang_err",
 			 "%s%s%s%d", objstr, location, errstr, errval);
 	}
@@ -10159,7 +10163,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 	    return;
 
 	event_ref = swig_make_ref(event, ipmi_cmdlang_event_t);
-	swig_call_cb(cmdlang_event_handler, "cmdlang_event", "%p", &event_ref);
+	swig_call_cb(handler, "cmdlang_event", "%p", &event_ref);
 	/* User shouldn't keep these around. */
 	swig_free_ref_check(event_ref, ipmi_cmdlang_event_t);
     }
@@ -10194,7 +10198,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 
 
 %extend ipmi_cmdlang_t {
-    ~ipmi_cmdlang()
+    ~ipmi_cmdlang_t()
     {
 	swig_cb_val handler_val = self->user_data;
 
@@ -10244,6 +10248,11 @@ void set_cmdlang_event_handler(swig_cb handler);
 }
 
 %extend ipmi_cmdlang_event_t {
+    ~ipmi_cmdlang_event_t()
+    {
+	/* Nothing to do. */
+    }
+
     void restart()
     {
 	ipmi_cmdlang_event_restart(self);
@@ -10263,10 +10272,13 @@ void set_cmdlang_event_handler(swig_cb handler);
 	int          i;
 	char         *s;
 
-
 	rv = ipmi_cmdlang_event_next_field(self, level, &t, &n, &len, &v);
-	if (!rv)
+	if (!rv) {
+	    *type = "";
+	    *name = NULL;
+	    *value = NULL;
 	    return rv;
+	}
 
 	if (!v)
 	    v = "";
@@ -10286,9 +10298,10 @@ void set_cmdlang_event_handler(swig_cb handler);
 	    if (!vp)
 		break;
 	    s = vp;
-	    s += sprintf(s, "0x%2.2x", v[0]);
+	    if (len > 0)
+		s += sprintf(s, "0x%2.2x", (unsigned char) v[0]);
 	    for (i=1; i<len; i++)
-		s += sprintf(s, " 0x%2.2x", v[0]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) v[0]);
 	    break;
 	case IPMI_CMDLANG_UNICODE:
 	    tp = "unicode";
@@ -10296,9 +10309,10 @@ void set_cmdlang_event_handler(swig_cb handler);
 	    if (!vp)
 		break;
 	    s = vp;
-	    s += sprintf(s, "0x%2.2x", v[0]);
+	    if (len > 0)
+		s += sprintf(s, "0x%2.2x", (unsigned char) v[0]);
 	    for (i=1; i<len; i++)
-		s += sprintf(s, " 0x%2.2x", v[0]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) v[0]);
 	    break;
 	default:
 	    free(np);
