@@ -9991,11 +9991,76 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 }
 
 %newobject alloc_cmdlang;
+/*
+ * Allocate a command language handler for use by the interpreted
+ * language.  This allows commands to be entered and the responses
+ * received by the handler object passed in.  The handler object must
+ * implement a large number of methods:
+ *
+ * cmdlang_out - Normal output of a name/value pair.  Has the following
+ *  parameters: <self> <cmdlang> <name> <value>
+ *
+ * cmdlang_out_binary - Output binary information.  Has the following
+ *  parameters: <self> <cmdlang> <name> <val1> [<val2> ...] where the
+ *  values are either a list of parameters or an array of integer
+ *  values (depending on the language).
+ *
+ * cmdlang_out_unicode - Output a unicode string.  Has the following
+ *  parameters: <self> <cmdlang> <name> <val1> [<val2> ...] where the
+ *  values are either a list of parameters or an array of integer
+ *  values (depending on the language).
+ *
+ * cmdlang_down - increase the nesting level of the output.  Takes
+ *  the following parameters: <self> <cmdlang>.
+
+ * cmdlang_up - decrease the nesting level of the output.  Takes
+ *  the following parameters: <self> <cmdlang>.
+ *
+ * cmdlang_done - Execution of a command is complete.  This will be
+ * called after every handled command so the upper layer will know
+ * when a new command can be entered..  Takes the following
+ * parameters: <self> <cmdlang>.
+ */
 ipmi_cmdlang_t *alloc_cmdlang(swig_cb handler);
+
+/*
+ * Enable or disable full information for events registers with
+ * set_cmdlang_event_handler.  Normally (with this set to false) only
+ * minimal event information is printed.  With this set to true, all
+ * information about the object the event occurs for is printed.
+ */
 void cmdlang_set_evinfo(int evinfo);
+
+/* 
+ * Get the event info flag value.
+ */
 int cmdlang_get_evinfo(void);
+
+/*
+ * Set an error handler for handling "global" errors from the OpenIPMI
+ * command language.  Basically, these are errors that are note
+ * related to any specific command handler.  The handler has the
+ * global_cmdlang_err method called on it with the following parms:
+ * <self>
+ * <objstr> - The name of the object associated with the error.  May
+ * be empty.
+ * <location> - The location (in the source code) where the error was
+ * generated.  May be empty.
+ * <errstr> - The error string generated.
+ * <errval> - an integer value for the error.
+ */
 void set_cmdlang_global_err_handler(swig_cb handler);
+
+/*
+ * Handle event from the cmdlang interface.  These are basically
+ * events that occur asyncronously and are thus not associated with
+ * any specific cmdlang handler.  The handler's cmdlang_event method
+ * will be called with the following parameters: <self> <event>.  The
+ * event is of the type ipmi_cmdlang_event_t.
+ */
 void set_cmdlang_event_handler(swig_cb handler);
+
+
 %{
     static void cmdlang_set_evinfo(int evinfo)
     {
@@ -10209,6 +10274,9 @@ void set_cmdlang_event_handler(swig_cb handler);
 	free(self);
     }
 
+    /*
+     * Process a command for the command language.
+     */
     void handle(const char *icmd)
     {
 	char *cmd = strdup(icmd);
@@ -10218,28 +10286,45 @@ void set_cmdlang_event_handler(swig_cb handler);
 	IPMI_SWIG_C_CB_EXIT
     }
 
+    /* 
+     * When outputting, tells if this is help output.
+     */
     int is_help()
     {
 	return self->help;
     }
 
+    /* 
+     * When outputting, gets the error value, or 0 if there was no
+     * error.
+     */
     int get_err()
     {
 	return self->err;
     }
 
     %newobject get_errstr;
+    /*
+     * If there was an error, get the error string.
+     */
     char *get_errstr()
     {
 	return strdup(self->errstr);
     }
 
+    /*
+     * If there was an error, get the object name associated with the error.
+     */
     %newobject get_objstr;
     char *get_objstr()
     {
 	return strdup(self->objstr);
     }
 
+    /*
+     * If there was an error, get the location in the source code
+     * where the error was generated.
+     */
     %newobject get_location;
     char *get_location()
     {
@@ -10247,17 +10332,30 @@ void set_cmdlang_event_handler(swig_cb handler);
     }
 }
 
+/*
+ * A cmdlang event is a series of name/value fields that may be
+ * fetched in sequence.
+ */
 %extend ipmi_cmdlang_event_t {
     ~ipmi_cmdlang_event_t()
     {
 	/* Nothing to do. */
     }
 
+    /*
+     * Restart with the first field.
+     */
     void restart()
     {
 	ipmi_cmdlang_event_restart(self);
     }
 
+    /*
+     * Get the values of the next field.  The level is the nesting
+     * level, the type is either "string", "binary", or "unicode", the
+     * name is the name of the field, and value is its value.  binary
+     * and unicode are returned as a string of hex values (0xnn 0xnn ...).
+     */
     int next_field(unsigned int *level,
 		   const char   **type,
 		   char         **name,

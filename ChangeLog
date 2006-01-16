@@ -6,6 +6,8 @@
 
 	* OpenIPMI.spec.in: Modify for renames and and the GUI.
 
+	* swig/OpenIPMI.i: Added some missing docs.
+
 	* configure.in: Move to version 2.0.4.
 
 2006-01-13 Corey Minyard <cminyard@mvista.com>
