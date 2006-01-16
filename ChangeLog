@@ -1,3 +1,13 @@
+2006-01-15 Corey Minyard <cminyard@mvista.com>
+
+	* man/ipmish.1, man/openipmish.1: Rename ipmish to openipmish.
+
+	* man/ipmicmd.1, man/openipmicmd.1: Rename ipmicmd to openipmicmd.
+
+	* OpenIPMI.spec.in: Modify for renames and and the GUI.
+
+	* configure.in: Move to version 2.0.4.
+
 2006-01-13 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/Makefile.am: Add os_debug.c into the openipmish build,

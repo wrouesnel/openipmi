@@ -143,15 +143,15 @@ fi
 %files python
 ###################################################
 %defattr(-,root,root)
-%{_exec_prefix}/lib/python*/site-packages/*OpenIPMI.*
+%{_libdir}/python*/site-packages/*OpenIPMI.*
 %doc swig/OpenIPMI.i
 
 ###################################################
 %files gui
 ###################################################
 %defattr(-,root,root)
-%dir %{_exec_prefix}/lib/python*/site-packages/openipmigui
-%{_exec_prefix}/lib/python*/site-packages/openipmigui/*
+%dir %{_libdir}/python*/site-packages/openipmigui
+%{_libdir}/python*/site-packages/openipmigui/*
 %{_bindir}/openipmigui
 
 ###################################################
@@ -169,13 +169,16 @@ fi
 %defattr(-,root,root)
 %{_bindir}/ipmi_ui
 %{_bindir}/ipmicmd
+%{_bindir}/openipmicmd
 %{_bindir}/ipmish
+%{_bindir}/openipmish
 %{_bindir}/solterm
 %{_libdir}/libOpenIPMIui.so*
 %{_libdir}/libOpenIPMIui.la
 %doc %{_mandir}/man1/ipmi_ui.1*
-%doc %{_mandir}/man1/ipmicmd.1*
-%doc %{_mandir}/man1/ipmish.1*
+%doc %{_mandir}/man1/openipmicmd.1*
+%doc %{_mandir}/man1/openipmish.1*
+%doc %{_mandir}/man1/openipmigui.1*
 %doc %{_mandir}/man7/ipmi_cmdlang.7*
 
 ###################################################
