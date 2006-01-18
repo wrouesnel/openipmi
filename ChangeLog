@@ -1,3 +1,7 @@
+2006-01-16 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fix a bug in getting some event fields.
+
 2006-01-15 Corey Minyard <cminyard@mvista.com>
 
 	* man/ipmish.1, man/openipmish.1: Rename ipmish to openipmish.

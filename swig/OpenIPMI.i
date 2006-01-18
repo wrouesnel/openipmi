@@ -10399,7 +10399,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 	    if (len > 0)
 		s += sprintf(s, "0x%2.2x", (unsigned char) v[0]);
 	    for (i=1; i<len; i++)
-		s += sprintf(s, " 0x%2.2x", (unsigned char) v[0]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) v[i]);
 	    break;
 	case IPMI_CMDLANG_UNICODE:
 	    tp = "unicode";
@@ -10410,7 +10410,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 	    if (len > 0)
 		s += sprintf(s, "0x%2.2x", (unsigned char) v[0]);
 	    for (i=1; i<len; i++)
-		s += sprintf(s, " 0x%2.2x", (unsigned char) v[0]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) v[i]);
 	    break;
 	default:
 	    free(np);
