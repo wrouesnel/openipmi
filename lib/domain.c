@@ -4430,6 +4430,25 @@ ipmi_domain_get_connection_args(ipmi_domain_t *domain,
     return domain->conn[con]->get_startup_args(domain->conn[con]);
 }
 
+ipmi_con_t *
+ipmi_domain_get_connection(ipmi_domain_t *domain,
+			   unsigned int  connection)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if (connection >= MAX_CONS)
+	return NULL;
+
+    if (!domain->conn[connection])
+	return NULL;
+
+    if (! domain->conn[connection]->use_connection)
+	return NULL;
+
+    domain->conn[connection]->use_connection(domain->conn[connection]);
+    return domain->conn[connection];
+}
+
 /* If the activate timer is not running, then start it.  This
    allows some time for other connections to become active before
    we go off and start activating things.  We wait a random amount

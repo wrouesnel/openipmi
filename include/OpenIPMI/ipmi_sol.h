@@ -160,7 +160,7 @@ typedef struct ipmi_sol_conn_s ipmi_sol_conn_t;
  *			for the callback.
  */
 typedef void (*ipmi_sol_connection_state_cb)(ipmi_sol_conn_t *conn,
-					     int             state,
+					     ipmi_sol_state  state,
 					     int             error,
 					     void            *cb_data);
 

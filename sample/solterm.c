@@ -266,7 +266,7 @@ char *state_names[5] = {"Closed", "Connecting", "Connected", "Connected (Char Tr
 
 
 #define ERROR_STRING_LEN 50
-static void connection_state(ipmi_sol_conn_t *conn, int state, int error, void *cb_data)
+static void connection_state(ipmi_sol_conn_t *conn, ipmi_sol_state state, int error, void *cb_data)
 {
 	char error_string[ERROR_STRING_LEN];
 

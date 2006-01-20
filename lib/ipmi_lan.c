@@ -5117,6 +5117,16 @@ find_matching_lan(lan_conn_parms_t *cparm)
     return NULL;
 }
 
+static void
+lan_use_connection(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = ipmi->con_data;
+
+    ipmi_lock(lan_list_lock);
+    lan->users++;
+    ipmi_unlock(lan_list_lock);
+}
+
 static ipmi_args_t *get_startup_args(ipmi_con_t *ipmi);
 
 int
@@ -5426,6 +5436,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->close_connection_done = lan_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
     ipmi->get_startup_args = get_startup_args;
+    ipmi->use_connection = lan_use_connection;
 
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */

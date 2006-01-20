@@ -1,3 +1,8 @@
+2006-01-19 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_sol.h, lib/ipmi_sol.c: Modified one
+	interface a little to pass the state as the correct type.
+
 2006-01-16 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix a bug in getting some event fields.

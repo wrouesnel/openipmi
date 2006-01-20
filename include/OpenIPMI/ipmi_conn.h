@@ -315,6 +315,11 @@ struct ipmi_con_s
 
     /* Return the arguments or the connection. */
     ipmi_args_t *(*get_startup_args)(ipmi_con_t *con);
+
+    /* Increment the usecount of the connection; for each use, the
+       connection must be closed.  This may be NULL if the connection
+       type does not support being reused. */
+    void (*use_connection)(ipmi_con_t *con);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

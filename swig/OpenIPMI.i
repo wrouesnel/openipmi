@@ -51,6 +51,7 @@
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_pet.h>
+#include <OpenIPMI/ipmi_sol.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 
@@ -2571,6 +2572,9 @@ typedef struct {
 typedef struct {
 } ipmi_cmdlang_event_t;
 
+typedef struct {
+} ipmi_sol_conn_t;
+
 %inline %{
 void enable_debug_malloc()
 {
@@ -4032,8 +4036,36 @@ char *get_error_string(unsigned int val);
 	IPMI_SWIG_C_CB_EXIT
 	return pet;
     }
+
+    /*
+     * Allocate a SoL object using the given domain's connection.
+     * Note that this does not cause a connection, it just creates an
+     * object for doing an SoL connection.
+     */
+    %newobject create_sol;
+    ipmi_sol_conn_t *create_sol(int connection)
+    {
+	ipmi_con_t      *con = ipmi_domain_get_connection(self, connection);
+	ipmi_sol_conn_t *scon;
+	int             rv;
+
+	if (!con)
+	    return NULL;
+
+	rv = ipmi_sol_create(con, &scon);
+	if (rv) {
+	    con->close_connection(con);
+	    return NULL;
+	}
+
+	return scon;
+    }
 }
 
+/*
+ * Allocate an args structure of the given connection type, generally
+ * "smi" or Lan".
+ */
 %newobject alloc_empty_args;
 ipmi_args_t *alloc_empty_args(char *con_type);
 %{
@@ -4049,6 +4081,10 @@ ipmi_args_t *alloc_empty_args(char *con_type);
     }
 %}
 
+/*
+ * Parse the array of arguments.  The arguments is a list/array of
+ * strings and parsed using the standard algorithms.
+ */
 %newobject alloc_parse_args;
 ipmi_args_t *alloc_parse_args(argarray *args);
 %{
@@ -4072,11 +4108,25 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	ipmi_free_args(self);
     }
 
+    /*
+     * Return the type of connection, generally "lan" or "smi".
+     */
     const char *get_type()
     {
 	return ipmi_args_get_type(self);
     }
 
+    /*
+     * An args is a set of fields indexed by argnum.  Fetching an
+     * argument returns the name, type, help string, and value.  E2BIG
+     * is returned if argnum is larger than the number of fields.
+     * Type will be either "str" for a string or integer or IP address
+     * or other field like that, "bool" for a boolean, and "enum" for
+     * an enumeration type.  The "str" type, obviously, may have
+     * semantics behind it.  The "bool" value will be either "true" or
+     * "false".  For enums, an array of strings is returned as "range"
+     * and the value will be one of these strings.
+     */
     int get_val(int           argnum,
 		const char    **name,
 		const char    **type,
@@ -4109,6 +4159,12 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	return 0;
     }
 
+    /*
+     * Set the given field.  If name is not NULL, then find the field
+     * by name.  If name is NULL, then argnum is used for the field.
+     * If the value does not match the semantics of the field, an
+     * error is returned.
+     */
     int set_val(int argnum, const char *name, const char *value)
     {
 	return ipmi_args_set_val(self, argnum, name, value);
@@ -6150,7 +6206,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 %constant int CHANNEL_MEDIUM_8023_LAN = IPMI_CHANNEL_MEDIUM_8023_LAN;
 %constant int CHANNEL_MEDIUM_RS232 = IPMI_CHANNEL_MEDIUM_RS232;
 %constant int CHANNEL_MEDIUM_OTHER_LAN = IPMI_CHANNEL_MEDIUM_OTHER_LAN;
-%constant int CHANNEL_MEDIUM_PCI_SMBUS = IPMI_CHANNEL_MEDIUM_PCI_SMBUS;
+    %constant int CHANNEL_MEDIUM_PCI_SMBUS = IPMI_CHANNEL_MEDIUM_PCI_SMBUS;
 %constant int CHANNEL_MEDIUM_SMBUS_v1 = IPMI_CHANNEL_MEDIUM_SMBUS_v1;
 %constant int CHANNEL_MEDIUM_SMBUS_v2 = IPMI_CHANNEL_MEDIUM_SMBUS_v2;
 %constant int CHANNEL_MEDIUM_USB_v1 = IPMI_CHANNEL_MEDIUM_USB_v1;
@@ -10428,4 +10484,15 @@ void set_cmdlang_event_handler(swig_cb handler);
 
 	return 1;
     }
+}
+
+%extend ipmi_sol_conn_t
+{
+    ~ipmi_sol_conn_t()
+    {
+	ipmi_sol_force_close(self);
+	ipmi_sol_free(self);
+    }
+
+
 }
