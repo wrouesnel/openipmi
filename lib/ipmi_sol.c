@@ -350,10 +350,9 @@ static int send_message(ipmi_sol_conn_t *conn, ipmi_msg_t *msg_out, sol_command_
 {
     int rv = 0;
     ipmi_msgi_t *rspi = ipmi_alloc_msg_item();
-    if (!rspi) {
-	rv = ENOMEM;
-	return rv;
-    }
+
+    if (!rspi)
+	return ENOMEM;
 
     rspi->data1 = conn;
     rspi->data2 = cb;
@@ -571,12 +570,6 @@ void ipmi_sol_set_ACK_retries(ipmi_sol_conn_t *conn, int retries)
 int ipmi_sol_set_use_authentication(ipmi_sol_conn_t *conn,
 	int use_authentication)
 {
-	/*
-	 * This can't be truly supported at the moment.
-	 */
-	return ENOSYS;
-
-#if 0
 	if (!conn)
 		return EINVAL;
 
@@ -589,7 +582,6 @@ int ipmi_sol_set_use_authentication(ipmi_sol_conn_t *conn,
 		conn->auxiliary_payload_data &= ~IPMI_SOL_AUX_USE_AUTHENTICATION;
 
 	return 0;
-#endif
 }
 
 
@@ -600,12 +592,6 @@ int ipmi_sol_get_use_authentication(ipmi_sol_conn_t *conn)
 
 int ipmi_sol_set_use_encryption(ipmi_sol_conn_t *conn, int use_encryption)
 {
-	/*
-	 * This can't be truly supported at the moment.
-	 */
-	return ENOSYS;
-
-#if 0
 	if (!conn)
 		return EINVAL;
 
@@ -618,7 +604,6 @@ int ipmi_sol_set_use_encryption(ipmi_sol_conn_t *conn, int use_encryption)
 		conn->auxiliary_payload_data &= ~IPMI_SOL_AUX_USE_ENCRYPTION;
 
 	return 0;
-#endif
 }
 
 int ipmi_sol_get_use_encryption(ipmi_sol_conn_t *conn)
@@ -964,6 +949,17 @@ static int transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitt
 	 * Pack the packet into a pseudo-IPMI message.
 	 */
 	ipmi_msg_t msg;
+	ipmi_con_option_t options[3];
+	int                curr_opt = 0;
+	ipmi_sol_conn_t   *conn = transmitter->sol_conn;
+
+	options[curr_opt].option = IPMI_CON_MSG_OPTION_CONF;
+	options[curr_opt].ival = ipmi_sol_get_use_encryption(conn);
+	curr_opt++;
+	options[curr_opt].option = IPMI_CON_MSG_OPTION_AUTH;
+	options[curr_opt].ival = ipmi_sol_get_use_authentication(conn);
+	curr_opt++;
+	options[curr_opt].option = IPMI_CON_OPTION_LIST_END;
 
 	ipmi_lock(transmitter->packet_lock);
 
@@ -983,11 +979,13 @@ static int transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitt
 	/*
 	 * And fire it off!
 	 */
-	rv = transmitter->sol_conn->ipmi->send_command(transmitter->sol_conn->ipmi,
-		(ipmi_addr_t *)&transmitter->sol_conn->sol_payload_addr,
-		sizeof(transmitter->sol_conn->sol_payload_addr),
-		&msg,
-		NULL, NULL);
+	rv = conn->ipmi->send_command_option
+	  (conn->ipmi,
+	   (ipmi_addr_t *)&transmitter->sol_conn->sol_payload_addr,
+	   sizeof(transmitter->sol_conn->sol_payload_addr),
+	   &msg,
+	   options,
+	   NULL, NULL);
 
 	if (rv)
 	{
@@ -1631,6 +1629,10 @@ int ipmi_sol_create(
 		return ENOMEM;
 
 	memset((void *)new_conn, 0, sizeof(*new_conn));
+
+	/* Enable authentication and encryption by default. */
+	new_conn->auxiliary_payload_data = (IPMI_SOL_AUX_USE_ENCRYPTION
+					    | IPMI_SOL_AUX_USE_AUTHENTICATION);
 
     	rv = ipmi_create_lock_os_hnd(ipmi->os_hnd, &new_conn->transmitter.packet_lock);
     	if (rv)

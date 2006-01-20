@@ -7,15 +7,7 @@ openipmicmd \- An IPMI Command Interface
 .B openipmicmd
 .RB [ \-k
 .IR "entry-to-execute" ]
-.BI smi\  smi-num
-
-.B openipmicmd
-.RB [ \-k
-.IR "entry-to-execute" ]
-.BI lan\  IP-addr
-.IR port\  [ IP-addr-2
-.IR port-2 ] 
-.I auth privilege username password
+.BI "<connection parms>"
 
 .SH DESCRIPTION
 The
@@ -30,48 +22,9 @@ interfaces.
 Execute a single command an exit.
 
 .TP
-.I "smi-num"
-The SMI number to connect to, for systems with more than on system
-interface.  Generally, this is '\fB0\fP'.
-
-.TP
-.I "IP-addr"
-The IP address of the LAN interface.
-
-.TP
-.I "port"
-The UDP port of the LAN interface, general \fB623\fP.
-
-.TP
-.I "IP-addr-2"
-Some systems support multiple IP connections, this specified the
-second address and is optional.  If specified, OpenIPMI will use both
-IP addresses and fail over to the working one if one of them fails.
-
-.TP
-.I "port-2"
-The port for the second IP connection, generally \fB623\fP.
-
-.TP
-.I "auth"
-The authorization to use for the connection, either "\fBnone\fP",
-"\fBstraight\fP", "\fBmd5\fP", or "\fBmd2\fP".
-
-.TP
-.I "privilege"
-The privilege to use for the connection, either "\fBcallback\fP", "\fBuser\fP",
-"\fBoperator\fP", or "\fBadmin\fP".  Note that some IPMI operations will fail
-without the correct privilege.
-
-.TP
-.I "username"
-The user name to use for the connection.  If using this anonymous
-user, this should be the empty string "".
-
-.TP
-.I "password"
-The password to use for the connection.
-
+.BI <connection parms>
+The parameters for the connection depend on the connection type.
+These are all described in openipmi_conparms (7)
 
 .SH COMMANDS
 
@@ -122,7 +75,8 @@ Remove a command registration.
 
 .SH "SEE ALSO"
 .BR ipmi_ui (1),
-.BR ipmilan (8)
+.BR ipmilan (8),
+.BR openipmi_conparms (7)
 
 .SH "KNOWN PROBLEMS"
 The asychronous nature of the program can be annoying.

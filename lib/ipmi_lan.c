@@ -1535,7 +1535,8 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 		 unsigned int payload_type, int in_session,
 		 unsigned char **msgdata, unsigned int *data_len,
 		 unsigned int  max_data_len, unsigned int header_len,
-		 unsigned char *oem_iana, unsigned int oem_payload_id)
+		 unsigned char *oem_iana, unsigned int oem_payload_id,
+		 const ipmi_con_option_t *options)
 {
     unsigned char *tmsg;
     int           rv;
@@ -1543,11 +1544,36 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     unsigned char *data;
     unsigned int  payload_len;
     uint32_t      *seqp;
+    int           do_auth = 1;
+    int           do_conf = 1;
 
-    if (in_session
-	&& (lan->ip[addr_num].working_conf
-	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
-    {
+    if (options) {
+	while (options->option != IPMI_CON_OPTION_LIST_END) {
+	    switch (options->option) {
+	    case IPMI_CON_MSG_OPTION_AUTH:
+		do_auth = options->ival;
+		break;
+
+	    case IPMI_CON_MSG_OPTION_CONF:
+		do_conf = options->ival;
+		break;
+
+	    default:
+		/* Ignore unknown options. */
+		break;
+	    }
+	    options++;
+	}
+    }
+
+    do_conf = (do_conf && in_session
+	       && (lan->ip[addr_num].working_conf
+		   != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE));
+    do_auth = (do_auth && in_session
+	       && (lan->ip[addr_num].working_integ
+		   != IPMI_LANP_INTEGRITY_ALGORITHM_NONE));
+
+    if (do_conf) {
 #if 0
 	if (! lan->ip[addr_num].working)
 	    return EAGAIN;
@@ -1594,14 +1620,9 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	tmsg += 2;
     }
     if (in_session) {
-	if (lan->ip[addr_num].working_conf
-	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE)
-	{
+	if (do_conf)
 	    data[5] |= 0x80;
-	}
-	if (lan->ip[addr_num].working_integ
-	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
-	{
+	if (do_auth) {
 	    seqp = &(lan->ip[addr_num].outbound_seq_num);
 	    data[5] |= 0x40;
 	} else {
@@ -1622,10 +1643,7 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     /* Payload length doesn't include the padding. */
     ipmi_set_uint16(tmsg, payload_len);
 
-    if (in_session
-	&& (lan->ip[addr_num].working_integ
-	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
-    {
+    if (do_auth) {
 	rv = lan->ip[addr_num].integ_info->integ_pad
 	    (lan->ipmi,
 	     lan->ip[addr_num].integ_data,
@@ -1633,12 +1651,7 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	     max_data_len);
 	if (rv)
 	    return rv;
-    }
 
-    if (in_session
-	&& (lan->ip[addr_num].working_integ
-	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
-    {
 	rv = lan->ip[addr_num].integ_info->integ_add
 	    (lan->ipmi,
 	     lan->ip[addr_num].integ_data,
@@ -1707,12 +1720,13 @@ lan15_format_msg(lan_data_t *lan, int addr_num,
 }
 
 static int
-lan_send_addr(lan_data_t        *lan,
-	      const ipmi_addr_t *addr,
-	      int               addr_len,
-	      const ipmi_msg_t  *msg,
-	      uint8_t           seq,
-	      int               addr_num)
+lan_send_addr(lan_data_t              *lan,
+	      const ipmi_addr_t       *addr,
+	      int                     addr_len,
+	      const ipmi_msg_t        *msg,
+	      uint8_t                 seq,
+	      int                     addr_num,
+	      const ipmi_con_option_t *options)
 {
     unsigned char  data[IPMI_MAX_LAN_LEN+IPMI_LAN_MAX_HEADER];
     unsigned char  *tmsg;
@@ -1795,7 +1809,7 @@ lan_send_addr(lan_data_t        *lan,
 			      payload_type, !out_of_session,
 			      &tmsg, &pos,
 			      IPMI_MAX_LAN_LEN, IPMI_LAN_MAX_HEADER,
-			      oem_iana, oem_payload_id);
+			      oem_iana, oem_payload_id, options);
     } else {
 	rv = lan15_format_msg(lan, addr_num, &tmsg, &pos);
 	if (addr->addr_type == IPMI_RMCPP_ADDR_SOL)
@@ -1841,12 +1855,13 @@ lan_send_addr(lan_data_t        *lan,
 }
 
 static int
-lan_send(lan_data_t        *lan,
-	 const ipmi_addr_t *addr,
-	 int               addr_len,
-	 const ipmi_msg_t  *msg,
-	 uint8_t           seq,
-	 int               *send_ip_num)
+lan_send(lan_data_t              *lan,
+	 const ipmi_addr_t       *addr,
+	 int                     addr_len,
+	 const ipmi_msg_t        *msg,
+	 uint8_t                 seq,
+	 int                     *send_ip_num,
+	 const ipmi_con_option_t *options)
 {
     int curr_ip_addr;
 
@@ -1885,7 +1900,7 @@ lan_send(lan_data_t        *lan,
 
     *send_ip_num = curr_ip_addr;
 
-    return lan_send_addr(lan, addr, addr_len, msg, seq, curr_ip_addr);
+    return lan_send_addr(lan, addr, addr_len, msg, seq, curr_ip_addr, options);
 }
 
 typedef struct call_ipmb_change_handler_s
@@ -2341,14 +2356,16 @@ rsp_timeout_handler(void              *cb_data,
 			       lan->seq_table[seq].addr_len,
 			       &(lan->seq_table[seq].msg),
 			       seq,
-			       lan->seq_table[seq].addr_num);
+			       lan->seq_table[seq].addr_num,
+			       NULL);
 	else
 	    rv = lan_send(lan,
 			  &(lan->seq_table[seq].addr),
 			  lan->seq_table[seq].addr_len,
 			  &(lan->seq_table[seq].msg),
 			  seq,
-			  &(lan->seq_table[seq].last_ip_num));
+			  &(lan->seq_table[seq].last_ip_num),
+			  NULL);
 
 	if (rv) {
 	    /* If we get an error resending the message, report an unknown
@@ -2615,11 +2632,12 @@ handle_msg_send(lan_timer_info_t      *info,
     lan->last_seq = seq;
 
     if (addr_num >= 0) {
-	rv = lan_send_addr(lan, addr, addr_len, msg, seq, addr_num);
+	rv = lan_send_addr(lan, addr, addr_len, msg, seq, addr_num, NULL);
 	lan->seq_table[seq].last_ip_num = addr_num;
     } else {
 	rv = lan_send(lan, addr, addr_len, msg, seq,
-		      &(lan->seq_table[seq].last_ip_num));
+		      &(lan->seq_table[seq].last_ip_num),
+		      NULL);
     }
     if (rv) {
 	int err;
@@ -3398,7 +3416,7 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     /* Odd netfns are responses or unacknowledged data.  Just send
        them. */
     if (msg->netfn & 1)
-	return lan_send_addr(lan, addr, addr_len, msg, 0, addr_num);
+	return lan_send_addr(lan, addr, addr_len, msg, 0, addr_num, NULL);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -3442,12 +3460,13 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 }
 
 static int
-lan_send_command(ipmi_con_t            *ipmi,
-		 const ipmi_addr_t     *addr,
-		 unsigned int          addr_len,
-		 const ipmi_msg_t      *msg,
-		 ipmi_ll_rsp_handler_t rsp_handler,
-		 ipmi_msgi_t           *trspi)
+lan_send_command_option(ipmi_con_t              *ipmi,
+			const ipmi_addr_t       *addr,
+			unsigned int            addr_len,
+			const ipmi_msg_t        *msg,
+			const ipmi_con_option_t *options,
+			ipmi_ll_rsp_handler_t   rsp_handler,
+			ipmi_msgi_t             *trspi)
 {
     lan_timer_info_t *info;
     lan_data_t       *lan;
@@ -3467,7 +3486,7 @@ lan_send_command(ipmi_con_t            *ipmi,
        them. */
     if (msg->netfn & 1) {
 	int dummy_send_ip;
-	return lan_send(lan, addr, addr_len, msg, 0, &dummy_send_ip);
+	return lan_send(lan, addr, addr_len, msg, 0, &dummy_send_ip, options);
     }
 
     if (!rspi) {
@@ -3550,6 +3569,18 @@ lan_send_command(ipmi_con_t            *ipmi,
 }
 
 static int
+lan_send_command(ipmi_con_t            *ipmi,
+		 const ipmi_addr_t     *addr,
+		 unsigned int          addr_len,
+		 const ipmi_msg_t      *msg,
+		 ipmi_ll_rsp_handler_t rsp_handler,
+		 ipmi_msgi_t           *trspi)
+{
+    return lan_send_command_option(ipmi, addr, addr_len, msg, NULL,
+				   rsp_handler, trspi);
+}
+
+static int
 lan_send_response(ipmi_con_t        *ipmi,
 		  const ipmi_addr_t *addr,
 		  unsigned int      addr_len,
@@ -3610,7 +3641,8 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 	ipmi_set_uint32(data, lan->ip[addr_num].mgsys_session_id);
     else
 	ipmi_set_uint32(data, lan->ip[addr_num].session_id);
-    lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, addr_num);
+    lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, addr_num,
+		  NULL);
 }
 
 static void
@@ -5437,6 +5469,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->handle_async_event = handle_async_event;
     ipmi->get_startup_args = get_startup_args;
     ipmi->use_connection = lan_use_connection;
+    ipmi->send_command_option = lan_send_command_option;
 
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */
@@ -5470,7 +5503,8 @@ snmp_got_match(lan_data_t          *lan,
     ack.cmd = IPMI_PET_ACKNOWLEDGE_CMD;
     ack.data = (unsigned char *) pet_ack;
     ack.data_len = 12;
-    lan_send(lan, (ipmi_addr_t *) &si, sizeof(si), &ack, 0, &dummy_send_ip);
+    lan_send(lan, (ipmi_addr_t *) &si, sizeof(si), &ack, 0, &dummy_send_ip,
+	     NULL);
 }
 
 typedef struct lan_do_evt_s

@@ -119,6 +119,31 @@ typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
    of the spec. */
 #define IPMI_CONN_HACK_RMCPP_INTEG_SIK		0x00000004
 
+/*
+ * Used to pass special options for sending messages.
+ */
+typedef struct ipmi_con_option_s
+{
+    int option;
+    union {
+	long ival;
+	void *pval;
+    };
+} ipmi_con_option_t;
+
+/* Used to mark the end of the option list.  Must always be the last
+   option. */
+#define IPMI_CON_OPTION_LIST_END		0
+
+/* Enable/disable authentication on the message (set by ival).
+   Default is enabled. */
+#define IPMI_CON_MSG_OPTION_AUTH		1
+
+/* Enable/disable confidentiality (encryption) on the message (set by
+   ival).  Default is enabled. */
+#define IPMI_CON_MSG_OPTION_CONF		2
+
+
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
 struct ipmi_con_s
@@ -320,6 +345,19 @@ struct ipmi_con_s
        connection must be closed.  This may be NULL if the connection
        type does not support being reused. */
     void (*use_connection)(ipmi_con_t *con);
+
+    /* Like send_command, but with options.  options may be NULL if
+       none.  If options are passed in, they must be terminated with
+       the proper option.  This field may be NULL if the connection
+       does not support options. */
+    int (*send_command_option)(ipmi_con_t              *ipmi,
+			       const ipmi_addr_t       *addr,
+			       unsigned int            addr_len,
+			       const ipmi_msg_t        *msg,
+			       const ipmi_con_option_t *options,
+			       ipmi_ll_rsp_handler_t   rsp_handler,
+			       ipmi_msgi_t             *rspi);
+
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

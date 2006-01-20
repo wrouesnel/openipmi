@@ -70,6 +70,12 @@
  *	include/OpenIPMI/include/ipmi_sol.h
  */
 
+#ifndef _IPMI_SOL_H
+#define _IPMI_SOL_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Queue identification constants for ipmi_sol_flush(...).
@@ -686,3 +692,9 @@ int ipmi_sol_flush(ipmi_sol_conn_t *conn,
 		   int             queue_selectors,
 		   ipmi_sol_flush_complete_cb cb,
 		   void            *cb_data);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _IPMI_SOL_H */

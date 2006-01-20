@@ -1,3 +1,33 @@
+2006-01-20 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_conn.h: Added a way to send messages with
+	options; primarily for supporting per-packet authentication and
+	encryption settings.
+
+	* include/OpenIPMI/ipmi_sol.h: Added C++ handling.
+
+	* lib/ipmi_lan.c: Added the ability to support per-packet
+	encryption and authentication for asynchronous packets (primarily
+	for SOL) using the previous change to the connection interface.
+
+	* lib/ipmi_sol.c: Added the ability to support separate
+	authentication and encryption on the interfaces.  Also, default
+	the values to use encryption.
+
+	* sample/solterm.c: Modify to use encryption and authentication by
+	default.  Also modify the way connection parameters are specified
+	so that it is standard (the "lan" is required") and get the
+	connection help via the standard interface.  Also removed all the
+	DOS newlines and converted them to *nix.
+
+	* man/Makefile.am, man/openipmi_conparms.7: Added a man page on
+	the standard connection parms, so it doesn't have to be in every
+	man page.
+	
+	* man/openipmicmd.1: Swith over to use the new conparms manpage.
+
+	* man/solterm.1; Added docs for solterm.
+
 2006-01-19 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_sol.h, lib/ipmi_sol.c: Modified one

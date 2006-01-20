@@ -62,15 +62,15 @@
  * Usage:
  *
  *	solterm -U username -P password [-Ra auth] [-Ri integ] [-Rc conf] hostname [-e escape_char]
- *		[-encrypted] [-authenticated] [-bitrate (9600|19200|38400|57600|115200)]
+ *		[-notencrypted] [-notauthenticated] [-bitrate (9600|19200|38400|57600|115200)]
  *		[-alerts (succeed|defer|fail)] [-holdoff] [-v] [-q]
  *
  *	-Ra auth	Specify authentication algorithm to use.
  *	-Ri integ	Specify integrity algorithm to use.
  *	-Rc conf	Specify confidentiality algorithm to use.
  *	-e escape_char	The escape character to use (Default: ~).
- *	-encrypted	Specify that SoL packets should be encrypted.
- *	-authenticated	Specify that SoL packets should be authenticated.
+ *	-notencrypted	Specify that SoL packets should not be encrypted.
+ *	-notauthenticated Specify that SoL packets should not be authenticated.
  *	-bitrate xxx	Specify bit rate to use.  BMCs are not required to
  *			support all bit rates.  Make sure this matches the bit
  *			rate at which the baseboard is communicating!
@@ -173,33 +173,44 @@ my_vlog(os_handler_t *handler, const char *format,
 	printf("\n");
 }
 
+void con_usage(const char *name, const char *help, void *cb_data)
+{
+    if (strcmp(name, "lan") != 0)
+	/* Only supports LAN. */
+	return;
+    printf("\n%s%s\n", name, help);
+}
+
 static void
 usage(void)
 {
     printf("Usage:\n"
-	   "  %s [-U username] [-P password] [-Ra auth] [-Ri integ] [-Rc conf]\n"
-"	hostname [-e escape_char] [-encrypted] [-authenticated]\n"
+	   "  %s <conparms>\n"
+"	[-e escape_char] [-notencrypted] [-notauthenticated]\n"
 "	[-bitrate (9600|19200|38400|57600|115200)]\n"
 "	[-alerts (succeed|defer|fail)] [-holdoff] [-ack-retries n]\n"
 "	[-ack-timeout usec] [-v] [-q]\n\n"
-"-Ra auth	Specify authentication algorithm to use.\n"
-"-Ri integ	Specify integrity algorithm to use.\n"
-"-Rc conf	Specify confidentiality algorithm to use.\n"
 "-e escape_char	The escape character to use.  Default is ~.\n"
-"-encrypted	Specify that SoL packets should be encrypted.\n"
-"-authenticated	Specify that SoL packets should be authenticated.\n"
+"-notencrypted	Specify that SoL packets should not be encrypted.\n"
+"-notauthenticated Specify that SoL packets should not be authenticated.\n"
 "-bitrate xxx	Specify bit rate to use.  BMCs are not required to support all\n"
 "		bit rates.  Make sure this matches the bit rate at which the\n"
 "		baseboard is communicating!  Defaults to the BMC's configured\n"
 "		nonvolatile bit rate.\n"
-"-alerts succeed	Specify that serial/modem alerts are to succeed while\n\t\t\tSoL is active.\n"
-"-alerts deferred	Serial/modem alerts are to be deferred for the duration\n\t\t\tof the SoL session.\n"
-"-alerts fail	Serial/modem alerts automatically fail during the SoL session.\n\t\tThis is the default.\n"
-"-holdoff	Specifies that CTS, DTR and DSR are to be deasserted at the\n\t\t"
-"start of the SoL session,so that the configuration may be\n\t\t"
-"modified before the handshake is released.\n"
+"-alerts succeed  Specify that serial/modem alerts are to succeed while\n"
+"               SoL is active.\n"
+"-alerts deferred  Serial/modem alerts are to be deferred for the duration\n"
+"               of the SoL session.\n"
+"-alerts fail	Serial/modem alerts automatically fail during the SoL session.\n"
+"               This is the default.\n"
+"-holdoff	Specifies that CTS, DTR and DSR are to be deasserted at the\n"
+"               start of the SoL session,so that the configuration may be\n"
+"               modified before the handshake is released.\n"
 "-v		Be more verbose.  May be specified multiple times.\n"
-"-q		Be quieter.  Opposite of -v.\n", progname);
+"-q		Be quieter.  Opposite of -v.\n"
+"\n<conparms> specified connection parameters for solterm.  Note that only\n"
+"lan connection are supported for solterm.  These parms are:", progname);
+    ipmi_parse_args_iter_help(con_usage, NULL);
 }
 
 static void show_buffer_text(const void *data, size_t count)
@@ -703,9 +714,12 @@ int main(int argc, char *argv[])
 	char *name = "remote system";
 	os_hnd_fd_id_t *stdin_id;
 	sol_configuration_t sol_configuration;
-	char **nargv;
 
 	memset(&sol_configuration, 0, sizeof(sol_configuration));
+
+	/* Enable authentication and encryption by default. */
+	sol_configuration.authenticated = 1;
+	sol_configuration.encrypted = 1;
 
 	exit_condition = condition_running;
 	verbosity = INITIAL_VERBOSITY;
@@ -729,18 +743,15 @@ int main(int argc, char *argv[])
 	/* Initialize the OpenIPMI library. */
 	ipmi_init(os_hnd);
 
-	/* Now we insert "lan" as the first argument so ipmi_parse_args is happy... */
-	nargv = ipmi_mem_alloc((argc + 1) * sizeof(*nargv));
-	nargv[0] = argv[0];
-	nargv[1] = "lan";
-	for (curr_arg = 1; curr_arg < argc; curr_arg++)
-		nargv[curr_arg + 1] = argv[curr_arg];
+	/* Now we make sure "lan" is the first argument so we get the
+	   right connection type... */
+	if (strcmp(argv[1], "lan") != 0) {
+		fprintf(stderr, "main: %s only supports lan connections\n",
+			progname);
+		exit(1);
+	}
 
-	argc++;
-	argv = nargv;
 	curr_arg = 1;
-	
-
 	rv = ipmi_parse_args2(&curr_arg, argc, argv, &args);
 	if (rv) {
 		ipmi_log(IPMI_LOG_FATAL, "Error parsing command arguments, argument %d: %s\n",
@@ -751,10 +762,10 @@ int main(int argc, char *argv[])
 
 	while (curr_arg < argc)
 	{
-		if (0 == strcmp(ARG, "-encrypted"))
-			sol_configuration.encrypted = 1;
-		else if (0 == strcmp(ARG, "-authenticated"))
-			sol_configuration.authenticated = 1;
+		if (0 == strcmp(ARG, "-notencrypted"))
+			sol_configuration.encrypted = 0;
+		else if (0 == strcmp(ARG, "-notauthenticated"))
+			sol_configuration.authenticated = 0;
 		else if (0 == strcmp(ARG, "-holdoff"))
 			sol_configuration.holdoff = 1;
 		else if (0 == strncmp(ARG, "-bitrate=", 9))
@@ -855,6 +866,8 @@ int main(int argc, char *argv[])
 		sol_configuration.holdoff);
 	
 
+	if (verbosity > 4)
+		DEBUG_MSG_ENABLE();
 	if (verbosity > 5)
 		DEBUG_RAWMSG_ENABLE();
 
