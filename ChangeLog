@@ -35,6 +35,13 @@
 	down in startup.  conn_change_cb could be called after the
 	connections were brought down (due to a race).
 
+	* swig/OpenIPMI.i: Finish out the SoL interface.
+
+	* swig/perl/OpenIPMI_perl.c: Add a "*b" format to the callback
+	caller to allow sizes arrays of characters (including nils) to be
+	passed.
+	* swig/python/OpenIPMI_lang.i: ditto
+
 2006-01-19 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_sol.h, lib/ipmi_sol.c: Modified one

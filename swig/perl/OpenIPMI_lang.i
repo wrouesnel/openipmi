@@ -282,6 +282,24 @@
     }
 }
 
+%typemap(in) charbuf {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if (!SvOK(tempsv)) {
+	$1.val = NULL;
+	$1.len = 0;
+    } else {
+	$1.val = SvPV(tempsv, $1.len);
+    }
+}
+
+%typemap(out) charbuf {
+    /* Nothing to do, input only */
+};
+
 %{
 #if PERL_HAS_POSIX_THREADS
 #define USE_POSIX_THREADS

@@ -209,7 +209,7 @@ usage(void)
 "-v		Be more verbose.  May be specified multiple times.\n"
 "-q		Be quieter.  Opposite of -v.\n"
 "\n<conparms> specified connection parameters for solterm.  Note that only\n"
-"lan connection are supported for solterm.  These parms are:", progname);
+"lan connection are supported for solterm.  These parms are:\n", progname);
     ipmi_parse_args_iter_help(con_usage, NULL);
 }
 
@@ -726,12 +726,6 @@ int main(int argc, char *argv[])
 
 	progname = argv[0];
 
-	if (argc < 2)
-	{
-		usage();
-		exit(1);
-	}
-
 	/* OS handler allocated first. */
 	os_hnd = ipmi_posix_setup_os_handler();
 	if (!os_hnd) {
@@ -742,6 +736,11 @@ int main(int argc, char *argv[])
 
 	/* Initialize the OpenIPMI library. */
 	ipmi_init(os_hnd);
+
+	if (argc < 2) {
+		usage();
+		exit(1);
+	}
 
 	/* Now we make sure "lan" is the first argument so we get the
 	   right connection type... */

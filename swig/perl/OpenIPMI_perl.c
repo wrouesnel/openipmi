@@ -100,6 +100,12 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 		}
 		break;
 
+	    case 'b':
+		/* An array of bytes as characters */
+		len = va_arg(ap, size_t);
+		XPUSHs(sv_2mortal(newSVpv(va_arg(ap, void *), len)));
+		break;
+
 	    case 'o':
 		/* An array of objects */
 		{

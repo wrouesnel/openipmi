@@ -412,6 +412,18 @@
     }
 }
 
+%typemap(in) charbuf {
+    if (!PyString_Check($input)) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a string");
+	return NULL;
+    }
+    PyString_AsStringAndSize($input, &$1.val, &$1.len);
+}
+
+%typemap(out) charbuf {
+    /* Nothing to do, input only */
+};
+
 %{
 
 #if PYTHON_HAS_POSIX_THREADS
@@ -662,6 +674,7 @@ swig_count_format(char *format)
 	    case 's':
 	    case 'p':
 	    case 'o':
+	    case 'b':
 		count++;
 		break;
 
@@ -764,6 +777,14 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 		    }
 		    PyList_SET_ITEM(o, i, p);
 		}
+		break;
+
+	    case 'b':
+		/* An array characters with length, as chars.  May
+		   include nuls */
+		len = va_arg(ap, size_t);
+		data = va_arg(ap, void *);
+		o = PyString_FromStringAndSize(data, len);
 		break;
 
 	    case 'p':

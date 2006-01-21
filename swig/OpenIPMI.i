@@ -68,6 +68,12 @@ typedef struct intarray
     int len;
 } intarray;
 
+typedef struct charbuf
+{
+    char *val;
+    int len;
+} charbuf;
+
 os_handler_t *swig_os_hnd;
 
 static int
@@ -2504,6 +2510,13 @@ sol_connection_state_change_cb(ipmi_sol_conn_t *conn,
 			       int             error,
 			       void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_connection_state_change", "%p%d%d",
+		 &conn_ref, state, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
 }
 
 
@@ -2513,6 +2526,13 @@ sol_data_received_cb(ipmi_sol_conn_t *conn,
 		     size_t          count,
 		     void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_data_received", "%p%*b",
+		 &conn_ref, count, buf);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
     return 0;
 }
 
@@ -2520,12 +2540,26 @@ static void
 sol_break_detected_cb(ipmi_sol_conn_t *conn,
 		      void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_break_detected", "%p", &conn_ref);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    return 0;
 }
 
 static void
 sol_bmc_transmit_overrun_cb(ipmi_sol_conn_t *conn,
 			    void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_bmc_transmit_overrun", "%p", &conn_ref);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    return 0;
 }
 
 static void
@@ -2533,6 +2567,14 @@ sol_write_complete_cb(ipmi_sol_conn_t *conn,
 		      int             error,
 		      void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_write_complete", "%p%d", &conn_ref, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2540,6 +2582,14 @@ sol_send_break_cb(ipmi_sol_conn_t *conn,
 		  int             error,
 		  void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_send_break", "%p%d", &conn_ref, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2547,20 +2597,44 @@ sol_set_CTS_assertable_cb(ipmi_sol_conn_t *conn,
 			  int             error,
 			  void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_set_CTS_assertable", "%p%d", &conn_ref, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 static void
-sol_set_DCD_DSR_assertable_cb(ipmi_sol_conn_t *conn,
-			      int             error,
-			      void            *cb_data)
+sol_set_DCD_DSR_asserted_cb(ipmi_sol_conn_t *conn,
+			    int             error,
+			    void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_set_DCD_DSR_asserted", "%p%d", &conn_ref, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 static void
-sol_set_RI_assertable_cb(ipmi_sol_conn_t *conn,
-			 int             error,
-			 void            *cb_data)
+sol_set_RI_asserted_cb(ipmi_sol_conn_t *conn,
+		       int             error,
+		       void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_set_RI_asserted", "%p%d", &conn_ref, error);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2569,6 +2643,15 @@ sol_flush_complete_cb(ipmi_sol_conn_t *conn,
 		      int             queue_selectors_flushed,
 		      void            *cb_data)
 {
+    swig_cb_val cb = cb_data;
+    swig_ref    conn_ref;
+
+    conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
+    swig_call_cb(cb, "sol_flush_complete", "%p%d%d", &conn_ref, error,
+		 queue_selectors_flushed);
+    swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
+    /* One-time callback */
+    deref_swig_cb_val(cb);
 }
 
 %}
@@ -4114,6 +4197,14 @@ char *get_error_string(unsigned int val);
      * Allocate a SoL object using the given domain's connection.
      * Note that this does not cause a connection, it just creates an
      * object for doing an SoL connection.
+     *
+     * The handler val will handle all events from the SOL session.
+     * this means it must implement the following callbacks:
+     *
+     *  sol_connection_state_change <self> <conn> <state> <error>
+     *  sol_data_received <self> <conn> <string>
+     *  sol_break_detected <self> <conn>
+     *  sol_bmc_transmit_overrun <self> <conn>
      */
     %newobject create_sol;
     ipmi_sol_conn_t *create_sol(int connection, swig_cb handler)
@@ -10699,7 +10790,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 	return ipmi_sol_set_bit_rate(self, rate);
     }
 
-    unsigned int sol_get_bit_rate()
+    unsigned int get_bit_rate()
     {
 	return ipmi_sol_get_bit_rate(self);
     }
@@ -10720,32 +10811,145 @@ void set_cmdlang_event_handler(swig_cb handler);
 	return ipmi_sol_force_close(self);
     }
 
-
-    int ipmi_sol_write(const char *buf,
-		       int        count,
-		       swig_cb    handler)
+    /*
+     * Write the given buffer to the serial port.  When complete, the
+     * sol_write_complete method of the handler will be called with
+     * the following parameters: <self> <conn> <error>
+     */
+    int write(charbuf buf, swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_transmit_complete_cb cb = NULL;
+	swig_cb_val                   handler_val = NULL;
+	int                           rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_write_complete)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_write_complete_cb;
+	    handler_val = ref_swig_cb(handler, sol_write_complete);
+	}
+	rv = ipmi_sol_write(self, buf.val, buf.len, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
-    int ipmi_sol_send_break(swig_cb handler)
+    /*
+     * Send a break to the serial port.  When complete, the
+     * sol_send_break method of the handler will be called with
+     * the following parameters: <self> <conn> <error>
+     */
+    int send_break(swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_transmit_complete_cb cb = NULL;
+	swig_cb_val                   handler_val = NULL;
+	int                           rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_send_break)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_send_break_cb;
+	    handler_val = ref_swig_cb(handler, sol_send_break);
+	}
+	rv = ipmi_sol_send_break(self, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
-    int ipmi_sol_set_CTS_assertable(int asserted, swig_cb handler)
+    /*
+     * Send CTS assertable (or not) on the serial port.  When
+     * complete, the sol_set_CTS_assertable method of the handler will
+     * be called with the following parameters: <self> <conn> <error>
+     */
+    int set_CTS_assertable(int asserted, swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_transmit_complete_cb cb = NULL;
+	swig_cb_val                   handler_val = NULL;
+	int                           rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_set_CTS_assertable)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_set_CTS_assertable_cb;
+	    handler_val = ref_swig_cb(handler, sol_set_CTS_assertable);
+	}
+	rv = ipmi_sol_set_CTS_assertable(self, asserted, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
-    int ipmi_sol_set_DCD_DSR_asserted(int asserted, swig_cb handler)
+    /*
+     * Assert or deassert DCD and DSR on the serial port.  When
+     * complete, the sol_set_DCD_DSR_asserted method of the handler
+     * will be called with the following parameters: <self> <conn>
+     * <error>
+     */
+    int set_DCD_DSR_asserted(int asserted, swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_transmit_complete_cb cb = NULL;
+	swig_cb_val                   handler_val = NULL;
+	int                           rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_set_DCD_DSR_asserted)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_set_DCD_DSR_asserted_cb;
+	    handler_val = ref_swig_cb(handler, sol_set_DCD_DSR_asserted);
+	}
+	rv = ipmi_sol_set_DCD_DSR_asserted(self, asserted, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
-    int ipmi_sol_set_RI_asserted(int asserted, swig_cb handler)
+    /*
+     * Assert or deassert RI on the serial port.  When complete, the
+     * sol_set_RI_asserted method of the handler will be called with
+     * the following parameters: <self> <conn> <error>
+     */
+    int set_RI_asserted(int asserted, swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_transmit_complete_cb cb = NULL;
+	swig_cb_val                   handler_val = NULL;
+	int                           rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_set_RI_asserted)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_set_RI_asserted_cb;
+	    handler_val = ref_swig_cb(handler, sol_set_RI_asserted);
+	}
+	rv = ipmi_sol_set_RI_asserted(self, asserted, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
 
@@ -10757,9 +10961,33 @@ void set_cmdlang_event_handler(swig_cb handler);
 %constant int SOL_MANAGEMENT_CONSOLE_QUEUES = IPMI_SOL_MANAGEMENT_CONSOLE_QUEUES;
 %constant int SOL_ALL_QUEUES = IPMI_SOL_ALL_QUEUES;
 
-    int ipmi_sol_flush(int queue_selectors, swig_cb handler)
+    /*
+     * Flush the given queues, as specified by the queue selectors
+     * above.  When complete, the sol_flush_complete method of the
+     * handler will be called with the following parameters: <self>
+     * <conn> <queue selectors> <error>
+     */
+    int flush(int queue_selectors, swig_cb handler = NULL)
     {
-	return ENOSYS;
+	ipmi_sol_flush_complete_cb cb = NULL;
+	swig_cb_val                handler_val = NULL;
+	int                        rv;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sol_flush_complete)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    cb = sol_flush_complete_cb;
+	    handler_val = ref_swig_cb(handler, sol_flush_complete);
+	}
+	rv = ipmi_sol_flush(self, queue_selectors, cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
 }
