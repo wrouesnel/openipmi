@@ -421,6 +421,9 @@ class Domain:
             self.sel_rescan_time = domain.get_sel_rescan_time()
             domain.iterate_connections(self)
             pass
+        if (connum not in self.connections):
+            self.ui.new_log("Got connection for invalid connection number")
+            return
         self.connections[connum].SetPortUp(portnum, connected)
         any_con_up = False
         for c in self.connections.itervalues():

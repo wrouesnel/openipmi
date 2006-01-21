@@ -26,12 +26,29 @@
 	
 	* man/openipmicmd.1: Swith over to use the new conparms manpage.
 
-	* man/solterm.1; Added docs for solterm.
+	* man/solterm.1: Added docs for solterm.
+
+	* lib/domain.c: Fixed a shutdown problem if a shutdown occurred
+	during a bus scan that detected an MC.
+
+	* swig/python/openipmigui/_domain.py: Fix a problem with shutting
+	down in startup.  conn_change_cb could be called after the
+	connections were brought down (due to a race).
 
 2006-01-19 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_sol.h, lib/ipmi_sol.c: Modified one
 	interface a little to pass the state as the correct type.
+
+	* include/OpenIPMI/ipmi_con.h: Added a way to increment the
+	usecount for a connection.  Right now this is only available on
+	LAN, so that a domain connection can be reused for something
+	else.
+
+	* lib/ipmi_lan.c: Added the usecount function.
+
+	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: Added a way to fetch
+	the connections used by a domain.
 
 2006-01-16 Corey Minyard <cminyard@mvista.com>
 

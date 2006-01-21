@@ -3816,6 +3816,9 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_domain_cb     SDRs_read_handler;
     void               *SDRs_read_handler_cb_data;
 
+    if (domain->in_shutdown)
+	return;
+
     /* This is an unusual looking piece of code, but is required for
        systems that do not have an IPMB.  If they don't have an IPMB,
        then we won't scan them and thus won't find anything.  So we

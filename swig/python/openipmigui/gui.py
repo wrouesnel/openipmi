@@ -600,12 +600,14 @@ def GetAttrInt(attr, default):
         return default
 
 def GetAttrBool(attr, default):
-    try:
-        return bool(attr.nodeValue)
-    except Exception, e:
+    if (attr.nodeValue.lower() == "true"):
+        return True
+    elif (attr.nodeValue.lower() == "false"):
+        return False
+    else:
         _oi_logging.error ("Error getting init parm " + attr.nodeName)
-        return default
-    return
+        pass
+    return default
 
 class _GUIRestore(_saveprefs.RestoreHandler):
     def __init__(self):

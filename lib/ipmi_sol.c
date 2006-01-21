@@ -551,9 +551,19 @@ void ipmi_sol_set_ACK_timeout(ipmi_sol_conn_t *conn, int timeout_usec)
 	conn->ACK_timeout_usec = timeout_usec;
 }
 
+int ipmi_sol_get_ACK_timeout(ipmi_sol_conn_t *conn)
+{
+	return conn->ACK_timeout_usec;
+}
+
 void ipmi_sol_set_ACK_retries(ipmi_sol_conn_t *conn, int retries)
 {
 	conn->ACK_retries = retries;
+}
+
+int ipmi_sol_get_ACK_retries(ipmi_sol_conn_t *conn)
+{
+	return conn->ACK_retries;
 }
 
 
@@ -2223,6 +2233,7 @@ int ipmi_sol_free(ipmi_sol_conn_t *conn)
 	if (conn->state != ipmi_sol_state_closed)
 		ipmi_sol_force_close(conn);
 	
+	conn->ipmi->close_connection(conn->ipmi);
 	ipmi_destroy_lock(conn->transmitter.queue_lock);
 	ipmi_destroy_lock(conn->transmitter.packet_lock);
 	ipmi_mem_free(conn);

@@ -342,6 +342,16 @@ int ipmi_sol_deregister_bmc_transmit_overrun_callback(ipmi_sol_conn_t *conn,
  */
 void ipmi_sol_set_ACK_timeout(ipmi_sol_conn_t *conn, int timeout_usec);
 
+/**
+ * Get the timeout to wait for an ACK from the BMC (for packets that expect an
+ * ACK).
+ *
+ * @param [in] conn	The IPMI SoL connection to configure.
+ *
+ * @return	The timeout
+ */
+int ipmi_sol_get_ACK_timeout(ipmi_sol_conn_t *conn);
+
 
 /**
  * Set the number of retries that we make before declaring a packet "lost".
@@ -351,6 +361,14 @@ void ipmi_sol_set_ACK_timeout(ipmi_sol_conn_t *conn, int timeout_usec);
  */
 void ipmi_sol_set_ACK_retries(ipmi_sol_conn_t *conn, int retries);
 
+/**
+ * Get the number of retries that we make before declaring a packet "lost".
+ *
+ * @param [in] conn	The IPMI SoL connection to configure.
+ *
+ * @return	The number of retries
+ */
+int ipmi_sol_get_ACK_retries(ipmi_sol_conn_t *conn);
 
 /**
  * Configure the authentication to use for the SoL packets.

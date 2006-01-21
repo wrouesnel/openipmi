@@ -2498,6 +2498,79 @@ event_deleted_handler(ipmi_domain_t *domain, int err, void *cb_data)
     deref_swig_cb_val(cb);
 }
 
+static void
+sol_connection_state_change_cb(ipmi_sol_conn_t *conn,
+			       ipmi_sol_state  state,
+			       int             error,
+			       void            *cb_data)
+{
+}
+
+
+static int
+sol_data_received_cb(ipmi_sol_conn_t *conn,
+		     const void      *buf,
+		     size_t          count,
+		     void            *cb_data)
+{
+    return 0;
+}
+
+static void
+sol_break_detected_cb(ipmi_sol_conn_t *conn,
+		      void            *cb_data)
+{
+}
+
+static void
+sol_bmc_transmit_overrun_cb(ipmi_sol_conn_t *conn,
+			    void            *cb_data)
+{
+}
+
+static void
+sol_write_complete_cb(ipmi_sol_conn_t *conn,
+		      int             error,
+		      void            *cb_data)
+{
+}
+
+static void
+sol_send_break_cb(ipmi_sol_conn_t *conn,
+		  int             error,
+		  void            *cb_data)
+{
+}
+
+static void
+sol_set_CTS_assertable_cb(ipmi_sol_conn_t *conn,
+			  int             error,
+			  void            *cb_data)
+{
+}
+
+static void
+sol_set_DCD_DSR_assertable_cb(ipmi_sol_conn_t *conn,
+			      int             error,
+			      void            *cb_data)
+{
+}
+
+static void
+sol_set_RI_assertable_cb(ipmi_sol_conn_t *conn,
+			 int             error,
+			 void            *cb_data)
+{
+}
+
+static void
+sol_flush_complete_cb(ipmi_sol_conn_t *conn,
+		      int             error,
+		      int             queue_selectors_flushed,
+		      void            *cb_data)
+{
+}
+
 %}
 
 typedef struct {
@@ -3307,7 +3380,7 @@ const char *parse_option_help();
     {
 	return ipmi_parse_options_help();
     }
- %}
+%}
 
 /*
  * Add a handler whose domain_change_cb method will be called whenever
@@ -4043,12 +4116,26 @@ char *get_error_string(unsigned int val);
      * object for doing an SoL connection.
      */
     %newobject create_sol;
-    ipmi_sol_conn_t *create_sol(int connection)
+    ipmi_sol_conn_t *create_sol(int connection, swig_cb handler)
     {
-	ipmi_con_t      *con = ipmi_domain_get_connection(self, connection);
+	ipmi_con_t      *con;
 	ipmi_sol_conn_t *scon;
 	int             rv;
+	swig_cb_val     handler_val;
 
+	if (nil_swig_cb(handler))
+	    return NULL;
+
+	if (!valid_swig_cb(handler, sol_connection_state_change))
+	    return NULL;
+	if (!valid_swig_cb(handler, sol_data_received))
+	    return NULL;
+	if (!valid_swig_cb(handler, sol_break_detected))
+	    return NULL;
+	if (!valid_swig_cb(handler, sol_bmc_transmit_overrun))
+	    return NULL;
+
+	con = ipmi_domain_get_connection(self, connection);
 	if (!con)
 	    return NULL;
 
@@ -4058,7 +4145,42 @@ char *get_error_string(unsigned int val);
 	    return NULL;
 	}
 
+	handler_val = ref_swig_gencb(handler);
+
+	rv = ipmi_sol_register_connection_state_callback
+	    (scon,
+	     sol_connection_state_change_cb,
+	     handler_val);
+	if (rv)
+	    goto out_err;
+
+	rv = ipmi_sol_register_data_received_callback
+	    (scon,
+	     sol_data_received_cb,
+	     handler_val);
+	if (rv)
+	    goto out_err;
+
+	rv = ipmi_sol_register_break_detected_callback
+	    (scon,
+	     sol_break_detected_cb,
+	     handler_val);
+	if (rv)
+	    goto out_err;
+
+	rv = ipmi_sol_register_bmc_transmit_overrun_callback
+	    (scon,
+	     sol_bmc_transmit_overrun_cb,
+	     handler_val);
+	if (rv)
+	    goto out_err;
+
 	return scon;
+
+    out_err:
+	deref_swig_cb_val(handler_val);
+	ipmi_sol_free(scon);
+	return NULL;
     }
 }
 
@@ -10490,9 +10612,154 @@ void set_cmdlang_event_handler(swig_cb handler);
 {
     ~ipmi_sol_conn_t()
     {
-	ipmi_sol_force_close(self);
 	ipmi_sol_free(self);
     }
 
+%constant int sol_state_closed = ipmi_sol_state_closed;
+%constant int sol_state_connecting = ipmi_sol_state_connecting;
+%constant int sol_state_connected = ipmi_sol_state_connected;
+%constant int sol_state_connected_ctu = ipmi_sol_state_connected_ctu;
+%constant int sol_state_closin = ipmi_sol_state_closing;
+
+    void set_ACK_timeout(int timeout_usec)
+    {
+	ipmi_sol_set_ACK_timeout(self, timeout_usec);
+    }
+
+    int get_ACK_timeout()
+    {
+	return ipmi_sol_get_ACK_timeout(self);
+    }
+
+    void set_ACK_retries(int retries)
+    {
+	ipmi_sol_set_ACK_retries(self, retries);
+    }
+
+    int get_ACK_retries()
+    {
+	return ipmi_sol_get_ACK_retries(self);
+    }
+
+    int set_use_authentication(int use_authentication)
+    {
+	return ipmi_sol_set_use_authentication(self, use_authentication);
+    }
+
+    int get_use_authentication()
+    {
+	return ipmi_sol_get_use_authentication(self);
+    }
+
+    int set_use_encryption(int use_encryption)
+    {
+	return ipmi_sol_set_use_encryption(self, use_encryption);
+    }
+
+    int get_use_encryption()
+    {
+	return ipmi_sol_get_use_encryption(self);
+    }
+
+
+%constant int sol_serial_alerts_fail = ipmi_sol_serial_alerts_fail;
+%constant int sol_serial_alerts_deferred = ipmi_sol_serial_alerts_deferred;
+%constant int sol_serial_alerts_succeed = ipmi_sol_serial_alerts_succeed;
+
+    int set_shared_serial_alert_behavior(int behavior)
+    {
+	return ipmi_sol_set_shared_serial_alert_behavior(self, behavior);
+    }
+
+    int get_shared_serial_alert_behavior()
+    {
+	return ipmi_sol_get_shared_serial_alert_behavior(self);
+    }
+
+    int set_deassert_CTS_DCD_DSR_on_connect(int assert)
+    {
+	return ipmi_sol_set_deassert_CTS_DCD_DSR_on_connect(self, assert);
+    }
+
+    int get_deassert_CTS_DCD_DSR_on_connect()
+    {
+	return ipmi_sol_get_deassert_CTS_DCD_DSR_on_connect(self);
+    }
+
+
+%constant int SOL_BIT_RATE_DEFAULT = IPMI_SOL_BIT_RATE_DEFAULT;
+%constant int SOL_BIT_RATE_9600 = IPMI_SOL_BIT_RATE_9600;
+%constant int SOL_BIT_RATE_19200 = IPMI_SOL_BIT_RATE_19200;
+%constant int SOL_BIT_RATE_38400 = IPMI_SOL_BIT_RATE_38400;
+%constant int SOL_BIT_RATE_57600 = IPMI_SOL_BIT_RATE_57600;
+%constant int SOL_BIT_RATE_115200 = IPMI_SOL_BIT_RATE_115200;
+
+    int set_bit_rate(unsigned int rate)
+    {
+	return ipmi_sol_set_bit_rate(self, rate);
+    }
+
+    unsigned int sol_get_bit_rate()
+    {
+	return ipmi_sol_get_bit_rate(self);
+    }
+
+
+    int open()
+    {
+	return ipmi_sol_open(self);
+    }
+
+    int close()
+    {
+	return ipmi_sol_close(self);
+    }
+
+    int force_close()
+    {
+	return ipmi_sol_force_close(self);
+    }
+
+
+    int ipmi_sol_write(const char *buf,
+		       int        count,
+		       swig_cb    handler)
+    {
+	return ENOSYS;
+    }
+
+    int ipmi_sol_send_break(swig_cb handler)
+    {
+	return ENOSYS;
+    }
+
+    int ipmi_sol_set_CTS_assertable(int asserted, swig_cb handler)
+    {
+	return ENOSYS;
+    }
+
+    int ipmi_sol_set_DCD_DSR_asserted(int asserted, swig_cb handler)
+    {
+	return ENOSYS;
+    }
+
+    int ipmi_sol_set_RI_asserted(int asserted, swig_cb handler)
+    {
+	return ENOSYS;
+    }
+
+
+%constant int SOL_BMC_TRANSMIT_QUEUE = IPMI_SOL_BMC_TRANSMIT_QUEUE;
+%constant int SOL_BMC_RECEIVE_QUEUE = IPMI_SOL_BMC_RECEIVE_QUEUE;
+%constant int SOL_MANAGEMENT_CONSOLE_TRANSMIT_QUEUE = IPMI_SOL_MANAGEMENT_CONSOLE_TRANSMIT_QUEUE;
+%constant int SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE = IPMI_SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE;
+%constant int SOL_BMC_QUEUES = IPMI_SOL_BMC_QUEUES;
+%constant int SOL_MANAGEMENT_CONSOLE_QUEUES = IPMI_SOL_MANAGEMENT_CONSOLE_QUEUES;
+%constant int SOL_ALL_QUEUES = IPMI_SOL_ALL_QUEUES;
+
+    int ipmi_sol_flush(int queue_selectors, swig_cb handler)
+    {
+	return ENOSYS;
+    }
 
 }
