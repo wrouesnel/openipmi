@@ -32,6 +32,7 @@
 
 import OpenIPMI
 import wx
+import _SoL
 
 id_st = 1000
 
@@ -136,6 +137,8 @@ class Connection:
         menu = wx.Menu();
         item = menu.Append(id_st+1, "Activate")
         wx.EVT_MENU(self.ui, id_st+1, self.Activate)
+        item = menu.Append(id_st+2, "Open SOL")
+        wx.EVT_MENU(self.ui, id_st+2, self.OpenSOL)
         self.d.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
         menu.Destroy()
 
@@ -143,6 +146,10 @@ class Connection:
         self.domain_id.to_domain(self)
         return
 
+    def OpenSOL(self, event):
+        _SoL.SoL(self.ui, self.domain_id, self.cnum)
+        return
+    
     def domain_cb(self, domain):
         domain.activate_connection(self.cnum)
         return

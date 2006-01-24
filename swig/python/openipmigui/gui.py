@@ -95,7 +95,7 @@ class IPMIGUI_Timer(wx.Timer):
 
 class IPMIGUI(wx.Frame):
     def __init__(self, mainhandler):
-        wx.Frame.__init__(self, None, 01, "IPMI GUI",
+        wx.Frame.__init__(self, None, -1, "IPMI GUI",
                           size=wx.Size(init_windowwidth, init_windowheight))
 
         self.mainhandler = mainhandler
@@ -175,7 +175,12 @@ class IPMIGUI(wx.Frame):
 
         self.last_scan = None
         self.timer = IPMIGUI_Timer(self)
+        return
 
+    def ReportError(self, str):
+        self.errstr.SetStatusText(str, 0)
+        return
+    
     def Timeout(self):
         if self.last_scan != None:
             next = self.last_scan
