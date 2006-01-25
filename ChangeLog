@@ -12,6 +12,9 @@
 
 	* lib/ipmi_sol.c: Add locking for OOB handling, as it was racy.
 
+	* lib/ipmi_sol.c, lib/ipmi.c: Moved SOL payload registration to
+	initialization routines so it is only done once.
+
 2006-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_sol.c: Modified formatting to conform with the OpenIPMI

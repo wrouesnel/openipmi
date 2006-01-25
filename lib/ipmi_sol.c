@@ -309,9 +309,6 @@ struct ipmi_sol_conn_s {
 };
 
 
-static ipmi_payload_t ipmi_sol_payload;
-
-
 static int transmitter_startup(ipmi_sol_transmitter_context_t *transmitter);
 static void transmitter_shutdown(ipmi_sol_transmitter_context_t *transmitter,
 				 int error);
@@ -1870,40 +1867,6 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
 }
 
 
-
-static int
-register_ipmi_payload(void)
-{
-    int rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
-					 &ipmi_sol_payload);
-    if (rv == EINVAL) {
-	/*
-	 * The payload is already registered... try to unregister the
-	 * old payload handler.
-	 */
-	rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL, NULL);
-
-	if (rv == EAGAIN) {
-	    /*
-	     * Unable to unregister it!
-	     */
-	    ipmi_log(IPMI_LOG_FATAL, "ipmi_sol.c(register_ipmi_payload): "
-		     "Unable to unregister existing SoL payload.");
-	    /* FIXME - NO EXITs! */
-	    exit(1);
-	} else if (rv != EINVAL) {
-	    /*
-	     * Unregistered, now do our registration again.
-	     */
-	    rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
-					     &ipmi_sol_payload);
-	}
-    }
-
-    return rv;
-}
-
-
 /********************************************************
  ** IPMI SoL API
  *******************************************************/
@@ -1926,10 +1889,7 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     ipmi_sol_conn_t                *new_conn;
     os_handler_t                   *os_hnd = ipmi->os_hnd;
     ipmi_sol_transmitter_context_t *xmitter;
-    int                            rv = register_ipmi_payload();
-
-    if (rv)
-	return rv;
+    int                            rv;
 
     new_conn = ipmi_mem_alloc(sizeof(*new_conn));
     if (!new_conn)
@@ -2943,3 +2903,18 @@ static ipmi_payload_t ipmi_sol_payload =
 { sol_format_msg, sol_get_recv_seq, sol_handle_recv,
   sol_handle_recv_async, NULL /*sol_get_msg_tag*/ };
 
+int
+_ipmi_sol_init()
+{
+    int rv;
+
+    rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
+				     &ipmi_sol_payload);
+    return rv;
+}
+
+void
+_ipmi_sol_shutdown(void)
+{
+    ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL, NULL);
+}
