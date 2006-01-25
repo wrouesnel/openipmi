@@ -18,6 +18,17 @@
 	* lib/ipmi_sol.c: Added locks for the SoL connection list and
 	reworked the list so the memory allocation is not required.
 
+	* lib/ipmi_sol.c: Consolidated the callback list handling into the
+	one place it was left in use.  Converted all the fatal logs into
+	severe ones since fatal means the logger should termintate the
+	program.
+
+	* lib/ipmi_sol.c: Added refcounting to make sure the sol
+	connection is not in use when it is deleted.
+
+	* lib/ipmi_sol.c: Reworked the timer code to handle shutdown races
+	properly.
+
 2006-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_sol.c: Modified formatting to conform with the OpenIPMI
