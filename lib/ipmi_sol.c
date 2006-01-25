@@ -1203,7 +1203,8 @@ transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
 
     if (rv) {
 	char buf[50];
-	ipmi_log(IPMI_LOG_WARNING, "ipmi_send_command_addr: [%s]",
+	ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(transmit_outstanding_packet): "
+		 "ipmi_send_command_addr: [%s]",
 		 ipmi_get_error_string(rv, buf, 50));
 	dispose_of_outstanding_packet(transmitter, rv);
     }
@@ -1262,7 +1263,9 @@ sol_ACK_timer_expired(void *cb_data, os_hnd_timer_id_t *id)
 	rv = setup_ACK_timer(transmitter);
 	if (rv) {
 	    char buf[50];
-	    ipmi_log(IPMI_LOG_WARNING, "Unable to setup_ACK_timer: %s", ipmi_get_error_string(rv, buf, 50));
+	    ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(sol_ACK_timer_expired): "
+		     "Unable to setup_ACK_timer: %s",
+		     ipmi_get_error_string(rv, buf, 50));
 	    dispose_of_outstanding_packet(transmitter, rv);
 	    /* FIXME: What is the right error value? */
 	}
@@ -1298,7 +1301,7 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
     if (transmitter->transmitted_packet) {
 	ipmi_unlock(transmitter->packet_lock);
 #ifdef IPMI_SOL_DEBUG_TRANSMIT
-	ipmi_log(IPMI_LOG_INFO,
+	ipmi_log(IPMI_LOG_INFO, "ipmi_sol.c(transmitter_prod): "
 		 "transmitter_prod exiting early:"
 		 " already waiting for an ACK.");
 #endif
@@ -1338,7 +1341,7 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
 	    rv = setup_ACK_timer(transmitter);
 	    if (rv) {
 		char buf[50];
-		ipmi_log(IPMI_LOG_WARNING,
+		ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(transmitter_prod): "
 			 "Unable to setup_ACK_timer: %s",
 			 ipmi_get_error_string(rv, buf, 50));
 		dispose_of_outstanding_packet(transmitter, rv);
@@ -1453,6 +1456,7 @@ transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
 		 * The BMC has acknowledged more than we've sent!
 		 */
 		ipmi_log(IPMI_LOG_WARNING,
+			 "ipmi_sol.c(transmitter_handle_acknowledge): "
 			 "The BMC has acknowledged more data than we sent."
 			 " Ignoring excess ACK.");
 	    }
@@ -1567,7 +1571,7 @@ transmitter_startup(ipmi_sol_transmitter_context_t *transmitter)
     transmitter->scratch_area = ipmi_mem_alloc(transmitter->scratch_area_size);
     if (!transmitter->scratch_area) {
 	/* Alloc failed! */
-	ipmi_log(IPMI_LOG_FATAL,
+	ipmi_log(IPMI_LOG_FATAL, "ipmi_sol.c(transmitter_startup): "
 		 "Insufficient memory for transmitter scratch area.");
 		
 	return ENOMEM;
@@ -1861,7 +1865,7 @@ register_ipmi_payload(void)
 	    /*
 	     * Unable to unregister it!
 	     */
-	    ipmi_log(IPMI_LOG_FATAL,
+	    ipmi_log(IPMI_LOG_FATAL, "ipmi_sol.c(register_ipmi_payload): "
 		     "Unable to unregister existing SoL payload.");
 	    /* FIXME - NO EXITs! */
 	    exit(1);
@@ -1999,13 +2003,13 @@ get_sane_payload_size(int b1, int b2)
     if ((result > 0x0103) || (result < 5)) {
 	result = (b1 << 8) + b2;
 	if ((result > 0x0103) || (result < 5)) {
-	    ipmi_log(IPMI_LOG_WARNING,
+	    ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(get_sane_payload_size): "
 		     "BMC did not supply a sensible buffer size"
 		     " (0x%02x, 0x%02x). Defaulting to 16.",
 		     b1, b2);
 	    result = 0x10; /* 16 bytes should be a safe buffer size. */
 	} else
-	    ipmi_log(IPMI_LOG_INFO,
+	    ipmi_log(IPMI_LOG_INFO, "ipmi_sol.c(get_sane_payload_size): "
 		     "BMC sent a byte-swapped buffer size (%d bytes)."
 		     " Using %d bytes.", (b2 << 8) + b1, result);
     }
@@ -2013,8 +2017,8 @@ get_sane_payload_size(int b1, int b2)
 }
 
 static void
-ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
-					  ipmi_msg_t      *msg_in)
+handle_activate_payload_response(ipmi_sol_conn_t *conn,
+				 ipmi_msg_t      *msg_in)
 {
     /*
      * Did it work?
@@ -2022,6 +2026,7 @@ ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
     if (msg_in->data_len != 13) {
 	if (msg_in->data_len != 1) {
 	    ipmi_log(IPMI_LOG_WARNING,
+		     "ipmi_sol.c(handle_active_payload_response): "
 		     "Received %d bytes... was expecting 13 bytes.\n",
 		     msg_in->data_len);
 	    dump_hex(msg_in->data, msg_in->data_len);
@@ -2038,7 +2043,9 @@ ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
     }
 
     if (msg_in->data[0] != 0x00) {
-	ipmi_log(IPMI_LOG_FATAL, "Activate payload failed.");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Activate payload failed.");
 	ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
 				      IPMI_IPMI_ERR_VAL(msg_in->data[0]));
 	return;
@@ -2059,6 +2066,7 @@ ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
     if (conn->payload_port_number != IPMI_LAN_STD_PORT) {
 	/* TODO: Currently don't handle ports other than the standard one! */
 	ipmi_log(IPMI_LOG_FATAL,
+		 "ipmi_sol.c(handle_active_payload_response): "
 		 "BMC requested connection through port %d."
 		 " Ports other than %d are not currently supported.",
 		 conn->payload_port_number, IPMI_LAN_STD_PORT);
@@ -2073,18 +2081,23 @@ ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
     else
 	conn->transmitter.scratch_area_size = conn->max_outbound_payload_size;
 
-    ipmi_log(IPMI_LOG_INFO, "Connected to BMC SoL through port %d.",
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_active_payload_response): "
+	     "Connected to BMC SoL through port %d.",
 	     /*		conn->hostname,*/
 	     conn->payload_port_number);
 
 #ifdef IPMI_SOL_VERBOSE
     ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_active_payload_response): "
 	     "BMC requested transmit limit %d bytes, receive limit %d bytes.",
 	     conn->max_outbound_payload_size,
 	     conn->max_inbound_payload_size);
 
     if (conn->max_outbound_payload_size > conn->transmitter.scratch_area_size)
-	ipmi_log(IPMI_LOG_WARNING, "Limiting transmit to %d bytes.",
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Limiting transmit to %d bytes.",
 		 conn->transmitter.scratch_area_size);
 #endif
 
@@ -2132,16 +2145,17 @@ send_activate_payload(ipmi_sol_conn_t *conn)
     msg_out.netfn = IPMI_APP_NETFN;
     msg_out.cmd = IPMI_ACTIVATE_PAYLOAD_CMD;
     return send_message(conn, &msg_out,
-			ipmi_sol_handle_activate_payload_response);
+			handle_activate_payload_response);
 }
 
 
 static void
-ipmi_sol_handle_set_volatile_bitrate_response(ipmi_sol_conn_t *conn,
-					      ipmi_msg_t      *msg_in)
+handle_set_volatile_bitrate_response(ipmi_sol_conn_t *conn,
+				     ipmi_msg_t      *msg_in)
 {
     if (msg_in->data_len != 1) {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(handle_set_volatile_bitrate_response): "
 		 "Received %d bytes... was expecting 1 byte.\n",
 		 msg_in->data_len);
 	dump_hex(msg_in->data, msg_in->data_len);
@@ -2157,7 +2171,8 @@ ipmi_sol_handle_set_volatile_bitrate_response(ipmi_sol_conn_t *conn,
     }
 
     if (msg_in->data[0] != 0x00) {
-	ipmi_log(IPMI_LOG_FATAL,
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_set_volatile_bitrate_response): "
 		 "Set SoL configuration[Volatile bit rate] failed.");
 	ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
 				      IPMI_IPMI_ERR_VAL(msg_in->data[0]));
@@ -2165,7 +2180,9 @@ ipmi_sol_handle_set_volatile_bitrate_response(ipmi_sol_conn_t *conn,
     }
 
 #ifdef IPMI_SOL_VERBOSE
-    ipmi_log(IPMI_LOG_INFO, "Volatile bit rate set.");
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_set_volatile_bitrate_response): "
+	     "Volatile bit rate set.");
 #endif
     send_activate_payload(conn);
 }
@@ -2188,17 +2205,18 @@ send_set_volatile_bitrate(ipmi_sol_conn_t *conn)
     msg_out.cmd = IPMI_SET_SOL_CONFIGURATION_PARAMETERS;
 
     return send_message(conn, &msg_out,
-			ipmi_sol_handle_set_volatile_bitrate_response);
+			handle_set_volatile_bitrate_response);
 }
 
 static void
-ipmi_sol_handle_get_payload_activation_status_response(ipmi_sol_conn_t *conn,
-						       ipmi_msg_t      *msg_in)
+handle_get_payload_activation_status_response(ipmi_sol_conn_t *conn,
+					      ipmi_msg_t      *msg_in)
 {
     int count = 0, found, max, byte, index;
 
     if (msg_in->data_len != 4) {
 	ipmi_log(IPMI_LOG_FATAL,
+		 "ipmi_sol.c(handle_get_payload_activation_status_response): "
 		 "Get Payload Activation Status command failed.");
 	if (msg_in->data_len > 0)
 	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
@@ -2227,12 +2245,15 @@ ipmi_sol_handle_get_payload_activation_status_response(ipmi_sol_conn_t *conn,
 
 #ifdef IPMI_SOL_VERBOSE
     ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_get_payload_activation_status_response): "
 	     "BMC currently using %d SoL payload instances; limit is %d.",
 	     count, max);
 #endif
 
     if (!found || (count >= max)) {
-	ipmi_log(IPMI_LOG_FATAL, "BMC can't accept any more SoL sessions.");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_get_payload_activation_status_response): "
+		 "BMC can't accept any more SoL sessions.");
 	ipmi_sol_set_connection_state
 	    (conn, ipmi_sol_state_closed,
 	     IPMI_RMCPP_ERR_VAL(IPMI_RMCPP_INVALID_PAYLOAD_TYPE));
@@ -2240,6 +2261,7 @@ ipmi_sol_handle_get_payload_activation_status_response(ipmi_sol_conn_t *conn,
     }
 #ifdef IPMI_SOL_VERBOSE
     ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_get_payload_activation_status_response): "
 	     "SoL sessions are available; Using instance slot %d.",
 	     conn->payload_instance);
 #endif
@@ -2268,13 +2290,13 @@ send_get_payload_activation_status_command(ipmi_sol_conn_t *conn)
     msg_out.cmd = IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD;
 
     return send_message(conn, &msg_out,
-			ipmi_sol_handle_get_payload_activation_status_response);
+			handle_get_payload_activation_status_response);
 }
 
 
 static void
-ipmi_sol_handle_session_info_response(ipmi_sol_conn_t *conn,
-				      ipmi_msg_t      *msg_in)
+handle_session_info_response(ipmi_sol_conn_t *conn,
+			     ipmi_msg_t      *msg_in)
 {
 #ifdef IPMI_SOL_VERBOSE
     char *privilege_level[16] = {
@@ -2284,7 +2306,9 @@ ipmi_sol_handle_session_info_response(ipmi_sol_conn_t *conn,
 #endif
 
     if (msg_in->data_len < 7) {
-	ipmi_log(IPMI_LOG_FATAL, "Get Session Info command failed.");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_session_info_response): "
+		 "Get Session Info command failed.");
 	if (msg_in->data_len > 0)
 	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
 					  IPMI_IPMI_ERR_VAL(msg_in->data[0]));
@@ -2297,11 +2321,14 @@ ipmi_sol_handle_session_info_response(ipmi_sol_conn_t *conn,
     }
 
 #ifdef IPMI_SOL_VERBOSE
-    ipmi_log(IPMI_LOG_INFO, "This session handle: 0x%02x"
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_session_info_response): "
+	     "This session handle: 0x%02x"
 	     "  BMC currently using %d of %d sessions",
 	     msg_in->data[1], msg_in->data[3], msg_in->data[2]);
-    ipmi_log(IPMI_LOG_INFO, "Current UserID: 0x%02x (%s)"
-	     "  Channel number: 0x%02x",
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_session_info_response): "
+	     "Current UserID: 0x%02x (%s)  Channel number: 0x%02x",
 	     msg_in->data[4] & 0x3f, privilege_level[msg_in->data[5] & 0x0f],
 	     msg_in->data[6] & 0x0f);
 #endif
@@ -2326,12 +2353,12 @@ send_get_session_info(ipmi_sol_conn_t *conn)
     msg_out.netfn = IPMI_APP_NETFN;
     msg_out.cmd = IPMI_GET_SESSION_INFO_CMD;
 
-    return send_message(conn, &msg_out, ipmi_sol_handle_session_info_response);
+    return send_message(conn, &msg_out, handle_session_info_response);
 }
 
 static void
-ipmi_sol_handle_commit_write_response(ipmi_sol_conn_t *conn,
-				      ipmi_msg_t      *msg_in)
+handle_commit_write_response(ipmi_sol_conn_t *conn,
+			     ipmi_msg_t      *msg_in)
 {
     send_get_session_info(conn);
 }
@@ -2353,12 +2380,12 @@ send_commit_write(ipmi_sol_conn_t *conn)
     msg_out.netfn = IPMI_TRANSPORT_NETFN;
     msg_out.cmd = IPMI_SET_SOL_CONFIGURATION_PARAMETERS;
 
-    return send_message(conn, &msg_out, ipmi_sol_handle_commit_write_response);
+    return send_message(conn, &msg_out, handle_commit_write_response);
 }
 
 static void
-ipmi_sol_handle_set_sol_enabled_response(ipmi_sol_conn_t *conn,
-					 ipmi_msg_t      *msg_in)
+handle_set_sol_enabled_response(ipmi_sol_conn_t *conn,
+				ipmi_msg_t      *msg_in)
 {
 #if 0
     if ((msg_in->data_len != 1) || (msg_in->data[0])) {
@@ -2386,7 +2413,9 @@ send_enable_sol_command(ipmi_sol_conn_t *conn)
     /*
      * Send a Set SoL Configuration command
      */
-    ipmi_log(IPMI_LOG_INFO, "Attempting to enable SoL on BMC.");
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(send_enable_sol_command): "
+	     "Attempting to enable SoL on BMC.");
 
     msg_out.data_len = 3;
     msg_out.data = data;
@@ -2400,15 +2429,17 @@ send_enable_sol_command(ipmi_sol_conn_t *conn)
     msg_out.cmd = IPMI_SET_SOL_CONFIGURATION_PARAMETERS;
 
     return send_message(conn, &msg_out,
-			ipmi_sol_handle_set_sol_enabled_response);
+			handle_set_sol_enabled_response);
 }
 
 static void
-ipmi_sol_handle_get_sol_enabled_response(ipmi_sol_conn_t *conn,
-					 ipmi_msg_t      *msg_in)
+handle_get_sol_enabled_response(ipmi_sol_conn_t *conn,
+				ipmi_msg_t      *msg_in)
 {
     if (msg_in->data_len != 3) {
-	ipmi_log(IPMI_LOG_FATAL, "Get SoL Configuration[SoL Enabled] failed.");
+	ipmi_log(IPMI_LOG_FATAL,
+		 "ipmi_sol.c(handle_get_sol_enabled_response): "
+		 "Get SoL Configuration[SoL Enabled] failed.");
 	if (msg_in->data_len > 0)
 	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
 					  IPMI_IPMI_ERR_VAL(msg_in->data[0]));
@@ -2422,12 +2453,16 @@ ipmi_sol_handle_get_sol_enabled_response(ipmi_sol_conn_t *conn,
 
     if ((msg_in->data[2] && 1)) {
 #ifdef IPMI_SOL_VERBOSE
-	ipmi_log(IPMI_LOG_INFO, "BMC says SoL is enabled.");
+	ipmi_log(IPMI_LOG_INFO,
+		 "ipmi_sol.c(handle_get_sol_enabled_response): "
+		 "BMC says SoL is enabled.");
 #endif
 	send_get_session_info(conn);
 	return;
     }
-    ipmi_log(IPMI_LOG_SEVERE, "BMC says SoL is disabled.");
+    ipmi_log(IPMI_LOG_SEVERE,
+	     "ipmi_sol.c(handle_get_sol_enabled_response): "
+	     "BMC says SoL is disabled.");
 	
     if (conn->force_connection_configure)
 	send_enable_sol_command(conn);
@@ -2458,16 +2493,17 @@ send_get_sol_configuration_command(ipmi_sol_conn_t *conn)
     msg_out.netfn = IPMI_TRANSPORT_NETFN;
     msg_out.cmd = IPMI_GET_SOL_CONFIGURATION_PARAMETERS;
 
-    send_message(conn, &msg_out, ipmi_sol_handle_get_sol_enabled_response);
+    send_message(conn, &msg_out, handle_get_sol_enabled_response);
 }
 
 
 static void
-ipmi_sol_handle_get_channel_payload_support_response(ipmi_sol_conn_t *conn,
-						     ipmi_msg_t      *msg_in)
+handle_get_channel_payload_support_response(ipmi_sol_conn_t *conn,
+					    ipmi_msg_t      *msg_in)
 {
     if (msg_in->data_len != 9) {
 	ipmi_log(IPMI_LOG_FATAL,
+		 "ipmi_sol.c(handle_get_channel_payload_support_response): "
 		 "Get Channel Payload Support command failed.");
 	if (msg_in->data_len > 0)
 	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
@@ -2482,14 +2518,18 @@ ipmi_sol_handle_get_channel_payload_support_response(ipmi_sol_conn_t *conn,
 
     if (!(msg_in->data[1] && (1 << IPMI_RMCPP_PAYLOAD_TYPE_SOL))) {
 	/* SoL is not supported! */
-	ipmi_log(IPMI_LOG_ERR_INFO, "BMC says SoL is not supported.");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_sol.c(handle_get_channel_payload_support_response): "
+		 "BMC says SoL is not supported.");
 	ipmi_sol_set_connection_state
 	    (conn, ipmi_sol_state_closed,
 	     IPMI_RMCPP_ERR_VAL(IPMI_RMCPP_INVALID_PAYLOAD_TYPE));
 	return;
     }
 #ifdef IPMI_SOL_VERBOSE
-    ipmi_log(IPMI_LOG_INFO, "BMC says SoL is supported.");
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_get_channel_payload_support_response): "
+	     "BMC says SoL is supported.");
 #endif
     send_get_sol_configuration_command(conn);
 }
@@ -2512,7 +2552,7 @@ send_get_channel_payload_support_command(ipmi_sol_conn_t *conn)
     msg_out.cmd = IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD;
 
     return send_message(conn, &msg_out,
-			ipmi_sol_handle_get_channel_payload_support_response);
+			handle_get_channel_payload_support_response);
 }
 
 
@@ -2524,7 +2564,8 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
      */
     if (conn->state != ipmi_sol_state_closed) {
 	/* It's an error to try to connect when not in closed state. */
-	ipmi_log(IPMI_LOG_WARNING,
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_sol.c(ipmi_sol_open): "
 		 "An attempt was made to open an SoL connection"
 		 " that's already open.");
 	return EINVAL;
@@ -2551,8 +2592,8 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
 
 
 static void
-ipmi_sol_handle_deactivate_payload_response(ipmi_sol_conn_t *conn,
-					    ipmi_msg_t      *msg_in)
+handle_deactivate_payload_response(ipmi_sol_conn_t *conn,
+				   ipmi_msg_t      *msg_in)
 {
     /*
      * We assume that conn hasn't gone away already, since we got the message
@@ -2587,7 +2628,7 @@ ipmi_sol_close(ipmi_sol_conn_t *conn)
 	|| (conn->state == ipmi_sol_state_closed))
 	return EINVAL;
 	
-    ipmi_sol_send_close(conn, ipmi_sol_handle_deactivate_payload_response);
+    ipmi_sol_send_close(conn, handle_deactivate_payload_response);
     return 0;
 }
 
@@ -2725,19 +2766,23 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
     conn = find_sol_connection_for_ipmi(ipmi_conn);
     if (!conn) {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
 		 "Dropped incoming SoL packet: Unrecognized connection.");
 	return;
     }
 
     if (data_len < 4) {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
 		 "Dropped incoming SoL packet: Too short, at %d bytes.",
 		 data_len);
 	return;
     }
 
 #ifdef IPMI_SOL_DEBUG_RECEIVE
-    ipmi_log(IPMI_LOG_INFO, "Received SoL packet, %d bytes", data_len);
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(sol_handle_recv_async): "
+	     "Received SoL packet, %d bytes", data_len);
     dump_hex(packet, data_len);
 #endif
 
@@ -2768,6 +2813,7 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	if (0 == packet[PACKET_SEQNR]) {
 	    /* Can't have data in a packet with zero seqnr: error */
 	    ipmi_log(IPMI_LOG_WARNING,
+		     "ipmi_sol.c(sol_handle_recv_async): "
 		     "Broken BMC: Received a packet with non-empty data"
 		     " and a sequence number of zero.");
 	} else {
