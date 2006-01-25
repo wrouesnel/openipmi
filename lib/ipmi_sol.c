@@ -1163,6 +1163,8 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
 	new_packet_record->packet[PACKET_SEQNR] = 0;
     }
 
+    new_packet_record->os_hnd = transmitter->sol_conn->ipmi->os_hnd;
+
     return new_packet_record;
 }
 
