@@ -2657,6 +2657,8 @@ ipmi_sol_free(ipmi_sol_conn_t *conn)
 	ipmi_destroy_lock(conn->transmitter.packet_lock);
     if (conn->transmitter.queue_lock)
 	ipmi_destroy_lock(conn->transmitter.queue_lock);
+    if (conn->transmitter.oob_op_lock)
+	ipmi_destroy_lock(conn->transmitter.oob_op_lock);
     if (conn->data_received_callback_list)
 	locked_list_destroy(conn->data_received_callback_list);
     if (conn->break_detected_callback_list)
