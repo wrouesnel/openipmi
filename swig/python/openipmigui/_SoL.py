@@ -88,9 +88,11 @@ class SoL(wx.Frame):
 
         self.term = SolTerm(self, self)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.term.textctrl, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.sizer.Add(self.term.textctrl, 1,
+                       wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
         self.errstr = wx.StatusBar(self, -1)
         self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.SetSizer(self.sizer)
         self.Show()
         wx.EVT_CLOSE(self, self.OnClose)
         return

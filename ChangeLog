@@ -4,6 +4,10 @@
 	standard formatting.  Make a few minor fixes (marked with FIXMEs
 	for now).
 
+	* lib/ipmi_sol.c: Fixed a bunch of memory leaks.  Still some left
+	with the callback lists, but those need to be replaced with locked
+	lists, so they are not worth fixing right now.
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added a way to send messages with

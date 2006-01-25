@@ -59,6 +59,9 @@
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
 
+/* FIXME - replace callback lists with standard locked lists to avoid
+   race conditions and memory leaks. */
+
 
 /*
  * Bit masks for status conditions sent BMC -> console, see Table 15-2
@@ -184,7 +187,7 @@ typedef struct ipmi_sol_outgoing_packet_record_s {
 
 struct ipmi_sol_transmitter_context_s {
     /* A queue of un-acked transmit requests. */
-    ipmi_sol_outgoing_queue_t *outgoing_queue;
+    ipmi_sol_outgoing_queue_t outgoing_queue;
 
     /* A reference back to the SoL connection to which this
        transmitter belongs. */
@@ -425,6 +428,7 @@ static int handle_response(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     if (rspi->data2)
 	((sol_command_callback)(rspi->data2))
 	    ((ipmi_sol_conn_t *)rspi->data1, &rspi->msg);
+    ipmi_free_msg_item(rspi);
     return IPMI_MSG_ITEM_USED;
 }
 
@@ -457,15 +461,17 @@ send_message(ipmi_sol_conn_t      *conn,
     return rv;
 }
 
-static int ipmi_sol_send_close(ipmi_sol_conn_t *conn, sol_command_callback cb)
+static int
+ipmi_sol_send_close(ipmi_sol_conn_t *conn, sol_command_callback cb)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[6];
 
     /*
      * Send a Deactivate Payload
      */
     msg_out.data_len = 6;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     msg_out.data[0] = IPMI_RMCPP_PAYLOAD_TYPE_SOL & 0x3f; /* payload type */
     msg_out.data[1] = conn->payload_instance; /* payload instance number */
@@ -488,7 +494,7 @@ static int ipmi_sol_send_close(ipmi_sol_conn_t *conn, sol_command_callback cb)
 static int
 add_callback_to_list(callback_list_t **cb_list, void *cb, void *cb_data)
 {
-    callback_list_t *new_entry = (callback_list_t *)ipmi_mem_alloc(sizeof(*new_entry));
+    callback_list_t *new_entry = ipmi_mem_alloc(sizeof(*new_entry));
     callback_list_t *iter = *cb_list;
 
     if (!new_entry)
@@ -897,18 +903,18 @@ dump_transmitter_queue_state(ipmi_sol_transmitter_context_t *transmitter)
 {
     /* DEBUG: Just dump the queue! */
     ipmi_lock(transmitter->queue_lock);
-    printf("Outgoing queue: 0x%p\n", transmitter->outgoing_queue);
+    printf("Outgoing queue: 0x%p\n", &transmitter->outgoing_queue);
     if (!transmitter->outgoing_queue)
 	return;
 
     printf("   head: 0x%p\n"
-	   "   tail: 0x%p\n", transmitter->outgoing_queue->head,
-	   transmitter->outgoing_queue->tail
+	   "   tail: 0x%p\n", transmitter->outgoing_queue.head,
+	   transmitter->outgoing_queue.tail
 	   );
 	
     printf("vvvvv Outgoing queue:\n");
-    if (transmitter->outgoing_queue->head) {
-	ipmi_sol_outgoing_queue_item_t *i = transmitter->outgoing_queue->head;
+    if (transmitter->outgoing_queue.head) {
+	ipmi_sol_outgoing_queue_item_t *i = transmitter->outgoing_queue.head;
 	while (i) {
 	    printf("%p -> %d chars at %p -> [", i, i->data_len, i->data); fflush(stdout);
 	    int j;
@@ -934,7 +940,7 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
     int data_len = 0;
     unsigned char *ptr = &transmitter->scratch_area[0];
     ipmi_sol_outgoing_packet_record_t *new_packet_record = NULL;
-    ipmi_sol_outgoing_queue_item_t *qi = transmitter->outgoing_queue->head;
+    ipmi_sol_outgoing_queue_item_t *qi = transmitter->outgoing_queue.head;
     unsigned char ib_op = 0;
     unsigned int already_acked = transmitter->bytes_acked_at_head;
 
@@ -1095,6 +1101,9 @@ dispose_of_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter,
     transmitter->transmitted_packet = NULL;
 }
 
+/*
+ * Must be called with the packet lock held.
+ */
 static int
 transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
 {
@@ -1114,8 +1123,6 @@ transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
     options[curr_opt].ival = ipmi_sol_get_use_authentication(conn);
     curr_opt++;
     options[curr_opt].option = IPMI_CON_OPTION_LIST_END;
-
-    ipmi_lock(transmitter->packet_lock);
 
     msg.netfn = 1;
     msg.cmd = 0;
@@ -1147,7 +1154,6 @@ transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
 		 ipmi_get_error_string(rv, buf, 50));
 	dispose_of_outstanding_packet(transmitter, rv);
     }
-    ipmi_unlock(transmitter->packet_lock);
     return rv;
 }
 
@@ -1314,7 +1320,7 @@ dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
     ipmi_lock(transmitter->queue_lock);
 
     transmitter->bytes_acked_at_head = 0;
-    qitem = transmitter->outgoing_queue->head;
+    qitem = transmitter->outgoing_queue.head;
 
     if (qitem) {
 	if (qitem->transmit_complete_callback)
@@ -1324,12 +1330,12 @@ dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
 	if (qitem->data)
 	    ipmi_mem_free(qitem->data);
 	
-	transmitter->outgoing_queue->head = qitem->next;
+	transmitter->outgoing_queue.head = qitem->next;
 	ipmi_mem_free(qitem);
 	
 	/* Deleting the last packet in the list? */
-	if (NULL == transmitter->outgoing_queue->head)
-	    transmitter->outgoing_queue->tail = NULL;
+	if (NULL == transmitter->outgoing_queue.head)
+	    transmitter->outgoing_queue.tail = NULL;
     }
 
     ipmi_unlock(transmitter->queue_lock);
@@ -1350,7 +1356,7 @@ transmitter_flush_outbound(ipmi_sol_transmitter_context_t *transmitter,
 
     dispose_of_outstanding_packet(transmitter, error);
 
-    while (transmitter->outgoing_queue->head)
+    while (transmitter->outgoing_queue.head)
 	dequeue_head(transmitter, error);
 
     ipmi_unlock(transmitter->queue_lock);
@@ -1387,7 +1393,7 @@ transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
 	int avail_this_pkt;
 	int this_ack;
 
-	qitem = conn->transmitter.outgoing_queue->head;
+	qitem = conn->transmitter.outgoing_queue.head;
 	if (!qitem) {
 	    if (acknowledged_char_count) {
 		/*
@@ -1478,14 +1484,14 @@ add_to_transmit_queue(ipmi_sol_transmitter_context_t *tx,
 
     ipmi_lock(tx->queue_lock);
 
-    if (tx->outgoing_queue->tail)
-	tx->outgoing_queue->tail->next = new_tail;
+    if (tx->outgoing_queue.tail)
+	tx->outgoing_queue.tail->next = new_tail;
 
-    tx->outgoing_queue->tail = new_tail;
+    tx->outgoing_queue.tail = new_tail;
 
     /* Adding to a previously empty list? */
-    if (!tx->outgoing_queue->head)
-	tx->outgoing_queue->head = new_tail;
+    if (!tx->outgoing_queue.head)
+	tx->outgoing_queue.head = new_tail;
 
     ipmi_unlock(tx->queue_lock);
 
@@ -1880,11 +1886,6 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     new_conn->state = ipmi_sol_state_closed;
     new_conn->try_fast_connect = 1;
 
-    new_conn->transmitter.outgoing_queue
-	= ipmi_mem_alloc(sizeof(*new_conn->transmitter.outgoing_queue));
-
-    new_conn->transmitter.outgoing_queue->head = NULL;
-    new_conn->transmitter.outgoing_queue->tail = NULL;
     new_conn->transmitter.sol_conn = new_conn;
     new_conn->transmitter.transmitted_packet = NULL;
     new_conn->transmitter.latest_outgoing_seqnr = 1;
@@ -2027,13 +2028,14 @@ ipmi_sol_handle_activate_payload_response(ipmi_sol_conn_t *conn,
 static int
 send_activate_payload(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[6];
 	
     /*
      * Send an Activate Payload command
      */
     msg_out.data_len = 6;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     msg_out.data[0] = IPMI_RMCPP_PAYLOAD_TYPE_SOL & 0x3f; /* payload type */
     msg_out.data[1] = conn->payload_instance; /* payload instance number */
@@ -2090,12 +2092,13 @@ ipmi_sol_handle_set_volatile_bitrate_response(ipmi_sol_conn_t *conn,
 static int
 send_set_volatile_bitrate(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[3];
     /*
      * Send a Set SoL Configuration command
      */
     msg_out.data_len = 3;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
     msg_out.data[0] = IPMI_SELF_CHANNEL; /* own channel, set param */
     msg_out.data[1] = 6; /* parameter selector = SOL volatile bit rate */
     msg_out.data[2] = conn->initial_bit_rate;
@@ -2169,13 +2172,14 @@ ipmi_sol_handle_get_payload_activation_status_response(ipmi_sol_conn_t *conn,
 static int
 send_get_payload_activation_status_command(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[1];
 
     /*
      * Send a Get Payload Activation Status command
      */
     msg_out.data_len = 1;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     msg_out.data[0] = IPMI_RMCPP_PAYLOAD_TYPE_SOL; /* Payload type */
 
@@ -2230,10 +2234,11 @@ send_get_session_info(ipmi_sol_conn_t *conn)
      * Send a Get Session Info command (gives us our User ID, among
      * other things)
      */
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[1];
 
     msg_out.data_len = 1;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     msg_out.data[0] = 0x00; /* current session */
 
@@ -2253,10 +2258,11 @@ ipmi_sol_handle_commit_write_response(ipmi_sol_conn_t *conn,
 static int
 send_commit_write(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[3];
 
     msg_out.data_len = 3;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     /* own channel, get param (not just version) */
     msg_out.data[0] = IPMI_SELF_CHANNEL;
@@ -2294,6 +2300,7 @@ static int
 send_enable_sol_command(ipmi_sol_conn_t *conn)
 {
     ipmi_msg_t msg_out;
+    unsigned char data[3];
 
     /*
      * Send a Set SoL Configuration command
@@ -2301,7 +2308,7 @@ send_enable_sol_command(ipmi_sol_conn_t *conn)
     ipmi_log(IPMI_LOG_INFO, "Attempting to enable SoL on BMC.");
 
     msg_out.data_len = 3;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     /* own channel, get param (not just version) */
     msg_out.data[0] = IPMI_SELF_CHANNEL;
@@ -2352,13 +2359,14 @@ ipmi_sol_handle_get_sol_enabled_response(ipmi_sol_conn_t *conn,
 static void
 send_get_sol_configuration_command(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[4];
 
     /*
      * Send a Get SoL Configuration command
      */
     msg_out.data_len = 4;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     /* own channel, get param (not just version) */
     msg_out.data[0] = IPMI_SELF_CHANNEL;
@@ -2408,13 +2416,14 @@ ipmi_sol_handle_get_channel_payload_support_response(ipmi_sol_conn_t *conn,
 static int
 send_get_channel_payload_support_command(ipmi_sol_conn_t *conn)
 {
-    ipmi_msg_t msg_out;
+    ipmi_msg_t    msg_out;
+    unsigned char data[1];
 
     /*
      * Send a Get Payload Support command
      */
     msg_out.data_len = 1;
-    msg_out.data = ipmi_mem_alloc(msg_out.data_len);
+    msg_out.data = data;
 
     msg_out.data[0] = IPMI_SELF_CHANNEL; /* current channel */
 
@@ -2753,10 +2762,11 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	ipmi_sol_set_connection_state(conn,
 				      ipmi_sol_state_closed,
 				      IPMI_SOL_ERR_VAL(IPMI_SOL_DEACTIVATED));
-    } else
+	ipmi_unlock(xmitter->packet_lock);
+    } else {
+	ipmi_unlock(xmitter->packet_lock);
 	transmitter_prod(xmitter);
-
-    ipmi_unlock(xmitter->packet_lock);
+    }
 }
 
 static ipmi_payload_t ipmi_sol_payload =
