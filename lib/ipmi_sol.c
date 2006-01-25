@@ -1197,7 +1197,7 @@ dispose_of_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter,
 	ipmi_lock(packet->timer_lock);
 	if (packet->timer_running)
 	    rv = os_hnd->stop_timer(os_hnd, packet->ack_timer);
-	if (!rv) {
+	if (! rv) {
 	    ipmi_destroy_lock(packet->timer_lock);
 	    os_hnd->free_timer(os_hnd, packet->ack_timer);
 	} else {
@@ -1355,7 +1355,8 @@ sol_ACK_timer_expired(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
-    if (! (--packet->transmit_attempts_remaining)) {
+    packet->transmit_attempts_remaining--;
+    if (packet->transmit_attempts_remaining == 0) {
 	/*
 	 * Didn't get a response even after retries... connection is lost.
 	 */
