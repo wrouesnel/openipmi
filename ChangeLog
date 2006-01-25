@@ -8,6 +8,14 @@
 	with the callback lists, but those need to be replaced with locked
 	lists, so they are not worth fixing right now.
 
+	* swig/python/openipmigui/_term.py: Started working on a terminal
+	emulator for SoL.
+
+	* swig/python/openipmigui/_SoL.py: Started working on SoL interface
+	code for the GUI.
+
+	* swig/pythong/openipmigui/Makefile.am: Added the above two files.
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added a way to send messages with
