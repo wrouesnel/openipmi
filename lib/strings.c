@@ -594,6 +594,7 @@ static char *sensor_states[256][16] =
 	"undetermined system hardware failure",
 	"entry added to auxiliary log",
 	"PEF action",
+	"Timestamp clock sync"
     },
     { /* 0x13 */
 	"front panel NMI/diag interrupt",
@@ -628,7 +629,10 @@ static char *sensor_states[256][16] =
 	"initiated by hard reset",
 	"initiated by warm reset",
 	"user requested PXE boot",
-	"automatic boot to diagnostic"
+	"automatic boot to diagnostic",
+	"OS initiated hard reset",
+	"OS initiated warm reset",
+	"System restart",
     },
     { /* 0x1e */
 	"no bootable media",
@@ -648,7 +652,10 @@ static char *sensor_states[256][16] =
     },
     { /* 0x20 */
 	"stop during OS load/initialization",
-	"run time stop"
+	"run time critical stop",
+	"OS Graceful Stop",
+	"Soft shutdown initiated by PEF",
+	"Agent not responding, graceful shutdown did not occur"
     },
     { /* 0x21 */
 	"fault status asserted",
@@ -710,6 +717,8 @@ static char *sensor_states[256][16] =
 	"controller access degraded or unavailable",
 	"management controller off-line",
 	"management controller unavailable",
+	"sensor failure",
+	"FRU failure"
     },
     { /* 0x29 */
 	"battery low",

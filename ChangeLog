@@ -1,3 +1,12 @@
+2006-01-25 Corey Minyard <cminyard@mvista.com>
+
+	* lib/strings.c: Added some sensor code strings specified by
+	errata to the spec.
+
+	* lib/ipmi_sol.c: Replaced the callback_lists used for reporting
+	status with locked lists.  The locked-lists are race-free and
+	handle all the deletion while in use type cases.
+
 2006-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_sol.c: Modified formatting to conform with the OpenIPMI

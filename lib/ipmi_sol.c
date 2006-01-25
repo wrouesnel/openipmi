@@ -56,6 +56,7 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/internal/ipmi_malloc.h>
 #include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/internal/locked_list.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
 
@@ -288,19 +289,19 @@ struct ipmi_sol_conn_s {
     int ACK_retries;
 
     /* A list of callbacks that are called when data received from the BMC. */
-    callback_list_t *data_received_callback_list;
+    locked_list_t *data_received_callback_list;
 
     /* A list of callbacks that are called when a break is reported by
        the BMC. */
-    callback_list_t *break_detected_callback_list;
+    locked_list_t *break_detected_callback_list;
 
     /* A list of callbacks that are called when a transmit overrun is
        reported by the BMC. */
-    callback_list_t *bmc_transmit_overrun_callback_list;
+    locked_list_t *bmc_transmit_overrun_callback_list;
 
     /* A list of callbacks that are called when the SoL connection
        changes state. */
-    callback_list_t *connection_state_callback_list;
+    locked_list_t *connection_state_callback_list;
 };
 
 
@@ -520,25 +521,25 @@ add_callback_to_list(callback_list_t **cb_list, void *cb, void *cb_data)
     return 0;
 }
 
-static int
-remove_callback_from_list(callback_list_t **cb_list, void *cb, void *cb_data)
+typedef struct do_data_received_callback_s
 {
-    callback_list_t *iter = *cb_list;
-    callback_list_t *last = NULL;
-    while (NULL != iter) {
-	if (iter->cb == cb && iter->cb_data == cb_data) {
-	    // remove this node.
-	    if (NULL == last)
-		*cb_list = iter->next;
-	    else
-		last->next = iter->next;
-	    ipmi_mem_free(iter);
-	    return 0;
-	}
-	last = iter;
-	iter = iter->next;
-    }
-    return ENOENT;
+    ipmi_sol_conn_t *conn;
+    const void      *buf;
+    size_t          count;
+    int             nack;
+} do_data_received_callback_t;
+
+static int
+do_data_received_callback(void *cb_data, void *item1, void *item2)
+{
+    do_data_received_callback_t *info = cb_data;
+    ipmi_sol_data_received_cb   cb = item1;
+    
+    info->nack = cb(info->conn, info->buf, info->count, item2);
+    if (info->nack)
+	return LOCKED_LIST_ITER_STOP;
+    else
+	return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static int
@@ -546,59 +547,96 @@ do_data_received_callbacks(ipmi_sol_conn_t *conn,
 			   const void      *buf,
 			   size_t          count)
 {
-    int nack = 0;
-    callback_list_t *iter = conn->data_received_callback_list;
+    do_data_received_callback_t info;
 
-    while (NULL != iter) {
-	nack = ((ipmi_sol_data_received_cb)iter->cb)(conn, buf, count,
-						     iter->cb_data);
-	if (nack)
-	    break;
-	iter = iter->next;
-    }
+    info.conn = conn;
+    info.buf = buf;
+    info.count = count;
+    info.nack = 0;
+    locked_list_iterate(conn->data_received_callback_list,
+			do_data_received_callback,
+			&info);
+    return info.nack;
+}
 
-    return nack;
+static int
+do_break_detected_callback(void *cb_data, void *item1, void *item2)
+{
+    ipmi_sol_conn_t            *conn = cb_data; 
+    ipmi_sol_break_detected_cb cb = item1;
+    
+    cb(conn, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
 do_break_detected_callbacks(ipmi_sol_conn_t *conn)
 {
-    callback_list_t *iter = conn->break_detected_callback_list;
-    while (NULL != iter) {
-	((ipmi_sol_break_detected_cb)iter->cb)(conn, iter->cb_data);
-	iter = iter->next;
-    }
+    locked_list_iterate(conn->break_detected_callback_list,
+			do_break_detected_callback,
+			conn);
+}
+
+static int
+do_transmit_overrun_callback(void *cb_data, void *item1, void *item2)
+{
+    ipmi_sol_conn_t                  *conn = cb_data; 
+    ipmi_sol_bmc_transmit_overrun_cb cb = item1;
+    
+    cb(conn, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
 do_transmit_overrun_callbacks(ipmi_sol_conn_t *conn)
 {
-    callback_list_t *iter = conn->bmc_transmit_overrun_callback_list;
-    while (NULL != iter) {
-	((ipmi_sol_bmc_transmit_overrun_cb)iter->cb)(conn, iter->cb_data);
-	iter = iter->next;
-    }
+    locked_list_iterate(conn->bmc_transmit_overrun_callback_list,
+			do_transmit_overrun_callback,
+			conn);
+}
+
+typedef struct do_connection_state_callback_s
+{
+    ipmi_sol_conn_t *conn;
+    ipmi_sol_state  state;
+    int             error;
+} do_connection_state_callback_t;
+
+static int
+do_connection_state_callback(void *cb_data, void *item1, void *item2)
+{
+    do_connection_state_callback_t *info = cb_data;
+    ipmi_sol_connection_state_cb   cb = item1;
+    
+    cb(info->conn, info->state, info->error, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
-do_connection_state_callbacks(ipmi_sol_conn_t *conn, int state, int error)
+do_connection_state_callbacks(ipmi_sol_conn_t *conn,
+			      ipmi_sol_state  state,
+			      int             error)
 {
-    callback_list_t *iter = conn->connection_state_callback_list;
-    while (NULL != iter) {
-	((ipmi_sol_connection_state_cb)iter->cb)(conn, state, error,
-						 iter->cb_data);
-	iter = iter->next;
-    }
+    do_connection_state_callback_t info;
+
+    info.conn = conn;
+    info.state = state;
+    info.error = error;
+    locked_list_iterate(conn->connection_state_callback_list,
+			do_connection_state_callback,
+			&info);
 }
 
-
+/* FIXME - check conn lock (when it is available) on the following items */
 int
 ipmi_sol_register_data_received_callback(ipmi_sol_conn_t           *conn,
 					 ipmi_sol_data_received_cb cb,
 					 void                      *cb_data)
 {
-    return add_callback_to_list(&conn->data_received_callback_list,
-				cb, cb_data);
+    if (locked_list_add(conn->data_received_callback_list, cb, cb_data))
+	return 0;
+    else
+	return ENOMEM;
 }
 
 int
@@ -606,8 +644,10 @@ ipmi_sol_deregister_data_received_callback(ipmi_sol_conn_t           *conn,
 					   ipmi_sol_data_received_cb cb,
 					   void                      *cb_data)
 {
-    return remove_callback_from_list(&conn->data_received_callback_list,
-				     cb, cb_data);
+    if (locked_list_remove(conn->data_received_callback_list, cb, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 
@@ -616,8 +656,10 @@ ipmi_sol_register_break_detected_callback(ipmi_sol_conn_t            *conn,
 					  ipmi_sol_break_detected_cb cb,
 					  void                       *cb_data)
 {
-    return add_callback_to_list(&conn->break_detected_callback_list,
-				cb, cb_data);
+    if (locked_list_add(conn->break_detected_callback_list, cb, cb_data))
+	return 0;
+    else
+	return ENOMEM;
 }
 
 int
@@ -625,8 +667,10 @@ ipmi_sol_deregister_break_detected_callback(ipmi_sol_conn_t            *conn,
 					    ipmi_sol_break_detected_cb cb,
 					    void                      *cb_data)
 {
-    return remove_callback_from_list(&conn->break_detected_callback_list,
-				     cb, cb_data);
+    if (locked_list_remove(conn->break_detected_callback_list, cb, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 
@@ -635,8 +679,10 @@ ipmi_sol_register_bmc_transmit_overrun_callback(ipmi_sol_conn_t *conn,
 						ipmi_sol_bmc_transmit_overrun_cb cb,
 						void *cb_data)
 {
-    return add_callback_to_list(&conn->bmc_transmit_overrun_callback_list,
-				cb, cb_data);
+    if (locked_list_add(conn->bmc_transmit_overrun_callback_list, cb, cb_data))
+	return 0;
+    else
+	return ENOMEM;
 }
 
 int
@@ -644,8 +690,11 @@ ipmi_sol_deregister_bmc_transmit_overrun_callback(ipmi_sol_conn_t *conn,
 						  ipmi_sol_bmc_transmit_overrun_cb cb,
 						  void *cb_data)
 {
-    return remove_callback_from_list(&conn->bmc_transmit_overrun_callback_list,
-				     cb, cb_data);
+    if (locked_list_remove(conn->bmc_transmit_overrun_callback_list, cb,
+			   cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 
@@ -654,8 +703,10 @@ ipmi_sol_register_connection_state_callback(ipmi_sol_conn_t              *conn,
 					    ipmi_sol_connection_state_cb cb,
 					    void                       *cb_data)
 {
-    return add_callback_to_list(&conn->connection_state_callback_list,
-				cb, cb_data);
+    if (locked_list_add(conn->connection_state_callback_list, cb, cb_data))
+	return 0;
+    else
+	return ENOMEM;
 }
 
 int
@@ -663,8 +714,10 @@ ipmi_sol_deregister_connection_state_callback(ipmi_sol_conn_t         *conn,
 					      ipmi_sol_connection_state_cb cb,
 					      void                    *cb_data)
 {
-    return remove_callback_from_list(&conn->connection_state_callback_list,
-				     cb, cb_data);
+    if (locked_list_remove(conn->connection_state_callback_list, cb, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 
@@ -1845,6 +1898,7 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
 		ipmi_sol_conn_t **sol_conn)
 {
     ipmi_sol_conn_t *new_conn;
+    os_handler_t    *os_hnd = ipmi->os_hnd;
     int rv = register_ipmi_payload();
     if (rv)
 	return rv;
@@ -1859,26 +1913,37 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     new_conn->auxiliary_payload_data = (IPMI_SOL_AUX_USE_ENCRYPTION
 					| IPMI_SOL_AUX_USE_AUTHENTICATION);
 
-    rv = ipmi_create_lock_os_hnd(ipmi->os_hnd,
+    rv = ipmi_create_lock_os_hnd(os_hnd,
 				 &new_conn->transmitter.packet_lock);
-    if (rv) {
-	ipmi_mem_free(new_conn);
-	return rv;
-    }
+    if (rv)
+	goto out_err;
 
-    rv = ipmi_create_lock_os_hnd(ipmi->os_hnd,
+    rv = ipmi_create_lock_os_hnd(os_hnd,
 				 &new_conn->transmitter.queue_lock);
-    if (rv) {
-	ipmi_destroy_lock(new_conn->transmitter.packet_lock);
-	ipmi_mem_free(new_conn);
-	return rv;
-    }
+    if (rv)
+	goto out_err;
 
     new_conn->ipmi = ipmi;
-    new_conn->data_received_callback_list = NULL;
-    new_conn->break_detected_callback_list = NULL;
-    new_conn->bmc_transmit_overrun_callback_list = NULL;
-    new_conn->connection_state_callback_list = NULL;
+    new_conn->data_received_callback_list = locked_list_alloc(os_hnd);
+    if (! new_conn->data_received_callback_list) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    new_conn->break_detected_callback_list = locked_list_alloc(os_hnd);
+    if (! new_conn->break_detected_callback_list) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    new_conn->bmc_transmit_overrun_callback_list = locked_list_alloc(os_hnd);
+    if (! new_conn->bmc_transmit_overrun_callback_list) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    new_conn->connection_state_callback_list = locked_list_alloc(os_hnd);
+    if (! new_conn->connection_state_callback_list) {
+	rv = ENOMEM;
+	goto out_err;
+    }
 
     new_conn->prev_received_seqnr = 0;
     new_conn->prev_character_count = 0;
@@ -1899,6 +1964,22 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     *sol_conn = new_conn;
 
     return 0;
+
+ out_err:
+    if (new_conn->transmitter.packet_lock)
+	ipmi_destroy_lock(new_conn->transmitter.packet_lock);
+    if (new_conn->transmitter.queue_lock)
+	ipmi_destroy_lock(new_conn->transmitter.queue_lock);
+    if (new_conn->data_received_callback_list)
+	locked_list_destroy(new_conn->data_received_callback_list);
+    if (new_conn->break_detected_callback_list)
+	locked_list_destroy(new_conn->break_detected_callback_list);
+    if (new_conn->bmc_transmit_overrun_callback_list)
+	locked_list_destroy(new_conn->bmc_transmit_overrun_callback_list);
+    if (new_conn->connection_state_callback_list)
+	locked_list_destroy(new_conn->connection_state_callback_list);
+    ipmi_mem_free(new_conn);
+    return rv;
 }
 
 
@@ -2541,8 +2622,18 @@ ipmi_sol_free(ipmi_sol_conn_t *conn)
 	ipmi_sol_force_close(conn);
 	
     conn->ipmi->close_connection(conn->ipmi);
-    ipmi_destroy_lock(conn->transmitter.queue_lock);
-    ipmi_destroy_lock(conn->transmitter.packet_lock);
+    if (conn->transmitter.packet_lock)
+	ipmi_destroy_lock(conn->transmitter.packet_lock);
+    if (conn->transmitter.queue_lock)
+	ipmi_destroy_lock(conn->transmitter.queue_lock);
+    if (conn->data_received_callback_list)
+	locked_list_destroy(conn->data_received_callback_list);
+    if (conn->break_detected_callback_list)
+	locked_list_destroy(conn->break_detected_callback_list);
+    if (conn->bmc_transmit_overrun_callback_list)
+	locked_list_destroy(conn->bmc_transmit_overrun_callback_list);
+    if (conn->connection_state_callback_list)
+	locked_list_destroy(conn->connection_state_callback_list);
     ipmi_mem_free(conn);
     return 0;
 }
