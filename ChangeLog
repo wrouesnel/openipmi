@@ -15,6 +15,9 @@
 	* lib/ipmi_sol.c, lib/ipmi.c: Moved SOL payload registration to
 	initialization routines so it is only done once.
 
+	* lib/ipmi_sol.c: Added locks for the SoL connection list and
+	reworked the list so the memory allocation is not required.
+
 2006-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_sol.c: Modified formatting to conform with the OpenIPMI

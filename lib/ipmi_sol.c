@@ -306,6 +306,9 @@ struct ipmi_sol_conn_s {
     /* A list of callbacks that are called when the SoL connection
        changes state. */
     locked_list_t *connection_state_callback_list;
+
+    /* Used to make a linked-list of these */
+    ipmi_sol_conn_t *next;
 };
 
 
@@ -334,46 +337,39 @@ dump_hex(unsigned char *data, int len)
  * be interested in that packet.
  */
 
-typedef struct ipmi_sol_conn_list_s ipmi_sol_conn_list_t;
+/* FIXME - a list is ineffecient for large numbers of connections.  It
+   probably doesn't matter for now, but a hash table might be a good
+   idea in the future. */
 
-struct ipmi_sol_conn_list_s {
-    ipmi_con_t *ipmi;
-    ipmi_sol_conn_t *sol;
-    ipmi_sol_conn_list_t *next;
-};
-
-static ipmi_sol_conn_list_t *conn_list = NULL;
-
+static ipmi_sol_conn_t *conn_list = NULL;
+static ipmi_lock_t *conn_lock = NULL;
 
 /**
  * Adds the given (ipmi, sol) pairing to the list of connections we're
  * managing.
  */
 static void
-add_connection(ipmi_con_t *ipmi, ipmi_sol_conn_t *sol)
+add_connection(ipmi_sol_conn_t *conn)
 {
-    ipmi_sol_conn_list_t *le = ipmi_mem_alloc(sizeof(ipmi_sol_conn_list_t));
-
-    le->ipmi = ipmi;
-    le->sol = sol;
-
-    le->next = conn_list;
-    conn_list = le;
-
-    return;
+    ipmi_lock(conn_lock);
+    conn->next = conn_list;
+    conn_list = conn;
+    ipmi_unlock(conn_lock);
 }
 
 
 /**
  * Removes the given connection from the list of connections we're managing.
  */
-static void delete_connection(ipmi_con_t *ipmi, ipmi_sol_conn_t *sol)
+static void delete_connection(ipmi_sol_conn_t *sol)
 {
-    ipmi_sol_conn_list_t *le = conn_list;
-    ipmi_sol_conn_list_t *prev = NULL;
+    ipmi_sol_conn_t *curr;
+    ipmi_sol_conn_t *prev = NULL;
 
-    while (le) {
-	if (le->ipmi == ipmi && le->sol == sol) {
+    ipmi_lock(conn_lock);
+    curr = conn_list;
+    while (curr) {
+	if (curr == sol) {
 	    /*
 	     * Delete me!
 	     */
@@ -382,21 +378,14 @@ static void delete_connection(ipmi_con_t *ipmi, ipmi_sol_conn_t *sol)
 		conn_list = conn_list->next;
 	    else
 		/* Deleting from within list */
-		prev->next = le->next;
-
-	    ipmi_mem_free(le);
-	    if (!prev)
-		le = conn_list;
-	    else
-		le = prev;
-	} else
-	    prev = le;
-
-	if (!le)
+		prev->next = curr->next;
 	    break;
+	}
 
-	le = le->next;
+	prev = curr;
+	curr = curr->next;
     }
+    ipmi_unlock(conn_lock);
 }
 
 
@@ -406,12 +395,18 @@ static void delete_connection(ipmi_con_t *ipmi, ipmi_sol_conn_t *sol)
 static ipmi_sol_conn_t *
 find_sol_connection_for_ipmi(ipmi_con_t *ipmi)
 {
-    ipmi_sol_conn_list_t *le = conn_list;
-    while (le) {
-	if (le->ipmi == ipmi)
-	    return le->sol;
-	le = le->next;
+    ipmi_sol_conn_t *conn;
+
+    ipmi_lock(conn_lock);
+    conn = conn_list;
+    while (conn) {
+	if (conn->ipmi == ipmi) {
+	    ipmi_unlock(conn_lock);
+	    return conn;
+	}
+	conn = conn->next;
     }
+    ipmi_unlock(conn_lock);
 
     return NULL;
 }
@@ -818,8 +813,11 @@ ipmi_sol_set_shared_serial_alert_behavior(ipmi_sol_conn_t *conn,
     if (conn->state != ipmi_sol_state_closed)
 	return EINVAL;
 
-    conn->auxiliary_payload_data &= ~(IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_MASK << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT);
-    conn->auxiliary_payload_data |= behavior << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT;
+    conn->auxiliary_payload_data
+	&= ~(IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_MASK
+	     << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT);
+    conn->auxiliary_payload_data
+	|= behavior << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT;
 
     return 0;
 }
@@ -829,8 +827,9 @@ ipmi_sol_serial_alert_behavior
 ipmi_sol_get_shared_serial_alert_behavior(ipmi_sol_conn_t *conn)
 {
     return (ipmi_sol_serial_alert_behavior)
-	((conn->auxiliary_payload_data >> IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT) &
-	 IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_MASK);
+	((conn->auxiliary_payload_data
+	  >> IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT)
+	 & IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_MASK);
 }
 
 int
@@ -905,10 +904,10 @@ ipmi_sol_set_connection_state(ipmi_sol_conn_t *conn,
 	 * Record this connection so we can match up incoming SoL
 	 * packets with their SoL connections.
 	 */
-	add_connection(conn->ipmi, conn);
+	add_connection(conn);
     } else if (new_state == ipmi_sol_state_closed) {
 	transmitter_shutdown(&conn->transmitter, error);
-	delete_connection(conn->ipmi, conn);
+	delete_connection(conn);
     } else if (((new_state == ipmi_sol_state_connected)
 		|| (new_state == ipmi_sol_state_connected_ctu))
 	       && (conn->state == ipmi_sol_state_connecting))
@@ -2910,11 +2909,25 @@ _ipmi_sol_init()
 
     rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
 				     &ipmi_sol_payload);
+    if (rv)
+	goto out;
+
+    rv = ipmi_create_global_lock(&conn_lock);
+    if (rv) {
+	ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL, NULL);
+	goto out;
+    }
+
+ out:
     return rv;
 }
 
 void
 _ipmi_sol_shutdown(void)
 {
+    if (conn_lock) {
+	ipmi_destroy_lock(conn_lock);
+	conn_lock = NULL;
+    }
     ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL, NULL);
 }
