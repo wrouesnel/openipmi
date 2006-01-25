@@ -1,3 +1,9 @@
+2006-01-24 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_sol.c: Modified formatting to conform with the OpenIPMI
+	standard formatting.  Make a few minor fixes (marked with FIXMEs
+	for now).
+
 2006-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added a way to send messages with

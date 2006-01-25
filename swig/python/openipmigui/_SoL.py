@@ -33,6 +33,8 @@ import OpenIPMI
 import wx
 import _term
 
+id_st = 1100
+
 # Note in this file SoL refers to the main SoL object and sol refers
 # to the connection.
 
@@ -68,29 +70,48 @@ class SoL(wx.Frame):
         self.dname = domain.get_name()
         return
             
-    def HandlerOutput(self, data):
+    def HandleOutput(self, data):
         self.sol.write(data)
         return
 
+    def finish_init(self):
+        wx.Frame.__init__(self, None, -1,
+                          name = ("SoL for " + self.dname + " connection "
+                                  + str(self.cnum)))
+
+        menubar = wx.MenuBar()
+        filemenu = wx.Menu()
+        filemenu.Append(id_st + 1, "Close", "Close")
+        wx.EVT_MENU(self, id_st+1, self.close);
+        menubar.Append(filemenu, "File")
+        self.SetMenuBar(menubar)
+
+        self.term = SolTerm(self, self)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.term.textctrl, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.errstr = wx.StatusBar(self, -1)
+        self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.Show()
+        wx.EVT_CLOSE(self, self.OnClose)
+        return
+
     def sol_connection_state_change(self, conn, state, err):
-        print "Connection change: " + str(state) + " " + OpenIPMI.get_error_string(err))
         if (self.startup):
             self.startup = False
             if (err):
                 self.ui.ReportError("Connection error for SoL: "
                                     + OpenIPMI.get_error_string(err))
+                self.Destroy()
                 return
-            wx.Frame.__init__(self, None, -1,
-                              name = ("SoL for " + self.dname + " connection "
-                                      + str(self.cnum)))
-        
-            self.term = SolTerm(self, self)
-            self.Show()
-            wx.EVT_CLOSE(self, self.OnClose)
+            self.finish_init()
             pass
-        else:
-            # FIXME - print error here.
-            pass
+        self.errstr.SetStatusText("Connection change: " + str(state)
+                                  + " " + OpenIPMI.get_error_string(err),
+                                  0)
+        return
+
+    def close(self, event):
+        self.Close()
         return
     
     def sol_data_received(self, conn, string):

@@ -10710,7 +10710,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 %constant int sol_state_connecting = ipmi_sol_state_connecting;
 %constant int sol_state_connected = ipmi_sol_state_connected;
 %constant int sol_state_connected_ctu = ipmi_sol_state_connected_ctu;
-%constant int sol_state_closin = ipmi_sol_state_closing;
+%constant int sol_state_closing = ipmi_sol_state_closing;
 
     void set_ACK_timeout(int timeout_usec)
     {
