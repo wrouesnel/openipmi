@@ -60,9 +60,10 @@
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
 
-/* FIXME - replace callback lists with standard locked lists to avoid
-   race conditions and memory leaks. */
-
+/* FIXME - implement refcounting for the connection to prevent
+   deletion during calbacks and things like that. */
+/* FIXME - add stuff to make sure received packets are handled in
+   order. */
 
 /*
  * Bit masks for status conditions sent BMC -> console, see Table 15-2
@@ -110,8 +111,8 @@
  */
 typedef struct callback_list_s callback_list_t;
 struct callback_list_s {
-    void *cb;
-    void *cb_data;
+    void            *cb;
+    void            *cb_data;
     callback_list_t *next;
 };
 
@@ -215,6 +216,9 @@ struct ipmi_sol_transmitter_context_s {
     /* We have already acked this many chars from the request at the
        head of the tx queue. */
     int bytes_acked_at_head;
+
+    /* Lock for the op callback list and the op data. */
+    ipmi_lock_t   *oob_op_lock;
 
     /* a combination of IPMI_SOL_OPERATION_RING_REQUEST,
        IPMI_SOL_OPERATION_CTS_PAUSE,
@@ -1071,6 +1075,7 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
 	= transmitter->accepted_character_count;
     transmitter->accepted_character_count = 0;
 
+    ipmi_lock(transmitter->oob_op_lock);
     new_packet_record->packet[PACKET_OP]
 	= (transmitter->oob_transient_op | transmitter->oob_persistent_op
 	   | ib_op);
@@ -1078,6 +1083,7 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
 
     new_packet_record->op_callback_list = transmitter->op_callback_list;
     transmitter->op_callback_list = NULL;
+    ipmi_unlock(transmitter->oob_op_lock);
 
     /*
      * Note here that control_only implies data_len==0.
@@ -1557,6 +1563,9 @@ add_to_transmit_queue(ipmi_sol_transmitter_context_t *tx,
     return 0;
 }
 
+/*
+ * Must be called with oob_op_lock held.
+ */
 static int
 add_op_control_callback(ipmi_sol_transmitter_context_t *tx, 
 			ipmi_sol_transmit_complete_cb  cb,
@@ -1657,14 +1666,17 @@ ipmi_sol_set_CTS_assertable(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
+    ipmi_lock(conn->transmitter.oob_op_lock);
     if (assertable)
 	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_CTS_PAUSE;
     else
 	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_CTS_PAUSE;
 
     rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+    ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    transmitter_prod(&conn->transmitter);
+    if (!rv)
+	transmitter_prod(&conn->transmitter);
 
     return rv;
 }
@@ -1687,14 +1699,17 @@ ipmi_sol_set_DCD_DSR_asserted(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
+    ipmi_lock(conn->transmitter.oob_op_lock);
     if (asserted)
 	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_DROP_DCD_DSR;
     else
 	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_DROP_DCD_DSR;
 
     rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+    ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    transmitter_prod(&conn->transmitter);
+    if (!rv)
+	transmitter_prod(&conn->transmitter);
 
     return rv;
 }
@@ -1717,14 +1732,17 @@ ipmi_sol_set_RI_asserted(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
+    ipmi_lock(conn->transmitter.oob_op_lock);
     if (asserted)
 	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_RING_REQUEST;
     else
 	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_RING_REQUEST;
 
     rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+    ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    transmitter_prod(&conn->transmitter);
+    if (!rv)
+	transmitter_prod(&conn->transmitter);
 
     return rv;
 }
@@ -1807,6 +1825,7 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
 	/*VOID*/
     }
 
+    ipmi_lock(conn->transmitter.oob_op_lock);
     /*
      * Do we flush the remote transmit queue?
      */
@@ -1825,7 +1844,6 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
 	need_callback = 1;
     }
 
-
     if (need_callback) {
 	ipmi_sol_flush_data_t *flush_data;
 
@@ -1841,9 +1859,13 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
 
 	rv = add_op_control_callback(&conn->transmitter, flush_finalize,
 				     flush_data);
+	ipmi_unlock(conn->transmitter.oob_op_lock);
 
 	transmitter_prod(&conn->transmitter);
+    } else {
+	ipmi_unlock(conn->transmitter.oob_op_lock);
     }
+
     return rv;
 }
 
@@ -1901,9 +1923,11 @@ int
 ipmi_sol_create(ipmi_con_t      *ipmi,
 		ipmi_sol_conn_t **sol_conn)
 {
-    ipmi_sol_conn_t *new_conn;
-    os_handler_t    *os_hnd = ipmi->os_hnd;
-    int rv = register_ipmi_payload();
+    ipmi_sol_conn_t                *new_conn;
+    os_handler_t                   *os_hnd = ipmi->os_hnd;
+    ipmi_sol_transmitter_context_t *xmitter;
+    int                            rv = register_ipmi_payload();
+
     if (rv)
 	return rv;
 
@@ -1912,18 +1936,21 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
 	return ENOMEM;
 
     memset(new_conn, 0, sizeof(*new_conn));
+    xmitter = &new_conn->transmitter;
 
     /* Enable authentication and encryption by default. */
     new_conn->auxiliary_payload_data = (IPMI_SOL_AUX_USE_ENCRYPTION
 					| IPMI_SOL_AUX_USE_AUTHENTICATION);
 
-    rv = ipmi_create_lock_os_hnd(os_hnd,
-				 &new_conn->transmitter.packet_lock);
+    rv = ipmi_create_lock_os_hnd(os_hnd, &xmitter->packet_lock);
     if (rv)
 	goto out_err;
 
-    rv = ipmi_create_lock_os_hnd(os_hnd,
-				 &new_conn->transmitter.queue_lock);
+    rv = ipmi_create_lock_os_hnd(os_hnd, &xmitter->queue_lock);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock_os_hnd(os_hnd, &xmitter->oob_op_lock);
     if (rv)
 	goto out_err;
 
@@ -1955,12 +1982,12 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     new_conn->state = ipmi_sol_state_closed;
     new_conn->try_fast_connect = 1;
 
-    new_conn->transmitter.sol_conn = new_conn;
-    new_conn->transmitter.transmitted_packet = NULL;
-    new_conn->transmitter.latest_outgoing_seqnr = 1;
-    new_conn->transmitter.packet_to_acknowledge = 0;
-    new_conn->transmitter.accepted_character_count = 0;
-    new_conn->transmitter.bytes_acked_at_head = 0;
+    xmitter->sol_conn = new_conn;
+    xmitter->transmitted_packet = NULL;
+    xmitter->latest_outgoing_seqnr = 1;
+    xmitter->packet_to_acknowledge = 0;
+    xmitter->accepted_character_count = 0;
+    xmitter->bytes_acked_at_head = 0;
 
     new_conn->ACK_retries = 10;
     new_conn->ACK_timeout_usec = 1000000;
@@ -1970,10 +1997,12 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     return 0;
 
  out_err:
-    if (new_conn->transmitter.packet_lock)
-	ipmi_destroy_lock(new_conn->transmitter.packet_lock);
-    if (new_conn->transmitter.queue_lock)
-	ipmi_destroy_lock(new_conn->transmitter.queue_lock);
+    if (xmitter->packet_lock)
+	ipmi_destroy_lock(xmitter->packet_lock);
+    if (xmitter->queue_lock)
+	ipmi_destroy_lock(xmitter->queue_lock);
+    if (xmitter->oob_op_lock)
+	ipmi_destroy_lock(xmitter->oob_op_lock);
     if (new_conn->data_received_callback_list)
 	locked_list_destroy(new_conn->data_received_callback_list);
     if (new_conn->break_detected_callback_list)
@@ -2104,6 +2133,7 @@ handle_activate_payload_response(ipmi_sol_conn_t *conn,
     /*
      * Set the hardware handshaking bits to match the "holdoff" option...
      */
+    ipmi_lock(conn->transmitter.oob_op_lock);
     if (conn->auxiliary_payload_data & IPMI_SOL_AUX_DEASSERT_HANDSHAKE)
 	conn->transmitter.oob_persistent_op
 	    |= (IPMI_SOL_OPERATION_CTS_PAUSE
@@ -2112,6 +2142,7 @@ handle_activate_payload_response(ipmi_sol_conn_t *conn,
 	conn->transmitter.oob_persistent_op
 	    &= ~(IPMI_SOL_OPERATION_CTS_PAUSE
 		 | IPMI_SOL_OPERATION_DROP_DCD_DSR);
+    ipmi_unlock(conn->transmitter.oob_op_lock);
 
     /*
      * And officially bring the connection "up"!
@@ -2836,7 +2867,9 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
 
 	    if (send_nack) {
+		ipmi_lock(xmitter->oob_op_lock);
 		xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
+		ipmi_unlock(xmitter->oob_op_lock);
 	    } else {
 		conn->prev_character_count = data_len;
 		xmitter->accepted_character_count = data_len;
