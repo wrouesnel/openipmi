@@ -64,8 +64,8 @@
    order. */
 /* FIXME - make sure that all callbacks are called without locks held,
    but properly serialized. */
-/* FIXME - research to see if we can have multiple outstanding
-   packets.  That would sure improve the performance. */
+/* FIXME - state transitions need to be locked properly and handled in
+   order. */
 
 /*
  * Bit masks for status conditions sent BMC -> console, see Table 15-2
@@ -364,13 +364,27 @@ static ipmi_lock_t *conn_lock = NULL;
  * Adds the given (ipmi, sol) pairing to the list of connections we're
  * managing.
  */
-static void
-add_connection(ipmi_sol_conn_t *conn)
+static int
+add_connection(ipmi_sol_conn_t *nconn)
 {
+    ipmi_sol_conn_t *conn;
+
     ipmi_lock(conn_lock);
-    conn->next = conn_list;
-    conn_list = conn;
+
+    /* Make sure the connection doesn't already exist */
+    conn = conn_list;
+    while (conn) {
+	if (conn->ipmi == nconn->ipmi) {
+	    ipmi_unlock(conn_lock);
+	    return EAGAIN;
+	}
+	conn = conn->next;
+    }
+
+    nconn->next = conn_list;
+    conn_list = nconn;
     ipmi_unlock(conn_lock);
+    return 0;
 }
 
 
@@ -454,7 +468,9 @@ sol_cleanup(ipmi_sol_conn_t *conn)
 {
     if (conn->state != ipmi_sol_state_closed)
 	ipmi_sol_force_close(conn);
-	
+
+    delete_connection(conn);
+
     conn->ipmi->close_connection(conn->ipmi);
     if (conn->transmitter.packet_lock)
 	ipmi_destroy_lock(conn->transmitter.packet_lock);
@@ -939,23 +955,14 @@ ipmi_sol_get_bit_rate(ipmi_sol_conn_t *conn)
  */
 static void
 ipmi_sol_set_connection_state(ipmi_sol_conn_t *conn,
-			      ipmi_sol_state new_state,
-			      int error)
+			      ipmi_sol_state  new_state,
+			      int             error)
 {
     if (conn->state == new_state)
 	return;
 
-    if ((conn->state == ipmi_sol_state_closed)
-	&& (new_state == ipmi_sol_state_connecting))
-    {
-	/*
-	 * Record this connection so we can match up incoming SoL
-	 * packets with their SoL connections.
-	 */
-	add_connection(conn);
-    } else if (new_state == ipmi_sol_state_closed) {
+    if (new_state == ipmi_sol_state_closed) {
 	transmitter_shutdown(&conn->transmitter, error);
-	delete_connection(conn);
     } else if (((new_state == ipmi_sol_state_connected)
 		|| (new_state == ipmi_sol_state_connected_ctu))
 	       && (conn->state == ipmi_sol_state_connecting))
@@ -1017,7 +1024,8 @@ dump_transmitter_queue_state(ipmi_sol_transmitter_context_t *transmitter)
     if (transmitter->outgoing_queue.head) {
 	ipmi_sol_outgoing_queue_item_t *i = transmitter->outgoing_queue.head;
 	while (i) {
-	    printf("%p -> %d chars at %p -> [", i, i->data_len, i->data); fflush(stdout);
+	    printf("%p -> %d chars at %p -> [", i, i->data_len, i->data);
+	    fflush(stdout);
 	    int j;
 	    for (j = 0; j < i->data_len; ++j)
 		printf("%c", i->data[j]);
@@ -1099,6 +1107,7 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
     new_packet_record = ipmi_mem_alloc(sizeof(*new_packet_record));
     if (!new_packet_record)
 	return NULL;
+    memset(new_packet_record, 0, sizeof(*new_packet_record));
 
     new_packet_record->packet_size = 4 + data_len;
 
@@ -1153,7 +1162,6 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
 	/* Zero sequence number for control-only packet */
 	new_packet_record->packet[PACKET_SEQNR] = 0;
     }
-    new_packet_record->ack_timer = NULL;
 
     return new_packet_record;
 }
@@ -1198,12 +1206,14 @@ dispose_of_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter,
 	if (packet->timer_running)
 	    rv = os_hnd->stop_timer(os_hnd, packet->ack_timer);
 	if (! rv) {
+	    ipmi_unlock(packet->timer_lock);
 	    ipmi_destroy_lock(packet->timer_lock);
 	    os_hnd->free_timer(os_hnd, packet->ack_timer);
 	} else {
 	    /* Tell the timer handler to throw the packet away, since
 	       it's about to run. */
 	    packet->deleted = 1;
+	    ipmi_unlock(packet->timer_lock);
 	    packet = NULL;
 	}
     }
@@ -1295,10 +1305,10 @@ setup_ACK_timer(ipmi_sol_transmitter_context_t *transmitter)
 
     ipmi_lock(packet->timer_lock);
     if (packet->timer_running) {
+	ipmi_unlock(packet->timer_lock);
 	ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(setup_ACK_timer): "
 		 "Timer start when timer was already running");
-	ipmi_unlock(packet->timer_lock);
-	return EAGAIN;
+	return 0;
     }
     timeout.tv_sec = transmitter->sol_conn->ACK_timeout_usec / 1000000;
     timeout.tv_usec = transmitter->sol_conn->ACK_timeout_usec % 1000000;
@@ -1444,6 +1454,7 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
 		ipmi_destroy_lock(packet->timer_lock);
 		goto handle_err;
 	    }
+	    packet->timer_running = 0;
 	}
 
 	if (!rv)
@@ -2091,6 +2102,10 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
 
     new_conn->ACK_retries = 10;
     new_conn->ACK_timeout_usec = 1000000;
+
+    rv = add_connection(new_conn);
+    if (rv)
+	goto out_err;
 
     *sol_conn = new_conn;
 
@@ -2885,6 +2900,12 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 		 "Dropped incoming SoL packet: Unrecognized connection.");
 	return;
     }
+
+    if (conn->state == ipmi_sol_state_closed)
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
+		 "Dropped incoming SoL packet: connection closed.");
+	return;
 
     if (data_len < 4) {
 	ipmi_log(IPMI_LOG_WARNING,

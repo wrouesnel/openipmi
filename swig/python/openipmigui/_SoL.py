@@ -121,9 +121,11 @@ class SoL(wx.Frame):
         return
     
     def sol_break_detected(self, conn):
+        self.errstr.SetStatusText("Received break")
         return
     
     def sol_bmc_transmit_overrun(self, conn):
+        self.errstr.SetStatusText("BMC Transmit Overrun")
         return
 
     pass
