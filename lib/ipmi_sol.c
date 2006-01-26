@@ -68,6 +68,26 @@
    order. */
 
 /*
+ * Locking notes:
+ *
+ * You may claim the queue_lock or the oob_lock if you already hold
+ * packet_lock.  The reverse is not allowed.  You may not claim the
+ * oob_lock and the queue lock at the same time.
+ *
+ * You may not hold the conn_lock with any other lock; use the
+ * refcounts instead.
+ *
+ * The packet_lock is the "general" lock for the connection; it
+ * protects the non-atomic data updates that would affect the
+ * operation of the connection.
+ *
+ * No locks may be held in user callbacks.  All the do_xxx_callbacks()
+ * functions must be called with the packet lock held.  They will
+ * release the packet lock and reclaim it.  These functions are
+ * responsible for serializing
+ */
+
+/*
  * Bit masks for status conditions sent BMC -> console, see Table 15-2
  * [1], page 208, 3rd column.
  */
@@ -279,8 +299,13 @@ struct ipmi_sol_conn_s {
        if it fails. */
     int try_fast_connect;
 
-    /* The current state of the SoL connection. */
+    /* The current state of the SoL connection.  Note that state
+       changes are protected by the packet lock. */
     ipmi_sol_state state;
+
+    /* The last state reported to the user.  Used to tell if there a
+       state transition pending to report to the user. */
+    ipmi_sol_state last_reported_state;
 
     /* Max payload size outbound from here->BMC */
     unsigned int max_outbound_payload_size;
@@ -331,7 +356,8 @@ struct ipmi_sol_conn_s {
 static int transmitter_startup(ipmi_sol_transmitter_context_t *transmitter);
 static void transmitter_shutdown(ipmi_sol_transmitter_context_t *transmitter,
 				 int error);
-
+static void transmitter_prod_nolock
+    (ipmi_sol_transmitter_context_t *transmitter);
 
 static void
 dump_hex(unsigned char *data, int len)
@@ -509,15 +535,29 @@ sol_put_connection(ipmi_sol_conn_t *conn)
  ** Shorthand IPMI messaging; used to set up or close an ipmi_sol_conn_t.
  ** This is NOT used for handling the SoL data... for that, see the payload
  ** functions towards the end of this file.
+ **
+ ** Note that the packet lock will be held in the callback.
  **/
 
 typedef void (*sol_command_callback)(ipmi_sol_conn_t *conn, ipmi_msg_t *msg);
 
 static int handle_response(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    if (rspi->data2)
-	((sol_command_callback)(rspi->data2))
-	    ((ipmi_sol_conn_t *)rspi->data1, &rspi->msg);
+    ipmi_sol_conn_t      *conn = find_sol_connection(rspi->data1);
+    sol_command_callback cb = rspi->data2;
+
+    if (! conn)
+	/* Connection went away while in progress... */
+	goto out;
+
+    if (cb) {
+	ipmi_lock(conn->transmitter.packet_lock);
+	cb(conn, &rspi->msg);
+	ipmi_unlock(conn->transmitter.packet_lock);
+    }
+
+    sol_put_connection(conn);
+ out:
     ipmi_free_msg_item(rspi);
     return IPMI_MSG_ITEM_USED;
 }
@@ -552,7 +592,7 @@ send_message(ipmi_sol_conn_t      *conn,
 }
 
 static int
-ipmi_sol_send_close(ipmi_sol_conn_t *conn, sol_command_callback cb)
+send_close(ipmi_sol_conn_t *conn, sol_command_callback cb)
 {
     ipmi_msg_t    msg_out;
     unsigned char data[6];
@@ -602,12 +642,15 @@ do_data_received_callback(void *cb_data, void *item1, void *item2)
 	return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static int
+static void
 do_data_received_callbacks(ipmi_sol_conn_t *conn,
+			   unsigned char   *packet,
+			   unsigned int    data_len,
 			   const void      *buf,
 			   size_t          count)
 {
-    do_data_received_callback_t info;
+    ipmi_sol_transmitter_context_t *xmitter = &conn->transmitter;
+    do_data_received_callback_t    info;
 
     info.conn = conn;
     info.buf = buf;
@@ -616,7 +659,21 @@ do_data_received_callbacks(ipmi_sol_conn_t *conn,
     locked_list_iterate(conn->data_received_callback_list,
 			do_data_received_callback,
 			&info);
-    return info.nack;
+
+    /* FIXME - after reclaiming lock, make sure conn still exists. */
+    conn->prev_received_seqnr = packet[PACKET_SEQNR];
+    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
+
+    if (info.nack) {
+	ipmi_lock(xmitter->oob_op_lock);
+	xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
+	ipmi_unlock(xmitter->oob_op_lock);
+    } else {
+	conn->prev_character_count = data_len;
+	xmitter->accepted_character_count = data_len;
+    }
+    /* FIXME - no prod if called from receiver. */
+    transmitter_prod_nolock(xmitter);
 }
 
 static int
@@ -823,13 +880,17 @@ ipmi_sol_set_use_authentication(ipmi_sol_conn_t *conn,
     if (!conn)
 	return EINVAL;
 
-    if (conn->state != ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state != ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     if (use_authentication)
 	conn->auxiliary_payload_data |= IPMI_SOL_AUX_USE_AUTHENTICATION;
     else
 	conn->auxiliary_payload_data &= ~IPMI_SOL_AUX_USE_AUTHENTICATION;
+    ipmi_unlock(conn->transmitter.packet_lock);
     
     return 0;
 }
@@ -848,13 +909,17 @@ ipmi_sol_set_use_encryption(ipmi_sol_conn_t *conn, int use_encryption)
     if (!conn)
 	return EINVAL;
 
-    if (conn->state != ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state != ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     if (use_encryption)
 	conn->auxiliary_payload_data |= IPMI_SOL_AUX_USE_ENCRYPTION;
     else
 	conn->auxiliary_payload_data &= ~IPMI_SOL_AUX_USE_ENCRYPTION;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return 0;
 }
@@ -874,14 +939,18 @@ ipmi_sol_set_shared_serial_alert_behavior(ipmi_sol_conn_t *conn,
     if (!conn)
 	return EINVAL;
 
-    if (conn->state != ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state != ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     conn->auxiliary_payload_data
 	&= ~(IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_MASK
 	     << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT);
     conn->auxiliary_payload_data
 	|= behavior << IPMI_SOL_AUX_SHARED_SERIAL_BEHAVIOR_SHIFT;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return 0;
 }
@@ -903,13 +972,17 @@ ipmi_sol_set_deassert_CTS_DCD_DSR_on_connect(ipmi_sol_conn_t *conn,
     if (!conn)
 	return EINVAL;
 
-    if (conn->state != ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state != ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     if (deassert)
 	conn->auxiliary_payload_data |= IPMI_SOL_AUX_DEASSERT_HANDSHAKE;
     else
 	conn->auxiliary_payload_data &= ~IPMI_SOL_AUX_DEASSERT_HANDSHAKE;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return 0;
 }
@@ -928,10 +1001,14 @@ int ipmi_sol_set_bit_rate(ipmi_sol_conn_t *conn, unsigned char rate)
     if (!conn)
 	return EINVAL;
 
-    if (conn->state != ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state != ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     conn->initial_bit_rate = rate;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return 0;
 }
@@ -1403,13 +1480,13 @@ static void transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
  *
  * Anything that gives the transmitter something to transmit (data or control)
  * should call this.
+ *
+ * Must be called with the packet lock held.
  */
 static void
-transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
+transmitter_prod_nolock(ipmi_sol_transmitter_context_t *transmitter)
 {
     ipmi_sol_outgoing_packet_record_t *packet;
-
-    ipmi_lock(transmitter->packet_lock);
 
     /*
      * TODO: If we are awaiting an ACK and we get a data packet from
@@ -1420,10 +1497,9 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
      * strictly control-only packet (no BREAKs, either!).
      */
     if (transmitter->transmitted_packet) {
-	ipmi_unlock(transmitter->packet_lock);
 #ifdef IPMI_SOL_DEBUG_TRANSMIT
-	ipmi_log(IPMI_LOG_INFO, "ipmi_sol.c(transmitter_prod): "
-		 "transmitter_prod exiting early:"
+	ipmi_log(IPMI_LOG_INFO, "ipmi_sol.c(transmitter_prod_nolock): "
+		 "exiting early:"
 		 " already waiting for an ACK.");
 #endif
 	return;
@@ -1465,7 +1541,6 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
     handle_err:
 	if (rv) {
 	    dispose_of_outstanding_packet(transmitter, rv);
-	    ipmi_unlock(transmitter->packet_lock);
 	    return;
 	}
 
@@ -1473,7 +1548,8 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
 	    rv = setup_ACK_timer(transmitter);
 	    if (rv) {
 		char buf[50];
-		ipmi_log(IPMI_LOG_WARNING, "ipmi_sol.c(transmitter_prod): "
+		ipmi_log(IPMI_LOG_WARNING,
+			 "ipmi_sol.c(transmitter_prod_nolock): "
 			 "Unable to setup_ACK_timer: %s",
 			 ipmi_get_error_string(rv, buf, 50));
 		dispose_of_outstanding_packet(transmitter, rv);
@@ -1490,9 +1566,18 @@ transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
 	    dispose_of_outstanding_packet(transmitter, errval);
 	}
     }
-    ipmi_unlock(transmitter->packet_lock);
 }
 
+/**
+ * Lock and call transmitter_prod_nolock()
+ */
+static void
+transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
+{
+    ipmi_lock(transmitter->packet_lock);
+    transmitter_prod_nolock(transmitter);
+    ipmi_unlock(transmitter->packet_lock);
+}
 
 /**
  * Remove a packet from the head of the queue.  This should be called
@@ -1539,10 +1624,10 @@ transmitter_flush_outbound(ipmi_sol_transmitter_context_t *transmitter,
 			   int                            error)
 {
     ipmi_lock(transmitter->packet_lock);
-    ipmi_lock(transmitter->queue_lock);
 
     dispose_of_outstanding_packet(transmitter, error);
 
+    ipmi_lock(transmitter->queue_lock);
     while (transmitter->outgoing_queue.head)
 	dequeue_head(transmitter, error);
 
@@ -1769,11 +1854,20 @@ ipmi_sol_write(ipmi_sol_conn_t               *conn,
 	       ipmi_sol_transmit_complete_cb cb,
 	       void                          *cb_data)
 {
+    int rv;
     if (count <= 0)
 	return EINVAL;
 
-    return add_to_transmit_queue(&conn->transmitter, buf, count, 0,
-				 cb, cb_data);
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state == ipmi_sol_state_connected)
+	|| (conn->state == ipmi_sol_state_connected_ctu))
+    {
+	rv = add_to_transmit_queue(&conn->transmitter, buf, count, 0,
+				   cb, cb_data);
+    } else
+	rv = EINVAL;
+    ipmi_unlock(conn->transmitter.packet_lock);
+    return rv;
 }
 
 
@@ -1789,9 +1883,19 @@ ipmi_sol_send_break(ipmi_sol_conn_t               *conn,
 		    ipmi_sol_transmit_complete_cb cb,
 		    void                          *cb_data)
 {
-    return add_to_transmit_queue(&conn->transmitter, NULL, 0,
-				 IPMI_SOL_OPERATION_GENERATE_BREAK,
-				 cb, cb_data);
+    int rv;
+
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state == ipmi_sol_state_connected)
+	|| (conn->state == ipmi_sol_state_connected_ctu))
+    {
+	rv = add_to_transmit_queue(&conn->transmitter, NULL, 0,
+				   IPMI_SOL_OPERATION_GENERATE_BREAK,
+				   cb, cb_data);
+    } else
+	rv = EINVAL;
+    ipmi_unlock(conn->transmitter.packet_lock);
+    return rv;
 }
 
 
@@ -1813,17 +1917,26 @@ ipmi_sol_set_CTS_assertable(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
-    ipmi_lock(conn->transmitter.oob_op_lock);
-    if (assertable)
-	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_CTS_PAUSE;
-    else
-	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_CTS_PAUSE;
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state == ipmi_sol_state_connected)
+	|| (conn->state == ipmi_sol_state_connected_ctu))
+    {
+	ipmi_lock(conn->transmitter.oob_op_lock);
+	if (assertable)
+	    conn->transmitter.oob_persistent_op
+		&= ~IPMI_SOL_OPERATION_CTS_PAUSE;
+	else
+	    conn->transmitter.oob_persistent_op
+		|= IPMI_SOL_OPERATION_CTS_PAUSE;
 
-    rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
-    ipmi_unlock(conn->transmitter.oob_op_lock);
+	rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+	ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    if (!rv)
-	transmitter_prod(&conn->transmitter);
+	if (!rv)
+	    transmitter_prod(&conn->transmitter);
+    } else
+	rv = EINVAL;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return rv;
 }
@@ -1846,17 +1959,26 @@ ipmi_sol_set_DCD_DSR_asserted(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
-    ipmi_lock(conn->transmitter.oob_op_lock);
-    if (asserted)
-	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_DROP_DCD_DSR;
-    else
-	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_DROP_DCD_DSR;
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state == ipmi_sol_state_connected)
+	|| (conn->state == ipmi_sol_state_connected_ctu))
+    {
+	ipmi_lock(conn->transmitter.oob_op_lock);
+	if (asserted)
+	    conn->transmitter.oob_persistent_op
+		&= ~IPMI_SOL_OPERATION_DROP_DCD_DSR;
+	else
+	    conn->transmitter.oob_persistent_op
+		|= IPMI_SOL_OPERATION_DROP_DCD_DSR;
 
-    rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
-    ipmi_unlock(conn->transmitter.oob_op_lock);
+	rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+	ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    if (!rv)
-	transmitter_prod(&conn->transmitter);
+	if (!rv)
+	    transmitter_prod(&conn->transmitter);
+    } else
+	rv = EINVAL;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return rv;
 }
@@ -1879,17 +2001,26 @@ ipmi_sol_set_RI_asserted(ipmi_sol_conn_t               *conn,
 {
     int rv;
 
-    ipmi_lock(conn->transmitter.oob_op_lock);
-    if (asserted)
-	conn->transmitter.oob_persistent_op |= IPMI_SOL_OPERATION_RING_REQUEST;
-    else
-	conn->transmitter.oob_persistent_op &= ~IPMI_SOL_OPERATION_RING_REQUEST;
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state == ipmi_sol_state_connected)
+	|| (conn->state == ipmi_sol_state_connected_ctu))
+    {
+	ipmi_lock(conn->transmitter.oob_op_lock);
+	if (asserted)
+	    conn->transmitter.oob_persistent_op
+		|= IPMI_SOL_OPERATION_RING_REQUEST;
+	else
+	    conn->transmitter.oob_persistent_op
+		&= ~IPMI_SOL_OPERATION_RING_REQUEST;
 
-    rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
-    ipmi_unlock(conn->transmitter.oob_op_lock);
+	rv = add_op_control_callback(&conn->transmitter, cb, cb_data);
+	ipmi_unlock(conn->transmitter.oob_op_lock);
 
-    if (!rv)
-	transmitter_prod(&conn->transmitter);
+	if (!rv)
+	    transmitter_prod(&conn->transmitter);
+    } else
+	rv = EINVAL;
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return rv;
 }
@@ -1952,6 +2083,14 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
     int rv = 0;
     int need_callback = 0;
 
+    ipmi_lock(conn->transmitter.packet_lock);
+    if ((conn->state != ipmi_sol_state_connected)
+	&& (conn->state != ipmi_sol_state_connected_ctu))
+    {
+	ipmi_unlock(conn->transmitter.packet_lock);
+	return EINVAL;
+    }
+
     /*
      * Do we flush the local transmit queue?
      */
@@ -2013,6 +2152,7 @@ ipmi_sol_flush(ipmi_sol_conn_t            *conn,
 	ipmi_unlock(conn->transmitter.oob_op_lock);
     }
 
+    ipmi_unlock(conn->transmitter.packet_lock);
     return rv;
 }
 
@@ -2104,6 +2244,9 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
 
     new_conn->ACK_retries = 10;
     new_conn->ACK_timeout_usec = 1000000;
+
+    /* Use an invalid state to force a state report. */
+    new_conn->last_reported_state = -1;
 
     rv = add_connection(new_conn);
     if (rv)
@@ -2217,7 +2360,7 @@ handle_activate_payload_response(ipmi_sol_conn_t *conn,
 		 " Ports other than %d are not currently supported.",
 		 conn->payload_port_number, IPMI_LAN_STD_PORT);
 
-	ipmi_sol_send_close(conn, NULL); 
+	send_close(conn, NULL); 
 	ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, ENOSYS);
 	return;
     }
@@ -2707,11 +2850,12 @@ send_get_channel_payload_support_command(ipmi_sol_conn_t *conn)
 int
 ipmi_sol_open(ipmi_sol_conn_t *conn)
 {
-    /*
-     * IPMI Get Channel Payload Support
-     */
+    int rv;
+
+    ipmi_lock(conn->transmitter.packet_lock);
     if (conn->state != ipmi_sol_state_closed) {
 	/* It's an error to try to connect when not in closed state. */
+	ipmi_unlock(conn->transmitter.packet_lock);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_sol.c(ipmi_sol_open): "
 		 "An attempt was made to open an SoL connection"
@@ -2733,9 +2877,11 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
     conn->sol_payload_addr.addr_type = IPMI_RMCPP_ADDR_SOL;
 
     if (conn->try_fast_connect)
-	return send_get_payload_activation_status_command(conn);
+	rv = send_get_payload_activation_status_command(conn);
     else
-	return send_get_channel_payload_support_command(conn);
+	rv = send_get_channel_payload_support_command(conn);
+    ipmi_unlock(conn->transmitter.packet_lock);
+    return rv;
 }
 
 
@@ -2772,11 +2918,16 @@ handle_deactivate_payload_response(ipmi_sol_conn_t *conn,
 int
 ipmi_sol_close(ipmi_sol_conn_t *conn)
 {
+    ipmi_lock(conn->transmitter.packet_lock);
     if ((conn->state == ipmi_sol_state_closing)
 	|| (conn->state == ipmi_sol_state_closed))
+    {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 	
-    ipmi_sol_send_close(conn, handle_deactivate_payload_response);
+    send_close(conn, handle_deactivate_payload_response);
+    ipmi_unlock(conn->transmitter.packet_lock);
     return 0;
 }
 
@@ -2784,21 +2935,25 @@ ipmi_sol_close(ipmi_sol_conn_t *conn)
 int
 ipmi_sol_force_close(ipmi_sol_conn_t *conn)
 {
-    if (conn->state == ipmi_sol_state_closed)
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->state == ipmi_sol_state_closed) {
+	ipmi_unlock(conn->transmitter.packet_lock);
 	return EINVAL;
+    }
 
     if (conn->state != ipmi_sol_state_closing)
 	/*
 	 * Try to be polite to the BMC. Don't ask for a callback,
 	 * cos we'll be gone!
 	 */
-	ipmi_sol_send_close(conn, NULL); 
+	send_close(conn, NULL); 
 
     transmitter_shutdown(&conn->transmitter,
 			 IPMI_SOL_ERR_VAL(IPMI_SOL_DISCONNECTED));
 
     ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed,
 				  IPMI_SOL_ERR_VAL(IPMI_SOL_DISCONNECTED));
+    ipmi_unlock(conn->transmitter.packet_lock);
 
     return 0;
 }
@@ -2903,18 +3058,23 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	return;
     }
 
-    if (conn->state == ipmi_sol_state_closed)
+    xmitter = &conn->transmitter;
+
+    ipmi_lock(xmitter->packet_lock);
+
+    if (conn->state == ipmi_sol_state_closed) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_sol.c(sol_handle_recv_async): "
 		 "Dropped incoming SoL packet: connection closed.");
-	return;
+	goto out_unlock;
+    }
 
     if (data_len < 4) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_sol.c(sol_handle_recv_async): "
 		 "Dropped incoming SoL packet: Too short, at %d bytes.",
 		 data_len);
-	goto out;
+	goto out_unlock;
     }
 
 #ifdef IPMI_SOL_DEBUG_RECEIVE
@@ -2941,10 +3101,6 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	ipmi_sol_set_connection_state(conn, new_state, 0);
     }
 
-    xmitter = &conn->transmitter;
-
-    ipmi_lock(xmitter->packet_lock);
-
     if (data_len > 4) {
 	data_len -= 4; /* Skip over header */
 
@@ -2956,8 +3112,9 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 		     " and a sequence number of zero.");
 	} else {
 	    int character_count;
-	    int send_nack;
 
+	    /* FIXME - validate that the sequence numbers are
+	       sequentially increasing. */
 	    if (conn->prev_received_seqnr == packet[PACKET_SEQNR]) {
 		/* overlapping packets... yummy */
 		character_count = data_len - conn->prev_character_count;
@@ -2966,21 +3123,10 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 		character_count = data_len;
 		conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    }
-	    send_nack = do_data_received_callbacks
-		(conn, &packet[PACKET_DATA + data_len - character_count],
+	    do_data_received_callbacks
+		(conn, packet, data_len,
+		 &packet[PACKET_DATA + data_len - character_count],
 		 character_count);
-
-	    conn->prev_received_seqnr = packet[PACKET_SEQNR];
-	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
-
-	    if (send_nack) {
-		ipmi_lock(xmitter->oob_op_lock);
-		xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
-		ipmi_unlock(xmitter->oob_op_lock);
-	    } else {
-		conn->prev_character_count = data_len;
-		xmitter->accepted_character_count = data_len;
-	    }
 	}
     }
 
@@ -3039,13 +3185,12 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	ipmi_sol_set_connection_state(conn,
 				      ipmi_sol_state_closed,
 				      IPMI_SOL_ERR_VAL(IPMI_SOL_DEACTIVATED));
-	ipmi_unlock(xmitter->packet_lock);
     } else {
-	ipmi_unlock(xmitter->packet_lock);
-	transmitter_prod(xmitter);
+	transmitter_prod_nolock(xmitter);
     }
 
- out:
+ out_unlock:
+    ipmi_unlock(xmitter->packet_lock);
     sol_put_connection(conn);
 }
 

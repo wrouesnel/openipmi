@@ -1,3 +1,14 @@
+2006-01-27 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: If the BMC returned a completely bogus response to
+	a get device id during connection startup, the domain would remain
+	in a perpetually messed up state.  This adds something to the
+	normal domain audit to detect this situation and try again.
+
+	* lib/ipmi_sol.c: Worked on the packet and state locking to make
+	sure that a lock was held during state changes, locks were not
+	held in callbacks, and callbacks are done in the right order.
+
 2006-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode

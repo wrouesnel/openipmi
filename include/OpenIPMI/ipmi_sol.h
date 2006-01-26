@@ -112,10 +112,21 @@ extern "C" {
  */
 typedef enum
 {
+    /* The connection is closed; no data transfer is possible. */
     ipmi_sol_state_closed,
+
+    /* The connection is currently starting up; no data transfer yet. */
     ipmi_sol_state_connecting,
+
+    /* The connection is up and operational. */
     ipmi_sol_state_connected,
+
+    /* The connection is up, but the BMC has reported Character
+       Transfer Unavailable.  This means the BMC is flow-controlling
+       us. */
     ipmi_sol_state_connected_ctu,
+
+    /* The connection is going down.  No data transfer. */
     ipmi_sol_state_closing
 } ipmi_sol_state;
 

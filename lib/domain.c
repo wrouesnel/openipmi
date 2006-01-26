@@ -233,6 +233,10 @@ struct ipmi_domain_s
     /* Are any low-level connections up? */
     int connection_up;
 
+    /* If we got some type of invalid return from the BMC, we mark
+       this and retry at audit intervals. */
+    int got_invalid_dev_id;
+
     /* Are we in the process of connecting? */
     int connecting;
 
@@ -331,6 +335,8 @@ struct ipmi_domain_s
 static locked_list_t *domains_list;
 
 static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
+
+static int domain_send_mc_id(ipmi_domain_t *domain);
 
 static void cancel_domain_oem_check(ipmi_domain_t *domain);
 
@@ -2684,16 +2690,23 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	goto out;
 
     /* Only operate if we know a connection is up. */
-    if (domain->connection_up) {
-	/* Rescan all the presence sensors to make sure they are valid. */
-	ipmi_detect_domain_presence_changes(domain, 1);
+    if (! domain->connection_up)
+	goto out_start_timer;
 
-	ipmi_domain_start_full_ipmb_scan(domain);
-
-	/* Also check to see if the SDRs have changed. */
-	check_main_sdrs(domain);
+    if (domain->got_invalid_dev_id) {
+	domain_send_mc_id(domain);
+	goto out_start_timer;
     }
 
+    /* Rescan all the presence sensors to make sure they are valid. */
+    ipmi_detect_domain_presence_changes(domain, 1);
+    
+    ipmi_domain_start_full_ipmb_scan(domain);
+
+    /* Also check to see if the SDRs have changed. */
+    check_main_sdrs(domain);
+
+ out_start_timer:
     timeout.tv_sec = domain->audit_domain_interval;
     timeout.tv_usec = 0;
     domain->os_hnd->start_timer(domain->os_hnd,
@@ -4097,6 +4110,7 @@ got_dev_id(ipmi_mc_t  *mc,
 			 "IPMI version of the BMC is %d.%d, which is older"
 			 " than OpenIPMI supports",
 			 DOMAIN_NAME(domain), major_version, minor_version);
+		domain->got_invalid_dev_id = 1;
 		call_con_fails(domain, ENOSYS, 0, 0, 0);
 		return;
 	    }
@@ -4106,9 +4120,12 @@ got_dev_id(ipmi_mc_t  *mc,
 		 "Invalid return from IPMI Get Device ID, something is"
 		 " seriously wrong with the BMC",
 		 DOMAIN_NAME(domain));
+	domain->got_invalid_dev_id = 1;
 	call_con_fails(domain, rv, 0, 0, 0);
 	return;
     }
+
+    domain->got_invalid_dev_id = 0;
 
     /* Get the information from the MC, not the message, since it may have
        been fixed up. */
@@ -4134,6 +4151,7 @@ got_dev_id(ipmi_mc_t  *mc,
 
     if (domain->major_version < 1) {
 	/* We only support 1.0 and greater. */
+	domain->got_invalid_dev_id = 0;
 	call_con_fails(domain, EINVAL, 0, 0, 0);
 	return;
     }
