@@ -9,6 +9,12 @@
 	sure that a lock was held during state changes, locks were not
 	held in callbacks, and callbacks are done in the right order.
 
+	* lib/ipmi_sol.c: Added code to do packet processing in order and
+	not hold locks in callbacks.  This required some complicated
+	additions of wait lists, but should guarantee to the user that all
+	callbacks will be in order and will occur one at a time from a SoL
+	connection.
+
 2006-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode

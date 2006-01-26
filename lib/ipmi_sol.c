@@ -60,12 +60,6 @@
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
 
-/* FIXME - add stuff to make sure received packets are handled in
-   order. */
-/* FIXME - make sure that all callbacks are called without locks held,
-   but properly serialized. */
-/* FIXME - state transitions need to be locked properly and handled in
-   order. */
 
 /*
  * Locking notes:
@@ -138,6 +132,7 @@ typedef struct callback_list_s callback_list_t;
 struct callback_list_s {
     void            *cb;
     void            *cb_data;
+    int             error;
     callback_list_t *next;
 };
 
@@ -222,6 +217,25 @@ typedef struct ipmi_sol_outgoing_packet_record_s {
 } ipmi_sol_outgoing_packet_record_t;
 
 
+/* Used to keep a list of incoming packets to process. */
+typedef struct sol_in_packet_info_s
+{
+    unsigned int  data_len;
+
+    struct sol_in_packet_info_s *next;
+
+    /* Data is tacked on to the end of this. */
+} sol_in_packet_info_t;
+
+/* Used to keep a list of pending state transitions. */
+typedef struct sol_state_cb_info_s
+{
+    ipmi_sol_state state;
+    int            error;
+
+    struct sol_state_cb_info_s *next;
+} sol_state_cb_info_t;
+
 struct ipmi_sol_transmitter_context_s {
     /* A queue of un-acked transmit requests. */
     ipmi_sol_outgoing_queue_t outgoing_queue;
@@ -303,10 +317,6 @@ struct ipmi_sol_conn_s {
        changes are protected by the packet lock. */
     ipmi_sol_state state;
 
-    /* The last state reported to the user.  Used to tell if there a
-       state transition pending to report to the user. */
-    ipmi_sol_state last_reported_state;
-
     /* Max payload size outbound from here->BMC */
     unsigned int max_outbound_payload_size;
 
@@ -348,6 +358,14 @@ struct ipmi_sol_conn_s {
        changes state. */
     locked_list_t *connection_state_callback_list;
 
+    /* We single-thread the processing of packets for a connection.
+       New packets get queued to be process later if processing is
+       already going on. The following handle this. */
+    unsigned int         processing_packet;
+    sol_in_packet_info_t *waiting_packets;
+    callback_list_t      *waiting_callbacks;
+    sol_state_cb_info_t  *waiting_states;
+
     /* Used to make a linked-list of these */
     ipmi_sol_conn_t *next;
 };
@@ -358,6 +376,9 @@ static void transmitter_shutdown(ipmi_sol_transmitter_context_t *transmitter,
 				 int error);
 static void transmitter_prod_nolock
     (ipmi_sol_transmitter_context_t *transmitter);
+static void process_packet(ipmi_sol_conn_t *conn,
+			   unsigned char   *packet,
+			   unsigned int    data_len);
 
 static void
 dump_hex(unsigned char *data, int len)
@@ -497,6 +518,13 @@ sol_cleanup(ipmi_sol_conn_t *conn)
 
     delete_connection(conn);
 
+    while (conn->waiting_packets) {
+	sol_in_packet_info_t *to_free = conn->waiting_packets;
+
+	conn->waiting_packets = to_free->next;
+	ipmi_mem_free(to_free);
+    }
+
     conn->ipmi->close_connection(conn->ipmi);
     if (conn->transmitter.packet_lock)
 	ipmi_destroy_lock(conn->transmitter.packet_lock);
@@ -525,9 +553,10 @@ sol_put_connection(ipmi_sol_conn_t *conn)
     conn->refcount--;
     if (conn->refcount == 0) {
 	/* No more users, destroy the connection. */
+	ipmi_unlock(conn_lock);
 	sol_cleanup(conn);
-    }
-    ipmi_unlock(conn_lock);
+    } else
+	ipmi_unlock(conn_lock);
 }
 
 
@@ -642,14 +671,11 @@ do_data_received_callback(void *cb_data, void *item1, void *item2)
 	return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static void
+static int
 do_data_received_callbacks(ipmi_sol_conn_t *conn,
-			   unsigned char   *packet,
-			   unsigned int    data_len,
 			   const void      *buf,
 			   size_t          count)
 {
-    ipmi_sol_transmitter_context_t *xmitter = &conn->transmitter;
     do_data_received_callback_t    info;
 
     info.conn = conn;
@@ -660,20 +686,9 @@ do_data_received_callbacks(ipmi_sol_conn_t *conn,
 			do_data_received_callback,
 			&info);
 
-    /* FIXME - after reclaiming lock, make sure conn still exists. */
-    conn->prev_received_seqnr = packet[PACKET_SEQNR];
-    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
-
-    if (info.nack) {
-	ipmi_lock(xmitter->oob_op_lock);
-	xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
-	ipmi_unlock(xmitter->oob_op_lock);
-    } else {
-	conn->prev_character_count = data_len;
-	xmitter->accepted_character_count = data_len;
-    }
-    /* FIXME - no prod if called from receiver. */
-    transmitter_prod_nolock(xmitter);
+    /* Only called from the packet handling routine, no need for any
+       special handling. for waiting */
+    return info.nack;
 }
 
 static int
@@ -692,6 +707,9 @@ do_break_detected_callbacks(ipmi_sol_conn_t *conn)
     locked_list_iterate(conn->break_detected_callback_list,
 			do_break_detected_callback,
 			conn);
+
+    /* Only called from the packet handling routine, no need for any
+       special handling. for waiting */
 }
 
 static int
@@ -710,6 +728,9 @@ do_transmit_overrun_callbacks(ipmi_sol_conn_t *conn)
     locked_list_iterate(conn->bmc_transmit_overrun_callback_list,
 			do_transmit_overrun_callback,
 			conn);
+
+    /* Only called from the packet handling routine, no need for any
+       special handling. for waiting */
 }
 
 typedef struct do_connection_state_callback_s
@@ -729,15 +750,15 @@ do_connection_state_callback(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static void
+void
 do_connection_state_callbacks(ipmi_sol_conn_t *conn,
-			      ipmi_sol_state  state,
+			      ipmi_sol_state  new_state,
 			      int             error)
 {
     do_connection_state_callback_t info;
 
     info.conn = conn;
-    info.state = state;
+    info.state = new_state;
     info.error = error;
     locked_list_iterate(conn->connection_state_callback_list,
 			do_connection_state_callback,
@@ -1020,6 +1041,76 @@ ipmi_sol_get_bit_rate(ipmi_sol_conn_t *conn)
 }
 
 
+static void
+do_and_destroy_transmit_complete_callbacks(callback_list_t *list,
+					   ipmi_sol_conn_t *conn)
+{
+    callback_list_t *temp;
+
+    while (NULL != list) {
+	((ipmi_sol_transmit_complete_cb)list->cb)(conn, list->error,
+						  list->cb_data);
+	temp = list;
+	list = list->next;
+	ipmi_mem_free(temp);
+    }
+}
+
+
+/*
+ * Handle and packets that are waiting to be processed.
+ */
+static void
+process_waiting_packets(ipmi_sol_conn_t *conn)
+{
+    while ((conn->waiting_packets) || conn->waiting_callbacks
+	   || (conn->waiting_states))
+    {
+	while (conn->waiting_callbacks) {
+	    callback_list_t *callbacks = conn->waiting_callbacks;
+	    conn->waiting_callbacks = NULL;
+	    ipmi_unlock(conn->transmitter.packet_lock);
+	    do_and_destroy_transmit_complete_callbacks(callbacks, conn);
+	    ipmi_lock(conn->transmitter.packet_lock);
+	}
+
+	if (conn->waiting_states) {
+	    sol_state_cb_info_t *state = conn->waiting_states;
+	    conn->waiting_states = state->next;
+	    ipmi_unlock(conn->transmitter.packet_lock);
+	    do_connection_state_callbacks(conn, state->state, state->error);
+	    ipmi_mem_free(state);
+	    ipmi_lock(conn->transmitter.packet_lock);
+	    continue;
+	}
+
+	if (conn->waiting_packets) {
+	    sol_in_packet_info_t *packet = conn->waiting_packets;
+	    unsigned char        *pdata
+		= ((unsigned char *) packet) + sizeof(*packet);
+
+	    /* Connection may have closed during reporting information,
+	       make sure to check this. */
+	    if (conn->state == ipmi_sol_state_closed) {
+		ipmi_log(IPMI_LOG_WARNING,
+			 "ipmi_sol.c(sol_handle_recv_async): "
+			 "Dropped incoming SoL packet: connection closed.");
+		while (packet) {
+		    sol_in_packet_info_t *npacket = packet->next;
+		    ipmi_mem_free(packet);
+		    packet = npacket;
+		}
+		conn->waiting_packets = NULL;
+		return;
+	    }
+
+	    process_packet(conn, pdata, packet->data_len);
+	    ipmi_mem_free(packet);
+	    continue;
+	}
+    }
+}
+
 /**
  * Changes the currently recorded "state" for the SoL connection.
  *
@@ -1053,7 +1144,39 @@ ipmi_sol_set_connection_state(ipmi_sol_conn_t *conn,
 
     conn->state = new_state;
 
+    if (conn->processing_packet) {
+	sol_state_cb_info_t *sp = ipmi_mem_alloc(sizeof(*sp));
+	if (!sp) {
+	    /* Yikes, no memory to store this.  Just log and give up. */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "ipmi_sol.c(ipmi_sol_set_connection_state): "
+		     "Could not allocate memory to queue state change.");
+	    
+	}
+	sp->state = new_state;
+	sp->error = error;
+	sp->next = NULL;
+	if (conn->waiting_states) {
+	    sol_state_cb_info_t *end = conn->waiting_states;
+	    while (end->next)
+		end = end->next;
+	    end->next = sp;
+	} else {
+	    conn->waiting_states = sp;
+	}
+	return;
+    }
+
+    conn->processing_packet = 1;
+    ipmi_unlock(conn->transmitter.packet_lock);
     do_connection_state_callbacks(conn, new_state, error);
+    ipmi_lock(conn->transmitter.packet_lock);
+
+    /* See if some other thread stuck some packets in for me to
+       process.  Do that now. */
+    process_waiting_packets(conn);
+
+    conn->processing_packet = 0;
 }
 
 
@@ -1061,24 +1184,6 @@ ipmi_sol_set_connection_state(ipmi_sol_conn_t *conn,
  ** IPMI SoL write operations
  **/
  
-static void
-do_and_destroy_transmit_complete_callbacks(callback_list_t **list,
-					   ipmi_sol_conn_t *conn,
-					   int             error)
-{
-    callback_list_t *iter = *list;
-    callback_list_t *temp;
-
-    while (NULL != iter) {
-	((ipmi_sol_transmit_complete_cb)iter->cb)(conn, error, iter->cb_data);
-	temp = iter;
-	iter = iter->next;
-	ipmi_mem_free(temp);
-    }
-    *list = NULL;
-}
-
-
 #ifdef IPMI_SOL_DEBUG_TRANSMIT
 /**
  * Dump the transmitter state.
@@ -1250,9 +1355,44 @@ static void
 do_outstanding_op_callbacks(ipmi_sol_transmitter_context_t *transmitter,
 			    int                            error)
 {
-    do_and_destroy_transmit_complete_callbacks
-	(&(transmitter->transmitted_packet->op_callback_list),
-	 transmitter->sol_conn, error);
+    callback_list_t *callbacks;
+    callback_list_t *end;
+    ipmi_sol_conn_t *conn = transmitter->sol_conn;
+
+    callbacks = transmitter->transmitted_packet->op_callback_list;
+    if (!callbacks)
+	return;
+    transmitter->transmitted_packet->op_callback_list = NULL;
+
+    end = callbacks;
+    while (!end) {
+	end->error = error;
+	end = end->next;
+    }
+
+    if (conn->processing_packet) {
+	if (conn->waiting_callbacks) {
+	    end = conn->waiting_callbacks;
+	    while (end->next)
+		end = end->next;
+	    end->next = callbacks;
+	} else {
+	    conn->waiting_callbacks = callbacks;
+	}
+	return;
+    }
+
+    conn->processing_packet = 1;
+    ipmi_unlock(transmitter->packet_lock);
+    do_and_destroy_transmit_complete_callbacks(callbacks,
+					       transmitter->sol_conn);
+    ipmi_lock(transmitter->packet_lock);
+
+    /* See if some other thread stuck some packets in for me to
+       process.  Do that now. */
+    process_waiting_packets(conn);
+
+    conn->processing_packet = 0;
 }
 
 
@@ -1623,8 +1763,6 @@ static void
 transmitter_flush_outbound(ipmi_sol_transmitter_context_t *transmitter,
 			   int                            error)
 {
-    ipmi_lock(transmitter->packet_lock);
-
     dispose_of_outstanding_packet(transmitter, error);
 
     ipmi_lock(transmitter->queue_lock);
@@ -1632,7 +1770,6 @@ transmitter_flush_outbound(ipmi_sol_transmitter_context_t *transmitter,
 	dequeue_head(transmitter, error);
 
     ipmi_unlock(transmitter->queue_lock);
-    ipmi_unlock(transmitter->packet_lock);
 }
 
 
@@ -1768,7 +1905,7 @@ add_to_transmit_queue(ipmi_sol_transmitter_context_t *tx,
 
     ipmi_unlock(tx->queue_lock);
 
-    transmitter_prod(tx);
+    transmitter_prod_nolock(tx);
 
     return 0;
 }
@@ -2244,9 +2381,6 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
 
     new_conn->ACK_retries = 10;
     new_conn->ACK_timeout_usec = 1000000;
-
-    /* Use an invalid state to force a state report. */
-    new_conn->last_reported_state = -1;
 
     rv = add_connection(new_conn);
     if (rv)
@@ -2863,8 +2997,6 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
 	return EINVAL;
     }
 
-    ipmi_sol_set_connection_state(conn, ipmi_sol_state_connecting, 0);
-
     conn->addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     conn->addr.channel = IPMI_BMC_CHANNEL;
     conn->addr.lun = 0;
@@ -2880,6 +3012,10 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
 	rv = send_get_payload_activation_status_command(conn);
     else
 	rv = send_get_channel_payload_support_command(conn);
+
+    if (!rv)
+	ipmi_sol_set_connection_state(conn, ipmi_sol_state_connecting, 0);
+
     ipmi_unlock(conn->transmitter.packet_lock);
     return rv;
 }
@@ -3039,50 +3175,15 @@ sol_handle_recv(ipmi_con_t    *conn,
     return ENOSYS;
 }
 
-/* Handle an asynchronous message.  This *should* deliver the
-   message, if possible. */
 static void
-sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
-		      unsigned char *packet,
-		      unsigned int  data_len)
+process_packet(ipmi_sol_conn_t *conn,
+	       unsigned char   *packet,
+	       unsigned int    data_len)
 {
-    ipmi_sol_conn_t                *conn;
     ipmi_sol_transmitter_context_t *xmitter;
     int                            nack = 0;
 
-    conn = find_sol_connection_for_ipmi(ipmi_conn);
-    if (!conn) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_sol.c(sol_handle_recv_async): "
-		 "Dropped incoming SoL packet: Unrecognized connection.");
-	return;
-    }
-
     xmitter = &conn->transmitter;
-
-    ipmi_lock(xmitter->packet_lock);
-
-    if (conn->state == ipmi_sol_state_closed) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_sol.c(sol_handle_recv_async): "
-		 "Dropped incoming SoL packet: connection closed.");
-	goto out_unlock;
-    }
-
-    if (data_len < 4) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_sol.c(sol_handle_recv_async): "
-		 "Dropped incoming SoL packet: Too short, at %d bytes.",
-		 data_len);
-	goto out_unlock;
-    }
-
-#ifdef IPMI_SOL_DEBUG_RECEIVE
-    ipmi_log(IPMI_LOG_INFO,
-	     "ipmi_sol.c(sol_handle_recv_async): "
-	     "Received SoL packet, %d bytes", data_len);
-    dump_hex(packet, data_len);
-#endif
 
     nack = (packet[PACKET_STATUS] & IPMI_SOL_STATUS_NACK_PACKET) != 0;
 
@@ -3112,6 +3213,7 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 		     " and a sequence number of zero.");
 	} else {
 	    int character_count;
+	    int do_nack;
 
 	    /* FIXME - validate that the sequence numbers are
 	       sequentially increasing. */
@@ -3123,12 +3225,27 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 		character_count = data_len;
 		conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    }
-	    do_data_received_callbacks
-		(conn, packet, data_len,
-		 &packet[PACKET_DATA + data_len - character_count],
+	    ipmi_unlock(xmitter->packet_lock);
+	    do_nack = do_data_received_callbacks
+		(conn, &packet[PACKET_DATA + data_len - character_count],
 		 character_count);
+	    ipmi_lock(xmitter->packet_lock);
+
+	    /* FIXME - after reclaiming lock, make sure conn still exists. */
+	    conn->prev_received_seqnr = packet[PACKET_SEQNR];
+	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
+
+	    if (do_nack) {
+		ipmi_lock(xmitter->oob_op_lock);
+		xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
+		ipmi_unlock(xmitter->oob_op_lock);
+	    } else {
+		conn->prev_character_count = data_len;
+		xmitter->accepted_character_count = data_len;
+	    }
 	}
     }
+
 
     if (packet[PACKET_ACK_NACK_SEQNR] &&
 	xmitter->transmitted_packet &&
@@ -3173,11 +3290,17 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
 	dispose_of_outstanding_packet(xmitter, 0);
     }
 
-    if (packet[PACKET_STATUS] & IPMI_SOL_STATUS_BREAK_DETECTED)
+    if (packet[PACKET_STATUS] & IPMI_SOL_STATUS_BREAK_DETECTED) {
+	ipmi_unlock(xmitter->packet_lock);
 	do_break_detected_callbacks(conn);
+	ipmi_lock(xmitter->packet_lock);
+    }
 
-    if (packet[PACKET_STATUS] & IPMI_SOL_STATUS_BMC_TX_OVERRUN)
+    if (packet[PACKET_STATUS] & IPMI_SOL_STATUS_BMC_TX_OVERRUN) {
+	ipmi_unlock(xmitter->packet_lock);
 	do_transmit_overrun_callbacks(conn);
+	ipmi_lock(xmitter->packet_lock);
+    }
 
     if (nack && (packet[PACKET_STATUS] & IPMI_SOL_STATUS_DEACTIVATED)) {
 	transmitter_shutdown(xmitter, IPMI_SOL_ERR_VAL(IPMI_SOL_DEACTIVATED));
@@ -3188,6 +3311,91 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
     } else {
 	transmitter_prod_nolock(xmitter);
     }
+}
+
+
+/* Handle an asynchronous message.  This *should* deliver the
+   message, if possible. */
+static void
+sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
+		      unsigned char *packet,
+		      unsigned int  data_len)
+{
+    ipmi_sol_transmitter_context_t *xmitter;
+    ipmi_sol_conn_t                *conn;
+
+    conn = find_sol_connection_for_ipmi(ipmi_conn);
+    if (!conn) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
+		 "Dropped incoming SoL packet: Unrecognized connection.");
+	return;
+    }
+
+    xmitter = &conn->transmitter;
+
+    ipmi_lock(xmitter->packet_lock);
+
+    if (data_len < 4) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
+		 "Dropped incoming SoL packet: Too short, at %d bytes.",
+		 data_len);
+	goto out_unlock;
+    }
+
+#ifdef IPMI_SOL_DEBUG_RECEIVE
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(sol_handle_recv_async): "
+	     "Received SoL packet, %d bytes", data_len);
+    dump_hex(packet, data_len);
+#endif
+
+    if (conn->state == ipmi_sol_state_closed) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(sol_handle_recv_async): "
+		 "Dropped incoming SoL packet: connection closed.");
+	goto out_unlock;
+    }
+
+    if (conn->processing_packet) {
+	/* Some other thread is already processing packets.  Tack this
+	   packet onto the end of waiting packets for the other thread
+	   to handle. */
+	sol_in_packet_info_t *packet, *epacket;
+	unsigned char        *pdata;
+
+	packet = ipmi_mem_alloc(sizeof(*packet) + data_len);
+	if (!packet)
+	    goto out_unlock;
+	packet->data_len = data_len;
+	packet->next = NULL;
+	pdata = ((unsigned char *) packet) + sizeof(*packet);
+	memcpy(pdata, packet, data_len);
+
+	if (conn->waiting_packets) {
+	    conn->waiting_packets = packet;
+	} else {
+	    epacket = conn->waiting_packets;
+	    while (epacket->next)
+		epacket = epacket->next;
+	    epacket->next = packet;
+	}
+	goto out_unlock;
+    }
+
+    conn->processing_packet = 1;
+
+    /* At this point we are single-threaded.  No other process can be
+       running this code but me, even if I release the packet_lock. */
+
+    process_packet(conn, packet, data_len);
+
+    /* See if some other thread stuck some packets in for me to
+       process.  Do that now. */
+    process_waiting_packets(conn);
+
+    conn->processing_packet = 0;
 
  out_unlock:
     ipmi_unlock(xmitter->packet_lock);
