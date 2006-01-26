@@ -1,3 +1,8 @@
+2006-01-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode
+	fails, to avoid a crash at FRU destruction time.
+
 2006-01-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/strings.c: Added some sensor code strings specified by

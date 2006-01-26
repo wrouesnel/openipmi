@@ -4265,6 +4265,16 @@ process_fru_info(ipmi_fru_t *fru)
 
  out_err:
     fru_cleanup_recs(fru);
+
+    /* Clear out the FRU information. */
+    _ipmi_fru_set_rec_data(fru, NULL);
+    _ipmi_fru_set_op_cleanup_recs(fru, NULL);
+    _ipmi_fru_set_op_write_complete(fru, NULL);
+    _ipmi_fru_set_op_write(fru, NULL);
+    _ipmi_fru_set_op_get_root_node(fru, NULL);
+
+    _ipmi_fru_set_is_normal_fru(fru, 0);
+
     return err;
 }
 
