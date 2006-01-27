@@ -60,6 +60,9 @@
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/ipmi_sol.h>
 
+/* FIXME - after processing waiting packets, a transmitter prod may be
+   necessary in some cases.  Figure out where. */
+
 
 /*
  * Locking notes:

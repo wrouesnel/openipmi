@@ -15,6 +15,9 @@
 	callbacks will be in order and will occur one at a time from a SoL
 	connection.
 
+	* lib/entity.c: Modified MC refcounts to not be held over a
+	message.  Bad idea.
+
 2006-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode

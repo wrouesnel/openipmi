@@ -1616,7 +1616,6 @@ detect_frudev(ipmi_mc_t  *mc,
 {
     ent_active_detect_t *info = rsp_data;
 
-    _ipmi_mc_put(mc);
     ipmi_lock(info->lock);
     info->msg = rsp;
     if (ipmi_entity_pointer_cb(info->ent_id, detect_frudev_handler, info))
@@ -1650,10 +1649,10 @@ try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
     _ipmi_mc_get(ent->frudev_mc);
     rv = ipmi_mc_send_command(ent->frudev_mc, ent->info.lun, &msg,
 			      detect_frudev, info);
-    if (rv) {
-	_ipmi_mc_put(ent->frudev_mc);
+    _ipmi_mc_put(ent->frudev_mc);
+    if (rv)
 	detect_done(ent, info);
-    }else
+    else
 	ipmi_unlock(info->lock);
 }
 
