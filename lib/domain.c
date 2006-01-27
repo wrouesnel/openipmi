@@ -2689,14 +2689,14 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
     if (rv)
 	goto out;
 
-    /* Only operate if we know a connection is up. */
-    if (! domain->connection_up)
-	goto out_start_timer;
-
     if (domain->got_invalid_dev_id) {
 	domain_send_mc_id(domain);
 	goto out_start_timer;
     }
+
+    /* Only operate if we know a connection is up. */
+    if (! domain->connection_up)
+	goto out_start_timer;
 
     /* Rescan all the presence sensors to make sure they are valid. */
     ipmi_detect_domain_presence_changes(domain, 1);

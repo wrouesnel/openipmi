@@ -765,7 +765,6 @@ do_connection_state_callbacks(ipmi_sol_conn_t *conn,
 			&info);
 }
 
-/* FIXME - check conn lock (when it is available) on the following items */
 int
 ipmi_sol_register_data_received_callback(ipmi_sol_conn_t           *conn,
 					 ipmi_sol_data_received_cb cb,
@@ -3231,7 +3230,9 @@ process_packet(ipmi_sol_conn_t *conn,
 		 character_count);
 	    ipmi_lock(xmitter->packet_lock);
 
-	    /* FIXME - after reclaiming lock, make sure conn still exists. */
+	    if (conn->state == ipmi_sol_state_closed)
+		return;
+
 	    conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
 
@@ -3294,12 +3295,16 @@ process_packet(ipmi_sol_conn_t *conn,
 	ipmi_unlock(xmitter->packet_lock);
 	do_break_detected_callbacks(conn);
 	ipmi_lock(xmitter->packet_lock);
+	if (conn->state == ipmi_sol_state_closed)
+	    return;
     }
 
     if (packet[PACKET_STATUS] & IPMI_SOL_STATUS_BMC_TX_OVERRUN) {
 	ipmi_unlock(xmitter->packet_lock);
 	do_transmit_overrun_callbacks(conn);
 	ipmi_lock(xmitter->packet_lock);
+	if (conn->state == ipmi_sol_state_closed)
+	    return;
     }
 
     if (nack && (packet[PACKET_STATUS] & IPMI_SOL_STATUS_DEACTIVATED)) {
