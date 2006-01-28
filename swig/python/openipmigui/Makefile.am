@@ -20,7 +20,7 @@ install-exec-local: $(EXTRA_DIST) $(PYC_FILES) $(PYO_FILES)
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui
 	$(INSTALL_PROGRAM) $^ $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui
 
-PYPATH=$(top_builddir)/swig/python
+PYPATH=$(top_builddir)/swig/python:$(srcdir)
 PYLDPATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs
 
 .py.pyc:

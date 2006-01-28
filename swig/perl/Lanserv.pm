@@ -4,9 +4,18 @@ use FileHandle;
 use IPC::Open2;
 use IO::Handle;
 
-my $top_builddir = "../..";
-my $top_srcdir = "../..";
-my $this_srcdir = $top_builddir . "/swig/perl";
+my $top_builddir = $ENV{top_builddir};
+if (not defined $top_builddir) {
+    $top_builddir = "../..";
+}
+my $srcdir = $ENV{srcdir};
+my $top_srcdir;
+if (defined $srcdir) {
+    $top_srcdir = "$srcdir/../..";
+} else {
+    $top_srcdir = "../..";
+}
+my $this_srcdir = $top_srcdir . "/swig/perl";
 my $lanserv_conf = $this_srcdir . "/lan.conf";
 my $lanserv_emu = $top_builddir . "/lanserv/lanserv_emu -c " . $lanserv_conf;
 

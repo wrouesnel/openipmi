@@ -30,6 +30,12 @@
 	* swig/python/openipmigui/gui.py: Clean up shutdown so that
 	domains are cleaned up no matter how the shutdown occurs.
 
+	* swig/python/openipmigui/Makefile.am: Modify python path to
+	allow building and execution in alternate object directories.
+
+	* swig/perl/Makefile.am: Modify paths to allow make check to
+	work in alternate object directories.
+
 2006-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode
