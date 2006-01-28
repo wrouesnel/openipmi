@@ -1619,7 +1619,11 @@ detect_frudev(ipmi_mc_t  *mc,
     ipmi_lock(info->lock);
     info->msg = rsp;
     if (ipmi_entity_pointer_cb(info->ent_id, detect_frudev_handler, info))
-	detect_cleanup(info, ipmi_mc_get_domain(mc));
+	/* We cheat and pull the domain from the entity id.  The domain
+	 * still has to be around in the place, but we can't rely on the
+	 * MC as it may have gone away if it failed or the domain is in
+	 * shutdown. */
+	detect_cleanup(info, info->ent_id.domain_id.domain);
 }
 
 /* This is the end of the line on checks.  We have to report something
