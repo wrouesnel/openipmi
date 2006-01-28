@@ -38,23 +38,22 @@
 #include "OpenIPMI.h"
 
 
-void
-swig_call_cb(swig_cb_val cb, char *method_name,
-	     char *format, ...)
+static void
+vswig_call_cb_rv(char rv_type, void *rv,
+		 swig_cb_val cb, char *method_name,
+		 char *format, va_list ap)
 {
     SV            *ref = newRV_inc(cb);
-    va_list       ap;
     int           len;
     unsigned char *data;
     int           *idata;
+    int           rcount;
     dSP ;
 
     sv_bless(ref, SvSTASH(cb));
 
     ENTER;
     SAVETMPS;
-
-    va_start(ap, format);
 
     PUSHMARK(SP);
     XPUSHs(ref);
@@ -156,12 +155,54 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     }
     PUTBACK;
 
-    va_end(ap);
+    if (!rv) {
+	call_method(method_name, G_DISCARD);
+    } else {
+	rcount = call_method(method_name, G_SCALAR);
+	SPAGAIN;
+	if (rcount < 1)
+	    croak("OpenIPMI: method did not return any value: %s",
+		  method_name);
+	if (rcount > 1)
+	    croak("OpenIPMI: method returned too many values: %s",
+		  method_name);
 
-    call_method(method_name, G_DISCARD);
+	switch (rv_type) {
+	case 'i':
+	    *((int *) rv) = POPi;
+	    break;
+
+	default:
+	    croak("OpenIPMI: Invalid requested return value: %i", rv_type);
+	    break;
+	}
+    }
 
     FREETMPS;
     LEAVE;
 
     SvREFCNT_dec(ref);
+}
+
+void
+swig_call_cb(swig_cb_val cb, char *method_name,
+	     char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vswig_call_cb_rv(' ', NULL, cb, method_name, format, ap);
+    va_end(ap);
+}
+
+void
+swig_call_cb_rv(char rv_type, void *rv,
+		swig_cb_val cb, char *method_name,
+		char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vswig_call_cb_rv(rv_type, rv, cb, method_name, format, ap);
+    va_end(ap);
 }

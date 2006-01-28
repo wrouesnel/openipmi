@@ -56,6 +56,12 @@ void swig_call_cb(swig_cb_val cb, char *method_name, char *format, ...)
      __attribute__ ((__format__ (__printf__, 3, 4)))
 #endif
 ;
+void swig_call_cb_rv(char rv_type, void *rv,
+		     swig_cb_val cb, char *method_name, char *format, ...)
+#ifdef __GNUC__
+     __attribute__ ((__format__ (__printf__, 5, 6)))
+#endif
+;
 
 
 typedef struct swig_ref

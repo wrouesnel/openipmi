@@ -709,11 +709,18 @@ static void swig_call_cb(swig_cb_val cb, char *method_name, char *format, ...)
      __attribute__ ((__format__ (__printf__, 3, 4)))
 #endif
 ;
+static void swig_call_cb_rv(char rv_type, void *rv,
+			    swig_cb_val cb, char *method_name,
+			    char *format, ...)
+#ifdef __GNUC__
+     __attribute__ ((__format__ (__printf__, 5, 6)))
+#endif
+;
 static void
-swig_call_cb(swig_cb_val cb, char *method_name,
-	     char *format, ...)
+vswig_call_cb_rv(char rv_type, void *rv,
+		 swig_cb_val cb, char *method_name,
+		 char *format, va_list ap)
 {
-    va_list       ap;
     int           len;
     unsigned char *data;
     int           *idata;
@@ -735,8 +742,6 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	errstr = "cannot allocate PyTyple";
 	goto out_err;
     }
-
-    va_start(ap, format);
 
     pos = 0;
     for (; *format; format++) {
@@ -872,12 +877,21 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	pos++;
     }
 
-    va_end(ap);
-
     p = PyObject_GetAttrString(cb, method_name);
     if (p) {
 	o = PyObject_CallObject(p, args);
 	Py_DECREF(p);
+	if (rv) {
+	    switch (rv_type) {
+	    case 'i': /* Integer */
+		*((int *) rv) = PyInt_AsLong(o);
+		break;
+
+	    default:
+		Py_FatalError("OpenIPMI: Invalid return type specified");
+		break;
+	    }
+	}
 	if (o) {
 	    Py_DECREF(o);
 	}
@@ -890,10 +904,35 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     return;
 
  out_err:
+    PyErr_SetString(PyExc_TypeError, errstr);
+    PyErr_Print();
     if (o) {
 	Py_DECREF(o);
     }
     OI_PY_STATE_PUT(gstate);
+}
+
+static void
+swig_call_cb(swig_cb_val cb, char *method_name,
+	     char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vswig_call_cb_rv(' ', NULL, cb, method_name, format, ap);
+    va_end(ap);
+}
+
+static void
+swig_call_cb_rv(char rv_type, void *rv,
+		swig_cb_val cb, char *method_name,
+		char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vswig_call_cb_rv(rv_type, rv, cb, method_name, format, ap);
+    va_end(ap);
 }
 
 %}

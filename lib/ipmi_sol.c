@@ -265,6 +265,12 @@ struct ipmi_sol_transmitter_context_s {
     /* We accepted this many chars from the above packet. */
     int accepted_character_count;
 
+    /* Nack returns pending that we need release_nack calls for. */
+    int nack_count;
+
+    /* Are we currently in a receive callback? */
+    int in_recv_cb;
+
     /* We have already acked this many chars from the request at the
        head of the tx queue. */
     int bytes_acked_at_head;
@@ -667,11 +673,9 @@ do_data_received_callback(void *cb_data, void *item1, void *item2)
     do_data_received_callback_t *info = cb_data;
     ipmi_sol_data_received_cb   cb = item1;
     
-    info->nack = cb(info->conn, info->buf, info->count, item2);
-    if (info->nack)
-	return LOCKED_LIST_ITER_STOP;
-    else
-	return LOCKED_LIST_ITER_CONTINUE;
+    if (cb(info->conn, info->buf, info->count, item2))
+	info->nack++;
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static int
@@ -1306,7 +1310,10 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
      */
     new_packet_record->packet[PACKET_ACK_NACK_SEQNR]
 	= transmitter->packet_to_acknowledge;
-    transmitter->packet_to_acknowledge = 0;
+    if (! (transmitter->oob_transient_op & IPMI_SOL_OPERATION_NACK_PACKET))
+	/* We have to ack the packet if we nack it, leave it around
+	   for the release if we are nack-ing. */
+	transmitter->packet_to_acknowledge = 0;
 
     new_packet_record->packet[PACKET_ACCEPTED_CHARACTER_COUNT]
 	= transmitter->accepted_character_count;
@@ -1316,7 +1323,9 @@ transmitter_gather(ipmi_sol_transmitter_context_t *transmitter,
     new_packet_record->packet[PACKET_OP]
 	= (transmitter->oob_transient_op | transmitter->oob_persistent_op
 	   | ib_op);
-    transmitter->oob_transient_op = 0;
+
+    /* Transmitted NACK has to be cleared by the user */
+    transmitter->oob_transient_op &= IPMI_SOL_OPERATION_NACK_PACKET;
 
     new_packet_record->op_callback_list = transmitter->op_callback_list;
     transmitter->op_callback_list = NULL;
@@ -1731,8 +1740,6 @@ dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
 {
     ipmi_sol_outgoing_queue_item_t *qitem;
 
-    ipmi_lock(transmitter->queue_lock);
-
     transmitter->bytes_acked_at_head = 0;
     qitem = transmitter->outgoing_queue.head;
 
@@ -1751,8 +1758,6 @@ dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
 	if (NULL == transmitter->outgoing_queue.head)
 	    transmitter->outgoing_queue.tail = NULL;
     }
-
-    ipmi_unlock(transmitter->queue_lock);
 }
 
 
@@ -1770,7 +1775,6 @@ transmitter_flush_outbound(ipmi_sol_transmitter_context_t *transmitter,
     ipmi_lock(transmitter->queue_lock);
     while (transmitter->outgoing_queue.head)
 	dequeue_head(transmitter, error);
-
     ipmi_unlock(transmitter->queue_lock);
 }
 
@@ -1841,7 +1845,9 @@ transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
 	    /*
 	     * This packet is DONE.
 	     */
+	    ipmi_lock(conn->transmitter.queue_lock);
 	    dequeue_head(&conn->transmitter, error);
+	    ipmi_unlock(conn->transmitter.queue_lock);
 	}
 
 	acknowledged_char_count -= this_ack;
@@ -2009,6 +2015,39 @@ ipmi_sol_write(ipmi_sol_conn_t               *conn,
     return rv;
 }
 
+
+/* 
+ * ipmi_sol_release_nack -
+ *
+ * Remove any pending nacks.
+ */
+int
+ipmi_sol_release_nack(ipmi_sol_conn_t *conn)
+{
+    int rv = 0;
+
+    ipmi_lock(conn->transmitter.packet_lock);
+    if (conn->transmitter.in_recv_cb) {
+	/* Raced with the receive callback, just mark it for the
+	   receive callback to handle. */
+	conn->transmitter.nack_count--;
+	goto out;
+    }
+    if (! conn->transmitter.nack_count) {
+	/* Nothing to NACK. */
+	rv = EINVAL;
+	goto out;
+    }
+    conn->transmitter.nack_count--;
+    if (! conn->transmitter.nack_count) {
+	/* Time to kick things off again. */
+	conn->transmitter.oob_transient_op &= ~IPMI_SOL_OPERATION_NACK_PACKET;
+	transmitter_prod_nolock(&conn->transmitter);
+    }
+ out:
+    ipmi_unlock(conn->transmitter.packet_lock);
+    return rv;
+}
 
 /* 
  * ipmi_sol_send_break -
@@ -3227,11 +3266,21 @@ process_packet(ipmi_sol_conn_t *conn,
 		character_count = data_len;
 		conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    }
+	    xmitter->in_recv_cb = 1;
 	    ipmi_unlock(xmitter->packet_lock);
 	    do_nack = do_data_received_callbacks
 		(conn, &packet[PACKET_DATA + data_len - character_count],
 		 character_count);
 	    ipmi_lock(xmitter->packet_lock);
+	    xmitter->in_recv_cb = 0;
+
+	    xmitter->nack_count += do_nack;
+	    if (xmitter->nack_count < 0) {
+		ipmi_log(IPMI_LOG_WARNING,
+			 "ipmi_sol.c(process_packet): "
+			 "Too many NACK releases.");
+		xmitter->nack_count = 0;
+	    }
 
 	    if (conn->state == ipmi_sol_state_closed)
 		return;
@@ -3239,7 +3288,7 @@ process_packet(ipmi_sol_conn_t *conn,
 	    conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
 
-	    if (do_nack) {
+	    if (xmitter->nack_count) {
 		ipmi_lock(xmitter->oob_op_lock);
 		xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
 		ipmi_unlock(xmitter->oob_op_lock);

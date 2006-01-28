@@ -2528,12 +2528,13 @@ sol_data_received_cb(ipmi_sol_conn_t *conn,
 {
     swig_cb_val cb = cb_data;
     swig_ref    conn_ref;
+    int         rv = 0;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
-    swig_call_cb(cb, "sol_data_received", "%p%*b",
-		 &conn_ref, count, buf);
+    swig_call_cb_rv('i', &rv, cb, "sol_data_received", "%p%*b",
+		    &conn_ref, count, buf);
     swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
-    return 0;
+    return rv;
 }
 
 static void
@@ -2546,7 +2547,6 @@ sol_break_detected_cb(ipmi_sol_conn_t *conn,
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
     swig_call_cb(cb, "sol_break_detected", "%p", &conn_ref);
     swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
-    return 0;
 }
 
 static void
@@ -2559,7 +2559,6 @@ sol_bmc_transmit_overrun_cb(ipmi_sol_conn_t *conn,
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
     swig_call_cb(cb, "sol_bmc_transmit_overrun", "%p", &conn_ref);
     swig_free_ref_check(conn_ref, ipmi_sol_conn_t);
-    return 0;
 }
 
 static void
@@ -10837,6 +10836,15 @@ void set_cmdlang_event_handler(swig_cb handler);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return rv;
+    }
+
+    /*
+     * For every NACK returned from the receive routine, this function
+     * must be called to release the NACK.
+     */
+    int release_nack(ipmi_sol_conn_t *conn)
+    {
+	return ipmi_sol_release_nack(conn);
     }
 
     /*

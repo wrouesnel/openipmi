@@ -118,7 +118,7 @@ class SoL(wx.Frame):
     
     def sol_data_received(self, conn, string):
         self.term.ProcessInput(string)
-        return
+        return 0
     
     def sol_break_detected(self, conn):
         self.errstr.SetStatusText("Received break")

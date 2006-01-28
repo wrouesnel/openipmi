@@ -1,3 +1,20 @@
+2006-01-28 Corey Minyard <cminyard@mvista.com>
+
+	* swig/perl/OpenIPMI_perl.c, swig/perl/OpenIPMI.h: Added the
+	ability to return a return value from a function.
+	* swig/python/OpenIPMI_lang.i: ditto
+
+	* swig/OpenIPMI.i: Modified sol_data_received_cb to handle the
+	return value properly.
+
+	* include/OpenIPMI/ipmi_sol.h, lib/ipmi_sol.c: Added a function to
+	release a SOL NACK situation.
+
+	* swig/OpenIPMI.i: Added the SOL NACK release function.
+
+	* swig/python/openipmigui/_term.c: Fixed a problem with character
+	handling.
+
 2006-01-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: If the BMC returned a completely bogus response to

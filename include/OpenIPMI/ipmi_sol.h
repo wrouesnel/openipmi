@@ -212,10 +212,13 @@ typedef void (*ipmi_sol_transmit_complete_cb)(ipmi_sol_conn_t *conn,
  * This callback is called asynchronously when characters have been received
  * from the remote.
  *
- * This callback is registered using ipmi_register_data_received_callback.  The
- * recipient of this callback has the opportunity to refuse (NACK) the data by
- * returning a nonzero value; conversely, it should return zero if the packet
- * contents have been accepted.
+ * This callback is registered using
+ * ipmi_register_data_received_callback.  The recipient of this
+ * callback has the opportunity to refuse (NACK) the data by returning
+ * a nonzero value; conversely, it should return zero if the packet
+ * contents have been accepted.  Note that if a NACK is returned, the
+ * BMC will hold packets until ipmi_sol_release_nack() is called or
+ * a flush is done.
  *
  * @param [in] conn	The IPMI SoL connection.
  * @param [in] buf	A pointer to the character data.
@@ -384,8 +387,6 @@ int ipmi_sol_get_ACK_retries(ipmi_sol_conn_t *conn);
 /**
  * Configure the authentication to use for the SoL packets.
  *
- * CURRENTLY NOT IMPLEMENTED.
- * 
  * @param [in] conn	The IPMI SoL connection to configure.
  * @param [in] use_authentication	Nonzero to use authentication for the
  * 					SoL packets.
@@ -406,8 +407,6 @@ int ipmi_sol_get_use_authentication(ipmi_sol_conn_t *conn);
 
 /**
  * Configure the encryption to use for the SoL packets.
- * 
- * CURRENTLY NOT IMPLEMENTED.
  * 
  * @param [in] conn	The IPMI SoL connection to configure.
  * @param [in] use_encryption	Nonzero to use encryption for the
@@ -594,6 +593,20 @@ int ipmi_sol_write(ipmi_sol_conn_t *conn,
 		   int             count,
 		   ipmi_sol_transmit_complete_cb cb,
 		   void            *cb_data);
+
+
+/**
+ * Release a NACK
+ *
+ * This function will release a NACK returned by the receive routine.
+ * For every NACK a receive routine returns, this must be called to
+ * reactivate receiving packets from the BMC.
+ *
+ * @param [in] conn	The IPMI SoL connection over which to transmit.
+ * @return	Zero on success
+ *		EINVAL	No NACK is pending.
+ */
+int ipmi_sol_release_nack(ipmi_sol_conn_t *conn);
 
 
 /**

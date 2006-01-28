@@ -285,14 +285,7 @@ class Terminal(TerminalEmulator):
     
     def HandleChar(self, event):
         key = event.GetKeyCode()
-        if (event.ControlDown()):
-            if ((key >= 64) and (key <= 90)): # '@' 'A' .. 'Z'
-                s = "%c" % (key-64)
-                pass
-            if ((key >= 97) and (key <= 122)): # 'a' .. 'z'
-                s = "%c" % (key-96)
-            pass
-        elif (key <= 255):
+        if (key <= 255):
             s = "%c" % (key)
             pass
         else:
