@@ -64,6 +64,7 @@ import OpenIPMI
 from openipmigui import _domain
 from openipmigui import gui
 from openipmigui import _saveprefs
+from openipmigui import _cmdwin
 
 
 class DomainHandler:
@@ -157,6 +158,10 @@ def run():
 
     preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     _saveprefs.restore(preffile)
+
+    histfile = os.path.join(os.environ['HOME'], '.openipmigui.history')
+    _cmdwin._HistoryRestore(histfile)
+    
     mainhandler = DomainHandler(preffile)
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
@@ -174,6 +179,9 @@ def run():
         pass
 
     app.MainLoop()
+
+    _cmdwin._HistorySave(histfile)
+
     OpenIPMI.set_log_handler(DummyLogHandler())
     OpenIPMI.shutdown_everything()
 

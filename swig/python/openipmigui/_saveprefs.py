@@ -56,16 +56,19 @@ def save(objlist, file):
         obj.SaveInfo(doc, elem)
         main.appendChild(elem)
         pass
-    # FIXME - need try/except here
-    f = open(file, 'w')
-    doc.writexml(f, indent='', addindent='\t', newl='\n')
+    try:
+        f = open(file, 'w')
+        doc.writexml(f, indent='', addindent='\t', newl='\n')
+    except:
+        _oi_logging.error("Unable to save startup file " + file)
+        pass
     return
 
 def restore(file):
     try:
         doc = xml.dom.minidom.parse(file).documentElement
     except:
-        _oi_logging.error("Unable to parse startup file " + file)
+        pass
     else:
         for child in doc.childNodes:
             if (child.nodeType == child.ELEMENT_NODE):

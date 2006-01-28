@@ -31,10 +31,16 @@
 #
 
 import wx
+import xml.dom
+import xml.dom.minidom
 import OpenIPMI
+import _saveprefs
+
+init_history = [ ]
 
 class CommandWindow(wx.TextCtrl):
     def __init__(self, parent):
+        global init_history
         wx.TextCtrl.__init__(self, parent, -1,
                              style=(wx.TE_MULTILINE
                                     | wx.HSCROLL))
@@ -43,9 +49,15 @@ class CommandWindow(wx.TextCtrl):
         self.max_history = 100
         wx.EVT_CHAR(self, self.HandleChar)
         self.AppendText("> ")
-        self.history = [ "" ]
+        self.history = [ ]
         self.lasthist = 0
-        self.currhist = 0
+        for cmd in init_history:
+            self.history.append(cmd[1])
+            self.lasthist += 1
+            pass
+        self.history.append("")
+        init_history = None
+        self.currhist = self.lasthist
 
         self.cmdlang = OpenIPMI.alloc_cmdlang(self)
         self.indent = 0;
@@ -213,3 +225,48 @@ class CommandWindow(wx.TextCtrl):
         return
 
     pass
+
+def cmphist(a, b):
+    return cmp(a[0], b[0])
+    
+def _HistorySave(file):
+    if (not init_history):
+        return
+    domimpl = xml.dom.getDOMImplementation()
+    doc = domimpl.createDocument(None, "IPMIHistory", None)
+    main = doc.documentElement
+    i = 0
+    for cmd in init_history:
+        if (cmd != ""):
+            helem = doc.createElement("hval")
+            helem.setAttribute("idx", str(i))
+            helem.setAttribute("val", cmd)
+            main.appendChild(helem)
+            i += 1
+            pass
+        pass
+    try:
+        f = open(file, 'w')
+        doc.writexml(f, indent='', addindent='\t', newl='\n')
+    except:
+        pass
+    return
+
+def _HistoryRestore(file):
+    try:
+        doc = xml.dom.minidom.parse(file).documentElement
+    except:
+        return
+    for c in doc.childNodes:
+        if (c.nodeType == c.ELEMENT_NODE):
+            try:
+                idx = int(c.getAttribute("idx"))
+                val = c.getAttribute("val")
+                init_history.append( (idx, val) )
+                pass
+            except:
+                pass
+            pass
+        pass
+    init_history.sort(cmphist)
+    return

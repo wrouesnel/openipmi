@@ -18,6 +18,18 @@
 	* lib/entity.c: Modified MC refcounts to not be held over a
 	message.  Bad idea.
 
+	* lib/ipmi_lan.c: The OEM finished callback could return a NULL
+	connection if shutdown was occurring, handle that.
+
+	* swig/python/openipmigui/_cmdwin.py: Added history saving for the
+	command window.
+	* swig/python/openipmigui.py: ditto
+
+	* swig/python/openipmigui/_saveprefs.py: Clean up error handling.
+
+	* swig/python/openipmigui/gui.py: Clean up shutdown so that
+	domains are cleaned up no matter how the shutdown occurs.
+
 2006-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: Clear out the FRU settings if the FRU decode

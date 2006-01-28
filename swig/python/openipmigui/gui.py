@@ -51,7 +51,9 @@ id_st = 100
 
 class IPMITreeDummyItem:
     def __init__(self):
-        pass
+        return
+
+    pass
 
 class IPMITreeCtrl(gizmos.TreeListCtrl):
     def __init__(self, parent):
@@ -61,6 +63,7 @@ class IPMITreeCtrl(gizmos.TreeListCtrl):
         self.SetMainColumn(0)
         self.SetColumnWidth(0, init_treenamewidth)
         self.SetColumnWidth(1, 800)
+        return
 
     def OnCompareItems(self, item1, item2):
         t1 = self.GetItemText(item1)
@@ -70,28 +73,40 @@ class IPMITreeCtrl(gizmos.TreeListCtrl):
         if t1 == t2: return 0
         return 1
 
+    pass
+
 class IPMICloser:
     def __init__(self, ui, count):
         self.ui = ui
         self.count = count
+        return
     
     def domain_cb(self, domain):
         domain.close(self)
+        return
 
     def domain_close_done_cb(self):
         self.count = self.count - 1
         if (self.count == 0):
-            self.ui.Close(True)
+            _cmdwin.init_history = self.ui.cmdwindow.history
+            self.ui.Destroy()
+            pass
+        return
+    pass
 
 class IPMIGUI_Timer(wx.Timer):
     def __init__(self, ui):
         wx.Timer.__init__(self)
         self.ui = ui
         self.Start(refresh_timer_time, oneShot=True)
+        return
 
     def Notify(self):
         self.ui.Timeout()
         self.Start(refresh_timer_time, oneShot=True)
+        return
+
+    pass
 
 class IPMIGUI(wx.Frame):
     def __init__(self, mainhandler):
@@ -171,6 +186,8 @@ class IPMIGUI(wx.Frame):
         wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
         wx.EVT_TREE_ITEM_EXPANDED(self.tree, -1, self.TreeExpanded)
 
+        wx.EVT_CLOSE(self, self.OnClose)
+
         self.Show(True)
 
         self.last_scan = None
@@ -186,6 +203,7 @@ class IPMIGUI(wx.Frame):
             next = self.last_scan
         else:
             next = self.tree.GetFirstVisibleItem()
+            pass
         callcount = 0
         checkcount = 0
         while (callcount < 100) and (checkcount < 1000) and next.IsOk():
@@ -193,23 +211,34 @@ class IPMIGUI(wx.Frame):
             if (data != None) and (hasattr(data, "DoUpdate")):
                 callcount = callcount + 1
                 data.DoUpdate()
+                pass
             next = self.tree.GetNextVisible(next)
             checkcount = checkcount + 1
+            pass
             
         if next.IsOk():
             self.last_scan = next
         else:
             self.last_scan = None
+            pass
+        return
         
     def quit(self, event):
+        self.Close(True)
+        return
+
+    def OnClose(self, event):
         self.closecount = len(self.mainhandler.domains)
         if (self.closecount == 0):
-            self.Close(True)
+            _cmdwin.init_history = self.cmdwindow.history
+            self.Destroy()
             return
         closer = IPMICloser(self, self.closecount)
         ds = self.mainhandler.domains.values()
         for v in ds:
             v.domain_id.to_domain(closer)
+            pass
+        return
 
     def openDomain(self, event):
         dialog = _domainDialog.OpenDomainDialog(self.mainhandler)

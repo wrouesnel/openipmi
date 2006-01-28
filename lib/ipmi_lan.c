@@ -4106,6 +4106,11 @@ lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
     ipmi_msgi_t *rspi = cb_data;
     int         addr_num = (long) rspi->data4;
 
+    if (! ipmi) {
+	ipmi_mem_free(rspi);
+	return;
+    }
+
     rv = send_get_dev_id(ipmi, lan, addr_num, rspi);
     if (rv) {
         handle_connected(ipmi, rv, addr_num);
