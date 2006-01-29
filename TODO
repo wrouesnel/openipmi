@@ -13,3 +13,25 @@ chassis-related commands.
 
 Add the ability to add/remove connections in domains and IP addresses
 for LAN connections.
+
+SOL configuration support
+
+Firmware firewall configuration
+
+Event-only sensors
+
+xRC4 support
+
+Serial port support
+
+Various chassis controls (identify, front panel enables, power restore
+policy, power cycle interval, restart cause)
+
+Boot option configuration
+
+Settable sensor support (errata E372)
+
+Channel forwarding (errata E379)
+
+System Info support (errata E381)
+
