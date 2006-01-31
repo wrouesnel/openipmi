@@ -1589,11 +1589,9 @@ sol_ACK_timer_expired(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi_lock(transmitter->packet_lock);
 
-    if (transmitter->transmitted_packet != packet) {
+    if (transmitter->transmitted_packet != packet)
 	/* OK, the packet was ACKed, it seems... */
-	ipmi_unlock(transmitter->packet_lock);
-	return;
-    }
+	goto out_unlock;
 
     packet->transmit_attempts_remaining--;
     if (packet->transmit_attempts_remaining == 0) {
@@ -1617,7 +1615,9 @@ sol_ACK_timer_expired(void *cb_data, os_hnd_timer_id_t *id)
 	    /* FIXME: What is the right error value? */
 	}
     }
+ out_unlock:
     ipmi_unlock(transmitter->packet_lock);
+    sol_put_connection(conn);
 }
 
 
