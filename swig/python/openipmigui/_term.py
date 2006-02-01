@@ -64,22 +64,59 @@ class TerminalEmulator:
         self.height = 24
         self.width = 80
         self.InputHandler = self.Input0
+        self.parms = None
+        self.saved_pos = [1, 1]
+        self.scroll_region = [0, self.height-1]
         return
 
-    def check_scroll(self):
+    def check_scroll_down(self):
         redraw = False
-        while (self.y >= self.height):
-            redraw = True
+        starty = self.GetStartY()
+        endy = self.GetEndY()
+        if (self.y == endy):
             self.y -= 1
-            del(self.buf[0])
-            self.buf.append([ ])
-            i = self.height-1
+            del(self.buf[starty])
+            self.buf.insert(endy, [ ])
             for j in range(0, self.width):
-                self.buf[i].append(" ")
+                self.buf[endy].append(" ")
                 pass
             pass
-        if (redraw):
-            self.ScrollLines(0, self.height-1)
+            self.ScrollLines(starty, endy)
+        else:
+            y += 1
+            pass
+        return
+
+    def check_scroll_down(self):
+        redraw = False
+        starty = self.GetStartY()
+        endy = self.GetEndY()
+        if (self.y == endy):
+            del(self.buf[starty])
+            self.buf.insert(endy, [ ])
+            for j in range(0, self.width):
+                self.buf[endy].append(" ")
+                pass
+            pass
+            self.ScrollLines(starty, endy)
+        else:
+            self.y += 1
+            pass
+        return
+
+    def check_scroll_up(self):
+        starty = self.GetStartY()
+        endy = self.GetEndY()
+        if (self.y == starty):
+            del(self.buf[endy])
+            self.buf.insert(starty, [ ])
+            for j in range(0, self.width):
+                self.buf[starty].append(" ")
+                pass
+            pass
+            self.ScrollLinesUp(starty, endy)
+        else:
+            self.y -= 1
             pass
         return
 
@@ -120,8 +157,7 @@ class TerminalEmulator:
             # the cursor is sitting.
             self.restore_cursor()
             self.x = 0;
-            self.y += 1;
-            self.check_scroll()
+            self.check_scroll_down()
             pass
         while ((self.x + len(s)) >= self.width):
             # The string exceeds the line length, do it in pieces
@@ -130,9 +166,8 @@ class TerminalEmulator:
             self.buf[self.y][self.x:self.x+outlen] = s[0:outlen]
             self.output_at(self.x, self.y, outlen)
             self.x = 0;
-            self.y += 1;
             s = s[outlen:]
-            self.check_scroll()
+            self.check_scroll_down()
             pass
         outlen = len(s)
         self.buf[self.y][self.x:self.x+outlen] = s[0:outlen]
@@ -141,35 +176,70 @@ class TerminalEmulator:
         self.handle_cursor()
         return
 
+    def GetParm(self, n, default = 1):
+        if (self.parms == None):
+            return default
+        elif (len(self.parms) <= n):
+            return default
+        return self.parms[n]
+
+    # Get the current upper bound of the cursor, used for scroll regions.
+    def GetStartY(self):
+        if ((self.y >= self.scroll_region[0])
+            and (self.y <= self.scroll_region[1])):
+            return self.scroll_region[0]
+        return 0
+
+    # Get the current lower bound of the cursor, used for scroll regions.
+    def GetEndY(self):
+        if ((self.y >= self.scroll_region[0])
+            and (self.y <= self.scroll_region[1])):
+            return self.scroll_region[1]
+        return self.height - 1
+
     # After '\e['
     def Input2(self, c, s):
         if (c == 'A'): # Up
-            if (self.y > 0):
-                self.restore_cursor()
-                self.y -= 1
-                self.handle_cursor();
+            count = self.GetParm(0)
+            starty = self.GetStartY()
+            self.restore_cursor()
+            if (count > (self.y - starty)):
+                self.y = starty
+            else:
+                self.y -= count
                 pass
+            self.handle_cursor();
             pass
         elif (c == 'B'): # Down
-            if (self.y < (self.height-1)):
-                self.restore_cursor()
-                self.y += 1
-                self.handle_cursor();
+            count = self.GetParm(0)
+            endy = self.GetEndY()
+            self.restore_cursor()
+            if (count > (endy - self.y)):
+                self.y = endy
+            else:
+                self.y += count
                 pass
+            self.handle_cursor();
             pass
         elif (c == 'C'): # Right
-            if (self.x < (self.width-1)):
-                self.restore_cursor()
-                self.x += 1
-                self.handle_cursor();
+            count = self.GetParm(0)
+            self.restore_cursor()
+            if (count > (self.width - self.x - 1)):
+                self.x = self.width - 1
+            else:
+                self.x += count
                 pass
+            self.handle_cursor();
             pass
         elif (c == 'D'): # Right
-            if (self.x > 0):
-                self.restore_cursor()
-                self.x -= 1
-                self.handle_cursor();
+            count = self.GetParm(0)
+            self.restore_cursor()
+            if (count > self.x):
+                self.x = 0
+            else:
+                self.x -= count
                 pass
+            self.handle_cursor();
             pass
         elif ((c >= '0') and (c <= '9')):
             if (self.parms == None):
@@ -180,26 +250,35 @@ class TerminalEmulator:
                 self.parms[currparm] += int(c)
                 pass
             return "" # Stay in Input2
-        elif (c == ';'): # Right
+        elif (c == ';'): # Next parm
             if (self.parms == None):
                 self.parms = [ 0, 0 ]
             else:
                 self.parms.append(0)
                 pass
             return "" # Stay in Input2
-        elif (c == 'H'): # Move to position specified by self.parms
-            if (self.parms == None):
-                x = 1
-                y = 1
+        elif (c == 'r'): # Scroll region
+            y1 = self.GetParm(0, -1)
+            y2 = self.GetParm(1, -1)
+            print "A: " + str(y1) + " " + str(y2)
+            if ((y1 == -1) or (y2 == -1)):
+                if ((y1 == -1) and (y2 == -1)):
+                    self.scroll_region[0] = 0
+                    self.scroll_region[1] = self.height - 1
+                    pass
                 pass
-            elif (len(self.parms) == 1):
-                y = self.parms[0]
-                x = 1
+            elif ((y1 > y2) or (y1 < 1) or (y2 < 1)
+                  or (y1 >= (self.height+1)) or (y2 >= (self.height+1))):
+                # Bogus values, just ignre them.
                 pass
             else:
-                y = self.parms[0]
-                x = self.parms[1]
+                self.scroll_region[0] = y1 - 1
+                self.scroll_region[1] = y2 - 1
                 pass
+            pass
+        elif ((c == 'H') or (c == 'f')): # Move to position specified
+            y = self.GetParm(0)
+            x = self.GetParm(1)
             if (x < 1):
                 x = 1
             elif (x > self.width):
@@ -210,6 +289,71 @@ class TerminalEmulator:
             self.y = y - 1
             self.handle_cursor();
             pass
+        elif (c == 's'): # save cursor position
+            self.saved_pos[0] = self.x
+            self.saved_pos[1] = self.y
+            pass
+        elif (c == 'u'): # Restore cursor position
+            self.restore_cursor()
+            self.x = self.saved_pos[0]
+            self.y = self.saved_pos[1]
+            self.handle_cursor();
+            pass
+        elif (c == 'J'): # Clear screen area
+            mode = self.GetParm(0, -1)
+            if (mode == -1):
+                starty = self.y
+                length = self.height - self.y
+                pass
+            elif (mode == 1):
+                starty = 0
+                length = self.y + 1
+                pass
+            elif (mode == 2):
+                starty = 0
+                length = self.height
+                # Special, this one homes
+                self.x = 0
+                self.y = 0
+                pass
+            else:
+                starty = 0
+                length = 0
+                pass
+            for y in range(starty, starty + length):
+                for x in range(0, self.width):
+                    self.buf[y][x] = " "
+                    pass
+                self.output_at(0, y, self.width)
+                pass
+            self.handle_cursor();
+            pass
+        elif (c == 'K'): # Clear line
+            mode = self.GetParm(0, -1)
+            y = self.y
+            if (mode == -1): # To end of line
+                startx = self.x
+                length = self.width - self.x
+                pass
+            elif (mode == 1): # To start of line
+                startx = 0
+                length = self.x + 1
+                pass
+            elif (mode == 2): # Whole line
+                startx = 0
+                length = self.width
+                pass
+            else: # Ignore
+                startx = 0
+                length = 0
+                pass
+            for x in range(startx, startx+length):
+                self.buf[y][x] = " "
+                pass
+            self.output_at(startx, y, length)
+            self.handle_cursor();
+        elif (c == 'm'): # Graphics mode
+            pass
         self.InputHandler = self.Input0
         return ""
 
@@ -218,10 +362,17 @@ class TerminalEmulator:
         if (c == '['):
             self.parms = None
             self.InputHandler = self.Input2
+            return ""
+        elif (c == 'D'): # Scroll down
+            self.restore_cursor()
+            self.check_scroll_down()
+            self.handle_cursor();
+        elif (c == 'M'): # Scroll up
+            self.restore_cursor()
+            self.check_scroll_up()
+            self.handle_cursor();
             pass
-        else:
-            self.InputHandler = self.Input0
-            pass
+        self.InputHandler = self.Input0
         return ""
 
     # "normal" input mode
@@ -231,8 +382,7 @@ class TerminalEmulator:
         else:
             if (c == '\n'):
                 self.restore_cursor()
-                self.y += 1
-                self.check_scroll()
+                self.check_scroll_down()
                 self.handle_cursor();
                 pass
             elif (c == '\r'):
@@ -394,10 +544,23 @@ class Terminal(TerminalEmulator):
             self.textctrl.AppendText("\n%*s" % (self.width, "") )
             pass
         else:
-            pos = (y2+1) * (self.width+1)
+            # Not (y2+1), because we deleted a line
+            pos = y2 * (self.width+1)
             self.textctrl.Replace(pos, pos, "%*s\n" % (self.width, "") )
             pass
         self.ExposeArea(0, y2, self.width, 1)
+        return
+    
+    def ScrollLinesUp(self, y1, y2):
+        self.textctrl.Remove(y2 * (self.width+1), (y2+1) * (self.width+1))
+        if (y1 == self.height-1):
+            self.textctrl.AppendText("\n%*s" % (self.width, "") )
+            pass
+        else:
+            pos = y1 * (self.width+1)
+            self.textctrl.Replace(pos, pos, "%*s\n" % (self.width, "") )
+            pass
+        self.ExposeArea(0, y1, self.width, 1)
         return
     
     def SendBack(self, data):
@@ -412,7 +575,19 @@ class Terminal(TerminalEmulator):
     
     def HandleChar(self, event):
         key = event.GetKeyCode()
-        if (key <= 255):
+        if (event.ControlDown()):
+            if ((key >= 64) and (key <= 90)): # '@' 'A' .. 'Z'
+                s = "%c" % (key-64)
+                pass
+            elif ((key >= 97) and (key <= 122)): # 'a' .. 'z'
+                s = "%c" % (key-96)
+            elif (key < 32):
+                s = "%c" % (key)
+                pass
+            else:
+                return
+            pass
+        elif (key <= 255):
             s = "%c" % (key)
             pass
         elif (key == wx.WXK_UP):

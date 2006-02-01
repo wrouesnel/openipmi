@@ -1,3 +1,8 @@
+2006-02-01 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/_term.py: Lots of work on terminal
+	emulation and improving performance.
+
 2006-01-28 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/OpenIPMI_perl.c, swig/perl/OpenIPMI.h: Added the
