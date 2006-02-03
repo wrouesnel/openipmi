@@ -124,7 +124,8 @@ class TerminalEmulator:
     def output_at(self, x, y, slen):
         s = ""
         i = 0
-        last_mode = [ -1, -1, -1 ]
+        last_mode = [ 0, 0, 7 ]
+        lastx = 0
         while (i < slen):
             if (len(s) > 0):
                 if (last_mode != self.modes[y][x+i]):
@@ -263,7 +264,7 @@ class TerminalEmulator:
                 pass
             self.handle_cursor();
             pass
-        elif (c == '?'): # Not sure what this does
+        elif (c == '?'): # FIXME: Not sure what this does
             return "" # Stay in Input2
         elif ((c >= '0') and (c <= '9')):
             if (self.parms == None):
@@ -343,6 +344,9 @@ class TerminalEmulator:
             for y in range(starty, starty + length):
                 for x in range(0, self.width):
                     self.buf[y][x] = " "
+                    self.modes[y][x][0] = 0
+                    self.modes[y][x][1] = black
+                    self.modes[y][x][2] = white
                     pass
                 self.output_at(0, y, self.width)
                 pass
@@ -369,6 +373,9 @@ class TerminalEmulator:
                 pass
             for x in range(startx, startx+length):
                 self.buf[y][x] = " "
+                self.modes[y][x][0] = 0
+                self.modes[y][x][1] = black
+                self.modes[y][x][2] = white
                 pass
             self.output_at(startx, y, length)
             self.handle_cursor();
