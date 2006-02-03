@@ -241,6 +241,8 @@ class TerminalEmulator:
                 pass
             self.handle_cursor();
             pass
+        elif (c == '?'): # Not sure what this does
+            return "" # Stay in Input2
         elif ((c >= '0') and (c <= '9')):
             if (self.parms == None):
                 self.parms = [ int(c) ]
@@ -260,7 +262,6 @@ class TerminalEmulator:
         elif (c == 'r'): # Scroll region
             y1 = self.GetParm(0, -1)
             y2 = self.GetParm(1, -1)
-            print "A: " + str(y1) + " " + str(y2)
             if ((y1 == -1) or (y2 == -1)):
                 if ((y1 == -1) and (y2 == -1)):
                     self.scroll_region[0] = 0
@@ -380,6 +381,7 @@ class TerminalEmulator:
         if ((c >= ' ') and (c <= '~')):
             return s + c
         else:
+            self.output_str(s)
             if (c == '\n'):
                 self.restore_cursor()
                 self.check_scroll_down()

@@ -10698,6 +10698,27 @@ void set_cmdlang_event_handler(swig_cb handler);
     }
 }
 
+%{
+static char *sol_state_string(int val)
+{
+    switch (val) {
+    case ipmi_sol_state_closed:
+	return "closed";
+    case ipmi_sol_state_connecting:
+	return "connecting";
+    case ipmi_sol_state_connected:
+	return "connected";
+    case ipmi_sol_state_connected_ctu:
+	return "connected no char xfer";
+    case ipmi_sol_state_closing:
+	return "closing";
+    default:
+	return "unknown";
+    }
+}
+%}
+char *sol_state_string(int val);
+
 %extend ipmi_sol_conn_t
 {
     ~ipmi_sol_conn_t()

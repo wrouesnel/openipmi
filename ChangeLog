@@ -1,3 +1,7 @@
+2006-02-02 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/_SoL.py: Add in all the SoL handling.
+
 2006-02-01 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_term.py: Lots of work on terminal
