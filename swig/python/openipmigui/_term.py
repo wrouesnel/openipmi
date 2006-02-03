@@ -48,17 +48,25 @@ BOLD = 1
 UNDERLINE = 2
 INVERSE = 4
 BLINK = 8
+CONCEALED = 16
 
 class TerminalEmulator:
     def __init__(self):
         self.buf = [ ]
+        # Mode is a 2-d array of [ cflags, bg color, fg color ]
+        self.modes = [ ]
         # Style is (fg, bg, flags)
         for i in range(0, 24):
             self.buf.append([ ])
+            self.modes.append([ ])
             for j in range(0, 80):
                 self.buf[i].append(" ")
+                self.modes[i].append( [0, 0, 7] )
                 pass
             pass
+        self.cflags = 0
+        self.bg_color = black
+        self.fg_color = white
         self.x = 0
         self.y = 0
         self.height = 24
@@ -74,28 +82,17 @@ class TerminalEmulator:
         starty = self.GetStartY()
         endy = self.GetEndY()
         if (self.y == endy):
-            self.y -= 1
+            old = self.buf[starty]
             del(self.buf[starty])
-            self.buf.insert(endy, [ ])
+            self.buf.insert(endy, old)
+            old = self.modes[starty]
+            del(self.modes[starty])
+            self.modes.insert(endy, old)
             for j in range(0, self.width):
-                self.buf[endy].append(" ")
-                pass
-            pass
-            self.ScrollLines(starty, endy)
-        else:
-            y += 1
-            pass
-        return
-
-    def check_scroll_down(self):
-        redraw = False
-        starty = self.GetStartY()
-        endy = self.GetEndY()
-        if (self.y == endy):
-            del(self.buf[starty])
-            self.buf.insert(endy, [ ])
-            for j in range(0, self.width):
-                self.buf[endy].append(" ")
+                self.buf[endy][j] = " "
+                self.modes[endy][j][0] = 0
+                self.modes[endy][j][1] = black
+                self.modes[endy][j][2] = white
                 pass
             pass
             self.ScrollLines(starty, endy)
@@ -108,10 +105,14 @@ class TerminalEmulator:
         starty = self.GetStartY()
         endy = self.GetEndY()
         if (self.y == starty):
+            old = self.buf[endy]
             del(self.buf[endy])
-            self.buf.insert(starty, [ ])
+            self.buf.insert(starty, old)
             for j in range(0, self.width):
-                self.buf[starty].append(" ")
+                self.buf[starty][j] = ' '
+                self.modes[starty][j][0] = 0
+                self.modes[starty][j][1] = black
+                self.modes[starty][j][2] = white
                 pass
             pass
             self.ScrollLinesUp(starty, endy)
@@ -120,23 +121,39 @@ class TerminalEmulator:
             pass
         return
 
-    def output_at(self, x, y, len):
+    def output_at(self, x, y, slen):
         s = ""
-        for i in range(0, len):
+        i = 0
+        last_mode = [ -1, -1, -1 ]
+        while (i < slen):
+            if (len(s) > 0):
+                if (last_mode != self.modes[y][x+i]):
+                    # Character mode change, output what we have and switch.
+                    self.DrawText(last_mode[2], last_mode[1], last_mode[0],
+                                  x, y, s)
+                    s = ""
+                    pass
+                pass
+            else:
+                last_mode = self.modes[y][x+i]
+                lastx = x + i
+                pass
             s += self.buf[y][x+i]
+            i += 1
             pass
-        self.DrawText(white, black, 0, x, y, s)
+        self.DrawText(last_mode[2], last_mode[1], last_mode[0],
+                      lastx, y, s)
         return
 
     def handle_cursor(self):
         if (self.x == self.width):
-            self.DrawCursor(white, black, 0, self.x-1, self.y,
-                            self.buf[self.y][self.x-1])
-            pass
+            xpos = self.x - 1
         else:
-            self.DrawCursor(white, black, 0, self.x, self.y,
-                            self.buf[self.y][self.x])
+            xpos = self.x
             pass
+        mode = self.modes[self.y][xpos]
+        self.DrawCursor(mode[2], mode[1], mode[0], xpos, self.y,
+                        self.buf[self.y][xpos])
         return
 
     def restore_cursor(self):
@@ -159,7 +176,7 @@ class TerminalEmulator:
             self.x = 0;
             self.check_scroll_down()
             pass
-        while ((self.x + len(s)) >= self.width):
+        while ((self.x + len(s)) > self.width):
             # The string exceeds the line length, do it in pieces
             outlen = self.width - self.x
             do_scroll = True
@@ -171,6 +188,11 @@ class TerminalEmulator:
             pass
         outlen = len(s)
         self.buf[self.y][self.x:self.x+outlen] = s[0:outlen]
+        for i in range(self.x, self.x+outlen):
+            self.modes[self.y][i][0] = self.cflags
+            self.modes[self.y][i][1] = self.bg_color
+            self.modes[self.y][i][2] = self.fg_color
+            pass
         self.output_at(self.x, self.y, outlen)
         self.x += outlen
         self.handle_cursor()
@@ -313,9 +335,6 @@ class TerminalEmulator:
             elif (mode == 2):
                 starty = 0
                 length = self.height
-                # Special, this one homes
-                self.x = 0
-                self.y = 0
                 pass
             else:
                 starty = 0
@@ -354,6 +373,203 @@ class TerminalEmulator:
             self.output_at(startx, y, length)
             self.handle_cursor();
         elif (c == 'm'): # Graphics mode
+            i = 0
+            val = self.GetParm(i, -1)
+            while (val != -1):
+                if (val == 0):
+                    self.cflags = 0
+                    self.bg_color = black
+                    self.fg_color = white
+                elif (val == 1):
+                    self.cflags |= BOLD
+                elif (val == 4):
+                    self.cflags |= UNDERLINE
+                elif (val == 5):
+                    self.cflags |= BLINK
+                elif (val == 7):
+                    self.cflags |= INVERSE
+                elif (val == 8):
+                    self.cflags |= CONCEALED
+                elif ((val >= 30) and (val <= 37)):
+                    self.fg_color = val - 30
+                elif ((val >= 40) and (val <= 47)):
+                    self.bg_color = val - 40
+                    pass
+                i += 1
+                val = self.GetParm(i, -1)
+                pass
+            pass
+        elif (c == 'g'): # FIXME: \e[2g means clear tabs
+            pass
+        elif (c == 'P'): # delete parm characters (1 default)
+            count = self.GetParm(0, 1)
+            if (count > (self.width - self.x)):
+                count = self.width - self.x
+                pass
+            y = self.y
+            x = self.x
+            for i in range(0, count):
+                del self.buf[y][x]
+                self.buf[y].append(' ')
+                old = self.modes[y][x]
+                del self.modes[y][x]
+                old[0] = 0
+                old[1] = black
+                old[2] = white
+                self.modes[y].append(old)
+                pass
+            self.DeleteChars(x, y, count)
+            self.handle_cursor()
+            pass
+        elif (c == 'M'): # delete parm lines (1 default)
+            count = self.GetParm(0, 1)
+            if (count > (self.height - self.y)):
+                count = self.height - self.y
+                pass
+            for i in range(0, count):
+                old = self.buf[self.y]
+                del self.buf[self.y]
+                self.buf.append(old)
+                old = self.modes[self.y]
+                del self.modes[self.y]
+                self.modes.append(old)
+                for j in range(0, self.width):
+                    self.buf[self.height-1][j] = ' '
+                    self.modes[self.height-1][j][0] = 0
+                    self.modes[self.height-1][j][1] = black
+                    self.modes[self.height-1][j][2] = white
+                    pass
+                self.ScrollLines(self.y, self.height-1)
+                pass
+            self.handle_cursor()
+            pass
+        elif (c == 'L'): # insert parm lines (1 default)
+            self.restore_cursor()
+            count = self.GetParm(0, 1)
+            if (count > (self.height - self.y)):
+                count = self.height - self.y
+                pass
+            for i in range(0, count):
+                old = self.buf[self.height-1]
+                del self.buf[self.height-1]
+                self.buf.insert(self.y, old)
+                for j in range(0, self.width):
+                    self.buf[self.y][j] = ' '
+                    self.modes[self.y][j][0] = 0
+                    self.modes[self.y][j][1] = black
+                    self.modes[self.y][j][2] = white
+                    pass
+                self.ScrollLinesUp(self.y, self.height-1)
+                pass
+            self.handle_cursor()
+            pass
+        elif (c == 'Z'): # Move to previous tab stop
+            self.restore_cursor()
+            self.x = ((self.x-1) / 8) * 8
+            self.handle_cursor();
+            pass
+        elif (c == '@'): # insert parm chars (1 default)
+            self.restore_cursor()
+            count = self.GetParm(0, 1)
+            if (count > (self.width - self.x)):
+                count = self.width - self.x
+                pass
+            y = self.y
+            x = self.x
+            for i in range(0, count):
+                del self.buf[y][self.width-1]
+                old = self.modes[y][self.width-1]
+                del self.modes[y][self.width-1]
+                old[0] = 0
+                old[1] = black
+                old[2] = white
+                self.buf[y].insert(self.x, ' ')
+                self.modes[y].insert(self.x, old)
+                pass
+            self.InsertChars(x, y, count)
+            self.handle_cursor()
+            pass
+        elif (c == 'S'): # scroll forward parm lines (1 default)
+            self.restore_cursor()
+            count = self.GetParm(0, 1)
+            if (count > self.height):
+                count = self.height
+                pass
+            for i in range(0, count):
+                old = self.buf[0]
+                del self.buf[0]
+                self.buf.append(old)
+                old = self.modes[0]
+                del self.modes[0]
+                self.modes.append(old)
+                for j in range(0, self.width):
+                    self.buf[self.height-1][j] = ' '
+                    self.modes[self.height-1][j][0] = 0
+                    self.modes[self.height-1][j][1] = black
+                    self.modes[self.height-1][j][2] = white
+                    pass
+                self.ScrollLines(0, self.height-1)
+                pass
+            self.handle_cursor()
+            pass
+        elif (c == 'T'): # scroll back parm lines (1 default)
+            self.restore_cursor()
+            count = self.GetParm(0, 1)
+            if (count > self.height):
+                count = self.height
+                pass
+            for i in range(0, count):
+                old = self.buf[self.height-1]
+                del self.buf[self.height-1]
+                self.buf.insert(0, old)
+                old = self.modes[self.height-1]
+                del self.modes[self.height-1]
+                self.modes.insert(0, old)
+                for j in range(0, self.width):
+                    self.buf[0][j] = ' '
+                    self.modes[0][j][0] = 0
+                    self.modes[0][j][1] = black
+                    self.modes[0][j][2] = white
+                    pass
+                self.ScrollLinesUp(0, self.height-1)
+                pass
+            self.handle_cursor()
+            pass
+        elif (c == 'G'): # Move cursor to column parm (1 default)
+            self.restore_cursor()
+            pos = self.GetParm(0, 1)
+            if (pos > self.width):
+                pos = self.width
+                pass
+            elif (pos < 1):
+                return ""
+            self.x = pos - 1
+            self.handle_cursor()
+            pass
+        elif (c == 'd'): # Move cursor to line parm (1 default)
+            self.restore_cursor()
+            pos = self.GetParm(0, 1)
+            if (pos > self.height):
+                pos = self.height
+                pass
+            elif (pos < 1):
+                return ""
+            self.y = pos - 1
+            self.handle_cursor()
+            pass
+        elif (c == 'X'): # erase parm characters (1 default) (no cursor move)
+            count = self.GetParm(0, 1)
+            if (count > (self.height - self.y)):
+                count = self.height - self.y
+                pass
+            for i in range(0, count):
+                self.buf[self.y][self.x+i] = " "
+                self.modes[self.y][self.x+i][0] = 0
+                self.modes[self.y][self.x+i][1] = black
+                self.modes[self.y][self.x+i][2] = white
+                pass
+            self.output_at(self.x, self.y, count)
+            self.handle_cursor()
             pass
         self.InputHandler = self.Input0
         return ""
@@ -372,6 +588,8 @@ class TerminalEmulator:
             self.restore_cursor()
             self.check_scroll_up()
             self.handle_cursor();
+            pass
+        elif (c == 'H'): # FIXME: Set tabulator stop in all rows at current column
             pass
         self.InputHandler = self.Input0
         return ""
@@ -440,7 +658,6 @@ class TerminalEmulator:
         for i in range(y, y+h):
             self.output_at(x, i, w)
             pass
-        self.handle_cursor()
         return
 
     def Reset(self):
@@ -515,6 +732,7 @@ class Terminal(TerminalEmulator):
         self.textctrl.AppendText("%*s" % (self.width, "") )
 
         self.ExposeArea(0, 0, self.width, self.height)
+        self.handle_cursor()
 
         wx.EVT_CHAR(self.textctrl, self.HandleChar)
         return
@@ -530,7 +748,7 @@ class Terminal(TerminalEmulator):
             self.style.SetBackgroundColour(self.colors[bg_color])
             pass
         self.style.SetFont(self.fonts[flags & 3])
-        # FIXME - we don't handle blinking
+        # FIXME - we don't handle blinking or concealed
         self.textctrl.Replace(pos, pos+len(val), val)
         self.textctrl.SetStyle(pos, pos+len(val), self.style)
         return
@@ -563,6 +781,24 @@ class Terminal(TerminalEmulator):
             self.textctrl.Replace(pos, pos, "%*s\n" % (self.width, "") )
             pass
         self.ExposeArea(0, y1, self.width, 1)
+        return
+
+    def DeleteChars(self, x, y, len):
+        linepos = y * (self.width+1)
+        pos = linepos + x
+        linepos += self.width - 1
+        self.textctrl.Remove(pos, pos+len)
+        self.textctrl.Replace(linepos, linepos, "%*s" % (len, ""))
+        self.ExposeArea(self.width-len, y, len, 1)
+        return
+    
+    def InsertChars(self, x, y, len):
+        linepos = y * (self.width+1)
+        pos = linepos + x
+        linepos += self.width - 1
+        self.textctrl.Remove(linepos-len, linepos)
+        self.textctrl.Replace(pos, pos, "%*s" % (len, ""))
+        self.ExposeArea(x, y, len, 1)
         return
     
     def SendBack(self, data):

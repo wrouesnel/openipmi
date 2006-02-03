@@ -5,6 +5,9 @@
 	* swig/OpenIPMI.i: The nack_release function had an invalid
 	parameter.
 
+	* swig/python/openipmigui/_term.py: Finished out a lot of the ANSI
+	handling and added color support.
+
 2006-02-02 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_SoL.py: Add in all the SoL handling.
@@ -217,7 +220,7 @@
 	* swig/python/openipmigui/*.py, swig/python/openipmigui.py: Add a
 	command line interface to the GUI.
 
-	* lib/mc: Fixed a memory leak that occurred in certain situations
+	* lib/mc.c: Fixed a memory leak that occurred in certain situations
 	when a shutdown occurs during startup.
 
 2006-01-12 Corey Minyard <cminyard@mvista.com>
