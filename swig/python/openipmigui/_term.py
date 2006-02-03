@@ -591,7 +591,6 @@ class TerminalEmulator:
     # After an escape
     def Input1(self, c, s):
         if (c == '['):
-            self.parms = None
             self.InputHandler = self.Input2
             return ""
         elif (c == 'D'): # Scroll down
@@ -682,6 +681,7 @@ class TerminalEmulator:
                     pass
                 pass
             elif (c == '\x1b'):
+                self.parms = None
                 self.InputHandler = self.Input1
                 pass
             pass
