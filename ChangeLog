@@ -1,3 +1,10 @@
+2006-02-03 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_sol.c: Fixed some problem with nack handling.
+
+	* swig/OpenIPMI.i: The nack_release function had an invalid
+	parameter.
+
 2006-02-02 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_SoL.py: Add in all the SoL handling.

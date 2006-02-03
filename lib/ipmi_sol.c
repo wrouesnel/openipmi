@@ -2042,6 +2042,11 @@ ipmi_sol_release_nack(ipmi_sol_conn_t *conn)
     if (! conn->transmitter.nack_count) {
 	/* Time to kick things off again. */
 	conn->transmitter.oob_transient_op &= ~IPMI_SOL_OPERATION_NACK_PACKET;
+
+	/* This is here just in case we decide that the accepted
+	   character count in a NACK packet is the number of bytes
+	   nack-ed. */
+	conn->transmitter.accepted_character_count = 0;
 	transmitter_prod_nolock(&conn->transmitter);
     }
  out:
@@ -2416,9 +2421,6 @@ ipmi_sol_create(ipmi_con_t      *ipmi,
     xmitter->sol_conn = new_conn;
     xmitter->transmitted_packet = NULL;
     xmitter->latest_outgoing_seqnr = 1;
-    xmitter->packet_to_acknowledge = 0;
-    xmitter->accepted_character_count = 0;
-    xmitter->bytes_acked_at_head = 0;
 
     new_conn->ACK_retries = 10;
     new_conn->ACK_timeout_usec = 1000000;
@@ -3057,6 +3059,11 @@ ipmi_sol_open(ipmi_sol_conn_t *conn)
     if (!rv)
 	ipmi_sol_set_connection_state(conn, ipmi_sol_state_connecting, 0);
 
+    conn->transmitter.nack_count = 0;
+    conn->transmitter.packet_to_acknowledge = 0;
+    conn->transmitter.accepted_character_count = 0;
+    conn->transmitter.bytes_acked_at_head = 0;
+
     ipmi_unlock(conn->transmitter.packet_lock);
     return rv;
 }
@@ -3266,29 +3273,42 @@ process_packet(ipmi_sol_conn_t *conn,
 		character_count = data_len;
 		conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    }
-	    xmitter->in_recv_cb = 1;
-	    ipmi_unlock(xmitter->packet_lock);
-	    do_nack = do_data_received_callbacks
-		(conn, &packet[PACKET_DATA + data_len - character_count],
-		 character_count);
-	    ipmi_lock(xmitter->packet_lock);
-	    xmitter->in_recv_cb = 0;
+	    if (xmitter->nack_count) {
+		/* The user already sent a NACK, no reason to send any
+		   more til they release it. */
+	    } else {
+		xmitter->in_recv_cb = 1;
+		ipmi_unlock(xmitter->packet_lock);
+		do_nack = do_data_received_callbacks
+		    (conn, &packet[PACKET_DATA + data_len - character_count],
+		     character_count);
+		ipmi_lock(xmitter->packet_lock);
+		xmitter->in_recv_cb = 0;
 
-	    xmitter->nack_count += do_nack;
-	    if (xmitter->nack_count < 0) {
-		ipmi_log(IPMI_LOG_WARNING,
-			 "ipmi_sol.c(process_packet): "
-			 "Too many NACK releases.");
-		xmitter->nack_count = 0;
+		xmitter->nack_count += do_nack;
+		if (xmitter->nack_count < 0) {
+		    ipmi_log(IPMI_LOG_WARNING,
+			     "ipmi_sol.c(process_packet): "
+			     "Too many NACK releases.");
+		    xmitter->nack_count = 0;
+		}
+
+		if (conn->state == ipmi_sol_state_closed)
+		    return;
 	    }
-
-	    if (conn->state == ipmi_sol_state_closed)
-		return;
 
 	    conn->prev_received_seqnr = packet[PACKET_SEQNR];
 	    xmitter->packet_to_acknowledge = packet[PACKET_SEQNR];
 
 	    if (xmitter->nack_count) {
+		conn->prev_character_count = 0;
+		/* FIXME: It is unclear from the spec whether the
+		   accepted character count on a NACK should be 0 or
+		   the number of bytes not accepted.  Zero seems more
+		   reasonable, but neither works with my machine, it
+		   just keeps retransmitting then gives up when it
+		   gets a NACK. - Corey */
+		xmitter->accepted_character_count = 0;
 		ipmi_lock(xmitter->oob_op_lock);
 		xmitter->oob_transient_op |= IPMI_SOL_OPERATION_NACK_PACKET;
 		ipmi_unlock(xmitter->oob_op_lock);

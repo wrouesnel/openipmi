@@ -10863,9 +10863,9 @@ char *sol_state_string(int val);
      * For every NACK returned from the receive routine, this function
      * must be called to release the NACK.
      */
-    int release_nack(ipmi_sol_conn_t *conn)
+    int release_nack()
     {
-	return ipmi_sol_release_nack(conn);
+	return ipmi_sol_release_nack(self);
     }
 
     /*
