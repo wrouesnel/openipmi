@@ -75,6 +75,7 @@ class TerminalEmulator:
         self.parms = None
         self.saved_pos = [1, 1]
         self.scroll_region = [0, self.height-1]
+        self.keypad_alt = False
         return
 
     def check_scroll_down(self):
@@ -353,9 +354,9 @@ class TerminalEmulator:
             self.handle_cursor();
             pass
         elif (c == 'K'): # Clear line
-            mode = self.GetParm(0, -1)
+            mode = self.GetParm(0, 0)
             y = self.y
-            if (mode == -1): # To end of line
+            if (mode == 0): # To end of line
                 startx = self.x
                 length = self.width - self.x
                 pass
@@ -381,7 +382,7 @@ class TerminalEmulator:
             self.handle_cursor();
         elif (c == 'm'): # Graphics mode
             i = 0
-            val = self.GetParm(i, -1)
+            val = self.GetParm(i, 0)
             while (val != -1):
                 if (val == 0):
                     self.cflags = 0
@@ -406,7 +407,9 @@ class TerminalEmulator:
                 val = self.GetParm(i, -1)
                 pass
             pass
-        elif (c == 'g'): # FIXME: \e[2g means clear tabs
+        elif (c == 'g'):
+             # FIXME: \e[2g means clear tabs, so does 3g, 0g or just g
+             # means current tab
             pass
         elif (c == 'P'): # delete parm characters (1 default)
             count = self.GetParm(0, 1)
@@ -578,6 +581,10 @@ class TerminalEmulator:
             self.output_at(self.x, self.y, count)
             self.handle_cursor()
             pass
+        elif (c == 'c'): # Identify terminal
+            # Identify ourself as "linux"
+            self.HandleTerminalOutput("\x1b[?62;9;c")
+            pass
         self.InputHandler = self.Input0
         return ""
 
@@ -597,6 +604,45 @@ class TerminalEmulator:
             self.handle_cursor();
             pass
         elif (c == 'H'): # FIXME: Set tabulator stop in all rows at current column
+            pass
+        elif (c == 'c'): # reset terminal
+            for y in range(0, self.height):
+                for x in range(0, self.width):
+                    self.buf[y][x] = " "
+                    self.modes[y][x][0] = 0
+                    self.modes[y][x][1] = black
+                    self.modes[y][x][2] = white
+                    pass
+                self.output_at(0, y, self.width)
+                pass
+            self.x = 0
+            self.y = 0
+            self.cflags = 0
+            self.bg_color = black
+            self.fg_color = white
+            self.handle_cursor();
+            pass
+        elif ((c >= '0') and (c <= '9')):
+            if (self.parms == None):
+                self.parms = [ int(c) ]
+            else:
+                currparm = len(self.parms) - 1
+                self.parms[currparm] *= 10
+                self.parms[currparm] += int(c)
+                pass
+            return "" # Stay in Input1
+        elif (c == 'n'): # Terminal state
+            op = self.GetParm(0, 0)
+            if (op == 5): # Requesting terminal status
+                self.HandleTerminalOutput("\x1b0n") # We are ok
+            elif (op == 6): # Current cursor position
+                self.HandleTerminalOutput("\x1b%d;%dR" % self.y+1, self.x+1)
+            pass
+        elif (c == '='): # alternate keypad mode
+            self.keypat_alt = True
+            pass
+        elif (c == '>'): # alternate keypad mode off
+            self.keypat_alt = False
             pass
         self.InputHandler = self.Input0
         return ""
@@ -843,8 +889,112 @@ class Terminal(TerminalEmulator):
             s = "\x1b[C"
         elif (key == wx.WXK_LEFT):
             s = "\x1b[D"
+        elif (key == wx.WXK_F1):
+            s = "\x1bOP"
+        elif (key == wx.WXK_F2):
+            s = "\x1bOQ"
+        elif (key == wx.WXK_F3):
+            s = "\x1bOR"
+        elif (key == wx.WXK_F4):
+            s = "\x1bOS"
+        elif (key == wx.WXK_F5):
+            s = "\x1b[15~"
+        elif (key == wx.WXK_F6):
+            s = "\x1b[17~"
+        elif (key == wx.WXK_F7):
+            s = "\x1b[18~"
+        elif (key == wx.WXK_F8):
+            s = "\x1b[19~"
+        elif (key == wx.WXK_F9):
+            s = "\x1b[20~"
+        elif (key == wx.WXK_F10):
+            s = "\x1b[21~"
+        elif (key == wx.WXK_F11):
+            s = "\x1b[23~"
+        elif (key == wx.WXK_F12):
+            s = "\x1b[24~"
+        elif (key == wx.WXK_INSERT):
+            s = "\x1b[2~"
+        elif (key == wx.WXK_HOME):
+            s = "\x1b[OH"
+        elif (key == wx.WXK_UP):
+            s = "\x1b[5~"
+        elif (key == wx.WXK_END):
+            s = "\x1b[OF"
+        elif (key == wx.WXK_DOWN):
+            s = "\x1b[6~"
+        elif (self.keypad_alt):
+            if (key == wx.WXK_NUMPAD0):
+                s = "\x1bOp"
+            elif (key == wx.WXK_NUMPAD1):
+                s = "\x1bOq"
+            elif (key == wx.WXK_NUMPAD2):
+                s = "\x1bOr"
+            elif (key == wx.WXK_NUMPAD3):
+                s = "\x1bOs"
+            elif (key == wx.WXK_NUMPAD4):
+                s = "\x1bOt"
+            elif (key == wx.WXK_NUMPAD5):
+                s = "\x1bOu"
+            elif (key == wx.WXK_NUMPAD6):
+                s = "\x1bOv"
+            elif (key == wx.WXK_NUMPAD7):
+                s = "\x1bOw~"
+            elif (key == wx.WXK_NUMPAD8):
+                s = "\x1bOx"
+            elif (key == wx.WXK_NUMPAD9):
+                s = "\x1bOy~"
+            elif (key == wx.WXK_NUMPAD_ADD):
+                s = "\x1bOM"
+            elif (key == wx.WXK_NUMPAD_SUBTRACT):
+                s = "\x1bOm"
+            elif (key == wx.WXK_NUMPAD_DECIMAL):
+                s = "\x1bOn"
+            elif (key == wx.WXK_NUMPAD_ENTER):
+                s = "\x1bOM"
+            elif (key == wx.WXK_NUMPAD_MULTIPLY):
+                s = "\x1bOl"
+            elif (key == wx.WXK_NUMPAD_DIVIDE):
+                s = "\x1bOl"
+            else:
+                return
+            pass
         else:
-            return
+            if (key == wx.WXK_NUMPAD0):
+                s = "0"
+            elif (key == wx.WXK_NUMPAD1):
+                s = "1"
+            elif (key == wx.WXK_NUMPAD2):
+                s = "2"
+            elif (key == wx.WXK_NUMPAD3):
+                s = "3"
+            elif (key == wx.WXK_NUMPAD4):
+                s = "4"
+            elif (key == wx.WXK_NUMPAD5):
+                s = "5"
+            elif (key == wx.WXK_NUMPAD6):
+                s = "6"
+            elif (key == wx.WXK_NUMPAD7):
+                s = "7~"
+            elif (key == wx.WXK_NUMPAD8):
+                s = "8"
+            elif (key == wx.WXK_NUMPAD9):
+                s = "9~"
+            elif (key == wx.WXK_NUMPAD_ADD):
+                s = "+"
+            elif (key == wx.WXK_NUMPAD_SUBTRACT):
+                s = "-"
+            elif (key == wx.WXK_NUMPAD_DECIMAL):
+                s = "."
+            elif (key == wx.WXK_NUMPAD_ENTER):
+                s = "\x0d"
+            elif (key == wx.WXK_NUMPAD_MULTIPLY):
+                s = "*"
+            elif (key == wx.WXK_NUMPAD_DIVIDE):
+                s = "/"
+            else:
+                return
+            pass
         self.HandleTerminalOutput(s)
         return
     
