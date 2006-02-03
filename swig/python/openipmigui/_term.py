@@ -636,7 +636,7 @@ class TerminalEmulator:
             if (op == 5): # Requesting terminal status
                 self.HandleTerminalOutput("\x1b0n") # We are ok
             elif (op == 6): # Current cursor position
-                self.HandleTerminalOutput("\x1b%d;%dR" % self.y+1, self.x+1)
+                self.HandleTerminalOutput("\x1b%d;%dR" % (self.y+1, self.x+1))
             pass
         elif (c == '='): # alternate keypad mode
             self.keypat_alt = True
