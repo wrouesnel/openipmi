@@ -126,6 +126,10 @@ class SoL(wx.Frame):
         wx.EVT_MENU(self, id_st+17, self.SetAckTimeout);
         controlmenu.Append(id_st+18, "Set Ack Retries", "Set Ack Retries")
         wx.EVT_MENU(self, id_st+18, self.SetAckRetries);
+        self.breakmenu = controlmenu.Append(id_st+19, "Send Break",
+                                            "Send Break")
+        self.breakmenu.Enable(False)
+        wx.EVT_MENU(self, id_st+19, self.SendBreak);
         
         smenu = wx.Menu()
         smenu.AppendRadioItem(id_st+20, "Default", "Default")
@@ -251,6 +255,7 @@ class SoL(wx.Frame):
             self.ctsassertablemenu.Enable(False)
             self.dcd_dsr_menu.Enable(False)
             self.ri_menu.Enable(False)
+            self.breakmenu.Enable(False)
             for f in self.fmenus:
                 f.Enable(False)
                 pass
@@ -266,6 +271,7 @@ class SoL(wx.Frame):
             self.ctsassertablemenu.Enable(True)
             self.dcd_dsr_menu.Enable(True)
             self.ri_menu.Enable(True)
+            self.breakmenu.Enable(True)
             for f in self.fmenus:
                 f.Enable(True)
                 pass
@@ -450,6 +456,10 @@ class SoL(wx.Frame):
 
     def FlushAll(self, event):
         self.sol.flush(OpenIPMI.SOL_ALL_QUEUES)
+        return
+
+    def SendBreak(self, event):
+        self.sol.send_break()
         return
 
     def sol_data_received(self, conn, string):
