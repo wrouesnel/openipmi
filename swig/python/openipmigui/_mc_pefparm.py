@@ -1,6 +1,6 @@
-# _mc_solparm.py
+# _mc_pefparm.py
 #
-# openipmi GUI handling for MC SOL parms
+# openipmi GUI handling for MC PEF parms
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>
@@ -36,9 +36,9 @@ import wx
 import wx.gizmos as gizmos
 import _oi_logging
 
-id_st = 1400
+id_st = 1500
 
-class MCLPData:
+class MCPEFData:
     def __init__(self, parm, idx, pname, ptype, origval):
         self.parm = parm
         self.idx = idx
@@ -51,12 +51,12 @@ class MCLPData:
     pass
 
 class MCValueSet(wx.Dialog):
-    def __init__(self, mclp, idx, data):
+    def __init__(self, mcpef, idx, data):
         wx.Dialog.__init__(self, None, -1,
                            "Set value for " + data.pname,
                            size=wx.Size(300, 300),
                            style=wx.RESIZE_BORDER)
-        self.mclp = mclp
+        self.mcpef = mcpef
         self.idx = idx
         self.data = data
     
@@ -93,28 +93,26 @@ class MCValueSet(wx.Dialog):
 
     def ok(self, event):
         val = str(self.field.GetValue())
-        rv = self.mclp.lpc.set_val(self.data.parm, self.data.idx,
+        rv = self.mcpef.pefc.set_val(self.data.parm, self.data.idx,
                                    self.data.ptype, val)
         if (rv != 0):
             self.errstr.SetStatusText("Invalid data value", 0)
             return
         self.data.currval = val
-        self.mclp.listc.SetStringItem(self.idx, 1, val)
+        self.mcpef.listc.SetStringItem(self.idx, 1, val)
         self.Close()
         return
 
     pass
                  
-class MCSolParm(wx.Dialog):
-    def __init__(self, m, lp, lpc, channel):
+class MCPefParm(wx.Dialog):
+    def __init__(self, m, pef, pefc):
         wx.Dialog.__init__(self, None, -1,
-                           "SOLPARMS for " + m.name + " channel "
-                           + str(channel),
+                           "PEFPARMS for " + m.name,
                            size=wx.Size(500, 600),
                            style=wx.RESIZE_BORDER)
-        self.lp = lp
-        self.lpc = lpc
-        self.channel = channel
+        self.pef = pef
+        self.pefc = pefc
         
         sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -145,7 +143,7 @@ class MCSolParm(wx.Dialog):
         itemdata = [ ]
         while (rv):
             lastv = v[0]
-            rv = lpc.get_val(i, v)
+            rv = pefc.get_val(i, v)
             if (rv):
                 vals = rv.split(" ", 2)
                 if (len(vals) == 3):
@@ -153,12 +151,12 @@ class MCSolParm(wx.Dialog):
                     if (vals[1] == "integer"):
                         w = [ 0 ]
                         x = [ "" ]
-                        err = OpenIPMI.solconfig_enum_val(i, 0, w, x)
+                        err = OpenIPMI.pefconfig_enum_val(i, 0, w, x)
                         if (err != OpenIPMI.enosys):
                             vals[1] = "enum"
                             pass
                         pass
-                    data = MCLPData(i, lastv, vals[0], vals[1], vals[2])
+                    data = MCPEFData(i, lastv, vals[0], vals[1], vals[2])
                     itemdata.append(data)
                     if (v[0] == 0):
                         item = listc.InsertStringItem(sys.maxint, vals[0])
@@ -170,7 +168,7 @@ class MCSolParm(wx.Dialog):
                     if (vals[1] == "enum"):
                         nval = [ 0 ]
                         sval = [ "" ]
-                        OpenIPMI.solconfig_enum_val(data.parm, int(vals[2]),
+                        OpenIPMI.pefconfig_enum_val(data.parm, int(vals[2]),
                                                     nval, sval)
                         listc.SetStringItem(item, 1, sval[0])
                         pass
@@ -204,8 +202,8 @@ class MCSolParm(wx.Dialog):
         return
 
     def OnClose(self, event):
-        if (self.lp):
-            self.lp.clear_lock(self.lpc)
+        if (self.pef):
+            self.pef.clear_lock(self.pefc)
         self.Destroy();
         return
 
@@ -232,7 +230,7 @@ class MCSolParm(wx.Dialog):
             sval = [ "" ]
             val = 0;
             while (val != -1):
-                rv = OpenIPMI.solconfig_enum_val(data.parm, val, nval, sval)
+                rv = OpenIPMI.pefconfig_enum_val(data.parm, val, nval, sval)
                 if (rv == 0):
                     item = menu.Append(id_st + val,
                                        sval[0] + " (" + str(val) + ")")
@@ -259,7 +257,7 @@ class MCSolParm(wx.Dialog):
         idx = self.listc.GetItemData(self.current_position)
         data = self.itemdata[idx]
         val = event.GetId() - id_st
-        rv = self.lpc.set_val(data.parm, data.idx, "integer", str(val))
+        rv = self.pefc.set_val(data.parm, data.idx, "integer", str(val))
         if (rv != 0):
             self.errstr.SetStatusText("Could not set value to "+str(val)+": "
                                       + OpenIPMI.get_error_string(rv), 0)
@@ -267,7 +265,7 @@ class MCSolParm(wx.Dialog):
         data.currval = val
         nval = [ 0 ]
         sval = [ "" ]
-        OpenIPMI.solconfig_enum_val(data.parm, val, nval, sval)
+        OpenIPMI.pefconfig_enum_val(data.parm, val, nval, sval)
         self.listc.SetStringItem(self.current_position, 1, sval[0])
         return
     
@@ -279,7 +277,7 @@ class MCSolParm(wx.Dialog):
         else:
             newval = "true"
             pass
-        rv = self.lpc.set_val(data.parm, data.idx,
+        rv = self.pefc.set_val(data.parm, data.idx,
                               data.ptype, newval)
         if (rv != 0):
             self.errstr.SetStatusText("Could not toggle value: "
@@ -291,15 +289,15 @@ class MCSolParm(wx.Dialog):
         return
 
     def save(self, event):
-        rv = self.lp.set_config(self.lpc)
+        rv = self.pef.set_config(self.pefc)
         if (rv != 0):
             self.errstr.SetStatusText("Error setting config: "
                                       + OpenIPMI.get_error_string(rv), 0)
             return
 
-        # Don't forget to set self.lp to None when done so OnClose
+        # Don't forget to set self.pef to None when done so OnClose
         # doesn't clear it again
-        self.lp = None
+        self.pef = None
         self.Close()
         return
 

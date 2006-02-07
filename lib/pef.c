@@ -1768,7 +1768,7 @@ lock_done(ipmi_pef_t *pef,
 	pefc->lock_supported = 0;
     } else if (err == IPMI_IPMI_ERR_VAL(0x81)) {
 	/* Someone else has the lock, return EAGAIN. */
-	pefc->done(pef, err, NULL, pefc->cb_data);
+	pefc->done(pef, EAGAIN, NULL, pefc->cb_data);
 	ipmi_pef_free_config(pefc);
 	pef_put(pef);
 	return;
@@ -2582,6 +2582,13 @@ static pefparm_gendata_t gdata[] =
     F_STRIV(alert_string, ipmi_pefconfig_get_num_alert_strings),
 };
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(pefparm_gendata_t))
+
+int
+ipmi_pefconfig_enum_val(unsigned int parm, int val, int *nval,
+			const char **sval)
+{
+    return ENOSYS;
+}
 
 int
 ipmi_pefconfig_get_val(ipmi_pef_config_t *pefc,

@@ -14,8 +14,6 @@ chassis-related commands.
 Add the ability to add/remove connections in domains and IP addresses
 for LAN connections.
 
-SOL configuration support
-
 Firmware firewall configuration
 
 Event-only sensors

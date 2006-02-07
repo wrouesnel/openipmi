@@ -34,6 +34,7 @@ import wx
 import _oi_logging
 import _sel
 import _mc_chan
+import _mc_pefparm
 
 id_st = 600
 
@@ -44,6 +45,7 @@ class MCOpHandler:
         self.handler = handler
         self.boolval = boolval
         self.item = None
+        pass
 
     def SetItem(self, item):
         self.item = item
@@ -56,9 +58,12 @@ class MCOpHandler:
                     self.m.ui.set_item_text(self.item, None)
                     pass
                 return 0
+            pass
         rv = self.m.mc_id.to_mc(self)
         if (rv == 0):
             rv = self.rv
+            pass
+        return
 
     def DoUpdate(self):
         if (self.boolval):
@@ -72,6 +77,9 @@ class MCOpHandler:
 
     def mc_cb(self, mc):
         self.rv = getattr(mc, self.func)(self.handler)
+        return
+
+    pass
 
 class MCRefreshData:
     def __init__(self, m, func):
@@ -97,16 +105,21 @@ class MCRefreshData:
         self.m.ui.set_item_text(self.item, str(val))
         return
 
+    pass
+
 class MCSelSet:
     def __init__(self, m):
         self.m = m;
         self.refr = MCRefreshData(m, "get_sel_rescan_time")
+        return
 
     def DoUpdate(self):
         self.refr.DoUpdate()
+        return
 
     def SetItem(self, item):
         self.refr.SetItem(item)
+        return
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -115,6 +128,7 @@ class MCSelSet:
         wx.EVT_MENU(self.m.ui, id_st+1, self.modval)
         self.m.ui.PopupMenu(menu, self.m.ui.get_item_pos(eitem))
         menu.Destroy()
+        return
 
     def modval(self, event):
         self.init = True
@@ -143,9 +157,11 @@ class MCSelSet:
         wx.EVT_CLOSE(dialog, self.OnClose)
         dialog.CenterOnScreen();
         dialog.Show(True);
+        return
 
     def cancel(self, event):
         self.dialog.Close()
+        return
 
     def ok(self, event):
         val = self.field.GetValue()
@@ -156,9 +172,11 @@ class MCSelSet:
         self.init = False
         self.m.mc_id.to_mc(self)
         self.dialog.Close()
+        return
 
     def OnClose(self, event):
         self.dialog.Destroy()
+        return
 
     def mc_cb(self, mc):
         if self.init:
@@ -166,7 +184,21 @@ class MCSelSet:
         else:
             mc.set_sel_rescan_time(self.ival)
             self.refr.DoUpdate()
+            pass
+        return
 
+    pass
+
+class PEFLockClearer:
+    def __init__(self, mc):
+        self.pef = mc.get_pef(self)
+        return
+
+    def got_pef_cb(self, pef, err):
+        pef.clear_lock();
+        return
+
+    pass
         
 class MC:
     def __init__(self, d, mc):
@@ -240,6 +272,21 @@ class MC:
         self.ee_refr = self.add_refr_item("Events Enabled",
                                  MCRefreshData(self, "get_events_enable"))
         self.add_refr_item("SEL Rescan Time", MCSelSet(self))
+
+        # Check for PEF capability, send a Get PEF Capabilities cmd
+        self.has_pef = False
+        mc.send_command(0, 4, 0x10, [ ], self)
+        return
+
+    def mc_cmd_cb(self, mc, netfn, cmd, rsp):
+        if (rsp[0] != 0):
+            # Error
+            return
+        if (len(rsp) < 4):
+            # Response too small
+            return
+        self.has_pef = True
+        return
 
     def __str__(self):
         return self.name
@@ -322,6 +369,12 @@ class MC:
             item = menu.Append(id_st+16, "Refetch SDRs")
             wx.EVT_MENU(self.ui, id_st+16, self.RefetchSDRsHandler)
             pass
+        if self.has_pef:
+            item = menu.Append(id_st+20, "PEF Parms")
+            wx.EVT_MENU(self.ui, id_st+20, self.PEFParms)
+            item = menu.Append(id_st+21, "Clear PEF Lock")
+            wx.EVT_MENU(self.ui, id_st+21, self.PEFLockClear)
+            pass
         item = menu.Append(id_st+17, "Cold Reset")
         wx.EVT_MENU(self.ui, id_st+17, self.ColdResetHandler)
         item = menu.Append(id_st+18, "Warm Reset")
@@ -372,6 +425,16 @@ class MC:
         self.mc_id.to_mc(self)
         return
 
+    def PEFParms(self, event):
+        self.cb_state = "pef_parms"
+        self.mc_id.to_mc(self)
+        return
+
+    def PEFLockClear(self, event):
+        self.cb_state = "pef_lock_clear"
+        self.mc_id.to_mc(self)
+        return
+
     def mc_cb(self, mc):
         if (self.cb_state == "enable_events"):
             mc.set_events_enable(1, self)
@@ -391,7 +454,39 @@ class MC:
             mc.reread_sel()
         elif (self.cb_state == "channel_info"):
             _mc_chan.MCChan(self, mc)
+        elif (self.cb_state == "pef_parms"):
+            pp = mc.get_pef(self)
+            if (pp == None):
+                self.ui.ReportError("Unable to allocate PEF config");
+                return
+        elif (self.cb_state == "pef_lock_clear"):
+            PEFLockClearer(mc)
             pass
+        return
+
+    def got_pef_cb(self, pef, err):
+        if (err):
+            self.ui.ReportError("Error fetching PEF: " +
+                                OpenIPMI.get_error_string(err))
+            return
+        rv = pef.get_config(self)
+        if (rv):
+            self.ui.ReportError("Error starting PEF config fetch: " +
+                                OpenIPMI.get_error_string(rv))
+        return
+
+    def pef_got_config_cb(self, pef, err, pefconfig):
+        if (err):
+            if (err == OpenIPMI.eagain):
+                self.ui.ReportError("PEF already locked by another user, "
+                                    "Try clearing the lock.")
+                pass
+            else:
+                self.ui.ReportError("Error fetching PEF config: " +
+                                    OpenIPMI.get_error_string(err))
+                pass
+            return
+        _mc_pefparm.MCPefParm(self, pef, pefconfig)
         return
 
     def mc_events_enable_cb(self, mc, err):

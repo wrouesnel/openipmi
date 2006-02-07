@@ -34,7 +34,7 @@ import OpenIPMI
 import wx
 import sys
 
-id_st = 600
+id_st = 1300
 
 class EventInfo:
     def __init__(self):

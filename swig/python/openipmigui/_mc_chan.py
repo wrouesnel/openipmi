@@ -99,7 +99,7 @@ class MCChanInfo:
             # Error
             self.mcchan.done_one()
             return
-        if (len(rsp) < 0):
+        if (len(rsp) < 9):
             # Eh?  response is too small
             self.mcchan.done_one()
             return

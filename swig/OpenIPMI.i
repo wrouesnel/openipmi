@@ -3371,6 +3371,12 @@ pef_str_to_parm(char *str)
     return ipmi_pefconfig_str_to_parm(str);
 }
 
+static int
+pefconfig_enum_val(int parm, int val, int *nval, const char **sval)
+{
+    return ipmi_lanconfig_enum_val(parm, val, nval, sval);
+}
+
 static const char *
 get_threshold_access_support_string(int val)
 {
@@ -3624,6 +3630,9 @@ int lanconfig_enum_val(int parm, int val, int *nval, const char **sval);
 /* Convert between pef string names and parm numbers. */
 char *pef_parm_to_str(int parm);
 int pef_str_to_parm(char *str);
+
+/* Used to discover enum values for lanparms. */
+int pefconfig_enum_val(int parm, int val, int *nval, const char **sval);
 
 /* Convert between SoL string names and parm numbers. */
 char *solparm_parm_to_str(int parm);
