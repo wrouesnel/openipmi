@@ -150,6 +150,14 @@ class MCSolParm(wx.Dialog):
                 vals = rv.split(" ", 2)
                 if (len(vals) == 3):
                     # Valid parm
+                    if (vals[1] == "integer"):
+                        w = [ 0 ]
+                        x = [ "" ]
+                        err = OpenIPMI.solconfig_enum_val(i, 0, w, x)
+                        if (err != OpenIPMI.enosys):
+                            vals[1] = "enum"
+                            pass
+                        pass
                     data = MCLPData(i, lastv, vals[0], vals[1], vals[2])
                     itemdata.append(data)
                     if (v[0] == 0):
@@ -159,7 +167,16 @@ class MCSolParm(wx.Dialog):
                                                       vals[0] + "[" +
                                                       str(lastv) + "]")
                         pass
-                    listc.SetStringItem(item, 1, vals[2])
+                    if (vals[1] == "enum"):
+                        nval = [ 0 ]
+                        sval = [ "" ]
+                        OpenIPMI.solconfig_enum_val(data.parm, int(vals[2]),
+                                                    nval, sval)
+                        listc.SetStringItem(item, 1, sval[0])
+                        pass
+                    else:
+                        listc.SetStringItem(item, 1, vals[2])
+                        pass
                     listc.SetItemData(item, len(itemdata)-1)
                     if (v[0] == 0):
                         i += 1
@@ -210,6 +227,20 @@ class MCSolParm(wx.Dialog):
         if (data.ptype == "bool"):
             item = menu.Append(id_st+1, "Toggle Value")
             wx.EVT_MENU(menu, id_st+1, self.togglevalue)
+        elif (data.ptype == "enum"):
+            nval = [ 0 ]
+            sval = [ "" ]
+            val = 0;
+            while (val != -1):
+                rv = OpenIPMI.solconfig_enum_val(data.parm, val, nval, sval)
+                if (rv == 0):
+                    item = menu.Append(id_st + val,
+                                       sval[0] + " (" + str(val) + ")")
+                    wx.EVT_MENU(menu, id_st + val, self.setenum)
+                    pass
+                val = nval[0];
+                pass
+            pass
         else:
             item = menu.Append(id_st+2, "Set Value")
             wx.EVT_MENU(menu, id_st+2, self.setvalue)
@@ -224,6 +255,22 @@ class MCSolParm(wx.Dialog):
         MCValueSet(self, idx, data)
         return
 
+    def setenum(self, event):
+        idx = self.listc.GetItemData(self.current_position)
+        data = self.itemdata[idx]
+        val = event.GetId() - id_st
+        rv = self.lpc.set_val(data.parm, data.idx, "integer", str(val))
+        if (rv != 0):
+            self.errstr.SetStatusText("Could not set value to "+str(val)+": "
+                                      + OpenIPMI.get_error_string(rv), 0)
+            return
+        data.currval = val
+        nval = [ 0 ]
+        sval = [ "" ]
+        OpenIPMI.solconfig_enum_val(data.parm, val, nval, sval)
+        self.listc.SetStringItem(self.current_position, 1, sval[0])
+        return
+    
     def togglevalue(self, event):
         idx = self.listc.GetItemData(self.current_position)
         data = self.itemdata[idx]

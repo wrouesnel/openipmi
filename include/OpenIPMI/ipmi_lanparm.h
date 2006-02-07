@@ -220,6 +220,17 @@ int ipmi_lanconfig_set_val(ipmi_lan_config_t *lanc,
 			   unsigned int      ival,
 			   unsigned char     *dval,
 			   unsigned int      dval_len);
+/* If the value is an integer, this can be used to determine if it is
+   an enumeration and what the values are.  If the parm is not an
+   enumeration, this will return ENOSYS for the parm.  Otherwise, if
+   you pass in zero, you will get either the first enumeration value,
+   or EINVAL if zero is not a valid enumeration, but there are others.
+   If this returns EINVAL or 0, nval will be set to the next valid
+   enumeration value, or -1 if val is the last or past the last
+   enumeration value.  If this returns 0, val will be set to the
+   string value for the enumeration. */
+int ipmi_lanconfig_enum_val(unsigned int parm, int val, int *nval,
+			    const char **sval);
 /* Free data from ipmi_lanconfig_get_val(). */
 void ipmi_lanconfig_data_free(void *data);
 /* Convert a string to a lanconfig parm number.  Returns -1 if the

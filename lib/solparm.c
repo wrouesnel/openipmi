@@ -1534,6 +1534,92 @@ static solparm_gendata_t gdata[] =
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(solparm_gendata_t))
 
 int
+ipmi_solconfig_enum_val(unsigned int parm, int val, int *nval,
+			const char **sval)
+{
+    char *rval;
+    int  rnval;
+
+    switch (parm) {
+    case 3: /* privilege level */
+	if (val < 2) {
+	    if (nval)
+		*nval = 2;
+	    return EINVAL;
+	}
+
+	switch (val) {
+	case 2:
+	    rval = "user";
+	    rnval = 3;
+	    break;
+	case 3:
+	    rval = "operator";
+	    rnval = 4;
+	    break;
+	case 4:
+	    rval = "admin";
+	    rnval = 5;
+	    break;
+	case 5:
+	    rval = "oem";
+	    rnval = -1;
+	    break;
+	default:
+	    if (*nval)
+		*nval = -1;
+	    return EINVAL;
+	}
+	break;
+
+    case 8: case 9:
+	if (val < 6) {
+	    if (nval)
+		*nval = 6;
+	    return EINVAL;
+	}
+
+	switch (val) {
+	case 6:
+	    rval = "9600";
+	    rnval = 7;
+	    break;
+	case 7:
+	    rval = "19.2K";
+	    rnval = 8;
+	    break;
+	case 8:
+	    rval = "38.4K";
+	    rnval = 9;
+	    break;
+	case 9:
+	    rval = "57.6K";
+	    rnval = 10;
+	    break;
+	case 10:
+	    rval = "115.2K";
+	    rnval = -1;
+	    break;
+	default:
+	    if (*nval)
+		*nval = -1;
+	    return EINVAL;
+	}
+	break;
+
+    default:
+	return ENOSYS;
+    }
+
+
+    if (sval)
+	*sval = rval;
+    if (nval)
+	*nval = rnval;
+    return 0;
+}
+
+int
 ipmi_solconfig_get_val(ipmi_sol_config_t *solc,
 		       unsigned int      parm,
 		       const char        **name,

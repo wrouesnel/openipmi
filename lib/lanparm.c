@@ -2498,6 +2498,53 @@ static lanparm_gendata_t gdata[] =
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(lanparm_gendata_t))
 
 int
+ipmi_lanconfig_enum_val(unsigned int parm, int val, int *nval,
+			const char **sval)
+{
+    char *rval;
+    int  rnval;
+    if (parm != 5) /* ip_addr_source */
+	return ENOSYS;
+    if (val < 0) {
+	if (nval)
+	    *nval = 0;
+	return EINVAL;
+    }
+    switch (val) {
+    case 0:
+	rval = "unspecified";
+	rnval = 1;
+	break;
+    case 1:
+	rval = "manually configured";
+	rnval = 2;
+	break;
+    case 2:
+	rval = "DHCP";
+	rnval = 3;
+	break;
+    case 3:
+	rval = "BIOS configured";
+	rnval = 4;
+	break;
+    case 4:
+	rval = "other protocol";
+	rnval = -1;
+	break;
+    default:
+	if (*nval)
+	    *nval = -1;
+	return EINVAL;
+    }
+
+    if (sval)
+	*sval = rval;
+    if (nval)
+	*nval = rnval;
+    return 0;
+}
+
+int
 ipmi_lanconfig_get_val(ipmi_lan_config_t *lanc,
 		       unsigned int      parm,
 		       const char        **name,

@@ -82,10 +82,34 @@ class MCChanInfo:
         if (not err):
             self.info = info;
             self.mcchan.info[self.idx]["info"] = self
+            v = [ 0 ]
+            rv = info.get_medium(v)
+            if ((not rv) and (v[0] == OpenIPMI.CHANNEL_MEDIUM_8023_LAN)):
+                # Test for SoL with get channel payload support cmd
+                rv = mc.send_command(0, 6, 0x4e, [ self.idx ], self)
+                if (not rv):
+                    return
+                pass
             pass
         self.mcchan.done_one()
         return
-    
+
+    def mc_cmd_cb(self, mc, netfn, cmd, rsp):
+        if (rsp[0] != 0):
+            # Error
+            self.mcchan.done_one()
+            return
+        if (len(rsp) < 0):
+            # Eh?  response is too small
+            self.mcchan.done_one()
+            return
+        if (rsp[1] & 0x2):
+            # We have SoL support
+            self.mcchan.info[self.idx]["SoL"] = True
+            pass
+        self.mcchan.done_one()
+        return
+
     pass
 
 class MCChanData:
@@ -94,6 +118,7 @@ class MCChanData:
         self.mcchan = mcchan
         # Assume this unless told otherwise
         self.medium = OpenIPMI.CHANNEL_MEDIUM_IPMB
+        self.has_sol_set = False
         return
 
     def HandleMenu(self, event, eitem, point):
@@ -105,10 +130,12 @@ class MCChanData:
             wx.EVT_MENU(menu, id_st+3, self.lanparms)
             item = menu.Append(id_st+4, "Clear LANPARM lock")
             wx.EVT_MENU(menu, id_st+4, self.clr_lanparm_lock)
-            item = menu.Append(id_st+5, "SoLPARMS")
-            wx.EVT_MENU(menu, id_st+5, self.solparms)
-            item = menu.Append(id_st+6, "Clear SoLPARM lock")
-            wx.EVT_MENU(menu, id_st+6, self.clr_solparm_lock)
+            if ("SoL" in self.mcchan.info[self.idx]):
+                item = menu.Append(id_st+5, "SoLPARMS")
+                wx.EVT_MENU(menu, id_st+5, self.solparms)
+                item = menu.Append(id_st+6, "Clear SoLPARM lock")
+                wx.EVT_MENU(menu, id_st+6, self.clr_solparm_lock)
+                pass
             pass
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()

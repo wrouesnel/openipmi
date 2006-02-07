@@ -227,6 +227,9 @@ class SoL(wx.Frame):
 
     def domain_cb(self, domain):
         self.sol = domain.create_sol(self.cnum, self)
+        if (self.sol == None):
+            self.ui.ReportError("Unable to open SoL connection")
+            return
         self.dname = domain.get_name()
         return
             

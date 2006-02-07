@@ -1,3 +1,22 @@
+2006-02-07 Corey Minyard <cminyard@mvista.com>
+
+	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Add a way to
+	detect if a parm is an enum and get the enum string values.
+	* lib/solparm.c, include/OpenIPMI/ipmi_solparm.h: ditto
+
+	* swig/OpenIPMI.i: Add the new enum interfaces for lanparm and
+	solparm.
+
+	* swig/python/openipmigui/_SoL.py: Add an error report if SoL
+	won't work on an interface.
+
+	* swig/python/openipmigui/_mc_chan.py: Add support for detecting
+	if an MC supports SoL before offering solparm configuration.
+	
+	* swig/python/openipmigui/_mc_lanparm.py: Add support for handling
+	enum values.
+	* swig/python/openipmigui/_mc_lanparm.py: ditto
+
 2006-02-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/solparm.c, include/OpenIPMI/ipmi_solparm.c: Added
