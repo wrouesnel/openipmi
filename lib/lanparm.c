@@ -2391,7 +2391,7 @@ typedef struct lanparm_gendata_s
     unsigned int (*iv_cnt)(ipmi_lan_config_t *lanc);
 } lanparm_gendata_t;
 
-unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
+static unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
 {
     return 5;
 }
@@ -2605,8 +2605,6 @@ ipmi_lanconfig_set_val(ipmi_lan_config_t *lanc,
     switch (gdata[parm].datatype) {
     case IPMI_LANCONFIG_INT:
     case IPMI_LANCONFIG_BOOL:
-	if (!ival)
-	    break;
 	if (gdata[parm].u.ival.sval)
 	    rv = gdata[parm].u.ival.sval(lanc, ival);
 	else if (gdata[parm].u.ival.sval_v)

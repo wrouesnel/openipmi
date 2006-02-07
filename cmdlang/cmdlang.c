@@ -44,6 +44,7 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_lanparm.h>
+#include <OpenIPMI/ipmi_solparm.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_auth.h>
@@ -429,6 +430,103 @@ ipmi_cmdlang_lanparm_handler(ipmi_cmd_info_t *cmd_info)
     }
 
     for_each_lanparm(cmd_info, domain, class, obj, cmd_info->handler_data,
+		 cmd_info);
+}
+
+/*
+ * Handling for iterating SOLPARMs.
+ */
+typedef struct solparm_iter_info_s
+{
+    char                *cmdstr;
+    ipmi_solparm_ptr_cb handler;
+    void                *cb_data;
+    ipmi_cmd_info_t     *cmd_info;
+} solparm_iter_info_t;
+
+static void
+for_each_solparm_handler(ipmi_solparm_t *solparm, void *cb_data)
+{
+    solparm_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            name[IPMI_SOLPARM_NAME_LEN];
+    char            *c;
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_solparm_get_name(solparm, name, sizeof(name));
+
+    c = strrchr(name, '.');
+    if (!c)
+	goto out_err;
+    c++;
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, c) == 0))
+	info->handler(solparm, info->cb_data);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(name,
+			    "cmdlang.c(for_each_solparm_handler)",
+			    "Bad SOLPARM name", EINVAL);
+}
+
+static void
+for_each_solparm_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_solparm_iterate_solparms(domain, for_each_solparm_handler, cb_data);
+}
+
+static void
+for_each_solparm(ipmi_cmd_info_t *cmd_info,
+	     char            *domain,
+	     char            *class,
+	     char            *obj,
+	     ipmi_solparm_ptr_cb handler,
+	     void            *cb_data)
+{
+    solparm_iter_info_t info;
+
+    if (class) {
+	cmd_info->cmdlang->errstr = "Invalid SOLPARM";
+	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_solparm)";
+	return;
+    }
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
+    info.cmdstr = obj;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_solparm_domain_handler, &info);
+}
+
+void
+ipmi_cmdlang_solparm_handler(ipmi_cmd_info_t *cmd_info)
+{
+    char *domain, *class, *obj;
+
+    if (cmd_info->curr_arg >= cmd_info->argc) {
+	domain = class = obj = NULL;
+    } else {
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
+	    cmd_info->cmdlang->errstr = "Invalid SOLPARM";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_solparm_handler)";
+	    return;
+	}
+	*obj = '\0';
+	obj++;
+	cmd_info->curr_arg++;
+    }
+
+    for_each_solparm(cmd_info, domain, class, obj, cmd_info->handler_data,
 		 cmd_info);
 }
 
@@ -2627,8 +2725,10 @@ int ipmi_cmdlang_entity_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_mc_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_pet_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_lanparm_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_solparm_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_fru_init(os_handler_t *os_hnd);
 void ipmi_cmdlang_lanparm_shutdown();
+void ipmi_cmdlang_solparm_shutdown();
 int ipmi_cmdlang_pef_init(os_handler_t *os_hnd);
 void ipmi_cmdlang_pef_shutdown();
 int ipmi_cmdlang_sensor_init(os_handler_t *os_hnd);
@@ -2656,6 +2756,9 @@ ipmi_cmdlang_init(os_handler_t *os_hnd)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_lanparm_init(os_hnd);
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_solparm_init(os_hnd);
     if (rv) return rv;
 
     rv = ipmi_cmdlang_fru_init(os_hnd);
@@ -2698,6 +2801,7 @@ ipmi_cmdlang_cleanup(void)
 {
     ipmi_cmdlang_pef_shutdown();
     ipmi_cmdlang_lanparm_shutdown();
+    ipmi_cmdlang_solparm_shutdown();
     cleanup_level(cmd_list);
 }
 

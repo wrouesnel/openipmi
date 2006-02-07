@@ -52,6 +52,7 @@
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_sol.h>
+#include <OpenIPMI/ipmi_solparm.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 
@@ -2316,8 +2317,8 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
 	swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2353,8 +2354,8 @@ lanparm_set_config(ipmi_lanparm_t    *lanparm,
 	swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2370,8 +2371,8 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
 	swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(lanparm_ref);
     }
-    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2418,8 +2419,8 @@ pef_set_parm(ipmi_pef_t *pef,
 	swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
@@ -2455,8 +2456,8 @@ pef_set_config(ipmi_pef_t    *pef,
 	swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
@@ -2472,8 +2473,8 @@ pef_clear_lock(ipmi_pef_t    *pef,
 	swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
+	swig_free_ref(pef_ref);
     }
-    swig_free_ref(pef_ref);
 }
 
 static void
@@ -2653,6 +2654,95 @@ sol_flush_complete_cb(ipmi_sol_conn_t *conn,
     deref_swig_cb_val(cb);
 }
 
+static void
+solparm_get_parm(ipmi_solparm_t *solparm,
+		 int            err,
+		 unsigned char  *data,
+		 unsigned int   data_len,
+		 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    solparm_ref;
+
+    solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
+    swig_call_cb(cb, "solparm_got_parm_cb", "%p%d%*s", &solparm_ref, err,
+		 data_len, (char *) data);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(solparm_ref);
+}
+
+static void
+solparm_set_parm(ipmi_solparm_t *solparm,
+		 int            err,
+		 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    solparm_ref;
+
+    if (cb) {
+	solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
+	swig_call_cb(cb, "solparm_set_parm_cb", "%p%d", &solparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+	swig_free_ref(solparm_ref);
+    }
+}
+
+static void
+solparm_get_config(ipmi_solparm_t    *solparm,
+		   int               err,
+		   ipmi_sol_config_t *config,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    solparm_ref;
+    swig_ref    config_ref;
+
+    solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
+    config_ref = swig_make_ref_destruct(config, ipmi_sol_config_t);
+    swig_call_cb(cb, "solparm_got_config_cb", "%p%d%p", &solparm_ref, err,
+		 &config_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(solparm_ref);
+    swig_free_ref(config_ref);
+}
+
+static void
+solparm_set_config(ipmi_solparm_t    *solparm,
+		   int               err,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    solparm_ref;
+
+    if (cb) {
+	solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
+	swig_call_cb(cb, "solparm_set_config_cb", "%p%d", &solparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+	swig_free_ref(solparm_ref);
+    }
+}
+
+static void
+solparm_clear_lock(ipmi_solparm_t    *solparm,
+		   int               err,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    solparm_ref;
+
+    if (cb) {
+	solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
+	swig_call_cb(cb, "solparm_clear_lock_cb", "%p%d", &solparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+	swig_free_ref(solparm_ref);
+    }
+}
+
 %}
 
 typedef struct {
@@ -2729,6 +2819,12 @@ typedef struct {
 
 typedef struct {
 } ipmi_sol_conn_t;
+
+typedef struct {
+} ipmi_sol_config_t;
+
+typedef struct {
+} ipmi_solparm_t;
 
 %inline %{
 void enable_debug_malloc()
@@ -3322,6 +3418,18 @@ authtype_string(int val)
     return ipmi_authtype_string(val);
 }
 
+static const char *
+solparm_parm_to_str(int parm)
+{
+    return ipmi_solconfig_parm_to_str(parm);
+}
+
+static int
+solparm_str_to_parm(char *str)
+{
+    return ipmi_solconfig_str_to_parm(str);
+}
+
 static char *
 get_error_string(unsigned int err)
 {
@@ -3500,6 +3608,10 @@ int lanparm_str_to_parm(char *str);
 /* Convert between pef string names and parm numbers. */
 char *pef_parm_to_str(int parm);
 int pef_str_to_parm(char *str);
+
+/* Convert between SoL string names and parm numbers. */
+char *solparm_parm_to_str(int parm);
+int solparm_str_to_parm(char *str);
 
 /* Convert various sensor values to strings. */
 char *get_threshold_access_support_string(int val);
@@ -6389,6 +6501,22 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return pet;
+    }
+
+    /*
+     * Allocate a solparm object for the MC.  The channel is the first
+     * parameter, the solparm is returned.
+     */
+    %newobject get_solparm;
+    ipmi_solparm_t *get_solparm(int channel)
+    {
+	int            rv;
+	ipmi_solparm_t *lp;
+
+	rv = ipmi_solparm_alloc(self, channel, &lp);
+	if (rv)
+	    return NULL;
+	return lp;
     }
 }
 
@@ -11019,4 +11147,467 @@ char *sol_state_string(int val);
 	return rv;
     }
 
+}
+
+%extend ipmi_solparm_t {
+    ~ipmi_solparm_t()
+    {
+	ipmi_solparm_deref(self);
+    }
+
+    %newobject get_mc_id;
+    ipmi_mcid_t *get_mc_id()
+    {
+	ipmi_mcid_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_solparm_get_mc_id(self);
+	return rv;
+    }
+
+    int get_channel()
+    {
+	return ipmi_solparm_get_channel(self);
+    }
+
+%constant int SOLPARM_SET_IN_PROGRESS = IPMI_SOLPARM_SET_IN_PROGRESS;
+%constant int SOLPARM_ENABLE = IPMI_SOLPARM_ENABLE;
+%constant int SOLPARM_AUTHENTICATION = IPMI_SOLPARM_AUTHENTICATION;
+%constant int SOLPARM_CHAR_SETTINGS = IPMI_SOLPARM_CHAR_SETTINGS;
+%constant int SOLPARM_RETRY = IPMI_SOLPARM_RETRY;
+%constant int SOLPARM_NONVOLATILE_BITRATE = IPMI_SOLPARM_NONVOLATILE_BITRATE;
+%constant int SOLPARM_VOLATILE_BITRATE = IPMI_SOLPARM_VOLATILE_BITRATE;
+%constant int SOLPARM_PAYLOAD_CHANNEL = IPMI_SOLPARM_PAYLOAD_CHANNEL;
+%constant int SOLPARM_PAYLOAD_PORT_NUMBER = IPMI_SOLPARM_PAYLOAD_PORT_NUMBER;
+
+    /*
+     * Fetch an individual parm from the MC.  The parameter (parm1) ,
+     * and set (parm2) and block (parm3) are specified, along with a
+     * handler (parm4).  The solparm_got_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <solparm> <err> <parm_rev> <data1> [<data2> ...]
+     */
+    int get_parm(int parm, int set, int block, swig_cb handler)
+    {
+	int         rv;
+	swig_cb_val handler_val;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!valid_swig_cb(handler, solparm_got_parm_cb))
+	    rv = EINVAL;
+	else {
+	    handler_val = ref_swig_cb(handler, solparm_got_parm_cb);
+	    ipmi_solparm_ref(self);
+	    rv = ipmi_solparm_get_parm(self, parm, set, block,
+				       solparm_get_parm, handler_val);
+	    if (rv) {
+		ipmi_solparm_deref(self);
+		deref_swig_cb_val(handler_val);
+	    }
+	}
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1),
+     * and string value (parm2) is specified, along with an optional
+     * handler (parm3).  The solparm_set_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <solparm> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	unsigned char        *data;
+	unsigned int         length;
+
+	IPMI_SWIG_C_CB_ENTRY
+	data = parse_raw_str_data(value, &length);
+	if (!data) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, solparm_set_parm_cb)) {
+		free(data);
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    handler_val = ref_swig_cb(handler, solparm_set_parm_cb);
+	}
+
+	if (handler_val)
+	    ipmi_solparm_ref(self);
+	rv = ipmi_solparm_set_parm(self, parm, data, length,
+				   solparm_set_parm, handler_val);
+	free(data);
+	if (rv && handler_val) {
+	    ipmi_solparm_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1), and
+     * an array of integers (parm2) is specified, along with an
+     * optional handler (parm3).  The solparm_set_parm_cb method on
+     * the handler will be called when the the operation completes
+     * with the following parms: <self> <solparm> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	unsigned char        *data;
+	unsigned int         length = value.len;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (length == 0)
+	    data = malloc(1);
+	else
+	    data = malloc(length);
+	if (!data) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	parse_ipmi_data(value, data, length, &length);
+
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, solparm_set_parm_cb)) {
+		free(data);
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    handler_val = ref_swig_cb(handler, solparm_set_parm_cb);
+	}
+
+	if (handler_val)
+	    ipmi_solparm_ref(self);
+	rv = ipmi_solparm_set_parm(self, parm, data, length,
+				   solparm_set_parm, handler_val);
+	free(data);
+	if (rv && handler_val) {
+	    ipmi_solparm_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+    }
+
+    /*
+     * Get the full standard configuration for the solparms.  When
+     * done, the solparm_got_config_cb method will be called on the
+     * handler (first parm) with the following parms: <self> <solparm>
+     * <err> <solconfig>.  The solconfig will be an object of type
+     * ipmi_sol_config_t.
+     */
+    int get_config(swig_cb handler)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!valid_swig_cb(handler, solparm_got_config_cb))
+	    rv = EINVAL;
+	else {
+	    handler_val = ref_swig_cb(handler, solparm_got_config_cb);
+
+	    ipmi_solparm_ref(self);
+	    rv = ipmi_sol_get_config(self, solparm_get_config, handler_val);
+	    if (rv) {
+		ipmi_solparm_deref(self);
+		deref_swig_cb_val(handler_val);
+	    }
+	}
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+	
+    }
+
+    /*
+     * Set the full standard configuration for the solparms.  The
+     * config to set is the first parm of type ipmi_sol_config_t.  When
+     * done, the solparm_set_config_cb method will be called on the
+     * handler (second parm) with the following parms: <self>
+     * <solparm> <err>.
+     */
+    int set_config(ipmi_sol_config_t *config, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, solparm_set_config_cb)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    handler_val = ref_swig_cb(handler, solparm_set_config_cb);
+	}
+
+	if (handler_val)
+	    ipmi_solparm_ref(self);
+	rv = ipmi_sol_set_config(self, config,
+				 solparm_set_config, handler_val);
+	if (rv && handler_val) {
+	    ipmi_solparm_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+    }
+
+    /*
+     * Unlock the lock for the solparm.  The config to set is the
+     * first parm of type ipmi_sol_config_t and may be undefined
+     * (meaning that the MC of the solparm will be unlocked).  If the
+     * config is supplied, it will be marked as unlocked.  When done,
+     * the solparm_clear_lock_cb method will be called on the handler
+     * (second parm) with the following parms: <self> <solparm> <err>.
+     */
+    int clear_lock(ipmi_sol_config_t *config = NULL, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	IPMI_SWIG_C_CB_ENTRY
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, solparm_clear_lock_cb)) {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    handler_val = ref_swig_cb(handler, solparm_clear_lock_cb);
+	}
+
+	if (handler_val)
+	    ipmi_solparm_ref(self);
+	rv = ipmi_sol_clear_lock(self, config,
+				 solparm_clear_lock, handler_val);
+	if (rv && handler_val) {
+	    ipmi_solparm_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+    out_err:
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
+    }
+}
+
+%extend ipmi_sol_config_t {
+    ~ipmi_sol_config_t()
+    {
+	ipmi_sol_free_config(self);
+    }
+
+    /*
+     * Get a value from the solconfig.  The first parameter is the
+     * parm number, the second is the parm index (which is a pointer
+     * to an integer).  The returned value will be undefined if
+     * an error occurred, it will be of the format:
+     *   "<name> <type> <data>"
+     * The type and data will not be present if the data value is not
+     * supported or the index is out of range, but the name will still
+     * be present.
+     *
+     * The supports types are: integer, bool, data, ip, and mac.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for ip is an IP address in the form
+     * "n.n.n.n".  Data for mac is a mac address in the form
+     * "nn:nn:nn:nn:nn:nn"
+     *
+     * The second parameter (the index) is zero based and should be
+     * set to zero when fetching an index for the first time.  It will
+     * be unchanged if the data item does not support multiple items.
+     * If it does support multiple items, then the number will be
+     * changed to the next supported value, or to -1 if this is the
+     * last item.
+     *
+     * Be careful with the index, it must be a number, not something
+     * that can be interpreted to a number.  If necessary, in perl,
+     * you must do $idx = int($idx) in some cases.
+     */
+    %newobject get_val;
+    char *get_val(int parm, int *index)
+    {
+	enum ipmi_solconf_val_type_e valtype;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+	const char        *name;
+	char              dummy[1];
+	char              *str = NULL, *s;
+	int               rv;
+	int               i;
+	unsigned int      len;
+
+	rv = ipmi_solconfig_get_val(self, parm, &name, index, &valtype,
+				    &ival, &dval, &dval_len);
+	if ((rv == ENOSYS) || (rv == E2BIG))
+	    return strdup(name);
+	else if (rv)
+	    return NULL;
+
+	switch (valtype) {
+	case IPMI_SOLCONFIG_INT:
+	    len = snprintf(dummy, 1, "%s integer %d", name, ival);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s integer %d", name, ival);
+	    break;
+	    
+	case IPMI_SOLCONFIG_BOOL:
+	    len = snprintf(dummy, 1, "%s bool %s", name,
+			   ival ? "true" : "false");
+	    str = malloc(len + 1);
+	    sprintf(str, "%s bool %s", name, 
+		    ival ? "true" : "false");
+	    break;
+	    
+	case IPMI_SOLCONFIG_DATA:
+	    len = snprintf(dummy, 1, "%s data", name);
+	    len += dval_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s data", name);
+	    for (i=0; i<dval_len; i++)
+		s += sprintf(s, " 0x%2.2x", dval[i]);
+	    break;
+
+	case IPMI_SOLCONFIG_IP:
+	    len = snprintf(dummy, 1, "%s ip", name);
+	    len += 4 * 4; /* worst case */
+	    str = malloc(len + 1);
+	    sprintf(str, "%s ip %d.%d.%d.%d", name,
+		    dval[0], dval[1], dval[2], dval[3]);
+	    break;
+
+	case IPMI_SOLCONFIG_MAC:
+	    len = snprintf(dummy, 1, "%s mac", name);
+	    len += 6 * 3;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s mac ", name);
+	    for (i=0; i<5; i++)
+		s += sprintf(s, "%2.2x:", dval[i]);
+	    sprintf(s, "%2.2x", dval[i]);
+	    break;
+	}
+
+	if (dval)
+	    ipmi_solconfig_data_free(dval);
+
+	return str;
+    }
+
+    /*
+     * Set a value in the solconfig.  The first parameter is the parm
+     * number, the second is the parm index.  The type is a string
+     * in the third parm.  The data is the fourth parm.
+     *
+     * The supports types are: integer, bool, data, ip, and mac.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for ip is an IP address in the form
+     * "n.n.n.n".  Data for mac is a mac address in the form
+     * "nn.nn.nn.nn.nn.nn"
+     *
+     * The index is ignored for types that do not use it.
+     */
+    int set_val(int parm, int idx, char *type, char *value) {
+	enum ipmi_solconf_val_type_e valtype;
+	int               rv;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+
+	rv = ipmi_solconfig_parm_to_type(parm, &valtype);
+	if (rv)
+	    return rv;
+
+	switch (valtype) {
+	case IPMI_SOLCONFIG_INT:
+	{
+	    char *endstr;
+	    if (strcmp(type, "integer") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (*value == '\0')
+		return EINVAL;
+	    ival = strtol(value, &endstr, 0);
+	    if (*endstr != '\0')
+		return EINVAL;
+	    break;
+	}
+	    
+	case IPMI_SOLCONFIG_BOOL:
+	    if (strcmp(type, "bool") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (strcasecmp(value, "true") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "false") == 0)
+		ival = 0;
+	    else if (strcasecmp(value, "on") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "off") == 0)
+		ival = 0;
+	    else
+		return EINVAL;
+	    break;
+	    
+	case IPMI_SOLCONFIG_DATA:
+	    if (strcmp(type, "data") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    dval = parse_raw_str_data(value, &dval_len);
+	    if (!dval)
+		return ENOMEM;
+	    break;
+
+	case IPMI_SOLCONFIG_IP:
+	    {
+		struct in_addr addr;
+		if (strcmp(type, "ip") != 0)
+		    return EINVAL;
+		rv = parse_ip_addr(value, &addr);
+		if (rv)
+		    return rv;
+		dval = malloc(4);
+		memcpy(dval, &addr.s_addr, 4);
+		dval_len = 4;
+	    }
+	    break;
+
+	case IPMI_SOLCONFIG_MAC:
+	    if (strcmp(type, "mac") != 0)
+		return EINVAL;
+	    dval = malloc(6);
+	    rv = parse_mac_addr(value, dval);
+	    if (rv) {
+		free(dval);
+		return rv;
+	    }
+	    dval_len = 6;
+	    break;
+	}
+
+	rv = ipmi_solconfig_set_val(self, parm, idx, ival, dval, dval_len);
+	if (dval)
+	    free(dval);
+	return rv;
+    }
 }

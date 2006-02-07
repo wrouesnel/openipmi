@@ -1,3 +1,28 @@
+2006-02-06 Corey Minyard <cminyard@mvista.com>
+
+	* lib/solparm.c, include/OpenIPMI/ipmi_solparm.c: Added
+	configuration of SoL parameters.
+
+	* lib/Makefile.am, include/OpenIPMI/Makefile.am: Added new solparm
+	files.
+
+	* cmdlang/cmd_solparm.c, cmdlang/cmdlang.c, cmdlang/Makefile.am:
+	Added support for solparms.
+
+	* swig/OpenIPMI.i: Added support for solparms.	
+
+	* swig/OpenIPMI.i: Fixed bugs in lanparm and pef config and parm
+	set handling, they were referencing a possibly uninitialized
+	variable.
+
+	* swig/python/openipmigui/_mc_solparm.py: Added solparm support in
+	the GUI.
+
+	* swig/python/openipmigui/_mc_chan.py: Tie-ins for solparm support
+	are here.
+	
+	* swig/python/openipmigui/Makefile.am: Add the new solparm file.
+
 2006-02-03 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_sol.c: Fixed some problem with nack handling.

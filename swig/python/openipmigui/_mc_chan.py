@@ -35,6 +35,7 @@ import wx
 import wx.gizmos as gizmos
 import _oi_logging
 import _mc_lanparm
+import _mc_solparm
 import _mc_user
 
 id_st = 500
@@ -104,6 +105,10 @@ class MCChanData:
             wx.EVT_MENU(menu, id_st+3, self.lanparms)
             item = menu.Append(id_st+4, "Clear LANPARM lock")
             wx.EVT_MENU(menu, id_st+4, self.clr_lanparm_lock)
+            item = menu.Append(id_st+5, "SoLPARMS")
+            wx.EVT_MENU(menu, id_st+5, self.solparms)
+            item = menu.Append(id_st+6, "Clear SoLPARM lock")
+            wx.EVT_MENU(menu, id_st+6, self.clr_solparm_lock)
             pass
         self.mcchan.tree.PopupMenu(menu, point)
         menu.Destroy()
@@ -124,6 +129,16 @@ class MCChanData:
         self.mcchan.mc_id.to_mc(self)
         return
 
+    def solparms(self, event):
+        self.cb_state = "solparms"
+        self.mcchan.mc_id.to_mc(self)
+        return
+
+    def clr_solparm_lock(self, event):
+        self.cb_state = "clr_solparm_lock"
+        self.mcchan.mc_id.to_mc(self)
+        return
+
     def mc_cb(self, mc):
         if (self.cb_state == "users"):
             rv = mc.get_users(self.idx, 0, self)
@@ -139,6 +154,12 @@ class MCChanData:
         elif (self.cb_state == "clr_lanparm_lock"):
             lp = mc.get_lanparm(self.idx)
             lp.clear_lock()
+        elif (self.cb_state == "solparms"):
+            sp = mc.get_solparm(self.idx)
+            sp.get_config(self)
+        elif (self.cb_state == "clr_solparm_lock"):
+            sp = mc.get_solparm(self.idx)
+            sp.clear_lock()
             pass
         return
 
@@ -170,6 +191,20 @@ class MCChanData:
                 pass
             return
         _mc_lanparm.MCLanParm(self.mcchan.m, lanparm, lanconfig, self.idx)
+        return
+    
+    def solparm_got_config_cb(self, solparm, err, solconfig):
+        if (err):
+            if (err == OpenIPMI.eagain):
+                self.mcchan.errstr.SetStatusText(
+                    "SOLPARMs are locked, clear the lock if necessary", 0)
+            else:
+                self.mcchan.errstr.SetStatusText(
+                    "Error getting solparms: "
+                    + OpenIPMI.get_error_string(err), 0)
+                pass
+            return
+        _mc_solparm.MCSolParm(self.mcchan.m, solparm, solconfig, self.idx)
         return
     
     pass
