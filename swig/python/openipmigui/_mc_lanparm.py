@@ -163,9 +163,17 @@ class MCLanParm(wx.Dialog):
                     if (v[0] == 0):
                         item = listc.InsertStringItem(sys.maxint, vals[0])
                     else:
-                        item = listc.InsertStringItem(sys.maxint,
-                                                      vals[0] + "[" +
-                                                      str(lastv) + "]")
+                        x = [ "" ]
+                        err = OpenIPMI.lanconfig_enum_idx(i, lastv, x)
+                        if (err):
+                            item = listc.InsertStringItem(sys.maxint,
+                                                          vals[0] + "[" +
+                                                          str(lastv) + "]")
+                        else:
+                            item = listc.InsertStringItem(sys.maxint,
+                                                          vals[0] + "[" +
+                                                          x[0] + "]")
+                            pass
                         pass
                     if (vals[1] == "enum"):
                         nval = [ 0 ]

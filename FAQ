@@ -286,3 +286,10 @@
     complicated.  OpenIPMI provides a way to configure this more
     easily, but you still have to know what you are doing.  See
     question 2.20 for how to handle these traps.
+
+ 2.22 The GUI locks up or does not run at all
+
+    The GUI requires wxPython 2.6 or later.  There is some attempt to
+    run with wxPython 2.4, but there are really just too many problems
+    there to work well.  This is unfortunate, but will hopefully not
+    be an issue in a short time.

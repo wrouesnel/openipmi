@@ -1,7 +1,8 @@
 2006-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Add a way to
-	detect if a parm is an enum and get the enum string values.
+	detect if a parm is an enum and get the enum string and index
+	values.
 	* lib/solparm.c, include/OpenIPMI/ipmi_solparm.h: ditto
 	* lib/pef.c, include/OpenIPMI/ipmi_pef.h: ditto
 
@@ -36,6 +37,9 @@
 
 	* man/openipmigui.1: Added docs on SOL, pefparms, solparms, and
 	fixed up a few things.
+
+	* lib/cmd_mc.c: Added the ability to dump all channels easily, and
+	added useful string names to the channel info.
 
 2006-02-06 Corey Minyard <cminyard@mvista.com>
 

@@ -244,6 +244,10 @@ int ipmi_pefconfig_set_val(ipmi_pef_config_t *pefc,
    string value for the enumeration. */
 int ipmi_pefconfig_enum_val(unsigned int parm, int val, int *nval,
 			    const char **sval);
+/* Sometimes array indexes may be enumerations.  This allows the user
+   to detect if a specific parm's array index is an enumeration, and
+   to get the enumeration values.  */
+int ipmi_pefconfig_enum_idx(unsigned int parm, int idx, const char **sval);
 /* Free data from ipmi_pefconfig_get_val(). */
 void ipmi_pefconfig_data_free(void *data);
 /* Convert a string to a pefconfig parm number.  Returns -1 if the

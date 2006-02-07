@@ -1620,6 +1620,12 @@ ipmi_solconfig_enum_val(unsigned int parm, int val, int *nval,
 }
 
 int
+ipmi_solconfig_enum_idx(unsigned int parm, int idx, const char **sval)
+{
+    return ENOSYS;
+}
+
+int
 ipmi_solconfig_get_val(ipmi_sol_config_t *solc,
 		       unsigned int      parm,
 		       const char        **name,

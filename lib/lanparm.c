@@ -2503,44 +2503,113 @@ ipmi_lanconfig_enum_val(unsigned int parm, int val, int *nval,
 {
     char *rval;
     int  rnval;
-    if (parm != 5) /* ip_addr_source */
+    if (parm == 5) { /* ip_addr_source */
+	if (val < 0) {
+	    if (nval)
+		*nval = 0;
+	    return EINVAL;
+	}
+	switch (val) {
+	case 0:
+	    rval = "unspecified";
+	    rnval = 1;
+	    break;
+	case 1:
+	    rval = "manually configured";
+	    rnval = 2;
+	    break;
+	case 2:
+	    rval = "DHCP";
+	    rnval = 3;
+	    break;
+	case 3:
+	    rval = "BIOS configured";
+	    rnval = 4;
+	    break;
+	case 4:
+	    rval = "other protocol";
+	    rnval = -1;
+	    break;
+	default:
+	    if (*nval)
+		*nval = -1;
+	    return EINVAL;
+	}
+    } else if (parm == 43) { /* cipher_suite_entry */
+	if (val < 0) {
+	    if (nval)
+		*nval = 0;
+	    return EINVAL;
+	}
+	switch (val) {
+	case 0: rval = "RAKP-none,none,none"; rnval = 1; break;
+	case 1: rval = "RAKP-HMAC-SHA1,none,none"; rnval = 2; break;
+	case 2: rval = "RAKP-HMAC-SHA1,HMAC-SHA1-96,none"; rnval = 3; break;
+	case 3: rval = "RAKP-HMAC-SHA1,HMAC-SHA1-96,AES-CBC-128"; rnval = 4; break;
+	case 4: rval = "RAKP-HMAC-SHA1,HMAC-SHA1-96,xRC4-128"; rnval = 5; break;
+	case 5: rval = "RAKP-HMAC-SHA1,HMAC-SHA1-96,xRC4-40"; rnval = 6; break;
+	case 6: rval = "RAKP-HMAC-MD5,none,none"; rnval = 7; break;
+	case 7: rval = "RAKP-HMAC-MD5,HMAC-MD5-128,none"; rnval = 8; break;
+	case 8: rval = "RAKP-HMAC-MD5,HMAC-MD5-128,AES-CBC-128"; rnval = 9; break;
+	case 9: rval = "RAKP-HMAC-MD5,HMAC-MD5-128,xRC4-128"; rnval = 10; break;
+	case 10: rval = "RAKP-HMAC-MD5,HMAC-MD5-128,xRC4-40"; rnval = 11; break;
+	case 11: rval = "RAKP-HMAC-MD5,MD5-128,none"; rnval = 12; break;
+	case 12: rval = "RAKP-HMAC-MD5,MD5-128,AES-CBC-128"; rnval = 13; break;
+	case 13: rval = "RAKP-HMAC-MD5,MD5-128,xRC4-128"; rnval = 14; break;
+	case 14: rval = "RAKP-HMAC-MD5,MD5-128,xRC4-40"; rnval = -1; break;
+	default:
+	    if (*nval)
+		*nval = -1;
+	    return EINVAL;
+	}
+    } else if (parm == 44) { /* max_priv_for_cipher_suite */
+	if (val < 0) {
+	    if (nval)
+		*nval = 0;
+	    return EINVAL;
+	}
+	switch (val) {
+	case 0: rval = "disabled"; rnval = 1; break;
+	case 1: rval = "callback"; rnval = 2; break;
+	case 2: rval = "user"; rnval = 3; break;
+	case 3: rval = "admin"; rnval = 4; break;
+	case 4: rval = "oem"; rnval = -1; break;
+	default:
+	    if (*nval)
+		*nval = -1;
+	    return EINVAL;
+	}
+    } else {
 	return ENOSYS;
-    if (val < 0) {
-	if (nval)
-	    *nval = 0;
-	return EINVAL;
-    }
-    switch (val) {
-    case 0:
-	rval = "unspecified";
-	rnval = 1;
-	break;
-    case 1:
-	rval = "manually configured";
-	rnval = 2;
-	break;
-    case 2:
-	rval = "DHCP";
-	rnval = 3;
-	break;
-    case 3:
-	rval = "BIOS configured";
-	rnval = 4;
-	break;
-    case 4:
-	rval = "other protocol";
-	rnval = -1;
-	break;
-    default:
-	if (*nval)
-	    *nval = -1;
-	return EINVAL;
     }
 
     if (sval)
 	*sval = rval;
     if (nval)
 	*nval = rnval;
+    return 0;
+}
+
+int
+ipmi_lanconfig_enum_idx(unsigned int parm, int idx, const char **sval)
+{
+    char *rval;
+
+    if ((parm < 10) || (parm > 14))
+	return ENOSYS;
+
+    switch (idx) {
+    case 0: rval = "callback"; break;
+    case 1: rval = "user"; break;
+    case 2: rval = "operator"; break;
+    case 3: rval = "admin"; break;
+    case 4: rval = "oem"; break;
+    default: return EINVAL;
+    }
+
+    if (sval)
+	*sval = rval;
+
     return 0;
 }
 

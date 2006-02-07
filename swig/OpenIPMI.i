@@ -3352,6 +3352,12 @@ lanconfig_enum_val(int parm, int val, int *nval, const char **sval)
     return ipmi_lanconfig_enum_val(parm, val, nval, sval);
 }
 
+static int
+lanconfig_enum_idx(int parm, int idx, const char **sval)
+{
+    return ipmi_lanconfig_enum_idx(parm, idx, sval);
+}
+
 
 static int
 lanparm_str_to_parm(char *str)
@@ -3375,6 +3381,12 @@ static int
 pefconfig_enum_val(int parm, int val, int *nval, const char **sval)
 {
     return ipmi_lanconfig_enum_val(parm, val, nval, sval);
+}
+
+static int
+pefconfig_enum_idx(int parm, int idx, const char **sval)
+{
+    return ipmi_pefconfig_enum_idx(parm, idx, sval);
 }
 
 static const char *
@@ -3447,6 +3459,12 @@ static int
 solconfig_enum_val(int parm, int val, int *nval, const char **sval)
 {
     return ipmi_solconfig_enum_val(parm, val, nval, sval);
+}
+
+static int
+solconfig_enum_idx(int parm, int idx, const char **sval)
+{
+    return ipmi_solconfig_enum_idx(parm, idx, sval);
 }
 
 static char *
@@ -3626,6 +3644,7 @@ int lanparm_str_to_parm(char *str);
 
 /* Used to discover enum values for lanparms. */
 int lanconfig_enum_val(int parm, int val, int *nval, const char **sval);
+int lanconfig_enum_idx(int parm, int idx, const char **sval);
 
 /* Convert between pef string names and parm numbers. */
 char *pef_parm_to_str(int parm);
@@ -3633,6 +3652,7 @@ int pef_str_to_parm(char *str);
 
 /* Used to discover enum values for lanparms. */
 int pefconfig_enum_val(int parm, int val, int *nval, const char **sval);
+int pefconfig_enum_idx(int parm, int idx, const char **sval);
 
 /* Convert between SoL string names and parm numbers. */
 char *solparm_parm_to_str(int parm);
@@ -3640,6 +3660,7 @@ int solparm_str_to_parm(char *str);
 
 /* Used to discover enum values for solparms. */
 int solconfig_enum_val(int parm, int val, int *nval, const char **sval);
+int solconfig_enum_idx(int parm, int idx, const char **sval);
 
 /* Convert various sensor values to strings. */
 char *get_threshold_access_support_string(int val);

@@ -934,14 +934,11 @@ mc_set_event_log_enable(ipmi_mc_t *mc, void *cb_data)
     
 }
 
-void
-got_chan_info(ipmi_mc_t           *mc,
-	      int                 err,
-	      ipmi_channel_info_t *info,
-	      void                *cb_data)
+static void
+dump_chan_info(ipmi_mc_t           *mc,
+	       ipmi_channel_info_t *info,
+	       ipmi_cmd_info_t     *cmd_info)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            mc_name[IPMI_MC_NAME_LEN];
     char            *str;
     unsigned int    val;
@@ -949,12 +946,6 @@ got_chan_info(ipmi_mc_t           *mc,
     unsigned char   data[3];
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
-
-    if (err) {
-	cmdlang->err = err;
-	cmdlang->errstr = "Error getting channel info";
-	goto out_err;
-    }
 
     ipmi_cmdlang_lock(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Channel Info", NULL);
@@ -964,11 +955,17 @@ got_chan_info(ipmi_mc_t           *mc,
     if (!rv)
 	ipmi_cmdlang_out_int(cmd_info, "Channel", val);
     rv = ipmi_channel_info_get_medium(info, &val);
-    if (!rv)
+    if (!rv) {
 	ipmi_cmdlang_out_int(cmd_info, "Medium", val);
+	ipmi_cmdlang_out(cmd_info, "Medium String",
+			 ipmi_channel_medium_string(val));
+    }
     rv = ipmi_channel_info_get_protocol_type(info, &val);
-    if (!rv)
+    if (!rv) {
 	ipmi_cmdlang_out_int(cmd_info, "Protocol Type", val);
+	ipmi_cmdlang_out(cmd_info, "Protocol Type String",
+			 ipmi_channel_protocol_string(val));
+    }
     rv = ipmi_channel_info_get_session_support(info, &val);
     if (!rv) {
 	switch (val) {
@@ -988,12 +985,49 @@ got_chan_info(ipmi_mc_t           *mc,
 	ipmi_cmdlang_out_binary(cmd_info, "Aux Info", (char *) data, 2);
     ipmi_cmdlang_up(cmd_info);
     ipmi_cmdlang_unlock(cmd_info);
+}
+
+static void
+got_chan_info(ipmi_mc_t           *mc,
+	      int                 err,
+	      ipmi_channel_info_t *info,
+	      void                *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    if (err) {
+	cmdlang->err = err;
+	cmdlang->errstr = "Error getting channel info";
+	goto out_err;
+    }
+
+    dump_chan_info(mc, info, cmd_info);
 
  out_err:
     if (cmdlang->err) {
 	cmdlang->location = "cmd_mc.c(got_chan_info)";
     }
 
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+got_chan_info_multi(ipmi_mc_t           *mc,
+		    int                 err,
+		    ipmi_channel_info_t *info,
+		    void                *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    if (err)
+	/* Ignore this on multiple fetches, don't print an error */
+	goto out;
+
+    dump_chan_info(mc, info, cmd_info);
+	    
+
+ out:
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -1010,26 +1044,38 @@ mc_get_chan_info(ipmi_mc_t *mc, void *cb_data)
 
 
     if ((argc - curr_arg) < 1) {
-	/* Not enough parameters */
-	cmdlang->errstr = "Not enough parameters";
-	cmdlang->err = EINVAL;
-	goto out_err;
-    }
+	int count = 0;
+	/* List them all */
+	for (channel=0; channel<8; channel++) {
+	    ipmi_cmdlang_cmd_info_get(cmd_info);
+	    rv = ipmi_mc_channel_get_info(mc, channel, got_chan_info_multi,
+					  cmd_info);
+	    if (rv)
+		ipmi_cmdlang_cmd_info_put(cmd_info);
+	    else
+		count++;
+	}
+	if (count == 0) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not get channel info for any channels";
+	    goto out_err;
+	}
+    } else {
+	ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "channel invalid";
+	    goto out_err;
+	}
+	curr_arg++;
 
-    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
-    if (cmdlang->err) {
-	cmdlang->errstr = "channel invalid";
-	goto out_err;
-    }
-    curr_arg++;
-
-    ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_mc_channel_get_info(mc, channel, got_chan_info, cmd_info);
-    if (rv) {
-	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmdlang->err = rv;
-	cmdlang->errstr = "Could not get channel info";
-	goto out_err;
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_channel_get_info(mc, channel, got_chan_info, cmd_info);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not get channel info";
+	    goto out_err;
+	}
     }
 
     return;

@@ -2591,6 +2591,12 @@ ipmi_pefconfig_enum_val(unsigned int parm, int val, int *nval,
 }
 
 int
+ipmi_pefconfig_enum_idx(unsigned int parm, int idx, const char **sval)
+{
+    return ENOSYS;
+}
+
+int
 ipmi_pefconfig_get_val(ipmi_pef_config_t *pefc,
 		       unsigned int      parm,
 		       const char        **name,
