@@ -31,6 +31,12 @@
 	* swig/python/openipmigui/Makefile.am: Add solparm and pef
 	configuration files.
 
+	* Makefile.am: Added the ability to run the GUI from the main
+	makefile.
+
+	* man/openipmigui.1: Added docs on SOL, pefparms, solparms, and
+	fixed up a few things.
+
 2006-02-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/solparm.c, include/OpenIPMI/ipmi_solparm.c: Added

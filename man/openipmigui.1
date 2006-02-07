@@ -137,6 +137,15 @@ A number of operations are available under the right-click menu on the
 MC; most of these are self-explanatory.  The MC is generally
 configured via the Channel Info command under this.
 
+.SH CONNECTIONS
+
+A set of connections for the domain is listed under the domain.  Each
+connection has one or more ports.  The state of these ports may be
+viewed by color; if a port is yellow (warning), it is down.  If a
+connection is red (severe), then all its ports are down.  If all
+connections are down, the "Connections" tree item turns blue
+(critical).
+
 .SH CHANNEL INFO
 
 If you right click on an MC, it will show a Channel Info entry.  This
@@ -193,11 +202,114 @@ command is available.  This pulls up all the parameters for the LAN
 and allows them to be set.  Right-clicking on an item allows it to be
 changed.
 
+.SH PEFPARMS
+
+If an MC support PEF, it will have a "PEF Parms" menu item in the
+pulldown menu for the MC.  This pulls up all the parameters for the PEF
+and allows them to be set.  Right-clicking on an item allows it to be
+changed.
+
+.SH SOLPARMS
+
+In the channel display on a 8023_LAN channel, a LANPARM configuration
+command is available if the MC supporte SOL (Serial Over LAN).  This
+pulls up all the parameters for the LAN and allows them to be set.
+Right-clicking on an item allows it to be changed.
+
+.SH SOL
+
+On a connection, an "Open SOL" menu item is present.  If the BMC on
+the far end of the connection has SOL (Serial Over LAN) support, then
+you can establish a serial connection with the BMC, assuming it is
+configured properly and you have the proper rights.
+
+When you choose this, you will get a new connection with a VT100/ANSI
+terminal emulator.  The connection will not yet be opened, you must
+open it (under the "File") to establish the connection.  When the
+status at the bottom right says "connected", you are ready to type.
+If something goes wrong, the connection may drop and you will have to
+reopen it.  You can also close the connection from the file menu, or
+quit the emulator.
+
+The "Controls" menu for the SOL connection contains a large number of
+settings for SOL.  These allow you to manipulate various value on the
+remote side of the connection.  These are:
+
+.TP
+Accept Input
+If disabled, this will cause data from the BMC to be refused,
+effectively flow-controlling the data (assuming that the BMC actually
+supports this properly, some don't)
+
+.TP
+Use Encryption
+Encrypt the data on the LAN using RMCP+ encryption negotiated for the
+connection.  Only available when the connection is closed, this cannot
+be changed dynamically.
+
+.TP
+Use Authentication
+Authenticate the data on the LAN using RMCP+ authentication negotiated
+for the connection.  Only available when the connection is closed,
+this cannot be changed dynamically.
+
+.TP
+Deassert CTS/DCD/DSR on connect
+Don't raise the lines when a connection is made; this allows things
+like baud rate to be set before the device on the far end of the
+serial port knows there is a connection.
+
+.TP
+CTS Assertable
+If set, the BMC has control over the CTS line.  Otherwise, the CTS
+line is deasserted.
+
+.TP
+DCD/DSR Asserted
+Set the DCD and DSR lines.
+
+.TP
+RI Asserted
+Assert the Ring Indicator line, can be used for remote wakeup on some
+systems (though, with IPMI, you have to wonder why you wouldn't use
+IPMI for this).
+
+.TP
+Set Ack Timeout
+Sets the timeout waiting for an ACK from the BMC.
+
+.TP
+Set Ack Retries
+Sets the number of times a packet is retried before the connection is
+closed.
+
+.TP
+Send Break
+Send a 300ms break signal to the remote serial port.
+
+.TP
+Serial Rate
+Sets the bitrate on the serial port.  Not all systems support this.
+Some, in fact, completely ignore this setting and use 19.2K.  Note
+that this is only the volatile rate.  The non-volatile rate setting is
+done with SOLPARM.
+
+.TP
+Serial Alert Behavior
+This sets what to do when an IPMI alert occurs and is going out the
+serial port somehow.  If set to "succeed", the SoL session will be
+disconnected when an alert comes out.
+
+.TP
+Queue Flush
+Allows various queues to be flushed.
+
 .SH "SEE ALSO"
 ipmish(1), IPMI document from OpenIPMI
 
 .SH "KNOWN PROBLEMS"
-Lots of missing functionality.
+Some of missing functionality.  See the list in the
+swig/python/openipmigui/TODO if you want to work on something.
 
 .SH AUTHOR
 .PP
