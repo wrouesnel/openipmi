@@ -1,3 +1,16 @@
+2006-02-08 Corey Minyard <cminyard@mvista.com>
+
+	* swig/perl/OpenIPMI_perl.c, swig/python/OpenIPMI_lang.i: Added a
+	new return value type that will take an empty return and not
+	modify the return value.
+	
+	* swig/OpenIPMI.i: Allow event handlers to take return values from
+	the handler, but preserve current semantics.
+
+	* swig/python/openipmigui/_entity.py: Cleanup and set return
+	values from event handlers.
+	* swig/python/openipmigui/_sensor.py: ditto
+
 2006-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Add a way to

@@ -887,6 +887,11 @@ vswig_call_cb_rv(char rv_type, void *rv,
 		*((int *) rv) = PyInt_AsLong(o);
 		break;
 
+	    case 'I': /* Integer, no return value leave alone */
+		if (o && (o != Py_None))
+		    *((int *) rv) = PyInt_AsLong(o);
+		break;
+
 	    default:
 		Py_FatalError("OpenIPMI: Invalid return type specified");
 		break;

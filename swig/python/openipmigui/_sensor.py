@@ -39,21 +39,30 @@ id_st = 700
 class SensorRefreshData:
     def __init__(self, s):
         self.s = s
+        return
 
     def sensor_cb(self, sensor):
         sensor.get_value(self.s)
+        return
+
+    pass
 
 
 class SensorInfoGetter:
     def __init__(self, s, func):
         self.s = s;
         self.func = func;
+        return
 
     def DoUpdate(self):
         self.s.sensor_id.to_sensor(self)
+        return
 
     def sensor_cb(self, sensor):
         getattr(sensor, self.func)(self.s)
+        return
+
+    pass
 
 
 threshold_strings = [ 'ur', 'uc', 'un', 'ln', 'lc', 'lr' ]
@@ -81,10 +90,12 @@ def threshold_event_str_to_full(s):
         rv += " going high"
     else:
         rv += " going low"
+        pass
     if (s[3] == 'a'):
         rv += " assertion"
     else:
         rv += " deassertion"
+        pass
     return rv
 
 def discrete_event_str_to_full(s, name):
@@ -95,6 +106,7 @@ def discrete_event_str_to_full(s, name):
         t = 'assertion'
     else:
         t = 'deassertion'
+        pass
     return s[0:l-1] + ' ' + t + ' (' + name + ')'
 
 class SensorHysteresisSet(wx.Dialog):
@@ -132,10 +144,13 @@ class SensorHysteresisSet(wx.Dialog):
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
             self.Destroy()
+            pass
+        return
 
     def cancel(self, event):
         self.Close()
-
+        return
+        
     def ok(self, event):
         try:
             self.positive = int(self.pos.GetValue())
@@ -148,12 +163,16 @@ class SensorHysteresisSet(wx.Dialog):
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
+            pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor thresholds: " + str(rv))
             self.Close()
+            pass
+        return
 
     def OnClose(self, event):
         self.Destroy()
+        return
 
     def sensor_cb(self, sensor):
         if (self.setting):
@@ -161,6 +180,8 @@ class SensorHysteresisSet(wx.Dialog):
         else:
             sensor.get_hysteresis(self)
             self.setting = True
+            pass
+        return
 
     def sensor_get_hysteresis_cb(self, sensor, err, positive, negative):
         if (err != 0):
@@ -170,13 +191,19 @@ class SensorHysteresisSet(wx.Dialog):
             self.pos.SetValue(str(positive))
             self.neg.SetValue(str(negative))
             self.Show(True);
+            pass
+        return
 
     def sensor_set_hysteresis_cb(self, sensor, err):
         if (err):
             _oi_logging.error("Unable to set sensor thresholds: " + str(err))
         else:
             sensor.get_hysteresis(self.s)
+            pass
         self.Close()
+        return
+
+    pass
 
 
 class SensorThresholdsSet(wx.Dialog):
@@ -194,6 +221,7 @@ class SensorThresholdsSet(wx.Dialog):
             self.thresholds[th] = th_text_box
             box.Add(th_text_box, 0, wx.ALIGN_LEFT | wx.ALL, 5)
             sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+            pass
         
         box = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
@@ -211,9 +239,12 @@ class SensorThresholdsSet(wx.Dialog):
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
             self.Destroy()
+            pass
+        return
 
     def cancel(self, event):
         self.Close()
+        return
 
     def ok(self, event):
         tlist = [ ]
@@ -222,16 +253,21 @@ class SensorThresholdsSet(wx.Dialog):
                 tlist.append(ths[0] + " " + str(float(ths[1].GetValue())))
             except:
                 return
+            pass
         self.threshold_str = ":".join(tlist)
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
+            pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor thresholds: " + str(rv))
             self.Close()
+            pass
+        return
 
     def OnClose(self, event):
         self.Destroy()
+        return
 
     def sensor_cb(self, sensor):
         if (self.setting):
@@ -243,6 +279,8 @@ class SensorThresholdsSet(wx.Dialog):
                 self.Destroy()
                 return
             self.setting = True
+            pass
+        return
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
         if (err != 0):
@@ -252,14 +290,20 @@ class SensorThresholdsSet(wx.Dialog):
         for i in th.split(':'):
             j = i.split()
             self.thresholds[j[0]].SetValue(j[1])
+            pass
         self.Show()
+        return
 
     def sensor_set_thresholds_cb(self, sensor, err):
         if (err):
             _oi_logging.error("Unable to set sensor thresholds: " + str(err))
         else:
             sensor.get_thresholds(self.s)
+            pass
         self.Close()
+        return
+
+    pass
 
 
 class SensorEventEnablesSet(wx.Dialog):
@@ -289,6 +333,8 @@ class SensorEventEnablesSet(wx.Dialog):
                                           discrete_event_str_to_full(the, name))
                 self.event_enables[the] = the_box
                 sbox_sizer.Add(the_box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+                pass
+            pass
         sbox.SetupScrolling()
         sbox.SetSizer(sbox_sizer)
         sizer.Add(sbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
@@ -309,29 +355,41 @@ class SensorEventEnablesSet(wx.Dialog):
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
             self.Destroy()
+            pass
+        return
 
     def cancel(self, event):
         self.Close()
+        return
 
     def ok(self, event):
         tlist = [ ]
         if (self.enable.GetValue()):
             tlist.append("events")
+            pass
         if (self.scanning.GetValue()):
             tlist.append("scanning")
+            pass
         for ths in self.event_enables.iteritems():
             if ths[1].GetValue():
                 tlist.append(ths[0])
+                pass
+            pass
         self.event_enable_str = " ".join(tlist)
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
+            pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor event enables: " + str(rv))
             self.Close()
+            pass
+        return
+        
 
     def OnClose(self, event):
         self.Destroy()
+        return
 
     def sensor_cb(self, sensor):
         if (self.setting):
@@ -343,6 +401,8 @@ class SensorEventEnablesSet(wx.Dialog):
                 self.Destroy()
                 return
             self.setting = True
+            pass
+        return
 
     def sensor_get_event_enable_cb(self, sensor, err, st):
         if (err != 0):
@@ -363,14 +423,23 @@ class SensorEventEnablesSet(wx.Dialog):
                     _oi_logging.warning("Sensor " + s.name + " returned enable "
                                     + i + " but the sensor reports it in a"
                                     + " callback.")
+                    pass
+                pass
+            pass
         self.Show()
+
+        return
 
     def sensor_event_enable_cb(self, sensor, err):
         if (err):
             _oi_logging.error("Unable to set sensor event enables: " + str(err))
         else:
             sensor.get_event_enables(self.s)
+            pass
         self.Close()
+        return
+
+    pass
 
 
 class Sensor:
@@ -405,6 +474,7 @@ class Sensor:
                                       None,
                                       data = SensorInfoGetter(self,
                                                        "get_event_enables"))
+            pass
 
         sensor.add_event_handler(self)
         sensor.get_value(self)
@@ -418,14 +488,18 @@ class Sensor:
             modifier = sensor.get_modifier_unit_use();
             if (modifier == OpenIPMI.MODIFIER_UNIT_BASE_DIV_MOD):
                self.threshold_sensor_units += "/"
+               pass
             elif (modifier == OpenIPMI.MODIFIER_UNIT_BASE_MULT_MOD):
                self.threshold_sensor_units += "*"
+               pass
             modifier = sensor.get_modifier_unit_string()
             if (modifier != "unspecified"):
                 self.threshold_sensor_units += modifier
+                pass
             self.threshold_sensor_units += sensor.get_rate_unit_string()
             if (sensor.get_percentage()):
                 self.threshold_sensor_units += '%'
+                pass
 
             self.events_supported = [ ]
             if (es != OpenIPMI.EVENT_SUPPORT_NONE):
@@ -434,29 +508,38 @@ class Sensor:
                     rv = sensor.threshold_event_supported(i, ival)
                     if (rv == 0) and (ival[0] != 0):
                         self.events_supported.append(i)
+                        pass
+                    pass
                 self.ui.append_item(self, "Threshold Events Supported",
                                     ' '.join(self.events_supported))
 
+                pass
             sval = ""
             fval = [ 0.0 ]
             rv = sensor.get_nominal_reading(fval)
             if (rv == 0):
                 sval += "  Nominal:" + str(fval[0])
+                pass
             rv = sensor.get_sensor_min(fval)
             if (rv == 0):
                 sval += "  Min:" + str(fval[0])
+                pass
             rv = sensor.get_sensor_max(fval)
             if (rv == 0):
                 sval += "  Max:" + str(fval[0])
+                pass
             rv = sensor.get_normal_min(fval)
             if (rv == 0):
                 sval += "  NormalMin:" + str(fval[0])
+                pass
             rv = sensor.get_normal_max(fval)
             if (rv == 0):
                 sval += "  NormalMax:" + str(fval[0])
+                pass
             if (sval != ""):
                 sval = sval.strip()
                 self.ui.append_item(self, "Ranges", sval);
+                pass
 
             self.threshold_support = sensor.get_threshold_access()
             ts = self.threshold_support
@@ -471,31 +554,40 @@ class Sensor:
                     rv = sensor.threshold_settable(th, ival)
                     if (rv == 0) and (ival[0] == 1):
                         sval += " " + th
+                        pass
                     rv = sensor.threshold_readable(th, ival)
                     if (rv == 0) and (ival[0] == 1):
                         rval += " " + th
+                        pass
                     rv = sensor.threshold_reading_supported(th, ival)
                     if (rv == 0) and (ival[0] == 1):
                         wval += " " + th
+                        pass
+                    pass
                 if (wval != ""):
                     wval = wval.strip()
                     self.ui.append_item(self, "Thresholds Reported", wval)
+                    pass
 
             if ((ts == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_READABLE)
                 or (ts == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE)):
                 if (sval != ""):
                     sval = sval.strip()
                     self.ui.append_item(self, "Settable Thresholds", sval)
+                    pass
                 if (rval != ""):
                     rval = rval.strip()
                     self.ui.append_item(self, "Readable Thresholds", rval)
+                    pass
                         
                 self.thresholds = self.ui.append_item(self, "Thresholds",
                                       None,
                                       data = SensorInfoGetter(self,
                                                        "get_thresholds"))
+                pass
             else:
                 sval = ""
+                pass
 
             self.settable_thresholds = sval
 
@@ -509,6 +601,8 @@ class Sensor:
                                      None,
                                      data = SensorInfoGetter(self,
                                                              "get_hysteresis"))
+                pass
+            pass
         else:
             self.hysteresis_support = OpenIPMI.HYSTERESIS_SUPPORT_NONE
             self.threshold_support = OpenIPMI.THRESHOLD_ACCESS_SUPPORT_NONE
@@ -532,6 +626,9 @@ class Sensor:
                         if (rv == 0) and (ival[0] != 0):
                             self.events_supported.append(sval)
                             self.events_supported_name[sval] = name
+                            pass
+                        pass
+                    pass
                             
                 self.ui.append_item(self, "Events Supported",
                                     ' '.join(self.events_supported))
@@ -542,12 +639,17 @@ class Sensor:
                     self.ui.append_item(None, str(i),
                                         self.states_supported_name[str(i)],
                                         parent=names)
+                    pass
+                pass
+            pass
+        return
 
     def __str__(self):
         return self.name
 
     def DoUpdate(self):
         self.sensor_id.to_sensor(self.updater)
+        return
 
     def HandleMenu(self, event):
         eitem = event.GetItem();
@@ -557,39 +659,49 @@ class Sensor:
             item = menu.Append(id_st+1, "Rearm")
             wx.EVT_MENU(self.ui, id_st+1, self.Rearm)
             doit = True
+            pass
         if (self.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE):
             item = menu.Append(id_st+2, "Set Thresholds")
             wx.EVT_MENU(self.ui, id_st+2, self.SetThresholds)
             doit = True
+            pass
         if (self.hysteresis_support == OpenIPMI.HYSTERESIS_SUPPORT_SETTABLE):
             item = menu.Append(id_st+3, "Set Hysteresis")
             wx.EVT_MENU(self.ui, id_st+3, self.SetHysteresis)
             doit = True
+            pass
         if ((self.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE)
             or (self.event_support == OpenIPMI.EVENT_SUPPORT_ENTIRE_SENSOR)):
             item = menu.Append(id_st+4, "Set Event Enables")
             wx.EVT_MENU(self.ui, id_st+4, self.SetEventEnables)
             doit = True
+            pass
 
         if (doit):
             self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
+            pass
         menu.Destroy()
+        return
 
     def Rearm(self, event):
-        pass
+        return
     
     def SetThresholds(self, event):
         SensorThresholdsSet(self)
+        return
     
     def SetHysteresis(self, event):
         SensorHysteresisSet(self)
+        return
     
     def SetEventEnables(self, event):
         SensorEventEnablesSet(self)
+        return
     
     def remove(self):
         self.e.sensors.pop(self.name)
         self.ui.remove_sensor(self)
+        return
 
     def handle_threshold_states(self, states):
         th = states.split()
@@ -601,29 +713,42 @@ class Sensor:
                 if (not self.in_warning):
                     self.in_warning = True
                     self.ui.incr_item_warning(self.treeroot)
+                    pass
+                pass
             else:
                 if (self.in_warning):
                     self.in_warning = False
                     self.ui.decr_item_warning(self.treeroot)
+                    pass
+                pass
 
             if (v == "uc") or (v == "lc"):
                 if (not self.in_severe):
                     self.in_severe = True
                     self.ui.incr_item_severe(self.treeroot)
+                    pass
+                pass
             else:
                 if (self.in_severe):
                     self.in_severe = False
                     self.ui.decr_item_severe(self.treeroot)
+                    pass
+                pass
 
             if (v == "ur") or (v == "lr"):
                 if (not self.in_critical):
                     self.in_critical = True
                     self.ui.incr_item_critical(self.treeroot)
+                    pass
+                pass
             else:
                 if (self.in_critical):
                     self.in_critical = False
                     self.ui.decr_item_critical(self.treeroot)
-
+                    pass
+                pass
+            pass
+        return
 
     def threshold_reading_cb(self, sensor, err, raw_set, raw, value_set,
                              value, states):
@@ -633,23 +758,28 @@ class Sensor:
         v = ""
         if (value_set):
             v += str(value) + self.threshold_sensor_units
+            pass
         if (raw_set):
             v += " (" + str(raw) + ")"
+            pass
         v += ": " + states
         self.ui.set_item_text(self.treeroot, v)
         self.handle_threshold_states(states)
+        return
         
     def discrete_states_cb(self, sensor, err, states):
         if (err):
             self.ui.set_item_text(self.treeroot, None)
             return
         self.ui.set_item_text(self.treeroot, states)
+        return
         
     def sensor_get_event_enable_cb(self, sensor, err, states):
         if (err != 0):
             self.ui.set_item_text(self.event_enables, None)
             return
         self.ui.set_item_text(self.event_enables, states)
+        return
 
     def sensor_get_hysteresis_cb(self, sensor, err, positive, negative):
         if (err != 0):
@@ -658,18 +788,23 @@ class Sensor:
         self.ui.set_item_text(self.hysteresis,
                               "Positive:" + str(positive)
                               + " Negative:" + str(negative))
+        return
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
         if (err != 0):
             self.ui.set_item_text(self.thresholds, None)
             return
         self.ui.set_item_text(self.thresholds, th)
+        return
 
     def threshold_event_cb(self, sensor, event_spec, raw_set, raw,
                            value_set, value, event):
         self.handle_threshold_states(event_spec)
         sensor.get_value(self)
+        return OpenIPMI.EVENT_NOT_HANDLED
         
     def discrete_event_cb(self, sensor, event_spec, severity, old_severity,
                           event):
-        pass
+        return OpenIPMI.EVENT_NOT_HANDLED
+    
+    pass

@@ -768,14 +768,15 @@ entity_presence_handler(ipmi_entity_t *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    event_ref;
+    int         rv = IPMI_EVENT_NOT_HANDLED;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
-    swig_call_cb(cb, "entity_presence_cb", "%p%d%p",
-		 &entity_ref, present, &event_ref);
+    swig_call_cb_rv('I', &rv, cb, "entity_presence_cb", "%p%d%p",
+		    &entity_ref, present, &event_ref);
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(event_ref);
-    return IPMI_EVENT_NOT_HANDLED;
+    return rv;
 }
 
 static void
@@ -845,16 +846,18 @@ entity_hot_swap_handler(ipmi_entity_t             *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    event_ref;
+    int         rv = IPMI_EVENT_NOT_HANDLED;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
-    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%s%s%p", &entity_ref,
-		 ipmi_hot_swap_state_name(last_state),
-		 ipmi_hot_swap_state_name(curr_state),
-		 &event_ref);
+    swig_call_cb_rv('I', &rv,
+		    cb, "entity_hot_swap_update_cb", "%p%s%s%p", &entity_ref,
+		    ipmi_hot_swap_state_name(last_state),
+		    ipmi_hot_swap_state_name(curr_state),
+		    &event_ref);
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(event_ref);
-    return IPMI_EVENT_NOT_HANDLED;
+    return rv;
 }
 
 static void
@@ -1772,6 +1775,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     int         raw_set = 0;
     int         value_set = 0;
     swig_ref    event_ref;
+    int         rv = IPMI_EVENT_NOT_HANDLED;
 
     if (value_present == IPMI_RAW_VALUE_PRESENT)
 	raw_set = 1;
@@ -1782,11 +1786,13 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     threshold_event_str(eventstr, threshold, high_low, dir);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
-    swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%d%f%p", &sensor_ref,
-		 eventstr, raw_set, raw_value, value_set, value, &event_ref);
+    swig_call_cb_rv('I', &rv,
+		    cb, "threshold_event_cb", "%p%s%d%d%d%f%p", &sensor_ref,
+		    eventstr, raw_set, raw_value, value_set, value,
+		    &event_ref);
     swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     swig_free_ref(event_ref);
-    return IPMI_EVENT_NOT_HANDLED;
+    return rv;
 }
 
 static int
@@ -1802,15 +1808,17 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     swig_ref    sensor_ref;
     char        eventstr[5];
     swig_ref    event_ref;
+    int         rv = IPMI_EVENT_NOT_HANDLED;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     discrete_event_str(eventstr, offset, dir);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
-    swig_call_cb(cb, "discrete_event_cb", "%p%s%d%d%p", &sensor_ref,
-		 eventstr, severity, prev_severity, &event_ref);
+    swig_call_cb_rv('I', &rv,
+		    cb, "discrete_event_cb", "%p%s%d%d%p", &sensor_ref,
+		    eventstr, severity, prev_severity, &event_ref);
     swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     swig_free_ref(event_ref);
-    return IPMI_EVENT_NOT_HANDLED;
+    return rv;
 }
 
 /*
@@ -2274,16 +2282,18 @@ control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
     swig_ref    event_ref;
+    int         rv = IPMI_EVENT_NOT_HANDLED;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
-    swig_call_cb(cb, "control_event_val_cb", "%p%p%*p%*p", &control_ref,
-		 &event_ref,
-		 ipmi_control_get_num_vals(control), valid_vals,
-		 ipmi_control_get_num_vals(control), val);
+    swig_call_cb_rv('I', &rv,
+		    cb, "control_event_val_cb", "%p%p%*p%*p", &control_ref,
+		    &event_ref,
+		    ipmi_control_get_num_vals(control), valid_vals,
+		    ipmi_control_get_num_vals(control), val);
     swig_free_ref_check(control_ref, ipmi_control_t);
     swig_free_ref(event_ref);
-    return IPMI_EVENT_NOT_HANDLED;
+    return rv;
 }
 
 static void
@@ -2967,6 +2977,11 @@ wait_io(int timeout)
 %constant int eagain = EAGAIN;
 %constant int eperm = EPERM;
 
+/*
+ * Return values for event handlers
+ */
+%constant int EVENT_NOT_HANDLED = IPMI_EVENT_NOT_HANDLED;
+%constant int EVENT_HANDLED = IPMI_EVENT_HANDLED;
 
 /* These two defines simplify the functions that do addition/removal
    of callbacks.  The type is the object type (domain, entity, etc)

@@ -31,6 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <ctype.h>
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -160,7 +161,8 @@ vswig_call_cb_rv(char rv_type, void *rv,
     } else {
 	rcount = call_method(method_name, G_SCALAR);
 	SPAGAIN;
-	if (rcount < 1)
+	/* Upper case types mean it will take a empty return */
+	if ((rcount < 1) && (! isupper(rv_type)))
 	    croak("OpenIPMI: method did not return any value: %s",
 		  method_name);
 	if (rcount > 1)
@@ -168,8 +170,13 @@ vswig_call_cb_rv(char rv_type, void *rv,
 		  method_name);
 
 	switch (rv_type) {
-	case 'i':
+	case 'i': /* Integer */
 	    *((int *) rv) = POPi;
+	    break;
+
+	case 'I': /* Integer, empty return leave value alone */
+	    if (rcount >= 1)
+		*((int *) rv) = POPi;
 	    break;
 
 	default:

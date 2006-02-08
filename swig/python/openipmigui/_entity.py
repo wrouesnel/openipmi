@@ -43,27 +43,35 @@ class EntityOp:
     def __init__(self, e, func):
         self.e = e
         self.func = func
+        return
 
     def DoOp(self):
         rv = self.e.entity_id.to_entity(self)
         if (rv == 0):
             rv = self.rv
+            pass
         return rv;
 
     def entity_cb(self, entity):
         self.rv = getattr(entity, self.func)(self.e)
+        return
+
+    pass
 
 class EntityFruViewer:
     def __init__(self, e):
         self.e = e
         self.e.entity_id.to_entity(self)
+        return
 
     def entity_cb(self, entity):
         fru = entity.get_fru()
         if (fru == None):
             return
         _fru.FruInfoDisplay(fru, str(self.e))
+        return
 
+    pass
 
 class ActivationTimeSetter(wx.Dialog):
     def __init__(self, e, name, func):
@@ -73,7 +81,7 @@ class ActivationTimeSetter(wx.Dialog):
         self.func = func
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
+
         box1 = wx.BoxSizer(wx.HORIZONTAL)
         label = wx.StaticText(self, -1, "Value:")
         box1.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
@@ -102,13 +110,17 @@ class ActivationTimeSetter(wx.Dialog):
         rv = e.entity_id.to_entity(self)
         if (rv == 0):
             rv = self.err
+            pass
         if (rv):
             _oi_logging.error("Error doing entity cb in activation time setter: "
                           + str(rv))
             self.Destroy()
+            pass
+        return
 
     def cancel(self, event):
         self.Close()
+        return
 
     def ok(self, event):
         try:
@@ -118,22 +130,31 @@ class ActivationTimeSetter(wx.Dialog):
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
+            pass
         if (rv != 0):
             _oi_logging.error("Error setting activation time: " + str(rv))
             self.Close()
+            pass
+        return
 
     def OnClose(self, event):
         self.Destroy()
+        return
 
     def entity_cb(self, entity):
         if (self.setting):
             self.err = getattr(entity, 'set_' + self.func)(None)
         else:
             self.err = getattr(entity, 'get_' + self.func)(self)
+            pass
+        return
 
     def entity_hot_swap_get_time_cb(self, entity, err):
         self.value.SetValue(str())
         self.Show(True)
+        return
+
+    pass
 
 class Entity:
     def __init__(self, d, entity):
@@ -157,6 +178,7 @@ class Entity:
         else:
             self.ui.add_entity(self.d, self)
             self.parent_id = None
+            pass
         self.hot_swap = "No"
 
         self.ui.append_item(self, 'Entity ID', self.entity_id_str)
@@ -172,6 +194,7 @@ class Entity:
         self.hot_swap_state = ''
 
         self.Changed(entity)
+        return
 
     def __str__(self):
         return self.name
@@ -185,6 +208,7 @@ class Entity:
             item = menu.Append(id_st+1, "View FRU Data")
             wx.EVT_MENU(self.d.ui, id_st+1, self.ViewFruData)
             doit = True
+            pass
             
         if (self.hot_swap == "Managed"):
             item = menu.Append(id_st+2, "Request Activation")
@@ -206,38 +230,51 @@ class Entity:
 
         if (doit):
             self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
+            pass
         menu.Destroy()
+        return
 
     def RequestActivation(self, event):
         oper = EntityOp(self, "set_activation_requested")
         rv = oper.DoOp()
         if (rv != 0):
             _oi_logging.error("entity set activation failed: " + str(rv))
+            pass
+        return
 
     def Activate(self, event):
         oper = EntityOp(self, "activate")
         rv = oper.DoOp()
         if (rv != 0):
             _oi_logging.error("entity activation failed: " + str(rv))
+            pass
+        return
 
     def Deactivate(self, event):
         oper = EntityOp(self, "deactivate")
         rv = oper.DoOp()
         if (rv != 0):
             _oi_logging.error("entity deactivation failed: " + str(rv))
+            pass
+        return
 
     def SetAutoActTime(self, event):
         ActivationTimeSetter(self, "Activation Time", "auto_activate_time")
+        return
         
     def SetAutoDeactTime(self, event):
         ActivationTimeSetter(self, "Deactivation Time", "auto_deactivate_time")
+        return
         
     def ViewFruData(self, event):
         EntityFruViewer(self)
+        return
 
     def entity_activate_cb(self, entity, err):
         if (err != 0):
             _oi_logging.error("entity activate operation failed: " + str(err))
+            pass
+        return
         
     def Changed(self, entity):
         self.is_fru = entity.is_fru()
@@ -246,32 +283,40 @@ class Entity:
         eid = self.id_str
         if (eid == None):
             eid = self.entity_id_str
+            pass
         if (eid != None):
             self.ui.set_item_text(self.treeroot, eid)
+            pass
 
         self.entity_type = entity.get_type()
         self.slot_number = entity.get_physical_slot_num()
         if (self.slot_number < 0):
             self.slot_number = None
+            pass
 
         self.mc_id = entity.get_mc_id()
         self.mc_name = None
         if (self.mc_id != None):
             self.mc_id.to_mc(self);
+            pass
 
         if entity.is_hot_swappable():
             if entity.supports_managed_hot_swap():
                 hot_swap = "Managed"
             else:
                 hot_swap = "Simple"
+                pass
         else:
             hot_swap = "No"
+            pass
         if (hot_swap != self.hot_swap):
             self.hot_swap = hot_swap
             if (hot_swap != "No"):
                 entity.get_hot_swap_state(self)
             else:
                 self.hot_swap_state = ''
+                pass
+            pass
 
         self.supports_auto_activate = entity.supports_auto_activate_time()
         self.supports_auto_deactivate = entity.supports_auto_deactivate_time()
@@ -283,15 +328,17 @@ class Entity:
                            str(entity.get_presence_sensor_always_there() != 0))
         if (self.slot_number != None):
             self.ui.set_item_text(self.slotnumitem, str(self.slot_number))
+            pass
         self.ui.set_item_text(self.mcitem, self.mc_name)
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
-
+        return
 
     def entity_hot_swap_update_cb(self, entity, old_state, new_state, event):
         self.hot_swap_state = new_state
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
+        return OpenIPMI.EVENT_NOT_HANDLED
     
     def entity_hot_swap_cb(self, entity, err, state):
         if (err):
@@ -300,32 +347,44 @@ class Entity:
         self.hot_swap_state = state
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
+        return
     
     def mc_cb(self, mc):
         self.mc_name = mc.get_name()
+        return
         
     def entity_iter_entities_cb(self, child, parent):
         self.parent_id = parent.get_id()
         self.parent = self.d.find_or_create_entity(parent)
+        return
         
     def remove(self):
         self.d.entities.pop(self.name)
         self.ui.remove_entity(self)
+        return
 
     def entity_sensor_update_cb(self, op, entity, sensor):
         if (op == "added"):
             e = _sensor.Sensor(self, sensor)
         elif (op == "removed"):
             self.sensors[sensor.get_name()].remove()
+            pass
+        return
 
     def entity_control_update_cb(self, op, entity, control):
         if (op == "added"):
             e = _control.Control(self, control)
         elif (op == "removed"):
             self.controls[control.get_name()].remove()
+            pass
+        return
 
     def entity_presence_cb(self, entity, present, event):
         if (present):
             self.ui.set_item_active(self.treeroot)
         else:
             self.ui.set_item_inactive(self.treeroot)
+            pass
+        return
+
+    pass
