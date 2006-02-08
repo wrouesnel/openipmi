@@ -338,7 +338,7 @@ class Entity:
         self.hot_swap_state = new_state
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
-        return OpenIPMI.EVENT_NOT_HANDLED
+        return OpenIPMI.EVENT_HANDLED_PASS
     
     def entity_hot_swap_cb(self, entity, err, state):
         if (err):

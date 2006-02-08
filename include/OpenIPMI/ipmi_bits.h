@@ -464,8 +464,16 @@ const char *ipmi_get_color_string(unsigned int val);
 /*
  * Misc values
  */
-#define IPMI_EVENT_HANDLED     0
-#define IPMI_EVENT_NOT_HANDLED 1
+/* Event was handled (so don't send it to the unhandled event
+   handler), and do NOT pass the event contents to other event
+   handlers. */
+#define IPMI_EVENT_HANDLED		0
+/* I did not handle this event. */
+#define IPMI_EVENT_NOT_HANDLED		1
+/* Event was handled (so don't send it to the unhandled event
+   handler), but still pass the event contents to other event
+   handlers. */
+#define IPMI_EVENT_HANDLED_PASS		2
 
 #define IPMI_TIMEOUT_NOW	0
 #define IPMI_TIMEOUT_FOREVER	LONG_MAX

@@ -11,6 +11,29 @@
 	values from event handlers.
 	* swig/python/openipmigui/_sensor.py: ditto
 
+	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_bits.h:
+	Added a way for an event handler to "handle" the event (not send
+	it to the unhandled event handler) but still pass the event data
+	on to other handlers.
+	* lib/sensor.c, lib/control.c, lib/entity.c: ditto
+
+	* lib/entity.c: Changed the internal presence handling to never
+	pass an event (since one is never really available, and shouldn't
+	matter).  The API is still there, though, and should be handled as
+	before.
+
+	* lib/oem_atca.c: Fixed a missing event handled initialization.
+
+	* swig/OpenIPMI.i: Added the new IPMI_EVENT_HANDLED_PASS return
+	value.
+
+	* swig/python/openipmigui/_entity.py: Switched to the pass event
+	handler return.
+	* swig/python/openipmigui/_sensor.py: ditto
+	* cmdlang/cmd_control.c: ditto
+	* cmdlang/cmd_entity.c: ditto
+	* cmdlang/cmd_control.c:  ditto
+
 2006-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Add a way to

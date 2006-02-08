@@ -1222,9 +1222,13 @@ control_val_event_call_handler(void *cb_data, void *item1, void *item2)
 		      info->vals,
 		      item2,
 		      info->event);
-    if (handled == IPMI_EVENT_HANDLED) {
-	info->handled = handled;
-	info->event = NULL;
+    if (handled != IPMI_EVENT_NOT_HANDLED) {
+	if (info->handled != IPMI_EVENT_HANDLED)
+	    /* Allow handled to override handled_pass, but not the
+	       other way. */
+	    info->handled = handled;
+	if (handled == IPMI_EVENT_HANDLED)
+	    info->event = NULL;
     }
     return LOCKED_LIST_ITER_CONTINUE;
 }

@@ -3319,9 +3319,13 @@ threshold_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
 		      info->value_present,
 		      info->raw_value, info->value,
 		      item2, info->event);
-    if (handled == IPMI_EVENT_HANDLED) {
-	info->handled = handled;
-	info->event = NULL;
+    if (handled != IPMI_EVENT_NOT_HANDLED) {
+	if (info->handled != IPMI_EVENT_HANDLED)
+	    /* Allow handled to override handled_pass, but not the
+	       other way. */
+	    info->handled = handled;
+	if (handled == IPMI_EVENT_HANDLED)
+	    info->event = NULL;
     }
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -3348,7 +3352,10 @@ ipmi_sensor_call_threshold_event_handlers
     info.raw_value = raw_value;
     info.value = value;
     info.event = *event;
-    info.handled = IPMI_EVENT_NOT_HANDLED;
+    if (handled)
+	info.handled = *handled;
+    else
+	info.handled = IPMI_EVENT_NOT_HANDLED;
 
     if (sensor->threshold_event_handler) {
 	sensor->threshold_event_handler(sensor, info.dir,
@@ -3380,9 +3387,13 @@ discrete_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
 		      info->severity,
 		      info->prev_severity,
 		      item2, info->event);
-    if (handled == IPMI_EVENT_HANDLED) {
-	info->handled = handled;
-	info->event = NULL;
+    if (handled != IPMI_EVENT_NOT_HANDLED) {
+	if (info->handled != IPMI_EVENT_HANDLED)
+	    /* Allow handled to override handled_pass, but not the
+	       other way. */
+	    info->handled = handled;
+	if (handled == IPMI_EVENT_HANDLED)
+	    info->event = NULL;
     }
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -3404,7 +3415,10 @@ ipmi_sensor_call_discrete_event_handlers(ipmi_sensor_t         *sensor,
     info.severity = severity;
     info.prev_severity = prev_severity;
     info.event = *event;
-    info.handled = IPMI_EVENT_NOT_HANDLED;
+    if (handled)
+	info.handled = *handled;
+    else
+	info.handled = IPMI_EVENT_NOT_HANDLED;
 
     if (sensor->discrete_event_handler) {
 	sensor->discrete_event_handler(sensor, info.dir, info.offset,
@@ -3431,7 +3445,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 
     CHECK_SENSOR_LOCK(sensor);
 
-    handled = 0;
+    handled = IPMI_EVENT_NOT_HANDLED;
 
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
 	enum ipmi_event_dir_e       dir;

@@ -2406,7 +2406,7 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 	/* Tell the user that we went away, if necessary. */
 	/* FIXME - what about out-of-comm state? */
 	if (finfo->hs_state != IPMI_HOT_SWAP_NOT_PRESENT) {
-	    int                       handled;
+	    int                       handled = IPMI_EVENT_NOT_HANDLED;
 	    enum ipmi_hot_swap_states old_state;
 	    ipmi_event_t              *event = NULL;
 

@@ -1241,7 +1241,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 	ipmi_cmdlang_up(evi);
     }
     ipmi_cmdlang_cmd_info_put(evi);
-    return IPMI_EVENT_HANDLED;
+    return IPMI_EVENT_HANDLED_PASS;
 
  out_err:
     ipmi_cmdlang_global_err(sensor_name,
@@ -1301,7 +1301,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	ipmi_cmdlang_up(evi);
     }
     ipmi_cmdlang_cmd_info_put(evi);
-    return IPMI_EVENT_HANDLED;
+    return IPMI_EVENT_HANDLED_PASS;
 
  out_err:
     ipmi_cmdlang_global_err(sensor_name,

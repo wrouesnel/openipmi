@@ -617,8 +617,9 @@ unsigned int ipmi_event_get_data(const ipmi_event_t *event,
 
    The return values from the event handlers is currently ignored, but
    you should generally return either IPMI_EVENT_NOT_HANDLED or
-   IPMI_EVENT_HANDLED depending on if you did or did not handle the
-   event. */
+   IPMI_EVENT_HANDLED or IPMI_EVENT_HANDLED_PASS depending on if you
+   did or did not handle the event and whether you want other event
+   handlers to see it. */
 
 typedef struct ipmi_event_handlers_s ipmi_event_handlers_t;
 
@@ -697,7 +698,9 @@ void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
 
 /* Add a handler to monitor the presence of an entity. This call
    allows multiple handlers to be attached to the entity.  It should
-   return IPMI_EVENT_HANDLED if it handled the event, or
+   return IPMI_EVENT_HANDLED if it handled the event,
+   IPMI_EVENT_HANDLED_PASS if it handled the event but wants to allow
+   other event handlers to see the event data, or
    IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
    the event means that is will manage the event (delete it when it is
    time).  If no sensor handles the event, then it will be delivered
@@ -936,11 +939,12 @@ int ipmi_entity_supports_managed_hot_swap(ipmi_entity_t *ent);
 
 /* Register to receive the hot-swap state when it changes.  the
    handler returns an integer.  It should return IPMI_EVENT_HANDLED if
-   it handled the event, or IPMI_EVENT_NOT_HANDLED if it didn't handle
-   the event.  "Handling" the event means that is will manage the
-   event (delete it when it is time).  If no sensor handles the event,
-   then it will be delivered to the "main" unhandled event handler for
-   the domain. */
+   it handled the event, IPMI_EVENT_HANDLED_PASS if it handled the
+   event but wants to allow other event handlers to see the event
+   data, or IPMI_EVENT_NOT_HANDLED if it didn't handle the event.
+   "Handling" the event means that is will manage the event (delete it
+   when it is time).  If no sensor handles the event, then it will be
+   delivered to the "main" unhandled event handler for the domain. */
 typedef int (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
 				       enum ipmi_hot_swap_states last_state,
 				       enum ipmi_hot_swap_states curr_state,
@@ -1073,7 +1077,9 @@ int ipmi_entity_id_check_hot_swap_state(ipmi_entity_id_t id);
 
 /* Handle events from a given sensor.  This allows multiple handlers
    to be added to a sensor.  Also, the handler returns an integer.  It
-   should return IPMI_EVENT_HANDLED if it handled the event, or
+   should return IPMI_EVENT_HANDLED if it handled the event,
+   IPMI_EVENT_HANDLED_PASS if it handled the event but wants to allow
+   other event handlers to see the event data, or
    IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
    the event means that is will manage the event (delete it when it is
    time).  If no sensor handles the event, then it will be delivered
@@ -1090,11 +1096,13 @@ int ipmi_sensor_remove_threshold_event_handler(
 /* Register a handler to be called for incoming events on the
    sensor. This call allows multiple handlers to be added to a sensor.
    Also, the handler returns an integer.  It should return
-   IPMI_EVENT_HANDLED if it handled the event, or
-   IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
-   the event means that is will manage the event (delete it when it is
-   time).  If no sensor handles the event, then it will be delivered
-   to the "main" unhandled event handler for the domain. */
+   IPMI_EVENT_HANDLED if it handled the event, IPMI_EVENT_HANDLED_PASS
+   if it handled the event but wants to allow other event handlers to
+   see the event data, or IPMI_EVENT_NOT_HANDLED if it didn't handle
+   the event.  "Handling" the event means that is will manage the
+   event (delete it when it is time).  If no sensor handles the event,
+   then it will be delivered to the "main" unhandled event handler for
+   the domain. */
 int ipmi_sensor_add_discrete_event_handler(
     ipmi_sensor_t                 *sensor,
     ipmi_sensor_discrete_event_cb handler,
@@ -1588,11 +1596,13 @@ int ipmi_control_get_val(ipmi_control_t      *control,
    it will return ENOSYS.  The valid_vals array is an array of
    booleans telling if the given value in the vals array is a valid
    value.  The event must be handled just like sensor events.  The
-   handler should return IPMI_EVENT_HANDLED if it handled the event
-   and IPMI_EVENT_NOT_HANDLED if it didn't handle the event.
-   "Handling" the event means that is will manage the event (delete it
-   when it is time).  If no sensor handles the event, then it will be
-   delivered to the "main" unhandled event handler for the domain. */
+   handler should return IPMI_EVENT_HANDLED if it handled the event,
+   IPMI_EVENT_HANDLED_PASS if it handled the event but wants to allow
+   other event handlers to see the event data, or
+   IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
+   the event means that is will manage the event (delete it when it is
+   time).  If no sensor handles the event, then it will be delivered
+   to the "main" unhandled event handler for the domain. */
 typedef int (*ipmi_control_val_event_cb)(ipmi_control_t *control,
 					 int            *valid_vals,
 					 int            *vals,

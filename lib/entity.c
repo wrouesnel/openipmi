@@ -300,8 +300,7 @@ struct ipmi_entity_info_s
 };
 
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
-static int call_presence_handlers(ipmi_entity_t *ent, int present,
-				  int handled, ipmi_event_t **event);
+static void call_presence_handlers(ipmi_entity_t *ent, int present);
 
 /***********************************************************************
  *
@@ -801,7 +800,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    present = ent->present;
 	    ent->present_change_count--;
 	    _ipmi_domain_entity_unlock(domain);
-	    call_presence_handlers(ent, present, IPMI_EVENT_NOT_HANDLED, NULL);
+	    call_presence_handlers(ent, present);
 	    _ipmi_domain_entity_lock(domain);
 
 	    /* Something grabbed the entity while the lock wasn't
@@ -1367,8 +1366,6 @@ typedef struct presence_handler_info_s
 {
     ipmi_entity_t             *ent;
     int                       present;
-    ipmi_event_t              *event;
-    int                       handled;
 } presence_handler_info_t;
 
 static int
@@ -1376,43 +1373,28 @@ call_presence_handler(void *cb_data, void *item1, void *item2)
 {
     presence_handler_info_t        *info = cb_data;
     ipmi_entity_presence_change_cb handler = item1;
-    int                            handled;
 
-    handled = handler(info->ent, info->present, item2, info->event);
-    if (handled == IPMI_EVENT_HANDLED) {
-	info->handled = handled;
-	info->event = NULL;
-    }
+    handler(info->ent, info->present, item2, NULL);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static int
-call_presence_handlers(ipmi_entity_t *ent, int present,
-		       int handled, ipmi_event_t **event)
+static void
+call_presence_handlers(ipmi_entity_t *ent, int present)
 {
     presence_handler_info_t info;
 
     info.ent = ent;
     info.present = present;
-    if (!event)
-	info.event = NULL;
-    else
-	info.event = *event;
-    info.handled = handled;
     ipmi_lock(ent->lock);
     if (ent->cruft_presence_handler) {
 	ipmi_entity_presence_nd_cb handler = ent->cruft_presence_handler;
 	void                       *cb_data = ent->cruft_presence_cb_data;
 	ipmi_unlock(ent->lock);
-	handler(ent, info.present, cb_data, info.event);
-	info.handled = IPMI_EVENT_HANDLED;
+	handler(ent, info.present, cb_data, NULL);
     } else
 	ipmi_unlock(ent->lock);
     locked_list_iterate(ent->presence_handlers, call_presence_handler,
 			&info);
-    if (event)
-	*event = info.event;
-    return info.handled;
 }
 
 /* This is for iterating the parents when a sensor's presence changes.
@@ -1430,11 +1412,8 @@ presence_parent_handler(ipmi_entity_t *ent,
 }
 
 static void
-presence_changed(ipmi_entity_t *ent,
-		 int           present,
-		 ipmi_event_t  *event)
+presence_changed(ipmi_entity_t *ent, int present)
 {
-    int                     handled = IPMI_EVENT_NOT_HANDLED;
     ipmi_fru_t              *fru;
     ipmi_domain_t           *domain = ent->domain;
 
@@ -1448,7 +1427,7 @@ presence_changed(ipmi_entity_t *ent,
 	{
 	    /* Do internal presence handling if we have the internal
 	       hot-swap machine installed. */
-	    handled = handle_hot_swap_presence(ent, present, event);
+	    handle_hot_swap_presence(ent, present, NULL);
 	}
 
 	/* When the entity becomes present or absent, fetch or destroy
@@ -1472,14 +1451,14 @@ presence_changed(ipmi_entity_t *ent,
 	if (ent->usecount == 1) {
 	    ent->present = !ent->present;
 	    _ipmi_domain_entity_unlock(domain);
-	    handled = call_presence_handlers(ent, present, handled, &event);
+	    call_presence_handlers(ent, present);
 	    _ipmi_domain_entity_lock(domain);
 	    while ((ent->usecount == 1) && (ent->present_change_count)) {
 		ent->present = !ent->present;
 		present = ent->present;
 		ent->present_change_count--;
 		_ipmi_domain_entity_unlock(domain);
-		call_presence_handlers(ent, present, handled, NULL);
+		call_presence_handlers(ent, present);
 		_ipmi_domain_entity_lock(domain);
 	    }
 	} else {
@@ -1491,9 +1470,6 @@ presence_changed(ipmi_entity_t *ent,
 	   rescan them. */
 	ipmi_entity_iterate_parents(ent, presence_parent_handler, NULL);
     }
-
-    if (event && (handled == IPMI_EVENT_NOT_HANDLED))
-	ipmi_handle_unhandled_event(domain, event);
 }
 
 static void
@@ -1524,9 +1500,9 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
     /* zero offset is the "present" offset, 1 or 2 means it absent or
        disabled, coupled with the assertion/deassertion. */
     if (dir == IPMI_ASSERTION)
-	presence_changed(ent, offset == 0, event);
+	presence_changed(ent, offset == 0);
     else if (dir == IPMI_DEASSERTION)
-	presence_changed(ent, offset != 0, event);
+	presence_changed(ent, offset != 0);
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -1546,9 +1522,9 @@ presence_bit_sensor_changed(ipmi_sensor_t         *sensor,
 
     /* Assertion means present. */
     if (dir == IPMI_ASSERTION)
-	presence_changed(ent, 1, event);
+	presence_changed(ent, 1);
     else if (dir == IPMI_DEASSERTION)
-	presence_changed(ent, 0, event);
+	presence_changed(ent, 0);
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -1581,7 +1557,7 @@ static void
 detect_done(ipmi_entity_t *ent, ent_active_detect_t *info)
 {
     ipmi_unlock(info->lock);
-    presence_changed(ent, info->present, NULL);
+    presence_changed(ent, info->present);
     ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
     _ipmi_put_domain_fully_up(ent->domain, "detect_done");
@@ -2022,7 +1998,7 @@ states_read(ipmi_sensor_t *sensor,
 	/* The present bit is supported. */
 	present = ipmi_is_state_set(states, 0);
 
-    presence_changed(ent, present, NULL);
+    presence_changed(ent, present);
     _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor), "states_read");
 }
 
@@ -2041,7 +2017,7 @@ states_bit_read(ipmi_sensor_t *sensor,
     }
 
     present = ipmi_is_state_set(states, ent->presence_bit_offset);
-    presence_changed(ent, present, NULL);
+    presence_changed(ent, present);
     _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor),
 			      "states_bit_read");
 }
@@ -5194,9 +5170,13 @@ call_hot_swap_handler(void *cb_data, void *item1, void *item2)
 
     handled = handler(info->ent, info->last_state, info->curr_state,
 		      item2, *(info->event));
-    if (handled == IPMI_EVENT_HANDLED) {
-	info->handled = handled;
-	*(info->event) = NULL;
+    if (handled != IPMI_EVENT_NOT_HANDLED) {
+	if (info->handled != IPMI_EVENT_HANDLED)
+	    /* Allow handled to override handled_pass, but not the
+	       other way. */
+	    info->handled = handled;
+	if (handled == IPMI_EVENT_HANDLED)
+	    *(info->event) = NULL;
     }
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -5214,7 +5194,10 @@ ipmi_entity_call_hot_swap_handlers(ipmi_entity_t             *ent,
     info.last_state = last_state;
     info.curr_state = curr_state;
     info.event = event;
-    info.handled = IPMI_EVENT_NOT_HANDLED;
+    if (handled)
+	info.handled = *handled;
+    else
+	info.handled = IPMI_EVENT_NOT_HANDLED;
     locked_list_iterate(ent->hot_swap_handlers, call_hot_swap_handler, &info);
     if (handled)
 	*handled = info.handled;
@@ -5990,7 +5973,7 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
 
  out:
     ipmi_unlock(ent->lock);
-    return 0;
+    return handled;
 }
 
 static void power_checked(ipmi_control_t *control,
@@ -6006,7 +5989,6 @@ hot_swap_power_changed(ipmi_control_t *control,
 		       ipmi_event_t   *event)
 {
     ipmi_entity_t *ent = cb_data;
-    int           handled = IPMI_EVENT_NOT_HANDLED;
 
     if (!valid_vals[0])
 	return IPMI_EVENT_NOT_HANDLED;
@@ -6014,7 +5996,7 @@ hot_swap_power_changed(ipmi_control_t *control,
     if (ent->present)
 	power_checked(control, 0, vals, ent);
     
-    return handled;
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 static void

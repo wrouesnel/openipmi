@@ -64,7 +64,7 @@ discrete_event_handler(ipmi_sensor_t         *sensor,
     ipmi_cmdlang_out(cmd_info, "Direction", ipmi_get_event_dir_string(dir));
     ipmi_cmdlang_out_int(cmd_info, "Severity", severity);
     ipmi_cmdlang_out_int(cmd_info, "Previous Severity", prev_severity);
-    return IPMI_EVENT_HANDLED;
+    return IPMI_EVENT_HANDLED_PASS;
 }
 
 static int
@@ -102,7 +102,7 @@ threshold_event_handler(ipmi_sensor_t               *sensor,
     default:
 	break;
     }
-    return IPMI_EVENT_HANDLED;
+    return IPMI_EVENT_HANDLED_PASS;
 }
 
 static void

@@ -801,10 +801,10 @@ class Sensor:
                            value_set, value, event):
         self.handle_threshold_states(event_spec)
         sensor.get_value(self)
-        return OpenIPMI.EVENT_NOT_HANDLED
+        return OpenIPMI.EVENT_HANDLED_PASS
         
     def discrete_event_cb(self, sensor, event_spec, severity, old_severity,
                           event):
-        return OpenIPMI.EVENT_NOT_HANDLED
+        return OpenIPMI.EVENT_HANDLED_PASS
     
     pass

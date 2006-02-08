@@ -2982,6 +2982,7 @@ wait_io(int timeout)
  */
 %constant int EVENT_NOT_HANDLED = IPMI_EVENT_NOT_HANDLED;
 %constant int EVENT_HANDLED = IPMI_EVENT_HANDLED;
+%constant int EVENT_HANDLED_PASS = IPMI_EVENT_HANDLED_PASS;
 
 /* These two defines simplify the functions that do addition/removal
    of callbacks.  The type is the object type (domain, entity, etc)
