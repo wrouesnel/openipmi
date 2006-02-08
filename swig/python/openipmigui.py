@@ -168,6 +168,10 @@ def run(args):
     debug_rawmsg = False
     do_trace = False
 
+    # Get rid of program name.
+    if (len(args) > 0):
+        del args[0]
+
     while (len(args) > 0):
         arg = args[0]
         del args[0]

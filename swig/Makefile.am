@@ -9,7 +9,7 @@ EXTRA_LIBRARIES = libglibshim.a libglib12shim.a
 AM_CFLAGS = -Wall -I$(top_srcdir)/include
 
 libglibshim_a_SOURCES = glibshim.c
-libglibshim_a_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DINITFUNC=init_glib_shim
+libglibshim_a_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DINITFUNC=init_glib_shim -fPIC
 
 libglib12shim_a_SOURCES = glibshim.c
-libglib12shim_a_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DINITFUNC=init_glib12_shim
+libglib12shim_a_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DINITFUNC=init_glib12_shim -fPIC
