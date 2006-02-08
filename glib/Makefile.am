@@ -10,13 +10,23 @@ VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
-AM_CFLAGS = -Wall -I$(top_srcdir)/include $(GLIB_CFLAGS)
+AM_CFLAGS = -Wall -I$(top_srcdir)/include
 
-lib_LTLIBRARIES = libOpenIPMIglib.la
+lib_LTLIBRARIES = @GLIB_TARGET@ @GLIB12_TARGET@
+EXTRA_LTLIBRARIES = libOpenIPMIglib.la libOpenIPMIglib12.la
 
 libOpenIPMIglib_la_SOURCES = glib_os_hnd.c
+libOpenIPMIglib_la_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DFNAME=ipmi_glib_get_os_handler
 libOpenIPMIglib_la_LIBADD = $(GDBM_LIB)
 libOpenIPMIglib_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
+	-rpath $(libdir) \
 	-Wl,-Map -Wl,libOpenIPMIglib.map $(GLIB_LIBS)
 
-CLEANFILES = libOpenIPMIglib.map
+libOpenIPMIglib12_la_SOURCES = glib_os_hnd.c
+libOpenIPMIglib12_la_CFLAGS = $(GLIB12_CFLAGS) $(AM_CFLAGS) -DFNAME=ipmi_glib12_get_os_handler
+libOpenIPMIglib12_la_LIBADD = $(GDBM_LIB)
+libOpenIPMIglib12_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
+	-rpath $(libdir) \
+	-Wl,-Map -Wl,libOpenIPMIglib12.map $(GLIB12_LIBS)
+
+CLEANFILES = libOpenIPMIglib.map libOpenIPMIglib12.map glib12_os_hnd.c

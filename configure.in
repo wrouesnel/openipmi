@@ -117,6 +117,28 @@ AC_ARG_WITH(gliblibs,
     gliblibs="$withval",
 )
 
+tryglib12=yes
+AC_ARG_WITH(glib12,
+[  --with-glib12=yes|no            Look for glib version 1.2.],
+    if test "x$withval" = "xyes"; then
+      tryglib12=yes
+    elif test "x$withval" = "xno"; then
+      tryglib12=no
+    fi,
+)
+
+glib12cflags=
+AC_ARG_WITH(glib12cflags,
+[  --with-glib12cflags=flags       Set the flags to compile with glib 1.2.],
+    glibcflags="$withval",
+)
+
+gliblibs=
+AC_ARG_WITH(glib12libs,
+[  --with-glib12libs=libs          Set the libraries to link with glib 1.2.],
+    gliblibs="$withval",
+)
+
 tryperl=yes
 perldir=
 AC_ARG_WITH(perl,
@@ -302,24 +324,87 @@ else
    GLIB_VERSION="$glibver"
    GLIB_LIBS="$gliblibs"
 fi
+echo "checking for glib... $haveglib"
    
 if test "x$haveglib" = "xyes"; then
    AC_DEFINE(HAVE_GLIB)
-   GLIB_DIR=glib
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
    GLIB_PKGCONF=OpenIPMIglib.pc
+   GLIB_TARGET=libOpenIPMIglib.la
+   GLIB_SHIM=libglibshim.a
+   GLIB_SHIM=libglibshim.a
+   GLIB_SHIM_LIB='$(top_builddir)/swig/libglibshim.a'
 else
-   GLIB_DIR=
    GLIB_LIB=
    GLIB_PKGCONF=
+   GLIB_TARGET=
+   GLIB_SHIM=
+   GLIB_SHIM_LIB=
 fi
 AC_SUBST(GLIB_VERSION)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 
-AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_PKGCONF)
+AC_SUBST(GLIB_TARGET)
+AC_SUBST(GLIB_SHIM)
+AC_SUBST(GLIB_SHIM_LIB)
+
+
+# We allow glib 1.2 specific libraries, too.
+haveglib12=no
+if test "x$glib12cflags" = "x" -o "x$glib12libs" = "x"; then
+   glibprog=
+   AC_PATH_PROG(glibprog, glib-config)
+   GLIB12_CFLAGS=
+   GLIB12_LIBS=
+   if test "x$glibprog" != "x"; then
+      GLIB12_CFLAGS=`$glibprog --cflags gthread`
+      if test $? = 0; then
+         haveglib12=yes
+   	 GLIB12_LIBS=`$glibprog --libs gthread`
+      fi
+   fi
+else
+   haveglib12=yes
+   GLIB12_CFLAGS="$glib12cflags"
+   GLIB12_LIBS="$glib12libs"
+fi
+
+echo "checking for glib 1.2... $haveglib12"
+
+if test "x$haveglib12" = "xyes"; then
+   AC_DEFINE(HAVE_GLIB12)
+   GLIB12_LIB='$(top_builddir)/glib/libOpenIPMIglib12.la'
+   GLIB12_PKGCONF=OpenIPMIglib12.pc
+   GLIB12_TARGET=libOpenIPMIglib12.la
+   GLIB12_SHIM=libglib12shim.a
+   GLIB12_SHIM_LIB='$(top_builddir)/swig/libglib12shim.a'
+else
+   GLIB12_LIB=
+   GLIB12_PKGCONF=
+   GLIB12_TARGET=
+   GLIB12_SHIM=
+   GLIB12_SHIM_LIB=
+fi
+AC_SUBST(GLIB12_CFLAGS)
+AC_SUBST(GLIB12_LIBS)
+
+AC_SUBST(GLIB12_LIB)
+AC_SUBST(GLIB12_PKGCONF)
+AC_SUBST(GLIB12_TARGET)
+AC_SUBST(GLIB12_SHIM)
+AC_SUBST(GLIB12_SHIM_LIB)
+
+
+if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
+   GLIB_DIR=glib
+else
+   GLIB_DIR=
+fi
+AC_SUBST(GLIB_DIR)
+
 
 # Handle PERL support
 if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
@@ -606,5 +691,6 @@ AC_OUTPUT(Makefile
 	  OpenIPMIpthread.pc
 	  OpenIPMIposix.pc
 	  OpenIPMIglib.pc
+	  OpenIPMIglib12.pc
 	  OpenIPMIcmdlang.pc
 	  OpenIPMIui.pc)

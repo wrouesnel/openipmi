@@ -34,6 +34,23 @@
 	* cmdlang/cmd_entity.c: ditto
 	* cmdlang/cmd_control.c:  ditto
 
+	* configure.in, glib/Makefile.am, glib/glib_os_hnd.c: Add support
+	for a separate glib 1.2 library, so we can build with either.
+
+	* OpenIPMIglib.pc.in: Fix some linking problems, don't need the
+	glib libs or cflags.
+
+	* OpenIPMIglib12.pc.in: Add this for the new glib 1.2 library.
+
+	* swig/Makefile.am, swig/glibshim.c, swig/OpenIPMI.i: Add a glib
+	shim so we can do both glib-2.0 and glib-1.2 at the same time.
+
+	* swig/python/openipmigui.py: Add some parameter handling
+
+	* swig/python/openipmigui/_domain.py: Fix some problems with
+	handling python 2.2.
+	* swig/python/openipmigui/_term.py: ditto
+
 2006-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Add a way to

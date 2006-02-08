@@ -189,7 +189,8 @@ class TerminalEmulator:
             self.check_scroll_down()
             pass
         outlen = len(s)
-        self.buf[self.y][self.x:self.x+outlen] = s[0:outlen]
+        for i in range(0, outlen):
+            self.buf[self.y][self.x+i] = s[i]
         for i in range(self.x, self.x+outlen):
             self.modes[self.y][i][0] = self.cflags
             self.modes[self.y][i][1] = self.bg_color

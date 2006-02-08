@@ -172,8 +172,6 @@
 };
 
 %typemap(in) strconstarray * (strconstarray argval)  {
-    int i;
-
     $1 = &argval;
     if (!PyList_Check($input)) {
 	PyErr_SetString(PyExc_TypeError, "Expecting a list");

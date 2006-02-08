@@ -60,6 +60,7 @@
 
 import os
 import wx
+import sys
 import OpenIPMI
 from openipmigui import _domain
 from openipmigui import gui
@@ -71,23 +72,29 @@ class DomainHandler:
     def __init__(self, preffile):
         self.domains = { };
         self.preffile = preffile
+        return
 
     def domain_change_cb(self, op, domain):
         if (op == "added"):
             self.domains[domain.get_name()].connected(domain)
         elif (op == "removed"):
             self.domains[domain.get_name()].remove()
+            pass
+        return
 
     def SetUI(self, ui):
         self.ui = ui;
+        return
 
     def savePrefs(self):
         objs = self.domains.values()
         objs.append(self.ui)
         _saveprefs.save(objs, self.preffile)
+        return
 
     def log(self, level, log):
         self.ui.new_log(level + ": " + log);
+        return
 
 class DummyLogHandler:
     def __init__(self):
@@ -100,7 +107,9 @@ class IPMIGUI_App(wx.App):
     def __init__(self, mainhandler):
         self.name = "IPMI GUI"
         self.mainhandler = mainhandler
+        self.initialized = False
         wx.App.__init__(self);
+        return
 
     def OnInit(self):
         self.ui = gui.IPMIGUI(self.mainhandler)
@@ -115,11 +124,7 @@ class IPMIGUI_App(wx.App):
 
         return True
 
-def ipmithread():
-    while True:
-        OpenIPMI.wait_io(1000)
-        pass
-    return
+    pass
 
 class CmdlangEventHandler:
     def __init__(self, app):
@@ -142,9 +147,15 @@ class CmdlangEventHandler:
             pass
         self.app.ui.new_log(estr)
         return
+    
     pass
 
-def run():
+def trace(frame, event, arg):
+    print (event + ": " + frame.f_code.co_name +
+           "(" + frame.f_code.co_filename + ":" + str(frame.f_lineno) + ")")
+    return trace
+
+def run(args):
     if ((wx.VERSION[0] < 2)
         or ((wx.VERSION[0] == 2) and (wx.VERSION[1] < 4))
         or ((wx.VERSION[0] == 2) and (wx.VERSION[1] == 4)
@@ -152,9 +163,48 @@ def run():
         print "Error: wxPython version must be 2.4.2 or greater"
         return
 
+    use_glib_12 = False
+    debug_msg = False
+    debug_rawmsg = False
+    do_trace = False
+
+    while (len(args) > 0):
+        arg = args[0]
+        del args[0]
+        if (arg == "--glib12"):
+            use_glib_12 = True
+        elif (arg == "--dmsg"):
+            debug_msg = True
+        elif (arg == "--drawmsg"):
+            debug_msg = True
+        elif (arg == "--trace"):
+            do_trace = True
+        else:
+            print "Unknown argument: " + arg
+            return
+        pass
+    
     OpenIPMI.enable_debug_malloc()
-    OpenIPMI.init()
-    #OpenIPMI.enable_debug_rawmsg()
+    if (use_glib_12):
+        OpenIPMI.init_glib12()
+        pass
+    elif ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):
+        # Version 2.4 of wxPython uses glib1.2, but OpenIPMI usually
+        # uses 2.0 if available.  Force glib 1.2 :(
+        OpenIPMI.init_glib12()
+        pass
+    else:
+        OpenIPMI.init()
+        pass
+
+    if (debug_rawmsg):
+        OpenIPMI.enable_debug_rawmsg()
+        pass
+    if (debug_msg):
+        OpenIPMI.enable_debug_msg()
+        pass
+    if (do_trace):
+        sys.settrace(trace)
 
     preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     _saveprefs.restore(preffile)
@@ -170,14 +220,6 @@ def run():
 
     OpenIPMI.set_cmdlang_event_handler(CmdlangEventHandler(app))
 
-    if ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):
-        # Version 2.4 of wxPython uses glib1.2, but OpenIPMI usually
-        # uses 2.0 if available.  That means we need two different
-        # event loops :(.
-        import thread
-        thread.start_new_thread(ipmithread, ())
-        pass
-
     app.MainLoop()
 
     _cmdwin._HistorySave(histfile)
@@ -186,12 +228,5 @@ def run():
     OpenIPMI.shutdown_everything()
 
 
-#def trace(frame, event, arg):
-#    print (event + ": " + frame.f_code.co_name +
-#           "(" + frame.f_code.co_filename + ":" + str(frame.f_lineno) + ")")
-#    return trace
-
 if __name__ == "__main__":
-    #import sys
-    #sys.settrace(trace)
-    run()
+    run(sys.argv)

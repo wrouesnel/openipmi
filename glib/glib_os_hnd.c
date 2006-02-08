@@ -761,8 +761,8 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
-void sset_log_handler(os_handler_t *handler,
-		      os_vlog_t    log_handler)
+static void sset_log_handler(os_handler_t *handler,
+			     os_vlog_t    log_handler)
 {
     g_os_hnd_data_t *info = handler->internal_data;
 
@@ -817,8 +817,9 @@ static os_handler_t ipmi_glib_os_handler =
     .set_log_handler = sset_log_handler,
 };
 
+/* FNAME comes from the makefile */
 os_handler_t *
-ipmi_glib_get_os_handler(int priority)
+FNAME(int priority)
 {
     os_handler_t    *rv;
     g_os_hnd_data_t *info;

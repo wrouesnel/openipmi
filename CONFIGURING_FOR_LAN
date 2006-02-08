@@ -1,0 +1,110 @@
+I get asked this question a lot.  Configuring a LAN interface is
+unfortunately complex because you have to do a bunch of different
+things to get one up and running.  However, it can be done.
+
+First, I *strongly* recommend using the GUI for this.  There are many
+parameters, far too many to easily handle in a command-line
+interface.  It can be done with a command-line interface, but it is
+ugly.
+
+The first thing to do is open a connection to the system.  Generally
+you would be doing this on a local BMC (because the LAN is not
+working), so I'll assume that. You can configure LAN remotely, with
+the obvious risks.  Anyway, in the GUI, do File->Open Domain, select
+"smi", and select 0 for the interface (assuming that's the one you
+want).  Let the connection come up.  In openipmish, do:
+  domain open local smi 0
+and wait for it to come up.
+
+Once up, you have 3 major configuration items:
+   * Channel configuration
+   * User configuration
+   * LAN Parameters
+
+
+CHANNEL CONFIGURATION
+---------------------
+
+Once your connection is up, you need to figure out what channels need
+to be configured.  Systems with more than one Ethernet port will
+generally have one channel for each port.  In this case, figuring out
+which port goes to which channel is left as an exercise for the
+reader.  You can list all the channels by right-clicking on the MC in
+the GUI and choosing "Channel Info", or by doing:
+  mc chan info <mc>
+in ipmish.  You are looking for channels with a medium of 4, or
+8023_LAN.
+
+Once you have the channel(s), you need to enable them.  Iin the GUI,
+open the tree for each channel you need to configure, and open up user
+access.  There are two different user access setting, one is volatile
+(and will be set immediately) the other is non-volatile (and will be
+restored upon power-up).  You need to set both of them.  Enable "Per
+Msg Auth", "User Auth", set the "Access Mode" to "ALWAYS", and set the
+"Privilege Limit" to the limit you want, generally "admin".  Then
+"Save" the configuration.  In openipmish, do "help mc chan" and follow
+the instructions for the "set_access" command.
+
+
+USER CONFIGURATION
+------------------
+
+After this, re-open the channel menu because you need that to get to
+the user and LANPARM configuration.  Right click on each channel you
+need to configure and choose "User Info".  You need to add a user for
+each channel.  User 1 generally has no username and is a generic
+user.  The other users can get a name set.  Unfortunately, there is no
+way to fetch the "Enabled" or "Session Limit" values, so those will
+show as "?" until you set them.  You need to set the name (if not user
+1), "Enabled" to True, "Link Auth Enabled" to True, "Msg Auth Enabled"
+to True, "Access Callback Only" to False, and the "Privilege Limit" to
+the privilege you want, generally admin for full access.  To set the
+password for a user, right click on the user's number and choose "Set
+Password".  Passwords cannot be fetched or displayed in IPMI.
+
+In openipmish, do "help mc chan user" and use these tools to set the
+various settings listed above for a user
+
+Note that on some systems, setting the user will fail unless you
+explicitly set the "Session Limit" (this is a bug in their
+implementation). so you might have to set that.  Zero disables it and
+is generally a good choice.
+
+LAN CONFIGURATION
+-----------------
+
+Once you have users configured, you are ready to configure LAN
+setting.  Right-click on the channel again and choose "LANPARMS".
+This pulls up a large list of settings.
+
+There are several things you need to configure.  First you need to set
+the ip_addr_source.  If it is DHCP, BIOS, or some other automatic
+setting, that's fine.  If it is manually configured, you must set the
+ip_addr and subnet_mask settings.
+
+If you want the system to be accessible when off, you must set the
+bmc_generated_arps and/or bmc_generated_garps to true.  You might have
+to experiment to see which one works.
+
+If you want to route through a router, you must set up the gateway IP
+addresses and MAC addresses.
+
+Last, but not least, you must set up the enables.  For LAN 1.5
+(non-RMCP+) access, you must set the "enable_auth_xxx[privilege]"
+values to the ones you want.  In general, md5 is the best you have
+with LAN 1.5, so enable md5 and disable everything else, unless you
+just want no access controls and enable "none".  You should enable it
+for the privilege levels you want.
+
+FOr RMCP+, you have to enable the cipher suites you are interested in.
+The cipher suite entries are listed, you have to set the
+"max_priv_for_cipher_suite" for the corresponding cipher suites you
+want.  Again, these are privilege levels.
+
+If you are using openipmish, use the "help lanparm" command and trace
+down.  And good luck, you will need it.
+
+ANYTHING ELSE
+-------------
+
+I think that is all, but I've probably missed something.

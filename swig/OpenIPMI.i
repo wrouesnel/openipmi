@@ -45,7 +45,6 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_posix.h>
-#include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_debug.h>
 #include <OpenIPMI/ipmi_user.h>
 #include <OpenIPMI/ipmi_lanparm.h>
@@ -378,7 +377,7 @@ typedef struct iargarray
 %{
 swig_cb_val swig_log_handler;
 
-static void
+void
 openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
 		   enum ipmi_log_type_e log_type, va_list ap)
 {
@@ -435,37 +434,6 @@ openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
  plog:
     swig_call_cb(handler, "log", "%s%s", pfx, log);
 }
-
-#ifdef HAVE_GLIB
-#include <glib.h>
-static void
-glib_handle_log(const gchar *log_domain,
-		GLogLevelFlags log_level,
-		const gchar *message,
-		gpointer user_data)
-{
-    char *pfx = "";
-    swig_cb_val handler = swig_log_handler;
-
-    if (! handler)
-	return;
-
-    if (log_level & G_LOG_LEVEL_ERROR)
-	pfx = "FATL";
-    else if (log_level & G_LOG_LEVEL_CRITICAL)
-	pfx = "SEVR";
-    else if (log_level & G_LOG_LEVEL_WARNING)
-	pfx = "WARN";
-    else if (log_level & G_LOG_LEVEL_MESSAGE)
-	pfx = "EINF";
-    else if (log_level & G_LOG_LEVEL_INFO)
-	pfx = "INFO";
-    else if (log_level & G_LOG_LEVEL_DEBUG)
-	pfx = "DEBG";
-
-    swig_call_cb(handler, "log", "%s%s", pfx, message);
-}
-#endif
 
 static void
 handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
@@ -2753,6 +2721,22 @@ solparm_clear_lock(ipmi_solparm_t    *solparm,
     }
 }
 
+#if defined(HAVE_GLIB) || defined(HAVE_GLIB12)
+os_handler_t *init_glib_shim(void);
+os_handler_t *init_glib12_shim(void);
+
+void
+glib_do_log(const char *pfx, const char *message)
+{
+    swig_cb_val handler = swig_log_handler;
+
+    if (! handler)
+	return;
+
+    swig_call_cb(handler, "log", "%s%s", pfx, message);
+}
+#endif
+
 %}
 
 typedef struct {
@@ -2864,6 +2848,32 @@ void disable_debug_rawmsg()
     DEBUG_RAWMSG_DISABLE();
 }
 
+#ifdef HAVE_GLIB
+void
+init_glib(void)
+{
+    if (swig_os_hnd)
+	return;
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
+    swig_os_hnd = init_glib_shim();
+}
+#endif
+
+#ifdef HAVE_GLIB12
+void
+init_glib12(void)
+{
+    if (swig_os_hnd)
+	return;
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
+    swig_os_hnd = init_glib12_shim();
+}
+#endif
+
 /*
  * Initialize the OS handler and use the POSIX version.
  */
@@ -2884,37 +2894,6 @@ init_posix(void)
     ipmi_init(swig_os_hnd);
     ipmi_cmdlang_init(swig_os_hnd);
 }
-
-#ifdef HAVE_GLIB
-/*
- * Initialize the OS handler with the glib version.
- */
-void
-init_glib(void)
-{
-    if (swig_os_hnd)
-	return;
-#ifdef OpenIPMI_HAVE_INIT_LANG
-    init_lang();
-#endif
-    if (!g_thread_supported ())
-	g_thread_init(NULL);
-    swig_os_hnd = ipmi_glib_get_os_handler();
-    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
-    ipmi_init(swig_os_hnd);
-    ipmi_cmdlang_init(swig_os_hnd);
-    g_log_set_handler("OpenIPMI",
-		      G_LOG_LEVEL_ERROR
-		      | G_LOG_LEVEL_CRITICAL
-		      | G_LOG_LEVEL_WARNING
-		      | G_LOG_LEVEL_MESSAGE
-		      | G_LOG_LEVEL_INFO
-		      | G_LOG_LEVEL_DEBUG
-		      | G_LOG_FLAG_FATAL,
-		      glib_handle_log,
-		      NULL);
-}
-#endif
 
 /*
  * Initialize the OS handler with the default version.  This is glib
@@ -10610,27 +10589,28 @@ void set_cmdlang_event_handler(swig_cb handler);
     static ipmi_cmdlang_t *
     alloc_cmdlang(swig_cb handler)
     {
-	ipmi_cmdlang_t *cmdlang;
+	ipmi_cmdlang_t *cmdlang = NULL;
 
+	IPMI_SWIG_C_CB_ENTRY
 	if (nil_swig_cb(handler))
-	    return NULL;
+	    goto out;
 
 	if (!valid_swig_cb(handler, cmdlang_out))
-	    return NULL;
+	    goto out;
 	if (!valid_swig_cb(handler, cmdlang_out_binary))
-	    return NULL;
+	    goto out;
 	if (!valid_swig_cb(handler, cmdlang_out_unicode))
-	    return NULL;
+	    goto out;
 	if (!valid_swig_cb(handler, cmdlang_down))
-	    return NULL;
+	    goto out;
 	if (!valid_swig_cb(handler, cmdlang_up))
-	    return NULL;
+	    goto out;
 	if (!valid_swig_cb(handler, cmdlang_done))
-	    return NULL;
+	    goto out;
 
 	cmdlang = malloc(sizeof(*cmdlang));
 	if (!cmdlang)
-	    return NULL;
+	    goto out;
 	memset(cmdlang, 0, sizeof(*cmdlang));
 
 	cmdlang->out = cmdlang_out;
@@ -10645,13 +10625,16 @@ void set_cmdlang_event_handler(swig_cb handler);
 	cmdlang->objstr = malloc(IPMI_MAX_NAME_LEN);
 	if (!cmdlang->objstr) {
 	    free(cmdlang);
-	    return NULL;
+	    cmdlang = NULL;
+	    goto out;
 	}
 	cmdlang->objstr[0] = '\0';
 	cmdlang->objstr_len = IPMI_MAX_NAME_LEN;
 
 	cmdlang->user_data = ref_swig_gencb(handler);
 
+    out:
+	IPMI_SWIG_C_CB_EXIT
 	return cmdlang;
     }
 

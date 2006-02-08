@@ -503,7 +503,7 @@ class Domain:
         if (self.domain_id != None):
             self.domain_id.to_domain(self)
             pass
-        self.mainhandler.domains.pop(self.name);
+        del self.mainhandler.domains[self.name]
         self.ui.remove_domain(self)
         return
 

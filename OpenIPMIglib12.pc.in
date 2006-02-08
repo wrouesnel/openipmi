@@ -3,9 +3,9 @@ exec_prefix=@prefix@
 libdir=@libdir@
 includedir=@includedir@
  
-Name: OpenIPMIglib
-Description: GLIB threaded OS handler for OpenIPMI
+Name: OpenIPMIglib12
+Description: GLIB 1.2 threaded OS handler for OpenIPMI
 Version: @VERSION@
 Requires: 
-Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMIglib
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMIglib12
 Cflags: -I${includedir}

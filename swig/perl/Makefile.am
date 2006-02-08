@@ -1,6 +1,5 @@
 
 AM_CFLAGS = $(PERL_CFLAGS) \
-	    $(GLIB_CFLAGS) \
 	    -I $(top_builddir)/include \
 	    -I $(top_srcdir)/include \
 	    -I $(top_srcdir)/swig/perl
@@ -20,10 +19,11 @@ OpenIPMI_LIB = @PERL_POSIX_LIB@ \
 	       $(top_builddir)/lib/libOpenIPMI.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
 	       $(top_builddir)/cmdlang/libOpenIPMIcmdlang.la \
-	       $(GLIB_LIB) $(GLIB_LIBS)
+	       $(GLIB_LIB) $(GLIB12_LIB)
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
+		@GLIB_SHIM_LIB@ @GLIB12_SHIM_LIB@
 	rm OpenIPMI.so
 	mv .libs/OpenIPMI.so .
 	rm -rf .libs
