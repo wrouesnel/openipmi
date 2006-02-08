@@ -33,3 +33,6 @@ Channel forwarding (errata E379)
 
 System Info support (errata E381)
 
+Suspend BMC ARPs command handling
+
+Get IP/UDP/RMCP statistics
