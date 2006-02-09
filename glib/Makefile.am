@@ -16,14 +16,14 @@ lib_LTLIBRARIES = @GLIB_TARGET@ @GLIB12_TARGET@
 EXTRA_LTLIBRARIES = libOpenIPMIglib.la libOpenIPMIglib12.la
 
 libOpenIPMIglib_la_SOURCES = glib_os_hnd.c
-libOpenIPMIglib_la_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS) -DFNAME=ipmi_glib_get_os_handler
+libOpenIPMIglib_la_CFLAGS = $(GLIB_CFLAGS) $(AM_CFLAGS)
 libOpenIPMIglib_la_LIBADD = $(GDBM_LIB)
 libOpenIPMIglib_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-rpath $(libdir) \
 	-Wl,-Map -Wl,libOpenIPMIglib.map $(GLIB_LIBS)
 
 libOpenIPMIglib12_la_SOURCES = glib_os_hnd.c
-libOpenIPMIglib12_la_CFLAGS = $(GLIB12_CFLAGS) $(AM_CFLAGS) -DFNAME=ipmi_glib12_get_os_handler
+libOpenIPMIglib12_la_CFLAGS = $(GLIB12_CFLAGS) $(AM_CFLAGS)
 libOpenIPMIglib12_la_LIBADD = $(GDBM_LIB)
 libOpenIPMIglib12_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-rpath $(libdir) \

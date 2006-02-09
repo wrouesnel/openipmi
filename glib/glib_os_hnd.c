@@ -817,12 +817,15 @@ static os_handler_t ipmi_glib_os_handler =
     .set_log_handler = sset_log_handler,
 };
 
-/* FNAME comes from the makefile */
+
 os_handler_t *
-FNAME(int priority)
+ipmi_glib_get_os_handler(int priority)
 {
     os_handler_t    *rv;
     g_os_hnd_data_t *info;
+
+    if (!g_thread_supported ())
+	g_thread_init(NULL);
 
     rv = g_malloc(sizeof(*rv));
     if (!rv)
@@ -850,4 +853,50 @@ FNAME(int priority)
     rv->internal_data = info;
 
     return rv;
+}
+
+static void (*log_hndlr)(const char *domain, const char *pfx, const char *msg);
+
+static void
+glib_handle_log(const gchar *log_domain,
+		GLogLevelFlags log_level,
+		const gchar *message,
+		gpointer user_data)
+{
+    void (*hndlr)(const char *domain, const char *pfx, const char *msg);
+    char *pfx = "";
+    if (log_level & G_LOG_LEVEL_ERROR)
+	pfx = "FATL";
+    else if (log_level & G_LOG_LEVEL_CRITICAL)
+	pfx = "SEVR";
+    else if (log_level & G_LOG_LEVEL_WARNING)
+	pfx = "WARN";
+    else if (log_level & G_LOG_LEVEL_MESSAGE)
+	pfx = "EINF";
+    else if (log_level & G_LOG_LEVEL_INFO)
+	pfx = "INFO";
+    else if (log_level & G_LOG_LEVEL_DEBUG)
+	pfx = "DEBG";
+
+    handler = log_hndlr;
+    if (handler)
+	hndlr(log_domain, pfx, message);
+}
+
+void
+ipmi_glib_set_log_handler(void (*hndlr)(const char *domain,
+					const char *pfx,
+					const char *msg))
+{
+    log_hndlr = hndlr;
+    g_log_set_handler("OpenIPMI",
+		      G_LOG_LEVEL_ERROR
+		      | G_LOG_LEVEL_CRITICAL
+		      | G_LOG_LEVEL_WARNING
+		      | G_LOG_LEVEL_MESSAGE
+		      | G_LOG_LEVEL_INFO
+		      | G_LOG_LEVEL_DEBUG
+		      | G_LOG_FLAG_FATAL,
+		      glib_handle_log,
+		      NULL);
 }

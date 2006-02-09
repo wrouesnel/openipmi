@@ -630,13 +630,14 @@ def GetAttrInt(attr, default):
     try:
         return int(attr.nodeValue)
     except Exception, e:
-        _oi_logging.error ("Error getting init parm " + attr.nodeName)
+        _oi_logging.error("Error getting init parm " + attr.nodeName +
+                          ": " + str(e))
         return default
 
 def GetAttrBool(attr, default):
-    if (attr.nodeValue.lower() == "true"):
+    if (attr.nodeValue.lower() == "true") or (attr.nodeValue == "1"):
         return True
-    elif (attr.nodeValue.lower() == "false"):
+    elif (attr.nodeValue.lower() == "false") or (attr.nodeValue == "0"):
         return False
     else:
         _oi_logging.error ("Error getting init parm " + attr.nodeName)

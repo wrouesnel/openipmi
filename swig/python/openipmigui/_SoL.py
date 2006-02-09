@@ -60,65 +60,71 @@ class SoL(wx.Frame):
         self.take_input = True
 
         wx.Frame.__init__(self, None, -1,
+                          "SoL for " + self.dname + " connection "
+                          + str(self.cnum),
                           name = ("SoL for " + self.dname + " connection "
                                   + str(self.cnum)))
 
         menubar = wx.MenuBar()
         filemenu = wx.Menu()
-        self.openmenu = filemenu.Append(id_st + 1, "Open", "Open")
+        self.openmenu = wx.MenuItem(filemenu, id_st + 1, "Open", "Open")
+        filemenu.AppendItem(self.openmenu)
         wx.EVT_MENU(self, id_st+1, self.open);
-        self.closemenu = filemenu.Append(id_st + 2, "Close", "Close")
+        self.closemenu = wx.MenuItem(filemenu, id_st + 2, "Close", "Close")
+        filemenu.AppendItem(self.closemenu)
         self.closemenu.Enable(False)
         wx.EVT_MENU(self, id_st+2, self.close);
-        self.forceclosemenu = filemenu.Append(id_st + 3, "Force Close",
-                                              "Force Close")
+        self.forceclosemenu = wx.MenuItem(filemenu, id_st + 3, "Force Close",
+                                          "Force Close")
+        filemenu.AppendItem(self.forceclosemenu)
         self.forceclosemenu.Enable(False)
         wx.EVT_MENU(self, id_st+3, self.forceclose);
-        self.quitmenu = filemenu.Append(id_st + 4, "Quit", "Quit")
+        self.quitmenu = wx.MenuItem(filemenu, id_st + 4, "Quit", "Quit")
+        filemenu.AppendItem(self.quitmenu)
         wx.EVT_MENU(self, id_st+4, self.quit);
         menubar.Append(filemenu, "File")
         
         controlmenu = wx.Menu()
-        self.acceptinputmenu = controlmenu.AppendCheckItem(id_st + 10,
-                                                           "Accept Input",
-                                                           "Accept Input")
+        self.acceptinputmenu = wx.MenuItem(controlmenu, id_st + 10,
+                                           "Accept Input",  "Accept Input")
+        controlmenu.AppendItem(self.acceptinputmenu)
         self.acceptinputmenu.Check(True)
         wx.EVT_MENU(self, id_st+10, self.AcceptInputToggle);
-        self.useencmenu = controlmenu.AppendCheckItem(id_st + 11,
-                                                      "Use Encryption",
-                                                      "Use Encryption")
+        self.useencmenu = wx.MenuItem(controlmenu, id_st + 11,
+                                      "Use Encryption", "Use Encryption")
+        controlmenu.AppendItem(self.useencmenu)
         self.useencmenu.Check(self.sol.get_use_encryption())
         wx.EVT_MENU(self, id_st+11, self.UseEncToggle);
-        self.useauthmenu = controlmenu.AppendCheckItem(id_st + 12,
-                                                       "Use Authentication",
-                                                       "Use Authentication")
+        self.useauthmenu = wx.MenuItem(controlmenu, id_st + 12,
+                                       "Use Authentication",
+                                       "Use Authentication")
+        controlmenu.AppendItem(self.useauthmenu)
         self.useauthmenu.Check(self.sol.get_use_authentication())
         wx.EVT_MENU(self, id_st+12, self.UseAuthToggle);
-        self.deassert_on_connect_menu = controlmenu.AppendCheckItem(
-            id_st + 13,
+        self.deassert_on_connect_menu = wx.MenuItem(
+            controlmenu, id_st + 13,
             "Deassert CTS/DCD/DSR on connect",
             "Deassert CTS/DCD/DSR on connect")
+        controlmenu.AppendItem(self.deassert_on_connect_menu)
         self.deassert_on_connect_menu.Check(
             self.sol.get_deassert_CTS_DCD_DSR_on_connect())
         wx.EVT_MENU(self, id_st+13, self.DeassertOnConnectToggle);
-        self.ctsassertablemenu = controlmenu.AppendCheckItem(
-            id_st + 14,
-            "CTS Assertable",
-            "CTS Assertable")
+        self.ctsassertablemenu = wx.MenuItem(controlmenu, id_st + 14,
+                                             "CTS Assertable",
+                                             "CTS Assertable")
+        controlmenu.AppendItem(self.ctsassertablemenu)
         self.ctsassertablemenu.Check(True)
         self.ctsassertablemenu.Enable(False)
         wx.EVT_MENU(self, id_st+14, self.CTSAssertableToggle);
-        self.dcd_dsr_menu = controlmenu.AppendCheckItem(
-            id_st + 15,
-            "DCD/DSR Asserted",
-            "DCD/DSR Asserted")
+        self.dcd_dsr_menu = wx.MenuItem(controlmenu, id_st + 15,
+                                        "DCD/DSR Asserted", "DCD/DSR Asserted")
+        controlmenu.AppendItem(self.dcd_dsr_menu)
         self.dcd_dsr_menu.Check(True)
         self.dcd_dsr_menu.Enable(False)
         wx.EVT_MENU(self, id_st+15, self.DCDDSRToggle);
-        self.ri_menu = controlmenu.AppendCheckItem(
-            id_st + 16,
-            "RI Asserted",
-            "RI Asserted")
+        self.ri_menu = wx.MenuItem(controlmenu, id_st + 16,
+                                   "RI Asserted", "RI Asserted")
+        controlmenu.AppendItem(self.ri_menu)
         self.ri_menu.Check(False)
         self.ri_menu.Enable(False)
         wx.EVT_MENU(self, id_st+16, self.RIToggle);
@@ -126,8 +132,9 @@ class SoL(wx.Frame):
         wx.EVT_MENU(self, id_st+17, self.SetAckTimeout);
         controlmenu.Append(id_st+18, "Set Ack Retries", "Set Ack Retries")
         wx.EVT_MENU(self, id_st+18, self.SetAckRetries);
-        self.breakmenu = controlmenu.Append(id_st+19, "Send Break",
-                                            "Send Break")
+        self.breakmenu = wx.MenuItem(controlmenu, id_st+19,
+                                     "Send Break", "Send Break")
+        controlmenu.AppendItem(self.breakmenu)
         self.breakmenu.Enable(False)
         wx.EVT_MENU(self, id_st+19, self.SendBreak);
         
@@ -149,18 +156,21 @@ class SoL(wx.Frame):
 
         smenu = wx.Menu()
         beh = self.sol.get_shared_serial_alert_behavior()
-        mi = smenu.AppendRadioItem(id_st+30, "Serial Alerts Fail",
-                                   "Serial Alerts Fail")
+        mi = wx.MenuItem(smenu, id_st+30, "Serial Alerts Fail",
+                         "Serial Alerts Fail", kind=wx.ITEM_RADIO)
+        smenu.AppendItem(mi)
         wx.EVT_MENU(self, id_st+30, self.SerialAlertsFail)
         if (beh == OpenIPMI.sol_serial_alerts_fail):
             mi.Check(True)
-        mi = smenu.AppendRadioItem(id_st+31, "Serial Alerts Deferred",
-                                   "Serial Alerts Deferred")
+        mi = wx.MenuItem(smenu, id_st+31, "Serial Alerts Deferred",
+                         "Serial Alerts Deferred", kind=wx.ITEM_RADIO)
+        smenu.AppendItem(mi)
         wx.EVT_MENU(self, id_st+31, self.SerialAlertsDeferred)
         if (beh == OpenIPMI.sol_serial_alerts_deferred):
             mi.Check(True)
-        mi = smenu.AppendRadioItem(id_st+32, "Serial Alerts Succeed",
-                                   "Serial Alerts Succeed")
+        mi = wx.MenuItem(smenu, id_st+32, "Serial Alerts Succeed",
+                         "Serial Alerts Succeed", kind=wx.ITEM_RADIO)
+        smenu.AppendItem(mi)
         wx.EVT_MENU(self, id_st+32, self.SerialAlertsSucceed)
         if (beh == OpenIPMI.sol_serial_alerts_succeed):
             mi.Check(True)
@@ -169,26 +179,37 @@ class SoL(wx.Frame):
 
         smenu = wx.Menu()
         fmenus = [ ]
-        fmenus.append(smenu.Append(id_st+40, "Flush BMC Transmit Queue",
-                                   "Flush BMC Transmit Queue"))
+        mi = wx.MenuItem(smenu, id_st+40, "Flush BMC Transmit Queue",
+                         "Flush BMC Transmit Queue")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+40, self.FlushBMCXmit)
-        fmenus.append(smenu.Append(id_st+41, "Flush BMC Receive Queue",
-                                   "Flush BMC Receive Queue"))
+        mi = wx.MenuItem(smenu, id_st+41, "Flush BMC Receive Queue",
+                         "Flush BMC Receive Queue")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+41, self.FlushBMCRecv)
-        fmenus.append(smenu.Append(id_st+42, "Flush My Transmit Queue",
-                                   "Flush My Transmit Queue"))
+        mi = wx.MenuItem(smenu, id_st+42, "Flush My Transmit Queue",
+                         "Flush My Transmit Queue")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+42, self.FlushMyXmit)
-        fmenus.append(smenu.Append(id_st+43, "Flush My Receive Queue",
-                                   "Flush My Receive Queue"))
+        mi = wx.MenuItem(smenu, id_st+43, "Flush My Receive Queue",
+                         "Flush My Receive Queue")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+43, self.FlushMyRecv)
-        fmenus.append(smenu.Append(id_st+44, "Flush BMC Queues",
-                                   "Flush BMC Queues"))
+        mi = wx.MenuItem(smenu, id_st+44, "Flush BMC Queues", "Flush BMC Queues")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+44, self.FlushBMC)
-        fmenus.append(smenu.Append(id_st+45, "Flush My Queues",
-                                   "Flush My Queues"))
+        mi = wx.MenuItem(smenu, id_st+45, "Flush My Queues", "Flush My Queues")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+45, self.FlushMe)
-        fmenus.append(smenu.Append(id_st+46, "Flush All Queues",
-                                   "Flush Al Queues"))
+        mi = wx.MenuItem(smenu, id_st+46, "Flush All Queues", "Flush Al Queues")
+        smenu.AppendItem(mi)
+        fmenus.append(mi)
         wx.EVT_MENU(self, id_st+46, self.FlushAll)
         controlmenu.AppendMenu(-1, "Queue Flush", smenu,
                                "Queue Flush")

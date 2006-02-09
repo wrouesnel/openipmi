@@ -46,6 +46,13 @@ extern "C" {
 /* Allocate and configure an OS handler. */
 os_handler_t *ipmi_glib_get_os_handler(void);
 
+/* This is a convenience log handler that allows the glib stuff to be
+   used without having to link with glib to get the log handler
+   information. */
+void ipmi_glib_set_log_handler(void (*hndlr)(const char *domain,
+					     const char *pfx,
+					     const char *msg));
+
 #ifdef __cplusplus
 }
 #endif

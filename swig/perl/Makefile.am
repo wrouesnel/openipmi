@@ -19,9 +19,9 @@ OpenIPMI_LIB = @PERL_POSIX_LIB@ \
 	       $(top_builddir)/lib/libOpenIPMI.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
 	       $(top_builddir)/cmdlang/libOpenIPMIcmdlang.la \
-	       $(GLIB_LIB) $(GLIB12_LIB)
+	       $(GLIB_SINGLE_LIB)
 
-OpenIPMI.so: $(OpenIPMI_OBJ)
+OpenIPMI.so: $(OpenIPMI_OBJ) @GLIB_SHIM_LIB@ @GLIB12_SHIM_LIB@
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
 		@GLIB_SHIM_LIB@ @GLIB12_SHIM_LIB@
 	rm OpenIPMI.so

@@ -352,7 +352,7 @@ AC_SUBST(GLIB_SHIM)
 AC_SUBST(GLIB_SHIM_LIB)
 
 
-# We allow glib 1.2 specific libraries, too.
+# We allow a glib 1.2 specific library, too.
 haveglib12=no
 if test "x$glib12cflags" = "x" -o "x$glib12libs" = "x"; then
    glibprog=
@@ -400,10 +400,24 @@ AC_SUBST(GLIB12_SHIM_LIB)
 
 if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
    GLIB_DIR=glib
+   # If we only have one glib library, just directly link with it in swig.
+   # If we have two libraries, the swig code dynamically loads it and we
+   # don't directly link with it.
+   if test "x$haveglib12" = "xyes" -a "x$haveglib" = "xyes"; then
+      GLIB_SINGLE_LIB=
+   else
+      if test "x$haveglib12" = "xyes"; then
+         GLIB_SINGLE_LIB=$(GLIB12_LIB)
+      else
+         GLIB_SINGLE_LIB=$(GLIB_LIB)
+      fi
+   fi
 else
    GLIB_DIR=
+   GLIB_SINGLE_LIB=
 fi
 AC_SUBST(GLIB_DIR)
+AC_SUBST(GLIB_SINGLE_LIB)
 
 
 # Handle PERL support

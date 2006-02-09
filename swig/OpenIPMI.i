@@ -2722,11 +2722,10 @@ solparm_clear_lock(ipmi_solparm_t    *solparm,
 }
 
 #if defined(HAVE_GLIB) || defined(HAVE_GLIB12)
-os_handler_t *init_glib_shim(void);
-os_handler_t *init_glib12_shim(void);
-
-void
-glib_do_log(const char *pfx, const char *message)
+static void
+glib_handle_log(const char *domain,
+		const char *pfx,
+		const char *message)
 {
     swig_cb_val handler = swig_log_handler;
 
@@ -2734,6 +2733,74 @@ glib_do_log(const char *pfx, const char *message)
 	return;
 
     swig_call_cb(handler, "log", "%s%s", pfx, message);
+}
+
+#if defined(HAVE_GLIB) && defined(HAVE_GLIB12)
+#include <dlfcn.h>
+#endif
+
+/*
+ * Initialize the OS handler with the glib version.
+ */
+os_handler_t *
+init_glib_shim(char *ver)
+{
+    os_handler_t *swig_os_hnd;
+#if defined(HAVE_GLIB) && defined(HAVE_GLIB12)
+/* Two versions of glib.  Go through special machinations to make this
+   work right.  We can't directly link with glib, we have to dlopen it
+   to get the right version. */
+
+    static char  *olibst = "libOpenIPMIglib%s.so";
+    char         dummy[1];
+    char         *name;
+    void         *hndl;
+    os_handler_t *(*get)(int);
+    void         (*setlog)(void (*hndlr)(const char *domain,
+					 const char *pfx,
+					 const char *msg));
+    int          len;
+
+    len = snprintf(dummy, 1, olibst, ver);
+    name = malloc(len+1);
+    if (!name) {
+	fprintf(stderr, "Unable to allocation memory for glib\n");
+	abort();
+    }
+    snprintf(name, len+1, olibst, ver);
+    hndl = dlopen(name, 0);
+    if (!hndl) {
+	fprintf(stderr, "Unable to open the glib library: %s\n", name);
+	free(name);
+	abort();
+    }
+    free(name);
+    get = dlsym(hndl, "ipmi_glib_get_os_handler");
+    if (!get) {
+	fprintf(stderr,
+		"Could not find glib function: ipmi_glib_get_os_handler\n");
+	abort();
+    }
+    setlog = dlsym(hndl, "ipmi_glib_set_log_handler");
+    if (!setlog) {
+	fprintf(stderr,
+		"Could not find glib function: ipmi_glib_set_log_handler\n");
+	abort();
+    }
+
+    swig_os_hnd = get(0);
+    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
+    ipmi_init(swig_os_hnd);
+    ipmi_cmdlang_init(swig_os_hnd);
+    setlog(glib_handle_log);
+#else
+    swig_os_hnd = ipmi_glib_get_os_handler(0);
+    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
+    ipmi_init(swig_os_hnd);
+    ipmi_cmdlang_init(swig_os_hnd);
+    ipmi_glib_set_log_handler(glib_handle_log);
+#endif
+    return swig_os_hnd;
 }
 #endif
 
@@ -2857,7 +2924,7 @@ init_glib(void)
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
-    swig_os_hnd = init_glib_shim();
+    swig_os_hnd = init_glib_shim("");
 }
 #endif
 
@@ -2870,7 +2937,7 @@ init_glib12(void)
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
-    swig_os_hnd = init_glib12_shim();
+    swig_os_hnd = init_glib_shim("12");
 }
 #endif
 
@@ -10711,11 +10778,13 @@ void set_cmdlang_event_handler(swig_cb handler);
     {
 	swig_cb_val handler_val = self->user_data;
 
+	IPMI_SWIG_C_CB_ENTRY
 	if (handler_val)
 	    deref_swig_cb_val(handler_val);
 	if (self->objstr)
 	    free(self->objstr);
 	free(self);
+	IPMI_SWIG_C_CB_EXIT
     }
 
     /*
@@ -10994,17 +11063,29 @@ char *sol_state_string(int val);
 
     int open()
     {
-	return ipmi_sol_open(self);
+	int rv;
+	IPMI_SWIG_C_CB_ENTRY
+	rv = ipmi_sol_open(self);
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
     int close()
     {
-	return ipmi_sol_close(self);
+	int rv;
+	IPMI_SWIG_C_CB_ENTRY
+	rv = ipmi_sol_close(self);
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
     int force_close()
     {
-	return ipmi_sol_force_close(self);
+	int rv;
+	IPMI_SWIG_C_CB_ENTRY
+	rv = ipmi_sol_force_close(self);
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
     /*
@@ -11041,7 +11122,11 @@ char *sol_state_string(int val);
      */
     int release_nack()
     {
-	return ipmi_sol_release_nack(self);
+	int rv;
+	IPMI_SWIG_C_CB_ENTRY
+	rv = ipmi_sol_release_nack(self);
+	IPMI_SWIG_C_CB_EXIT
+	return rv;
     }
 
     /*

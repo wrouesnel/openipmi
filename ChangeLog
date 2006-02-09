@@ -1,3 +1,28 @@
+2006-02-09 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Added more support for handling dual glib
+	libraries (1.2 and 2.0) in the swig stuff.
+
+	* glib/Makefile.am, glib/glib_os_hnd.c: Added more support for
+	handling dual glib libraries.
+	* include/OpenIPMI/ipmi_glib.h: ditto
+
+	* swig/Makefile.am: Removed glib shim, as it was not going to
+	work.
+
+	* swig/OpenIPMI.i: Fixed the glib stuff so it works properly with
+	dual glib libraries.
+	* swig/perl/Makefile.am, swig/python/Makefile.am: ditto
+
+	* swig/python/openipmigui/_SoL.py: Fixed to work with wxPython
+	2.4.
+
+	* swig/OpenIPMI.i: Added missing callback entry and exit markers
+	for SoL.
+
+	* swig/python/openipmigui/gui.py: Fixed getting boolean attributes
+	so it works with older versions of python.
+
 2006-02-08 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/OpenIPMI_perl.c, swig/python/OpenIPMI_lang.i: Added a
