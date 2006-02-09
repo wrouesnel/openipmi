@@ -25,7 +25,7 @@ OpenIPMI_LIB = @PYTHON_POSIX_LIB@ \
 
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
-_OpenIPMI.so: $(OpenIPMI_OBJ) @GLIB_SHIM_LIB@ @GLIB12_SHIM_LIB@
+_OpenIPMI.so: $(OpenIPMI_OBJ)
 
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
 	rm _OpenIPMI.so

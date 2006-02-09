@@ -2768,9 +2768,10 @@ init_glib_shim(char *ver)
 	abort();
     }
     snprintf(name, len+1, olibst, ver);
-    hndl = dlopen(name, 0);
+    hndl = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
     if (!hndl) {
-	fprintf(stderr, "Unable to open the glib library: %s\n", name);
+	fprintf(stderr, "Unable to open the glib library: %s: %s\n",
+		name, dlerror());
 	free(name);
 	abort();
     }
@@ -2778,13 +2779,15 @@ init_glib_shim(char *ver)
     get = dlsym(hndl, "ipmi_glib_get_os_handler");
     if (!get) {
 	fprintf(stderr,
-		"Could not find glib function: ipmi_glib_get_os_handler\n");
+		"Could not find glib function: ipmi_glib_get_os_handler: %s\n",
+		dlerror());
 	abort();
     }
     setlog = dlsym(hndl, "ipmi_glib_set_log_handler");
     if (!setlog) {
 	fprintf(stderr,
-		"Could not find glib function: ipmi_glib_set_log_handler\n");
+		"Could not find glib function: ipmi_glib_set_log_handler: %s\n",
+		dlerror());
 	abort();
     }
 

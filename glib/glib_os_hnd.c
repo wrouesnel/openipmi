@@ -878,8 +878,8 @@ glib_handle_log(const gchar *log_domain,
     else if (log_level & G_LOG_LEVEL_DEBUG)
 	pfx = "DEBG";
 
-    handler = log_hndlr;
-    if (handler)
+    hndlr = log_hndlr;
+    if (hndlr)
 	hndlr(log_domain, pfx, message);
 }
 

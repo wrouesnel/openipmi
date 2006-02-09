@@ -331,15 +331,10 @@ if test "x$haveglib" = "xyes"; then
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
    GLIB_PKGCONF=OpenIPMIglib.pc
    GLIB_TARGET=libOpenIPMIglib.la
-   GLIB_SHIM=libglibshim.a
-   GLIB_SHIM=libglibshim.a
-   GLIB_SHIM_LIB='$(top_builddir)/swig/libglibshim.a'
 else
    GLIB_LIB=
    GLIB_PKGCONF=
    GLIB_TARGET=
-   GLIB_SHIM=
-   GLIB_SHIM_LIB=
 fi
 AC_SUBST(GLIB_VERSION)
 AC_SUBST(GLIB_CFLAGS)
@@ -348,15 +343,15 @@ AC_SUBST(GLIB_LIBS)
 AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_PKGCONF)
 AC_SUBST(GLIB_TARGET)
-AC_SUBST(GLIB_SHIM)
-AC_SUBST(GLIB_SHIM_LIB)
 
 
 # We allow a glib 1.2 specific library, too.
 haveglib12=no
 if test "x$glib12cflags" = "x" -o "x$glib12libs" = "x"; then
    glibprog=
-   AC_PATH_PROG(glibprog, glib-config)
+   if test "x$tryglib12" != "xno"; then
+      AC_PATH_PROG(glibprog, glib-config)
+   fi
    GLIB12_CFLAGS=
    GLIB12_LIBS=
    if test "x$glibprog" != "x"; then
@@ -379,14 +374,10 @@ if test "x$haveglib12" = "xyes"; then
    GLIB12_LIB='$(top_builddir)/glib/libOpenIPMIglib12.la'
    GLIB12_PKGCONF=OpenIPMIglib12.pc
    GLIB12_TARGET=libOpenIPMIglib12.la
-   GLIB12_SHIM=libglib12shim.a
-   GLIB12_SHIM_LIB='$(top_builddir)/swig/libglib12shim.a'
 else
    GLIB12_LIB=
    GLIB12_PKGCONF=
    GLIB12_TARGET=
-   GLIB12_SHIM=
-   GLIB12_SHIM_LIB=
 fi
 AC_SUBST(GLIB12_CFLAGS)
 AC_SUBST(GLIB12_LIBS)
@@ -394,8 +385,6 @@ AC_SUBST(GLIB12_LIBS)
 AC_SUBST(GLIB12_LIB)
 AC_SUBST(GLIB12_PKGCONF)
 AC_SUBST(GLIB12_TARGET)
-AC_SUBST(GLIB12_SHIM)
-AC_SUBST(GLIB12_SHIM_LIB)
 
 
 if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
@@ -407,9 +396,9 @@ if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
       GLIB_SINGLE_LIB=
    else
       if test "x$haveglib12" = "xyes"; then
-         GLIB_SINGLE_LIB=$(GLIB12_LIB)
+         GLIB_SINGLE_LIB=$GLIB12_LIB
       else
-         GLIB_SINGLE_LIB=$(GLIB_LIB)
+         GLIB_SINGLE_LIB=$GLIB_LIB
       fi
    fi
 else
