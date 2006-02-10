@@ -53,6 +53,8 @@
  *      written permission.
  */
 
+#include <config.h>
+
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>

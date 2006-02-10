@@ -53,6 +53,7 @@
  *      written permission.
  */
 
+#include <config.h>
 #include <string.h>
 
 #ifdef HAVE_EXECINFO_H

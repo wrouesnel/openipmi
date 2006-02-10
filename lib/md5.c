@@ -31,6 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <config.h>
+
 /* Not strictly necessary, but ths is pointless if we don't have ssl */
 #ifdef HAVE_OPENSSL
 

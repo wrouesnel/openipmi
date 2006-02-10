@@ -34,6 +34,9 @@
 %module OpenIPMI
 
 %{
+
+#include <config.h>
+
 #ifdef HAVE_GETADDRINFO
 #include <netdb.h>
 #endif
@@ -266,8 +269,8 @@ parse_raw_str_data(char *str, unsigned int *length)
 
 static int
 parse_ip_addr(char *str, struct in_addr *addr)
-#ifdef HAVE_GETADDRINFO
 {
+#ifdef HAVE_GETADDRINFO
     struct addrinfo    hints, *res0, *s;
     struct sockaddr_in *paddr;
     int                rv;
@@ -294,18 +297,16 @@ parse_ip_addr(char *str, struct in_addr *addr)
     *addr = paddr->sin_addr;
     freeaddrinfo(res0);
     return 0;
-}
 #else
 /* System does not support getaddrinfo, just for IPv4*/
-{
     struct hostent *ent;
     ent = gethostbyname(str);
     if (!ent)
 	return EINVAL;
     memcpy(&addr->s_addr, ent->h_addr_list[0], 4);
     return 0;
-}
 #endif
+}
 
 static int
 parse_mac_addr(char *str, unsigned char *addr)
@@ -2918,31 +2919,37 @@ void disable_debug_rawmsg()
     DEBUG_RAWMSG_DISABLE();
 }
 
-#ifdef HAVE_GLIB
 void
 init_glib(void)
 {
+#ifdef HAVE_GLIB
     if (swig_os_hnd)
 	return;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
     swig_os_hnd = init_glib_shim("");
-}
+#else
+    fprintf(stderr, "Error: no support for init_glib()\n");
+    abort();
 #endif
+}
 
-#ifdef HAVE_GLIB12
 void
 init_glib12(void)
 {
+#ifdef HAVE_GLIB12
     if (swig_os_hnd)
 	return;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
     swig_os_hnd = init_glib_shim("12");
-}
+#else
+    fprintf(stderr, "Error: no support for init_glib12()\n");
+    abort();
 #endif
+}
 
 /*
  * Initialize the OS handler and use the POSIX version.

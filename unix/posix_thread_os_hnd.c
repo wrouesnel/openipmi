@@ -31,6 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <config.h>
+
 /* Get the rwlocks for GNU. */
 #define _GNU_SOURCE
 
@@ -815,7 +817,7 @@ ipmi_posix_thread_get_os_handler(void)
 {
     os_handler_t     *rv;
     pt_os_hnd_data_t *info;
-#if HAVE_GDBM
+#ifdef HAVE_GDBM
     int              err;
 #endif
 

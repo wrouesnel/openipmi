@@ -2,6 +2,7 @@
 SUBDIRS = . @PYTHON_GUI_DIR@
 
 AM_CFLAGS = $(PYTHON_CFLAGS) \
+	    -I $(top_builddir) \
 	    -I $(top_builddir)/include \
 	    -I $(top_srcdir)/include \
 	    -I $(top_srcdir)/swig/python

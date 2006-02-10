@@ -31,6 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <config.h>
+
 #ifdef HAVE_OPENIPMI_SMI
 
 #include <sys/ioctl.h>

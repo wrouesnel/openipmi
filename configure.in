@@ -1,4 +1,5 @@
 AC_INIT(README.Force)
+AC_CONFIG_HEADER([config.h])
 AC_CANONICAL_TARGET
 OPENIPMI_PKG_NAME=OpenIPMI
 OPENIPMI_VERSION_MAJOR=2
@@ -11,11 +12,11 @@ OPENIPMI_SMI=
 
 case $target_os in
 	linux*)
-		AC_DEFINE(HAVE_OPENIPMI_SMI)
+		AC_DEFINE([HAVE_OPENIPMI_SMI], [], [We have a local IPMI interface])
 		;;
 
 	cygwin*)
-		AC_DEFINE(HAVE_CYGWIN_TARGET)
+		AC_DEFINE([HAVE_CYGWIN_TARGET], [], [Running on CYGWIN])
 		;;
 esac
 
@@ -281,7 +282,7 @@ if test "x$POPTLIBS" = "x"; then
 fi
 
 # Check for GDBM
-AC_CHECK_HEADER(gdbm.h, AC_DEFINE(HAVE_GDBM) GDBM_LIB=-lgdbm; )
+AC_CHECK_HEADER(gdbm.h, AC_DEFINE([HAVE_GDBM], [], [Have GDBM libraries]) GDBM_LIB=-lgdbm; )
 AC_SUBST(GDBM_LIB)
 
 # Find pkg-config
@@ -327,7 +328,7 @@ fi
 echo "checking for glib... $haveglib"
    
 if test "x$haveglib" = "xyes"; then
-   AC_DEFINE(HAVE_GLIB)
+   AC_DEFINE([HAVE_GLIB], [], [Have GLIB libraries])
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
    GLIB_PKGCONF=OpenIPMIglib.pc
    GLIB_TARGET=libOpenIPMIglib.la
@@ -370,7 +371,7 @@ fi
 echo "checking for glib 1.2... $haveglib12"
 
 if test "x$haveglib12" = "xyes"; then
-   AC_DEFINE(HAVE_GLIB12)
+   AC_DEFINE([HAVE_GLIB12], [], [Have the GLIB 1.2 libraries])
    GLIB12_LIB='$(top_builddir)/glib/libOpenIPMIglib12.la'
    GLIB12_PKGCONF=OpenIPMIglib12.pc
    GLIB12_TARGET=libOpenIPMIglib12.la
@@ -435,7 +436,7 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
 
    if test "x$perldir" != "x"; then
       tpprog=`$perlprog -e "\\$p = \"$perlinstalldir\"; \\$u = \"$prefix\"; \\$p =~ s/\\$u//; print \\$p"`
-      AC_DEFINE(HAVE_PERL)
+      AC_DEFINE([HAVE_PERL], [], [Have perl installed])
       PERL_DIR=perl
       if test "x$perlcflags" = "x"; then
          PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | grep ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
@@ -456,7 +457,7 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
       PERL_POSIX_LIB=
    fi
 else
-   AC_DEFINE(HAVE_PERL)
+   AC_DEFINE([HAVE_PERL], [], [Have perl installed])
    PERL_DIR=perl
    PERL_CFLAGS="$perlcflags"
    PERL_INSTALL_DIR="$perlinstalldir"
@@ -509,7 +510,7 @@ if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
    fi
 
    if test "x$pythoninstalldir" != "x"; then
-      AC_DEFINE(HAVE_PYTHON)
+      AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
       PYTHON_DIR=python
       PYTHON_CFLAGS="$pythoncflags"
       PYTHON_INSTALL_DIR="$pythoninstalldir"
@@ -519,7 +520,7 @@ if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
       PYTHON_INSTALL_DIR=
    fi
 else
-   AC_DEFINE(HAVE_PYTHON)
+   AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
    PYTHON_DIR=python
    PYTHON_CFLAGS="$pythoncflags"
    PYTHON_INSTALL_DIR="$pythoninstalldir"
@@ -568,7 +569,7 @@ if test "x$swigprog" != "x"; then
       echo "***swig must be version 1.3.21 or greater, disabling swig and perl/python"
    else
       echo "swig version $swigver"
-      AC_DEFINE(HAVE_SWIG)
+      AC_DEFINE([HAVE_SWIG], [], [Have swig installed])
       SWIG_DIR=swig
       SWIG=$swigprog
    fi
@@ -594,7 +595,7 @@ if test "x$tryucdsnmp" != "xno"; then
       if test "x$FOUND_SNMPINCL" = "xno"; then
           AC_CHECK_HEADER(ucd-snmp/snmp_api.h,
                    FOUND_SNMPINCL=yes;
-		   AC_DEFINE(HAVE_ALT_UCDSNMP_DIR))
+		   AC_DEFINE([HAVE_ALT_UCDSNMP_DIR], [], [Alternate UCD SMP directory]))
       fi
    fi
 
@@ -602,8 +603,8 @@ if test "x$tryucdsnmp" != "xno"; then
       if test "x$HAVE_NETSNMP" = "xyes"; then
          AC_CHECK_LIB(netsnmp, snmp_add, 
 		      SNMPLIBS="-lnetsnmp $SNMPLIBS"
-		      AC_DEFINE(HAVE_UCDSNMP)
-		      AC_DEFINE(HAVE_NETSNMP)
+		      AC_DEFINE([HAVE_UCDSNMP], [], [Have UCD SNMP])
+		      AC_DEFINE([HAVE_NETSNMP], [], [Have Net SNMP])
 		      HAVE_UCDSNMP=yes
 		      HAVE_NETSNMP=yes,
 		      ,
@@ -612,8 +613,8 @@ if test "x$tryucdsnmp" != "xno"; then
 	     # Try net snmp with crypto
 	     AC_CHECK_LIB(netsnmp, snmp_add_full, 
 	                  SNMPLIBS="-lnetsnmp -lcrypto $SNMPLIBS"
-			  AC_DEFINE(HAVE_UCDSNMP)
-			  AC_DEFINE(HAVE_NETSNMP)
+		          AC_DEFINE([HAVE_UCDSNMP], [], [Have UCD SNMP])
+		          AC_DEFINE([HAVE_NETSNMP], [], [Have Net SNMP])
 			  HAVE_UCDSNMP=yes
 			  HAVE_NETSNMP=yes,
 			  ,
@@ -625,7 +626,7 @@ if test "x$tryucdsnmp" != "xno"; then
       else
          AC_CHECK_LIB(snmp, snmp_open_ex, 
 		      SNMPLIBS="-lsnmp $SNMPLIBS"
-		      AC_DEFINE(HAVE_UCDSNMP)
+		      AC_DEFINE([HAVE_UCDSNMP], [], [Have UCD SNMP])
 		      HAVE_UCDSNMP=yes,
 		      ,
 		      $SNMPLIBS)
@@ -633,7 +634,7 @@ if test "x$tryucdsnmp" != "xno"; then
             # Try with the crypto lib
             AC_CHECK_LIB(snmp, snmp_sess_perror, 
 		         SNMPLIBS="-lsnmp -lcrypto $SNMPLIBS"
-			 AC_DEFINE(HAVE_UCDSNMP)
+		         AC_DEFINE([HAVE_UCDSNMP], [], [Have UCD SNMP])
 			 HAVE_UCDSNMP=yes,
 			 ,
 			 -lcrypto $SNMPLIBS)
@@ -657,7 +658,7 @@ if test "x$tryopenssl" != "xno"; then
    if test "x$FOUND_OPENSSL" = "xyes"; then
       AC_CHECK_LIB(crypto, CRYPTO_malloc, 
 		   OPENSSLLIBS="-lcrypto $OPENSSLLIBS"
-		   AC_DEFINE(HAVE_OPENSSL)
+		   AC_DEFINE([HAVE_OPENSSL], [], [Have the openssl libraries])
 		   HAVE_OPENSSL=yes,
 		   ,
 		   $OPENSSLLIBS)

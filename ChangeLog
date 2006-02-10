@@ -1,3 +1,19 @@
+2006-02-10 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Convert over to use config.h instead of passing
+	everything on the command line for the compiler.
+	* cmdlang/ipmish.c, cmdlang/os_debug.c: ditto
+	* glib/glib_os_hnd.c: ditto
+	* lanserv/lanserv_config.c, lanserv/lanserv_ipmi.c: ditto
+	* lib/aes_cbc.c, lib/hmac.c, lib/md5.c, lib/rakp.c: ditto
+	* lib/ipmi.c, lib/ipmi_lan.c, lib/ipmi_smi.c: ditto
+	* swig/OpenIPMI.i: ditto
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+	* ui/basic_ui.c: ditto
+	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.c: ditto
+	* utils/ipmi_malloc.c: ditto
+
 2006-02-09 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Added more support for handling dual glib

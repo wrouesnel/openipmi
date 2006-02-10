@@ -1,5 +1,8 @@
 
-AM_CFLAGS = $(PERL_CFLAGS) \
+# Having to -include this is stupid, but perl stupidly have a config.h
+# file in it's include directory.
+AM_CFLAGS = -include $(top_builddir)/config.h \
+	    $(PERL_CFLAGS) \
 	    -I $(top_builddir)/include \
 	    -I $(top_srcdir)/include \
 	    -I $(top_srcdir)/swig/perl
