@@ -26,7 +26,7 @@ libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 	 $(OPENSSLLIBS)
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libIPMIlanserv.map
+	-Wl,-Map -Wl,libIPMIlanserv.map -L$(DESTDIR)$(libdir) -R$(libdir)
 
 ipmi_checksum_SOURCES = ipmi_checksum.c
 

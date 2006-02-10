@@ -27,8 +27,8 @@ OpenIPMI_LIB = @PYTHON_POSIX_LIB@ \
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
-
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
+		-R/$(libdir)
 	rm _OpenIPMI.so
 	mv .libs/_OpenIPMI.so .
 	rm -rf .libs
@@ -45,11 +45,12 @@ OpenIPMI.pyo: OpenIPMI.py _OpenIPMI.so
 OpenIPMI_wrap.c: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 	$(SWIG) $(DEFS) -python -o $@ -I$(top_srcdir)/swig/python $<
 
-CLEANFILES = $(OpenIPMI_OBJ) _OpenIPMI.so OpenIPMI_wrap.c
+CLEANFILES = $(OpenIPMI_OBJ) _OpenIPMI.so OpenIPMI_wrap.c \
+	OpenIPMI.py OpenIPMI.pyo OpenIPMI.pyc
 
 install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
-	$(INSTALL_PROGRAM) _OpenIPMI.so $(DESTDIR)$(PYTHON_INSTALL_DIR)
+	$(LIBTOOL) --mode=install $(INSTALL_PROGRAM) _OpenIPMI.so $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.py $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyc $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_PROGRAM) OpenIPMI.pyo $(DESTDIR)$(PYTHON_INSTALL_DIR)

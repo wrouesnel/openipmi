@@ -25,7 +25,8 @@ OpenIPMI_LIB = @PERL_POSIX_LIB@ \
 	       $(GLIB_SINGLE_LIB)
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
+		-R/$(libdir)
 	rm OpenIPMI.so
 	mv .libs/OpenIPMI.so .
 	rm -rf .libs
