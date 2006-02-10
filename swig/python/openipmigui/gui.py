@@ -175,8 +175,6 @@ class IPMIGUI(wx.Frame):
 
         self.bpanel = wx.Panel(self.bsplitter, -1)
         bpsizer = wx.BoxSizer(wx.VERTICAL)
-        self.errstr = wx.StatusBar(self.bpanel, -1)
-        bpsizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         self.cmdwindow = _cmdwin.CommandWindow(self.bpanel)
         bpsizer.Add(self.cmdwindow, 1, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
         self.bpanel.SetSizer(bpsizer)
@@ -187,6 +185,9 @@ class IPMIGUI(wx.Frame):
         wx.EVT_TREE_ITEM_EXPANDED(self.tree, -1, self.TreeExpanded)
 
         wx.EVT_CLOSE(self, self.OnClose)
+        
+        self.CreateStatusBar(1)
+        self.SetStatusText("Welcome to the OpenIPMI GUI!", 0)
 
         self.Show(True)
 
@@ -195,7 +196,7 @@ class IPMIGUI(wx.Frame):
         return
 
     def ReportError(self, str):
-        self.errstr.SetStatusText(str, 0)
+        self.SetStatusText(str, 0)
         return
     
     def Timeout(self):

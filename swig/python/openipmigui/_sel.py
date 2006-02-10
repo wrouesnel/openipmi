@@ -64,6 +64,7 @@ class SELDisplay(wx.Dialog):
     def __init__(self, o, type):
         self.o = o
         self.type = type
+        self.numevents = 0
         wx.Dialog.__init__(self, None, -1, "SEL for " + o.get_name(),
                            size=wx.Size(500, 600),
                            style=wx.RESIZE_BORDER)
@@ -113,14 +114,16 @@ class SELDisplay(wx.Dialog):
         listc = self.listc
         evinfo = EventInfo()
         ev.call_handler(evinfo)
-        idx = listc.InsertStringItem(sys.maxint, str(ev.get_record_id()))
+        idx = listc.InsertStringItem(self.numevents, str(ev.get_record_id()))
+        self.numevents += 1
         listc.SetStringItem(idx, 1, str(ev.get_type()))
         listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
         listc.SetStringItem(idx, 3, str(ev.get_data()))
         self.events[self.evnum] = ev
         listc.SetItemData(idx, self.evnum)
         if (evinfo.sensor):
-            idx = listc.InsertStringItem(sys.maxint, "")
+            idx = listc.InsertStringItem(self.numevents, "")
+            self.numevents += 1
             listc.SetStringItem(idx, 2, evinfo.sensor)
             listc.SetStringItem(idx, 3, evinfo.val)
             listc.SetItemData(idx, self.evnum)
@@ -138,6 +141,7 @@ class SELDisplay(wx.Dialog):
             del self.events[idx]
             ev.delete()
         self.listc.ClearAll()
+        self.numevents = 0
 
     def OnClose(self, event):
         self.Destroy()
@@ -150,11 +154,12 @@ class SELDisplay(wx.Dialog):
 
         rect = self.listc.GetItemRect(self.curr_idx)
         if (rect == None):
-            return None
-        (x, y) = event.GetPosition().Get()
-        pos = wx.Point(x, rect.GetBottom())
-
-        self.PopupMenu(menu, pos)
+            point = None
+        else:
+            # FIXME - why do I have to subtract 25?
+            point = wx.Point(rect.GetLeft(), rect.GetBottom()-25)
+            pass
+        self.PopupMenu(menu, point)
         menu.Destroy()
 
     def DelItem(self, event):

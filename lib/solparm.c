@@ -1317,7 +1317,7 @@ ipmi_sol_set_config(ipmi_solparm_t       *solparm,
 		    void                 *cb_data)
 {
     ipmi_sol_config_t *solc;
-    unsigned char     data[1];
+    unsigned char     data[MAX_IPMI_DATA_SIZE];
     solparms_t        *lp;
     int               rv;
 

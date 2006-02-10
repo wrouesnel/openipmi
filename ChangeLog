@@ -9,7 +9,12 @@
 	* ui/Makefile.am: ditto
 	* unix/Makefile.am: ditto
 	
+	* lib/lanparm.c: Fixed a data overrun in ipmi_lanparm_set_config.
+	* lib/solparm.c: ditto
 
+	* swig/python/openipmigui/*: Fixed a bunch of problems dealing
+	with wxPython 2.4 issues.  Ugly...
+	
 2006-02-10 Coly <colyli@gmail.com>, Corey Minyard <cminyard@mvista.com>
 
 	* libedit: Add this directory

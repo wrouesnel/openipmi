@@ -33,6 +33,7 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 import OpenIPMI
 import _domain
+import _errstr
 
 authtypes = [ 'default', 'none', 'md2', 'md5', 'straight', 'rmcp+' ]
 privileges = [ 'default', 'callback', 'user', 'operator', 'admin', 'oem' ]
@@ -51,8 +52,8 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
         args = OpenIPMI.alloc_empty_args(str(contype))
         self.args = args
 
-        self.errstr = wx.StatusBar(self, -1)
-        self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.errstr = _errstr.ErrStr(self)
+        self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
 
         i = 0
         rv = 0
@@ -139,6 +140,7 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
         return
 
     def SetupArgs(self):
+        self.errstr.SetError("")
         args = self.args
         for f in self.fields:
             idx = f[0]
@@ -164,8 +166,8 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
                 continue
             rv = args.set_val(idx, None, val);
             if (rv != 0):
-                self.errstr.SetStatusText("Error setting field " + f[1] + ": "
-                                          + OpenIPMI.get_error_string(rv), 0)
+                self.errstr.SetError("Error setting field " + f[1] + ": "
+                                     + OpenIPMI.get_error_string(rv))
                 raise Exception()
             pass
         return args
@@ -196,6 +198,7 @@ class ConnInfo(wx.Panel):
 
         self.coninfos = [ ]
         self.currcon = 0
+
         show = True
         panel = wx.Panel(self, -1, size=wx.Size(400, 200))
         self.sizer.Add(panel, 0, wx.ALIGN_CENTRE, 0)
@@ -257,8 +260,8 @@ class OpenDomainDialog(wx.Dialog):
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
-        self.status = wx.StatusBar(self)
-        self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        self.status = _errstr.ErrStr(self)
+        self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL | wx.GROW, 2)
 
         self.conn = [ ConnInfo(self, mainhandler),
                       ConnInfo(self, mainhandler, False) ]
@@ -283,9 +286,10 @@ class OpenDomainDialog(wx.Dialog):
         self.Close(True)
 
     def ok(self, event):
+        self.status.SetError("")
         name = str(self.name.GetValue())
         if (name == ""):
-            self.status.SetStatusText("No name specified")
+            self.status.SetError("No name specified")
             return
         try:
             args = [ self.conn[0].FillinConn() ]
@@ -295,10 +299,11 @@ class OpenDomainDialog(wx.Dialog):
                 pass
             pass
         except:
+            self.status.SetError("Error handling connection arguments")
             return
         domain_id = OpenIPMI.open_domain3(name, [], args, None, None)
         if (domain_id == None):
-            self.status.SetStatusText("Error opening domain")
+            self.status.SetError("Error opening domain")
             return
 
         self.Close(True)

@@ -35,6 +35,7 @@ import OpenIPMI
 import wx
 import wx.gizmos as gizmos
 import _oi_logging
+import _errstr
 
 id_st = 800
 
@@ -65,8 +66,8 @@ class MCValueSet(wx.Dialog):
         self.field = wx.TextCtrl(self, -1, data.currval)
         sizer.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 
-        self.errstr = wx.StatusBar(self, -1)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.errstr = _errstr.ErrStr(self)
+        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
@@ -96,7 +97,7 @@ class MCValueSet(wx.Dialog):
         rv = self.mclp.lpc.set_val(self.data.parm, self.data.idx,
                                    self.data.ptype, val)
         if (rv != 0):
-            self.errstr.SetStatusText("Invalid data value", 0)
+            self.errstr.SetError("Invalid data value")
             return
         self.data.currval = val
         self.mclp.listc.SetStringItem(self.idx, 1, val)
@@ -127,8 +128,8 @@ class MCLanParm(wx.Dialog):
 
         sizer.Add(listc, 1, wx.GROW, 0)
 
-        self.errstr = wx.StatusBar(self, -1)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.errstr = _errstr.ErrStr(self)
+        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         box = wx.BoxSizer(wx.HORIZONTAL)
         save = wx.Button(self, -1, "Save")
@@ -140,6 +141,7 @@ class MCLanParm(wx.Dialog):
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         i = 0
+        j = 0
         rv = True
         v = [ 0 ]
         itemdata = [ ]
@@ -161,16 +163,16 @@ class MCLanParm(wx.Dialog):
                     data = MCLPData(i, lastv, vals[0], vals[1], vals[2])
                     itemdata.append(data)
                     if (v[0] == 0):
-                        item = listc.InsertStringItem(sys.maxint, vals[0])
+                        listc.InsertStringItem(j, vals[0])
                     else:
                         x = [ "" ]
                         err = OpenIPMI.lanconfig_enum_idx(i, lastv, x)
                         if (err):
-                            item = listc.InsertStringItem(sys.maxint,
-                                                          vals[0] + "[" +
-                                                          str(lastv) + "]")
+                            listc.InsertStringItem(j,
+                                                   vals[0] + "[" +
+                                                   str(lastv) + "]")
                         else:
-                            item = listc.InsertStringItem(sys.maxint,
+                            listc.InsertStringItem(j,
                                                           vals[0] + "[" +
                                                           x[0] + "]")
                             pass
@@ -180,12 +182,13 @@ class MCLanParm(wx.Dialog):
                         sval = [ "" ]
                         OpenIPMI.lanconfig_enum_val(data.parm, int(vals[2]),
                                                     nval, sval)
-                        listc.SetStringItem(item, 1, sval[0])
+                        listc.SetStringItem(j, 1, sval[0])
                         pass
                     else:
-                        listc.SetStringItem(item, 1, vals[2])
+                        listc.SetStringItem(j, 1, vals[2])
                         pass
-                    listc.SetItemData(item, len(itemdata)-1)
+                    listc.SetItemData(j, len(itemdata)-1)
+                    j += 1
                     if (v[0] == 0):
                         i += 1
                         pass
@@ -269,8 +272,8 @@ class MCLanParm(wx.Dialog):
         val = event.GetId() - id_st
         rv = self.lpc.set_val(data.parm, data.idx, "integer", str(val))
         if (rv != 0):
-            self.errstr.SetStatusText("Could not set value to "+str(val)+": "
-                                      + OpenIPMI.get_error_string(rv), 0)
+            self.errstr.SetError("Could not set value to "+str(val)+": "
+                                 + OpenIPMI.get_error_string(rv))
             return
         data.currval = val
         nval = [ 0 ]
@@ -290,8 +293,8 @@ class MCLanParm(wx.Dialog):
         rv = self.lpc.set_val(data.parm, data.idx,
                               data.ptype, newval)
         if (rv != 0):
-            self.errstr.SetStatusText("Could not toggle value: "
-                                      + OpenIPMI.get_error_string(rv), 0)
+            self.errstr.SetError("Could not toggle value: "
+                                 + OpenIPMI.get_error_string(rv))
             return
             
         data.currval = newval
@@ -301,8 +304,8 @@ class MCLanParm(wx.Dialog):
     def save(self, event):
         rv = self.lp.set_config(self.lpc)
         if (rv != 0):
-            self.errstr.SetStatusText("Error setting config: "
-                                      + OpenIPMI.get_error_string(rv), 0)
+            self.errstr.SetError("Error setting config: "
+                                 + OpenIPMI.get_error_string(rv))
             return
 
         # Don't forget to set self.lp to None when done so OnClose

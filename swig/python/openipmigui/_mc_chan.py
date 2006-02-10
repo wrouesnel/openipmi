@@ -37,6 +37,7 @@ import _oi_logging
 import _mc_lanparm
 import _mc_solparm
 import _mc_user
+import _errstr
 
 id_st = 500
 
@@ -170,9 +171,8 @@ class MCChanData:
         if (self.cb_state == "users"):
             rv = mc.get_users(self.idx, 0, self)
             if (rv):
-                self.mcchan.errstr.SetStatusText("Could not get users: " +
-                                                 OpenIPMI.get_error_string(rv),
-                                                 0)
+                self.mcchan.errstr.SetError("Could not get users: " +
+                                            OpenIPMI.get_error_string(rv))
                 pass
             pass
         elif (self.cb_state == "lanparms"):
@@ -193,12 +193,11 @@ class MCChanData:
     def mc_channel_got_users_cb(self, mc, err, max_users, enabled_users,
                                 fixed_users, users):
         if (err):
-            self.mcchan.errstr.SetStatusText("Error fetching users: " +
-                                             OpenIPMI.get_error_string(err),
-                                             0)
+            self.mcchan.errstr.SetError("Error fetching users: " +
+                                        OpenIPMI.get_error_string(err))
             return
         if (len(users) == 0):
-            self.mcchan.errstr.SetStatusText("No users", 0)
+            self.mcchan.errstr.SetError("No users")
             return
         v = [ 0 ]
         users[0].get_channel(v)
@@ -209,12 +208,12 @@ class MCChanData:
     def lanparm_got_config_cb(self, lanparm, err, lanconfig):
         if (err):
             if (err == OpenIPMI.eagain):
-                self.mcchan.errstr.SetStatusText(
-                    "LANPARMs are locked, clear the lock if necessary", 0)
+                self.mcchan.errstr.SetError(
+                    "LANPARMs are locked, clear the lock if necessary")
             else:
-                self.mcchan.errstr.SetStatusText(
+                self.mcchan.errstr.SetError(
                     "Error getting lanparms: "
-                    + OpenIPMI.get_error_string(err), 0)
+                    + OpenIPMI.get_error_string(err))
                 pass
             return
         _mc_lanparm.MCLanParm(self.mcchan.m, lanparm, lanconfig, self.idx)
@@ -223,12 +222,12 @@ class MCChanData:
     def solparm_got_config_cb(self, solparm, err, solconfig):
         if (err):
             if (err == OpenIPMI.eagain):
-                self.mcchan.errstr.SetStatusText(
-                    "SOLPARMs are locked, clear the lock if necessary", 0)
+                self.mcchan.errstr.SetError(
+                    "SOLPARMs are locked, clear the lock if necessary")
             else:
-                self.mcchan.errstr.SetStatusText(
+                self.mcchan.errstr.SetError(
                     "Error getting solparms: "
-                    + OpenIPMI.get_error_string(err), 0)
+                    + OpenIPMI.get_error_string(err))
                 pass
             return
         _mc_solparm.MCSolParm(self.mcchan.m, solparm, solconfig, self.idx)
@@ -263,8 +262,8 @@ class BoolSetter:
             pass
         rv = self.setter(bval)
         if (rv):
-            mcchan.errstr.SetStatusText("Could not toggle value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            mcchan.errstr.SetError("Could not toggle value: "
+                                   + OpenIPMI.get_error_string(rv))
             return
         self.mcchan.tree.SetItemText(self.item, val, 1);
         return
@@ -296,8 +295,8 @@ class AccessSetter:
     def setval(self, val):
         rv = self.setter(val)
         if (rv):
-            mcchan.errstr.SetStatusText("Could not set value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            mcchan.errstr.SetError("Could not set value: "
+                                   + OpenIPMI.get_error_string(rv))
             return
         self.mcchan.tree.SetItemText(self.item, 
                                      OpenIPMI.channel_access_mode_string(val),
@@ -349,8 +348,8 @@ class PrivSetter:
     def setval(self, val):
         rv = self.setter(val)
         if (rv):
-            mcchan.errstr.SetStatusText("Could not set value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            mcchan.errstr.SetError("Could not set value: "
+                                   + OpenIPMI.get_error_string(rv))
             return
         self.mcchan.tree.SetItemText(self.item, 
                                      OpenIPMI.privilege_string(val),
@@ -491,8 +490,8 @@ class MCChan(wx.Dialog):
 
         sizer.Add(self.tree, 1, wx.GROW, 0);
 
-        self.errstr = wx.StatusBar(self, -1)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.errstr = _errstr.ErrStr(self)
+        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         box = wx.BoxSizer(wx.HORIZONTAL)
         save = wx.Button(self, -1, "Save")

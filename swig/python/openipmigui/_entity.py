@@ -36,6 +36,7 @@ import wx
 import _sensor
 import _control
 import _fru
+import _errstr
 
 id_st = 400
 
@@ -89,8 +90,8 @@ class ActivationTimeSetter(wx.Dialog):
         box1.Add(self.value, 0, wx.ALIGN_LEFT | wx.ALL, 5)
         sizer.Add(box1, 0, wx.ALIGN_LEFT | wx.ALL, 2)
         
-        self.status = wx.StatusBar(self)
-        sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL, 2)
+        self.status = _errstr.ErrStr(self)
+        sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL | wx.GROW, 2)
 
         box2 = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")

@@ -32,6 +32,7 @@
 import OpenIPMI
 import wx
 import _term
+import _errstr
 
 id_st = 1100
 
@@ -227,14 +228,14 @@ class SoL(wx.Frame):
                        wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(hsizer, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
-        self.errstr = wx.StatusBar(self, -1)
-        hsizer.Add(self.errstr, 4, wx.ALIGN_CENTRE | wx.ALL, 2)
-        self.statestr = wx.StatusBar(self, -1)
+        self.errstr = _errstr.ErrStr(self)
+        hsizer.Add(self.errstr, 4, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
+        self.statestr = _errstr.ErrStr(self)
         hsizer.Add(self.statestr, 1, wx.ALIGN_CENTRE | wx.ALL, 2)
         self.SetSizer(self.sizer)
 
 
-        self.statestr.SetStatusText(OpenIPMI.sol_state_string(
+        self.statestr.SetError(OpenIPMI.sol_state_string(
             OpenIPMI.sol_state_closed))
         self.state = OpenIPMI.sol_state_closed
         self.Show()
@@ -262,12 +263,11 @@ class SoL(wx.Frame):
 
     def sol_connection_state_change(self, conn, state, err):
         if (err != 0):
-            self.errstr.SetStatusText("Connection change: "
-                                      + OpenIPMI.sol_state_string(state)
-                                      + " " + OpenIPMI.get_error_string(err),
-                                      0)
+            self.errstr.SetError("Connection change: "
+                                 + OpenIPMI.sol_state_string(state)
+                                 + " " + OpenIPMI.get_error_string(err))
             pass
-        self.statestr.SetStatusText(OpenIPMI.sol_state_string(state))
+        self.statestr.SetError(OpenIPMI.sol_state_string(state))
         if ((self.state != OpenIPMI.sol_state_closed)
             and (state == OpenIPMI.sol_state_closed)):
             self.openmenu.Enable(True)
@@ -494,11 +494,11 @@ class SoL(wx.Frame):
         return 0
     
     def sol_break_detected(self, conn):
-        self.errstr.SetStatusText("Received break")
+        self.errstr.SetError("Received break")
         return
     
     def sol_bmc_transmit_overrun(self, conn):
-        self.errstr.SetStatusText("BMC Transmit Overrun")
+        self.errstr.SetError("BMC Transmit Overrun")
         return
 
     pass

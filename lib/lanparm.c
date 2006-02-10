@@ -1865,7 +1865,7 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
 		    void                 *cb_data)
 {
     ipmi_lan_config_t *lanc;
-    unsigned char     data[1];
+    unsigned char     data[MAX_IPMI_DATA_SIZE];
     lanparms_t        *lp;
     int               rv;
 
