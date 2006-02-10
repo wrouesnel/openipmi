@@ -48,6 +48,7 @@
 #include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_debug.h>
+#include <editline/readline.h>
 
 #ifdef HAVE_GLIB
 #include <glib.h>
@@ -79,9 +80,6 @@ os_hnd_fd_id_t *term_fd_id;
 static int done = 0;
 static int evcount = 0;
 static int handling_input = 0;
-static char *line_buffer;
-static int  line_buffer_max = 0;
-static int  line_buffer_pos = 0;
 static int cmd_redisp = 1;
 
 static void user_input_ready(int fd, void *data, os_hnd_fd_id_t *id);
@@ -94,8 +92,7 @@ redraw_cmdline(int force)
     if (force)
 	redisp = 1;
     if (!done && handling_input && redisp) {
-	fputs("> ", stdout);
-	fwrite(line_buffer, 1, line_buffer_pos, stdout);
+	rl_redisplay();
 	fflush(stdout);
     }
 }
@@ -608,105 +605,41 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 static void
 user_input_ready(int fd, void *data, os_hnd_fd_id_t *id)
 {
-    ipmi_cmdlang_t *info = data;
-    out_data_t *out_data = info->user_data;
-    char rc;
-    int  count;
-    int  i;
+    rl_callback_read_char();
+}
 
-    count = read(fd, &rc, 1);
-    if (count <= 0) {
+static void
+rl_ipmish_cb_handler(char *cmdline)
+{
+    char *expansion = NULL;
+    int result;
+
+    if (cmdline == NULL) {
 	done = 1;
 	evcount = 1; /* Force a newline */
 	return;
     }
-
-    switch(rc) {
-    case 0x04: /* ^d */
-	if (line_buffer_pos == 0) {
-	    done = 1;
-	    evcount = 1; /* Force a newline */
-	}
-	break;
-
-    case 12: /* ^l */
-	fputc('\n', out_data->stream);
-	redraw_cmdline(1);
-	break;
-
-    case '\r': case '\n':
-	fputc(rc, out_data->stream);
-	if (line_buffer) {
-	    line_buffer[line_buffer_pos] = '\0';
-	    for (i=0; isspace(line_buffer[i]); i++)
-		;
-	    /* Ignore blank lines. */
-	    if (line_buffer[i] != '\0') {
-		/* Turn off input processing. */
-		disable_term_fd(info);
-
-		cmdlang.err = 0;
-		cmdlang.errstr = NULL;
-		cmdlang.errstr_dynalloc = 0;
-		cmdlang.location = NULL;
-		handling_input = 0;
-		line_buffer_pos = 0;
-		ipmi_cmdlang_handle(&cmdlang, line_buffer);
-	    } else {
-		fputs("> ", out_data->stream);
-	    }
-	} else {
-	    fputs("> ", out_data->stream);
-	}
-	break;
-
-    case 0x7f: /* delete */
-    case '\b': /* backspace */
-	if (line_buffer_pos > 0) {
-	    line_buffer_pos--;
-	    fputs("\b \b", out_data->stream);
-	}
-	break;
-
-    default:
-	if (line_buffer_pos >= line_buffer_max) {
-	    char *new_line = ipmi_mem_alloc(line_buffer_max+10+1);
-	    if (!new_line)
-		break;
-	    line_buffer_max += 10;
-	    if (line_buffer) {
-		memcpy(new_line, line_buffer, line_buffer_pos);
-		ipmi_mem_free(line_buffer);
-	    }
-	    line_buffer = new_line;
-	}
-	line_buffer[line_buffer_pos] = rc;
-	line_buffer_pos++;
-	fputc(rc, out_data->stream);
-	break;
+    result = history_expand(cmdline, &expansion);
+    if (result < 0 || result == 2) {
+	fprintf(stderr, "%s\n", expansion);
+    } else if (expansion && strlen(expansion)){
+	cmdlang.err = 0;
+	cmdlang.errstr = NULL;
+	cmdlang.errstr_dynalloc = 0;
+	cmdlang.location = NULL;
+	handling_input = 0;
+	add_history(expansion);
+	ipmi_cmdlang_handle(&cmdlang, expansion);
     }
-
-    fflush(out_data->stream);
+    if (expansion)
+	ipmi_mem_free(expansion);
 }
-
-static int term_setup;
-struct termios old_termios;
 
 static void
 cleanup_term(void)
 {
-    if (line_buffer) {
-	ipmi_mem_free(line_buffer);
-	line_buffer = NULL;
-    }
+    rl_callback_handler_remove();
     disable_term_fd(&cmdlang);
-
-    if (!term_setup)
-	return;
-
-    tcsetattr(0, TCSADRAIN, &old_termios);
-    tcdrain(0);
-    term_setup = 0;
 }
 
 static void cleanup_sig(int sig);
@@ -714,20 +647,14 @@ static void cleanup_sig(int sig);
 static void
 setup_term(os_handler_t *os_hnd)
 {
-    struct termios new_termios;
-
-    tcgetattr(0, &old_termios);
-    new_termios = old_termios;
-    new_termios.c_lflag &= ~(ICANON|ECHO);
-    tcsetattr(0, TCSADRAIN, &new_termios);
-    term_setup = 1;
-
     signal(SIGINT, cleanup_sig);
     signal(SIGPIPE, cleanup_sig);
     signal(SIGUSR1, cleanup_sig);
     signal(SIGUSR2, cleanup_sig);
     signal(SIGPWR, cleanup_sig);
 
+    stifle_history(500);
+    rl_callback_handler_install("> ", rl_ipmish_cb_handler);
     lout_data.stream = stdout;
 
     cmdlang.os_hnd = os_hnd;
@@ -810,6 +737,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
     read_nest++;
     saved_done_ptr = done_ptr;
 
+    /* not record the file's commands into history */
     while (fgets(cmdline, sizeof(cmdline), s)) {
 	my_out_data.stream = stdout;
 	my_out_data.indent = 0;
@@ -817,6 +745,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
 	cdone = 0;
 	done_ptr = &cdone;
 	printf("> %s", cmdline);
+	fflush(stdout);
 	ipmi_cmdlang_handle(&my_cmdlang, cmdline);
 	while (!cdone)
 	    cmdlang->os_hnd->perform_one_op(cmdlang->os_hnd, NULL);
@@ -1098,8 +1027,9 @@ main(int argc, char *argv[])
 	read_nest = 1;
 	execs = e->next;
 	printf("> %s\n", e->str);
+	fflush(stdout);
 	done_ptr = &cdone;
-	ipmi_cmdlang_handle(&cmdlang, e->str);
+	rl_ipmish_cb_handler(e->str);
 	while (!cdone)
 	    os_hnd->perform_one_op(os_hnd, NULL);
 	done_ptr = NULL;
@@ -1107,7 +1037,6 @@ main(int argc, char *argv[])
 	read_nest = 0;
     }
 
-    printf("> ");
     fflush(stdout);
 
     handling_input = 1;
@@ -1132,8 +1061,11 @@ main(int argc, char *argv[])
 
     os_hnd->free_os_handler(os_hnd);
 
+    /* remove the prompt which editline printed */
+    printf("\b\b  \b\b");
     if (evcount)
 	printf("\n");
+    fflush(stdout);
 
     if (rv)
 	return 1;

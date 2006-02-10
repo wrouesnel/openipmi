@@ -10,7 +10,7 @@ VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
-AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS $(GLIB_CFLAGS)
+AM_CFLAGS = -Wall -I$(top_srcdir)/include -I$(top_srcdir)/libedit -DIPMI_CHECK_LOCKS $(GLIB_CFLAGS)
 
 lib_LTLIBRARIES = libOpenIPMIcmdlang.la
 
@@ -30,6 +30,7 @@ openipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(top_builddir)/libedit/libedit.a \
 		$(SNMPLIBS) $(GLIB_LIB) $(GLIB_LIBS) $(OPENSSLLIBS) \
 		$(GDBM_LIB)
 
@@ -39,3 +40,4 @@ CLEANFILES = libOpenIPMIcmdlang.map
 # compatability.
 install-data-local:
 	$(LN_S) openipmish $(DESTDIR)$(bindir)/ipmish
+

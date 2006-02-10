@@ -1,3 +1,10 @@
+2006-02-10 Coly <colyli@gmail.com>, Corey Minyard <cminyard@mvista.com>
+
+	* libedit: Add this directory
+
+	* cmdlang/ipmish.c, cmdlang/Makefile.am: Add support for libedit
+	into ipmish.
+
 2006-02-10 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Convert over to use config.h instead of passing
