@@ -1,3 +1,9 @@
+2006-02-11 Corey Minyard <cminyard@mvista.com>
+
+	* lib/lanparm.c: Added a hack for non-compliant systems that
+	return 0xcc for unsupported LANPARM parameters instead of the
+	proper 0x80 return code.
+
 2006-02-10 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/Makefile.am: Fix so it will install into any random
