@@ -3968,6 +3968,11 @@ char *get_error_string(unsigned int val);
 	return ipmi_domain_get_connection_args(self, connection);
     }
 
+    char *get_connection_type(int connection)
+    {
+	return ipmi_domain_get_connection_type(self, connection);
+    }
+
     /*
      * Add a handler to be called when an entity is added, updated, or
      * removed. When the entity is updated the entity_update_cb

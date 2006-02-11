@@ -16,6 +16,26 @@
 	with wxPython 2.4 issues.  Ugly...
 
 	* lib/normal_fru.c: Fix a cleanup order problem.
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a way to get
+	the connection type string.
+
+	* swig/OpenIPMI.i: Added the connection type string.
+
+	* swig/python/openipmigui/_conn.py: Print the connection type.
+
+	* cmdlang/cmd_control.c: Don't return that we handles the event,
+	pass it on.
+	* cmdlang/cmd_entity.c: ditto
+	* cmdlang/cmd_sensor.c: ditto
+	* cmdlang/cmd_sel.c: ditto
+	* swig/python/openipmigui/_entity.py: ditto
+	* swig/python/openipmigui/_sensor.py: ditto
+
+	* swig/python/openipmigui/errstr.py: Only do a clear in 2.4
+	
+	* swig/python/openipmigui/_sel.py: Fix problems deleting single
+	events. 
 	
 2006-02-10 Coly <colyli@gmail.com>, Corey Minyard <cminyard@mvista.com>
 

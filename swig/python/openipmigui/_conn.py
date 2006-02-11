@@ -91,6 +91,7 @@ class Connection:
         d.connections[cnum] = self
 
         self.ui.add_connection(d, self)
+        self.ui.set_item_text(self.treeroot, domain.get_connection_type(cnum))
 
         v = [ 0 ]
         rv = domain.num_connection_ports(cnum, v)

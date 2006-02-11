@@ -41,8 +41,10 @@ class ErrStr(wx.StatusBar):
         self.SetStatusText(text)
         # In 2.4, it won't automatically show text, we have to clear
         # it and sentit a paint event.
-        self.Clear()
-        self.ProcessEvent(wx.PaintEvent(-1))
+        if (hasattr(self, "Clear")):
+            self.Clear()
+            self.ProcessEvent(wx.PaintEvent(-1))
+            pass
         return
 
     pass

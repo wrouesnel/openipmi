@@ -4451,6 +4451,21 @@ ipmi_domain_get_connection_args(ipmi_domain_t *domain,
     return domain->conn[con]->get_startup_args(domain->conn[con]);
 }
 
+char *
+ipmi_domain_get_connection_type(ipmi_domain_t *domain,
+				unsigned int  connection)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if (connection >= MAX_CONS)
+	return NULL;
+
+    if (!domain->conn[connection])
+	return NULL;
+
+    return domain->conn[connection]->con_type;
+}
+
 ipmi_con_t *
 ipmi_domain_get_connection(ipmi_domain_t *domain,
 			   unsigned int  connection)

@@ -893,7 +893,7 @@ presence_change(ipmi_entity_t *entity,
     }
 
     ipmi_cmdlang_cmd_info_put(evi);
-    return IPMI_EVENT_HANDLED_PASS;
+    return IPMI_EVENT_NOT_HANDLED;
 
  out_err:
     ipmi_cmdlang_global_err(entity_name,
@@ -941,7 +941,7 @@ entity_hot_swap(ipmi_entity_t             *entity,
     }
 
     ipmi_cmdlang_cmd_info_put(evi);
-    return IPMI_EVENT_HANDLED_PASS;
+    return IPMI_EVENT_NOT_HANDLED;
 
  out_err:
     ipmi_cmdlang_global_err(entity_name,

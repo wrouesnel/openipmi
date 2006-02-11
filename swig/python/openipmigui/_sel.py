@@ -170,15 +170,19 @@ class SELDisplay(wx.Dialog):
             key2 = self.listc.GetItemData(self.curr_idx - 1)
             if (key2 == key):
                 self.listc.DeleteItem(self.curr_idx-1)
+                self.numevents -= 1
+                self.curr_idx -= 1
                 pass
             pass
-        if (self.curr_idx+1 < self.listc.GetItemCount()):
+        if (self.curr_idx+1 < self.numevents):
             key2 = self.listc.GetItemData(self.curr_idx + 1)
             if (key2 == key):
                 self.listc.DeleteItem(self.curr_idx+1)
+                self.numevents -= 1
                 pass
             pass
         self.listc.DeleteItem(self.curr_idx)
+        self.numevents -= 1
         ev.delete()
 
 
