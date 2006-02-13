@@ -2,6 +2,8 @@
 
 	* OpenIPMI.spec.in: Added some missing files.
 
+	* configure.in: Move to version 2.0.5.
+
 2006-02-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c: Added a hack for non-compliant systems that
