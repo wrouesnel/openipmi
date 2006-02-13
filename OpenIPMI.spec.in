@@ -118,6 +118,8 @@ fi
 %{_libdir}/libOpenIPMIcmdlang.la
 %{_libdir}/libOpenIPMIglib.so*
 %{_libdir}/libOpenIPMIglib.la
+%{_libdir}/libOpenIPMIglib12.so*
+%{_libdir}/libOpenIPMIglib12.la
 %{_libdir}/libOpenIPMIposix.so*
 %{_libdir}/libOpenIPMIposix.la
 %{_libdir}/libOpenIPMIpthread.so*
@@ -179,7 +181,9 @@ fi
 %doc %{_mandir}/man1/openipmicmd.1*
 %doc %{_mandir}/man1/openipmish.1*
 %doc %{_mandir}/man1/openipmigui.1*
+%doc %{_mandir}/man1/solterm.1*
 %doc %{_mandir}/man7/ipmi_cmdlang.7*
+%doc %{_mandir}/man7/openipmi_conparms.7*
 
 ###################################################
 %files lanserv
