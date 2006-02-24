@@ -28,11 +28,15 @@ libOpenIPMIposix_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 
 noinst_HEADERS = heap.h
 
-noinst_PROGRAMS = test_heap
+noinst_PROGRAMS = test_heap test_handlers
 
 test_heap_SOURCES = test_heap.c
 test_heap_LDADD = 
 
-TESTS = test_heap
+test_handlers_SOURCES = test_handlers.c
+test_handlers_LDADD = libOpenIPMIposix.la libOpenIPMIpthread.la \
+	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB)
+
+TESTS = test_heap test_handlers
 
 CLEANFILES = libOpenIPMIposix.map libOpenIPMIpthread.map

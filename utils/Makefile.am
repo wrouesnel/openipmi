@@ -16,7 +16,7 @@ lib_LTLIBRARIES = libOpenIPMIutils.la
 
 libOpenIPMIutils_la_SOURCES = md5.c md2.c ipmi_auth.c \
 			      ipmi_malloc.c ilist.c locks.c hash.c \
-			      locked_list.c
+			      locked_list.c os_handler.c
 libOpenIPMIutils_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIutils.map
 

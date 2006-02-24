@@ -5,6 +5,13 @@ openipmigui \- GUI interface to an IPMI system
 
 .SH SYNOPSIS
 .B openipmigui
+.RB [--dmsg]
+.RB [--drawmsg]
+.RB [--glib12]
+.RB [--trace]
+.RB [-n]
+.RB [-p
+.IR preffile]
 
 .SH DESCRIPTION
 .B openipmigui
@@ -24,7 +31,31 @@ Note that events are not reported in the log window, you must open an
 SEL window for a domain to view the events.
 
 .SH OPTIONS
-None yet
+.TP
+.B "\--dmsg"
+Turn on message debugging, this will dump all messages to debug log output.
+.TP
+.B "\--drawmsg"
+Turn on raw message debugging, this will dump all low-level messages to
+debug log output.  This differes from normal message debugging in that all
+protocol messages are also dumped, not just IPMI messages.
+.TP
+.B "\--dmem"
+Turn on memory debugging, this will cause memory allocation and
+deallocations to be checked.  When the program terminates, it will
+dump all memory that was not properly freed (leaked), and overruns,
+writing of freed memory, or other types of memory errors.
+.TP
+.B "\--trace"
+Turn on python tracing so that all python procedure calls entered and
+exited will be printed out.
+.TP
+.B "\-n"
+Turn off reading of the preferences file at startup.
+.TP
+.BI \-p\ preffile
+Use preffile as the name of the preferences file instead of
+$HOME/.openipmigui.startup
 
 .SH MENU BAR
 
@@ -36,7 +67,7 @@ you want to exit.  The Open Domain command is how you establish a
 connection to an IPMI system.  The Save Prefs command will store the
 current domains and the configuration of the main GUI window.  These
 settings will be restored at startup.  The settings are stored in
-~/.openipmigui.startup; this file may be removed to clear all the
+$HOME/.openipmigui.startup; this file may be removed to clear all the
 settings.
 
 The View menu contains commands to expand and contract the entire

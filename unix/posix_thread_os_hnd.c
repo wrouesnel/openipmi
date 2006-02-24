@@ -395,7 +395,8 @@ destroy_lock(os_handler_t  *handler,
     int rv;
 
     if (id->lock_count != 0)
-	ipmi_log(IPMI_LOG_FATAL, "Destroy of lock when count is not zero");
+	handler->log(handler, IPMI_LOG_FATAL,
+		     "Destroy of lock when count is not zero");
     rv = pthread_mutex_destroy(&id->mutex);
     if (rv)
 	return rv;
@@ -426,9 +427,9 @@ unlock(os_handler_t  *handler,
     int rv;
 
     if (id->lock_count == 0)
-	ipmi_log(IPMI_LOG_FATAL, "lock count went negative");
+	handler->log(handler, IPMI_LOG_FATAL, "lock count went negative");
     if (pthread_self() != id->owner)
-	ipmi_log(IPMI_LOG_FATAL, "lock release by non-owner");
+	handler->log(handler, IPMI_LOG_FATAL, "lock release by non-owner");
     id->lock_count--;
     if (id->lock_count == 0) {
 	rv = pthread_mutex_unlock(&id->mutex);
@@ -485,7 +486,17 @@ cond_wait(os_handler_t  *handler,
 	  os_hnd_cond_t *cond,
 	  os_hnd_lock_t *lock)
 {
-    return pthread_cond_wait(&cond->cond, &lock->mutex);
+    int       rv;
+    int       old_lock_count;
+    pthread_t old_owner;
+
+    old_lock_count = lock->lock_count; 
+    old_owner = lock->owner;
+    lock->lock_count = 0;
+    rv = pthread_cond_wait(&cond->cond, &lock->mutex);
+    lock->lock_count = old_lock_count;
+    lock->owner = old_owner;
+    return rv;
 }
 
 static int
@@ -496,6 +507,9 @@ cond_timedwait(os_handler_t   *handler,
 {
     struct timespec spec;
     struct timeval  now;
+    int             rv;
+    int             old_lock_count;
+    pthread_t       old_owner;
 
     gettimeofday(&now, NULL);
     spec.tv_sec = timeout->tv_sec + now.tv_sec;
@@ -504,7 +518,13 @@ cond_timedwait(os_handler_t   *handler,
 	spec.tv_sec += 1;
 	spec.tv_nsec -= 1000000000;
     }
-    return pthread_cond_timedwait(&cond->cond, &lock->mutex, &spec);
+    old_lock_count = lock->lock_count; 
+    old_owner = lock->owner;
+    lock->lock_count = 0;
+    rv = pthread_cond_timedwait(&cond->cond, &lock->mutex, &spec);
+    lock->lock_count = old_lock_count;
+    lock->owner = old_owner;
+    return rv;
 }
 
 static int

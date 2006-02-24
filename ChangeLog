@@ -1,3 +1,25 @@
+2006-02-24 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui.py, man/openipmigui.1:  Added some
+	command-line parameters to control some thing about the GUI.
+
+	* configure.in: Move to version 2.0.6.
+
+2006-02-14 Corey Minyard <cminyard@mvista.com>
+
+	* utils/os_handler.c, include/OpenIPMI/os_handler.h:  Add an
+	interface to allow easier waiting for IPMI things to complete.
+
+	* utils/Makefile.am: Add the new os_handler.c file.
+
+	* unix/test_handlers.c, unix/Makefile.am: Add some OS handler
+	tests and tests for the wait operations.
+
+2006-02-13 Radisys
+
+	* lib/ipmi_smi.c: Fix the IPMB address setting code to actually
+	use the right types when interacting with the driver.
+
 2006-02-12 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.spec.in: Added some missing files.

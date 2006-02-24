@@ -163,10 +163,15 @@ def run(args):
         print "Error: wxPython version must be 2.4.2 or greater"
         return
 
+    preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
+    histfile = os.path.join(os.environ['HOME'], '.openipmigui.history')
+
     use_glib_12 = False
     debug_msg = False
     debug_rawmsg = False
+    debug_mem = False
     do_trace = False
+    read_preffile = True
 
     # Get rid of program name.
     if (len(args) > 0):
@@ -181,14 +186,25 @@ def run(args):
             debug_msg = True
         elif (arg == "--drawmsg"):
             debug_msg = True
+        elif (arg == "--dmem"):
+            debug_mem = True
         elif (arg == "--trace"):
             do_trace = True
+        elif (arg == "-n"):
+            read_preffile = False
+        elif (arg == '-p'):
+            if (len(args) == 0):
+                print "No argument given for -p";
+                return
+            preffile = args[0]
+            del args[0]
         else:
             print "Unknown argument: " + arg
             return
         pass
-    
-    OpenIPMI.enable_debug_malloc()
+
+    if (debug_mem):
+        OpenIPMI.enable_debug_malloc()
     if (use_glib_12):
         OpenIPMI.init_glib12()
         pass
@@ -209,11 +225,10 @@ def run(args):
         pass
     if (do_trace):
         sys.settrace(trace)
+        pass
 
-    preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
-    _saveprefs.restore(preffile)
-
-    histfile = os.path.join(os.environ['HOME'], '.openipmigui.history')
+    if (read_preffile):
+        _saveprefs.restore(preffile)
     _cmdwin._HistoryRestore(histfile)
     
     mainhandler = DomainHandler(preffile)

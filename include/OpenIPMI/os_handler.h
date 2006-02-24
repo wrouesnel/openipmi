@@ -342,6 +342,88 @@ struct os_handler_s
 os_handler_t *ipmi_alloc_os_handler(void);
 void ipmi_free_os_handler(os_handler_t *handler);
 
+/**********************************************************************
+ *
+ * Tools to use OS handlers to wait.
+ *
+ * Well, you shouldn't have to wait for OpenIPMI to do things, you
+ * should use callbacks and event-drive your programs.  However, it's
+ * not always that simple.  Broken APIs that require blocking exist,
+ * and it makes things ugly.
+ *
+ * The tools below help you with this.  They provide a way with an OS
+ * handler to do blocking operations more easily.  They handle all the
+ * nastiness of threading, single-threaded, and whatnot.
+ *
+ * To use this, allocate a waiter factory.  Then when you need to
+ * wait, allocate a waiter from the factory.  It is allocated with a
+ * usecount of 1.  For every operation you start, "use" the waiter.
+ * When you are done starting operations, do one "release" of the
+ * waiter and then wait on the waiter.  When operations complete, they
+ * "release" the waiter.  When the last operation is done the wait
+ * operation will return.  Then free the waiter.  You cannot reuse
+ * waiters, you must allocate new ones.
+ *
+ * This interface has three basic modes.  If you have a
+ * single-threaded OS handler (no threads support in the handler) then
+ * you must set num_threads = 0 and it runs single-threaded.  The code
+ * will run an event loop while waiting for the operations to complete.
+ *
+ * If you have multiple thread support in the OS handler and set
+ * num_threads > 0, it will allocate num_threads event loop threads.
+ * The event loop will not be run from the waiting thread (there are
+ * race conditions with this) but condition variable are used to wake
+ * the waiting thread.
+ *
+ * If you have multiple thread support in the OS handler and set
+ * num_threads = 0, things are more complex.  This allows a
+ * single-threaded application, but permits a multi-threaded
+ * application.  Another thread is allocated to run the event loop.
+ * It will *only* run when a thread is waiting.  Thus it preserved
+ * single-threaded operation for single-threaded programs, but does
+ * not have races in multi-threaded programs.
+ *
+ * Be careful using the timeout.  You want to be *sure* that you don't
+ * free the waiter before anything else that might wake up and release
+ * it.
+ *
+ *********************************************************************/
+
+typedef struct os_handler_waiter_factory_s os_handler_waiter_factory_t;
+typedef struct os_handler_waiter_s os_handler_waiter_t;
+
+/* Allocate a factory to get waiters from.  This is the thing that
+   owns the event loop threads (if you have them).  The event loop
+   threads are allocated with thread_priority. */
+int os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
+				    unsigned int num_threads,
+				    int          thread_priority,
+				    os_handler_waiter_factory_t **factory);
+
+/* Free a waiter factory.  This will fail with EAGAIN if there are any
+   waiters allocated from it that have not been freed. */
+int os_handler_free_waiter_factory(os_handler_waiter_factory_t *factory);
+
+/* Allocate a waiter from the factory.  Returns NULL on failure. It is
+   allocated with a use count of 1. */
+os_handler_waiter_t *os_handler_alloc_waiter
+  (os_handler_waiter_factory_t *factory);
+
+/* Free a waiter.  It cannot be waiting or an error is returned (EAGAIN). */
+int os_handler_free_waiter(os_handler_waiter_t *waiter);
+
+/* Increment the use count of the waiter. */
+void os_handler_waiter_use(os_handler_waiter_t *waiter);
+
+/* Decrement the use count of the waiter.  When the usecount reaches
+   zero the waiter will return. */
+void os_handler_waiter_release(os_handler_waiter_t *waiter);
+
+/* Wait for the waiter's use count to reach zero.  If timeout is
+   non-NULL, it will wait up to that amount of time. */
+int os_handler_waiter_wait(os_handler_waiter_t *waiter,
+			   struct timeval      *timeout);
+
 #ifdef __cplusplus
 }
 #endif
