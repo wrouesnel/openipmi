@@ -1,7 +1,7 @@
 
 AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-bin_PROGRAMS = openipmicmd solterm
+bin_PROGRAMS = openipmicmd solterm rmcp_ping
 
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3
 
@@ -35,6 +35,8 @@ solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
                 $(top_builddir)/lib/libOpenIPMI.la \
                 $(top_builddir)/unix/libOpenIPMIposix.la \
                 $(OPENSSLLIBS)
+
+rmcp_ping_SOURCES = rmcp_ping.c
 
 EXTRA_DIST = example_oem.c
 

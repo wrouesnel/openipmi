@@ -3,6 +3,9 @@
 	* swig/python/openipmigui.py, man/openipmigui.1:  Added some
 	command-line parameters to control some thing about the GUI.
 
+	* sample/rmcp_ping.c, sample/Makefile.am, man/rmcp_ping.1: Add a
+	command to do RMCP pinging.
+
 	* configure.in: Move to version 2.0.6.
 
 2006-02-14 Corey Minyard <cminyard@mvista.com>
