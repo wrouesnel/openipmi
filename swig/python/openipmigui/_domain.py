@@ -459,6 +459,13 @@ class Domain:
             return _entity.Entity(self, entity)
         return
         
+    def find_entity_byname(self, ename):
+        if (ename in self.entities):
+            return self.entities[ename];
+        else:
+            return None
+        return
+        
     def entity_update_cb(self, op, domain, entity):
         if (op == "added"):
             e = self.find_or_create_entity(entity)

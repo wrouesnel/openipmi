@@ -4917,8 +4917,18 @@ ipmi_open_domain(char               *name,
 	    goto out_err;
     }
 
-    for (i=0; i<num_con; i++)
+    for (i=0; i<num_con; i++) {
+	/* Set the ports that we will have valid and unconnected. */
+	if (con[i]->get_num_ports) {
+	    int m = con[i]->get_num_ports(con[i]);
+	    int j;
+	    for (j=0; j<m; j++)
+		domain->port_up[j][i] = 0;
+	} else
+	    /* Only one port 0 */
+	    domain->port_up[0][i] = 0;
 	rv = con[i]->start_con(con[i]);
+    }
     if (rv)
 	goto out_err;
 

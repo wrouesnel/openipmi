@@ -7907,7 +7907,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 {
     unsigned int       slave_addr = ipmi_mc_get_address(mc);
     ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
+    ipmi_entity_t      *ent = NULL;
     int                rv;
     char               *board_name;
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
@@ -8092,6 +8092,8 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo);
 
  out:
+    if (ent)
+	_ipmi_entity_put(ent);
     if (rv && sinfo)
 	zynx_destroyer(mc, sinfo);
     return rv;
@@ -8156,6 +8158,8 @@ alloc_adm1021_sensor(ipmi_mc_t             *mc,
 	goto out;
 
  out:
+    if (ent)
+	_ipmi_entity_put(ent);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -8461,7 +8465,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 {
     unsigned int        slave_addr = ipmi_mc_get_address(mc);
     ipmi_entity_info_t  *ents;
-    ipmi_entity_t       *ent;
+    ipmi_entity_t       *ent = NULL;
     int                 rv;
     char                *board_name;
     ipmi_domain_t       *domain = ipmi_mc_get_domain(mc);
@@ -8554,6 +8558,8 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 					 sinfo);
 
  out:
+    if (ent)
+	_ipmi_entity_put(ent);
     if (rv && sinfo)
 	mxp_genboard_removal_handler(domain, mc, sinfo);
     return rv;

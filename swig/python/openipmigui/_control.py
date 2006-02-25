@@ -353,14 +353,14 @@ class Control:
                 self.ui.append_item(self, "Light Type", "transition")
                 for i in range(0, self.num_vals):
                     cap = [ ]
-                    for j in range (0, control.get_num_light_values()):
+                    for j in range (0, control.get_num_light_values(i)):
                         cap2 = [ ]
-                        for k in range (0,control.get_num_light_transitions()):
+                        for k in range (0,control.get_num_light_transitions(i, j)):
                             cap3 = [ ]
                             val = control.get_light_color(i, j, k)
                             cap3.append(OpenIPMI.color_string(val))
-                            val = control.get_light_time(i, j, k)
-                            cap3.append(OpenIPMI.color_string(cval))
+                            val = control.get_light_color_time(i, j, k)
+                            cap3.append(OpenIPMI.color_string(val))
                             cap2.append(cap3)
                             pass
                         cap.append(cap2)

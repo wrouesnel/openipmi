@@ -6587,7 +6587,7 @@ check_power(ipmi_control_t *control,
 
     if (err) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%sentity.c(power_chedked): Unable to"
+		 "%sentity.c(check_power): Unable to"
 		 " get power value, error %x",
 		 CONTROL_NAME(control), err);
 	ipmi_mem_free(info);
@@ -6603,7 +6603,7 @@ check_power(ipmi_control_t *control,
 			               info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%sentity.c(power_checked): Unable to"
+		     "%sentity.c(check_power): Unable to"
 		     " request requester status, error %x",
 		     SENSOR_NAME(ent->hot_swap_requester), rv);
 	    ipmi_mem_free(info);
@@ -6622,6 +6622,7 @@ static int
 e_check_hot_swap_state(ipmi_entity_t *ent)
 {
     hs_check_t *info;
+    int        rv = 0;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -6632,15 +6633,19 @@ e_check_hot_swap_state(ipmi_entity_t *ent)
 
     ipmi_lock(ent->lock);
     if (ent->hot_swap_power)
-	ipmi_control_id_get_val(ent->hot_swap_power_id, check_power, info);
+	rv = ipmi_control_id_get_val(ent->hot_swap_power_id, check_power,
+				     info);
     else if (ent->hot_swap_requester)
-	ipmi_sensor_id_get_states(ent->hot_swap_requester_id, check_requester,
-		       		  info);
+	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
+				       check_requester, info);
     else
+	ipmi_mem_free(info);
+	
+    if (info && rv)
 	ipmi_mem_free(info);
     ipmi_unlock(ent->lock);
 
-    return 0;
+    return rv;
 }
 
 

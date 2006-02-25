@@ -6,6 +6,30 @@
 	* sample/rmcp_ping.c, sample/Makefile.am, man/rmcp_ping.1: Add a
 	command to do RMCP pinging.
 
+	* OpenIPMI.spec.in: Add the rmcp_ping program.
+
+	* lib/sel.c: Fix some possible deadlocks.
+
+	* include/OpenIPMI/ipmi_conn.h: Added a way to discover how many
+	ports the connection supports.
+
+	* lib/ipmi_lan.c: Add the function to return the number of ports.
+
+	* lib/domain.c: Set the enabled ports right at startup to avoid
+	invalid readings of the number of ports.
+
+	* lib/entity.c: Fix a memory leak in certain error conditions
+	using the internal hot-swap state machine.
+
+	* lib/ipmi_lan.c: Fix some locking problems that could lead to
+	deadlock.  Don't call connection handlers in certain timeout cases
+	with the sequence lock held.
+
+	* lib/oem_motorola_mxp.c: Add some missing entity puts.
+
+	* swig/python/openipmigui/*: Fixed problems with entities that
+	need to be re-parented.
+
 	* configure.in: Move to version 2.0.6.
 
 2006-02-14 Corey Minyard <cminyard@mvista.com>

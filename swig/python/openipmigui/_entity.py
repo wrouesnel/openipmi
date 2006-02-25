@@ -166,22 +166,35 @@ class Entity:
         self.entity_id_str = entity.get_entity_id_string()
         self.sensors = { }
         self.controls = { }
+        self.children = { }
         entity.add_presence_handler(self)
         entity.add_hot_swap_handler(self)
 
         d.entities[self.name] = self
 
         # Find my parent and put myself in that hierarchy
-        if (entity.is_child()):
-            entity.iterate_parents(self)
-            self.ui.add_entity(self.d, self, parent=self.parent)
-            del self.parent # Don't leave circular reference
-        else:
-            self.ui.add_entity(self.d, self)
-            self.parent_id = None
+        self.parent_id = None
+        self.parent = None
+        self.eeop = "fparent"
+        entity.iterate_parents(self)
+        self.ui.add_entity(self.d, self, parent=self.parent)
+        if (self.parent != None):
+            self.parent.children[self.name] = self.name
+            self.parent_name = self.parent.name
             pass
-        self.hot_swap = "No"
+        else:
+            self.parent_name = None
+            pass
+        self.parent = None # Don't leave circular reference
 
+        self.hot_swap = 'No'
+        self.hot_swap_state = ''
+        self.create_my_items()
+
+        self.Changed(entity)
+        return
+
+    def create_my_items(self):
         self.ui.append_item(self, 'Entity ID', self.entity_id_str)
         self.typeitem = self.ui.append_item(self, 'Type', None)
         self.idstringitem = self.ui.append_item(self, 'ID String', None)
@@ -190,13 +203,9 @@ class Entity:
                                             None)
         self.slotnumitem = self.ui.append_item(self, 'Slot Number', None)
         self.mcitem = self.ui.append_item(self, 'MC', None)
-        self.hotswapitem = self.ui.append_item(self, 'Hot Swap', 'No')
-        self.hot_swap = 'No'
-        self.hot_swap_state = ''
-
-        self.Changed(entity)
+        self.hotswapitem = self.ui.append_item(self, 'Hot Swap', self.hot_swap)
         return
-
+    
     def __str__(self):
         return self.name
 
@@ -278,6 +287,70 @@ class Entity:
         return
         
     def Changed(self, entity):
+        # Reparent first, in case parent has changed.
+        old_parent_id = self.parent_id
+        reparent = False
+        self.parent_id = None
+        self.parent = None
+        self.eeop = "fparent"
+        entity.iterate_parents(self)
+        if (self.parent_id != None):
+            if (old_parent_id == None):
+                reparent = True
+                pass
+            elif (self.parent_id.cmp(old_parent_id) != 0):
+                reparent = True
+                pass
+            pass
+        else:
+            if (old_parent_id != None):
+                reparent = True
+                pass
+            pass
+
+        if (reparent):
+            old_treeroot = self.treeroot
+            self.eop = "removed"
+            entity.iterate_sensors(self)
+            entity.iterate_controls(self)
+
+            if (self.parent_name):
+                oparent = self.d.find_entity_byname(self.parent_name)
+                if (oparent):
+                    del oparent.children[self.name]
+                pass
+            self.ui.reparent_entity(self.d, self, self.parent)
+            if (self.parent != None):
+                self.parent.children[self.name] = self.name
+                self.parent_name = self.parent.name
+                pass
+            else:
+                self.parent_name = None
+                pass
+            self.create_my_items()
+
+            # Reparent children
+            self.eeop = "repch"
+            entity.iterate_children(self);
+            
+            self.eop = "added"
+            entity.iterate_sensors(self)
+            entity.iterate_controls(self)
+
+            if (entity.is_present()):
+                self.ui.set_item_active(self.treeroot);
+                pass
+            else:
+                self.ui.set_item_inactive(self.treeroot);
+                pass
+
+            self.eop = None
+            self.ui.tree.Delete(old_treeroot)
+            pass
+        
+        self.parent = None # Kill circular reference
+
+
         self.is_fru = entity.is_fru()
         
         self.id_str = entity.get_id_string()
@@ -354,11 +427,28 @@ class Entity:
         self.mc_name = mc.get_name()
         return
         
-    def entity_iter_entities_cb(self, child, parent):
-        self.parent_id = parent.get_id()
-        self.parent = self.d.find_or_create_entity(parent)
+    def entity_iter_entities_cb(self, e1, e2):
+        if (self.eeop == "fparent"):
+            self.parent_id = e2.get_id()
+            self.parent = self.d.find_or_create_entity(e2)
+            pass
+        elif (self.eeop == "repch"):
+            ch_e = self.d.find_entity_byname(e2.get_name())
+            if (ch_e):
+                ch_e.parent_id = None
+                ch_e.Changed(e2)
+                pass
+            pass
         return
-        
+
+    def entity_iter_sensors_cb(self, entity, sensor):
+        self.entity_sensor_update_cb(self.eop, entity, sensor)
+        return
+    
+    def entity_iter_controls_cb(self, entity, control):
+        self.entity_control_update_cb(self.eop, entity, control)
+        return
+    
     def remove(self):
         self.d.entities.pop(self.name)
         self.ui.remove_entity(self)
@@ -366,17 +456,27 @@ class Entity:
 
     def entity_sensor_update_cb(self, op, entity, sensor):
         if (op == "added"):
-            e = _sensor.Sensor(self, sensor)
+            if (sensor.get_name() not in self.sensors):
+                e = _sensor.Sensor(self, sensor)
+                pass
+            pass
         elif (op == "removed"):
-            self.sensors[sensor.get_name()].remove()
+            if (sensor.get_name() in self.sensors):
+                self.sensors[sensor.get_name()].remove()
+                pass
             pass
         return
 
     def entity_control_update_cb(self, op, entity, control):
         if (op == "added"):
-            e = _control.Control(self, control)
+            if (control.get_name() not in self.controls):
+                e = _control.Control(self, control)
+                pass
+            pass
         elif (op == "removed"):
-            self.controls[control.get_name()].remove()
+            if (control.get_name() in self.controls):
+                self.controls[control.get_name()].remove()
+                pass
             pass
         return
 

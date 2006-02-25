@@ -561,6 +561,24 @@ class IPMIGUI(wx.Frame):
         self.tree.SetPyData(e.controlroot, IPMITreeDummyItem())
         self.setup_item(e.controlroot, active=True)
         return
+
+    def reparent_entity(self, d, e, parent):
+        if (parent == None):
+            parent = d.entityroot
+        else:
+            parent = parent.treeroot
+            pass
+        ntreeroot = self.tree.AppendItem(parent, e.name_str)
+        self.tree.SetPyData(ntreeroot, self.tree.GetPyData(e.treeroot))
+        nsensorroot = self.tree.AppendItem(ntreeroot, "Sensors")
+        self.tree.SetPyData(nsensorroot, self.tree.GetPyData(e.sensorroot))
+        ncontrolroot = self.tree.AppendItem(ntreeroot, "Controls")
+        self.tree.SetPyData(ncontrolroot, self.tree.GetPyData(e.controlroot))
+
+        e.treeroot = ntreeroot
+        e.sensorroot = nsensorroot
+        e.controlroot = ncontrolroot
+        return
     
     def remove_entity(self, e):
         if (hasattr(e, "treeroot")):
