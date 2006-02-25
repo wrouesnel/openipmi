@@ -175,6 +175,7 @@ fi
 %{_bindir}/ipmish
 %{_bindir}/openipmish
 %{_bindir}/solterm
+%{_bindir}/rmcp_ping
 %{_libdir}/libOpenIPMIui.so*
 %{_libdir}/libOpenIPMIui.la
 %doc %{_mandir}/man1/ipmi_ui.1*
@@ -182,6 +183,7 @@ fi
 %doc %{_mandir}/man1/openipmish.1*
 %doc %{_mandir}/man1/openipmigui.1*
 %doc %{_mandir}/man1/solterm.1*
+%doc %{_mandir}/man1/rmcp_ping.1*
 %doc %{_mandir}/man7/ipmi_cmdlang.7*
 %doc %{_mandir}/man7/openipmi_conparms.7*
 
