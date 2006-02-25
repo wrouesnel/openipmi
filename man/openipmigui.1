@@ -9,6 +9,7 @@ openipmigui \- GUI interface to an IPMI system
 .RB [--drawmsg]
 .RB [--glib12]
 .RB [--trace]
+.RB [--logstderr]
 .RB [-n]
 .RB [-p
 .IR preffile]
@@ -45,6 +46,9 @@ Turn on memory debugging, this will cause memory allocation and
 deallocations to be checked.  When the program terminates, it will
 dump all memory that was not properly freed (leaked), and overruns,
 writing of freed memory, or other types of memory errors.
+.TP
+.B "\--logstderr"
+Send all logs to standard error output as well as the GUI console.
 .TP
 .B "\--trace"
 Turn on python tracing so that all python procedure calls entered and

@@ -69,9 +69,10 @@ from openipmigui import _cmdwin
 
 
 class DomainHandler:
-    def __init__(self, preffile):
+    def __init__(self, preffile, log_stderr):
         self.domains = { };
         self.preffile = preffile
+        self.log_stderr = log_stderr
         return
 
     def domain_change_cb(self, op, domain):
@@ -93,7 +94,9 @@ class DomainHandler:
         return
 
     def log(self, level, log):
-        self.ui.new_log(level + ": " + log);
+        if (self.log_stderr):
+            sys.stderr.write(level + ": " + log + "\n")
+        self.ui.new_log(level + ": " + log)
         return
 
 class DummyLogHandler:
@@ -101,7 +104,7 @@ class DummyLogHandler:
         pass
 
     def log(self, level, log):
-        print level + ": " + log
+        sys.stderr.write(level + ": " + log | "\n")
 
 class IPMIGUI_App(wx.App):
     def __init__(self, mainhandler):
@@ -172,6 +175,7 @@ def run(args):
     debug_mem = False
     do_trace = False
     read_preffile = True
+    do_log_stderr = False
 
     # Get rid of program name.
     if (len(args) > 0):
@@ -190,6 +194,8 @@ def run(args):
             debug_mem = True
         elif (arg == "--trace"):
             do_trace = True
+        elif (arg == "--logstderr"):
+            do_log_stderr = True
         elif (arg == "-n"):
             read_preffile = False
         elif (arg == '-p'):
@@ -231,7 +237,7 @@ def run(args):
         _saveprefs.restore(preffile)
     _cmdwin._HistoryRestore(histfile)
     
-    mainhandler = DomainHandler(preffile)
+    mainhandler = DomainHandler(preffile, do_log_stderr)
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
 
