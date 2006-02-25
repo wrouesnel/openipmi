@@ -104,7 +104,7 @@ class DummyLogHandler:
         pass
 
     def log(self, level, log):
-        sys.stderr.write(level + ": " + log | "\n")
+        sys.stderr.write(level + ": " + log + "\n")
 
 class IPMIGUI_App(wx.App):
     def __init__(self, mainhandler):
