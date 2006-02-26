@@ -1676,8 +1676,6 @@ ipmi_move_msg_item(ipmi_msgi_t *new_item, ipmi_msgi_t *old_item)
 {
     if (new_item->msg.data && (new_item->msg.data != new_item->data))
 	ipmi_free_msg_item_data(new_item->msg.data);
-    memcpy(&new_item->addr, &old_item->addr, old_item->addr_len);
-    new_item->addr_len = old_item->addr_len;
     new_item->msg = old_item->msg;
 
     if (!old_item->msg.data) {

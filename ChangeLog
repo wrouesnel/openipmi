@@ -1,3 +1,9 @@
+2006-02-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, lib/ipmi.c: Don't copy address information for
+	system interface address responses, use the address the sender
+	supplied.  This fixes problem with system interface MC scanning.
+
 2006-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui.py, man/openipmigui.1:  Add the ability

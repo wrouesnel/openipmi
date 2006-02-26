@@ -1767,6 +1767,8 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     rspi = nmsg->rsp_item;
     if (nmsg->rsp_handler) {
 	ipmi_move_msg_item(rspi, orspi);
+	memcpy(&rspi->addr, &orspi->addr, orspi->addr_len);
+	rspi->addr_len = orspi->addr_len;
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
     } else
 	ipmi_free_msg_item(rspi);
@@ -2482,7 +2484,6 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
 				&(info->msg),
 				devid_bc_rsp_handler,
 				info, NULL);
-
     if (rv)
 	goto out_err;
     else
