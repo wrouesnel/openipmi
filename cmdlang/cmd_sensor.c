@@ -1245,7 +1245,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 
  out_err:
     ipmi_cmdlang_global_err(sensor_name,
-			    "cmd_sensor.c(ipmi_cmdlang_sensor_change)",
+			    "cmd_sensor.c(sensor_discrete_event_handler)",
 			    errstr, rv);
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);
@@ -1305,7 +1305,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 
  out_err:
     ipmi_cmdlang_global_err(sensor_name,
-			    "cmd_sensor.c(ipmi_cmdlang_sensor_change)",
+			    "cmd_sensor.c(sensor_threshold_event_handler)",
 			    errstr, rv);
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);

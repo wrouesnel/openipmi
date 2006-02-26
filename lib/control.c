@@ -406,11 +406,18 @@ control_final_destroy(ipmi_control_t *control)
 int
 ipmi_control_destroy(ipmi_control_t *control)
 {
-    ipmi_control_info_t *controls = _ipmi_mc_get_controls(control->mc);
+    ipmi_control_info_t *controls;
+    ipmi_mc_t           *mc = control->mc;
+
+    _ipmi_domain_mc_lock(control->domain);
+    _ipmi_mc_get(mc);
+    _ipmi_domain_mc_unlock(control->domain);
+    controls = _ipmi_mc_get_controls(control->mc);
 
     ipmi_lock(controls->idx_lock);
     if (controls->controls_by_idx[control->num] != control) {
 	ipmi_unlock(controls->idx_lock);
+	_ipmi_mc_put(control->mc);
 	return EINVAL;
     }
 
@@ -423,6 +430,7 @@ ipmi_control_destroy(ipmi_control_t *control)
 
     control->destroyed = 1;
     _ipmi_control_put(control);
+    _ipmi_mc_put(mc);
 
     return 0;
 }

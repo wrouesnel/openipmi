@@ -4,6 +4,26 @@
 	system interface address responses, use the address the sender
 	supplied.  This fixes problem with system interface MC scanning.
 
+	* cmdlang/cmd_sensor.c: Fixed some misnamed comments.
+	
+	* lib/entity.c: Make sure the domain exists before calling
+	_ipmi_put_domain_fully_up().
+
+	* lib/ipmi_lan.c: Don't call the LAN close_done call until all the
+	messages have been returned as errors.
+
+	* lib/mc.c: Fix some accounting problems with errors and
+	startup_count.
+
+	* lib/oem_motorola_mxp.c: Don't add an AMC is the removal handler
+	can't be registered.
+
+	* lib/sensor.c, lib/control.c: Add some missing MC gets and puts.
+
+	* swig/python/openipmigui/*: Fix a lot of little problems with
+	handling certain failure cases, removal and adding of sensors, and
+	a host of other things.
+
 2006-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui.py, man/openipmigui.1:  Add the ability

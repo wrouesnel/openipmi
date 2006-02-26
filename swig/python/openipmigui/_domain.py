@@ -469,9 +469,7 @@ class Domain:
     def entity_update_cb(self, op, domain, entity):
         if (op == "added"):
             e = self.find_or_create_entity(entity)
-            entity.add_sensor_update_handler(e)
-            entity.add_control_update_handler(e)
-        elif (op == "removed"):
+        elif (op == "deleted"):
             self.entities[entity.get_name()].remove()
         else:
             e = self.find_or_create_entity(entity)
@@ -489,10 +487,15 @@ class Domain:
         
     def mc_update_cb(self, op, domain, mc):
         if (op == "added"):
-            _mc.MC(self, mc)
+            if (mc.get_name() not in self.entities):
+                _mc.MC(self, mc)
+                pass
             pass
-        elif (op == "removed"):
-            self.entities[mc.get_name()].remove()
+        elif (op == "deleted"):
+            if (mc.get_name() in self.entities):
+                self.entities[mc.get_name()].remove()
+                pass
+            pass
         else:
             m = self.find_or_create_mc(mc)
             m.Changed(mc)

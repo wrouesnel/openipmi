@@ -5052,7 +5052,8 @@ fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
 	ipmi_fru_destroy_internal(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
-    _ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
+    if (domain)
+	_ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
 }
 
 int

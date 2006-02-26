@@ -958,11 +958,20 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 int
 ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 {
-    ipmi_sensor_info_t *sensors = _ipmi_mc_get_sensors(sensor->mc);
+    ipmi_sensor_info_t *sensors;
+    ipmi_mc_t          *mc = sensor->mc;
+
+    _ipmi_domain_mc_lock(sensor->domain);
+    _ipmi_mc_get(mc);
+    _ipmi_domain_mc_unlock(sensor->domain);
+    sensors = _ipmi_mc_get_sensors(sensor->mc);
 
     ipmi_lock(sensors->idx_lock);
-    if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
+    if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num]) {
+	ipmi_unlock(sensors->idx_lock);
+	_ipmi_mc_put(sensor->mc);
 	return EINVAL;
+    }
 
     _ipmi_sensor_get(sensor);
 
@@ -975,6 +984,7 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 
     sensor->destroyed = 1;
     _ipmi_sensor_put(sensor);
+    _ipmi_mc_put(mc);
     return 0;
 }
 

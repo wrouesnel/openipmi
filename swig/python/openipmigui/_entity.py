@@ -169,8 +169,12 @@ class Entity:
         self.children = { }
         entity.add_presence_handler(self)
         entity.add_hot_swap_handler(self)
+        entity.add_sensor_update_handler(self)
+        entity.add_control_update_handler(self)
 
         d.entities[self.name] = self
+
+        self.destroyed = False
 
         # Find my parent and put myself in that hierarchy
         self.parent_id = None
@@ -310,7 +314,7 @@ class Entity:
 
         if (reparent):
             old_treeroot = self.treeroot
-            self.eop = "removed"
+            self.eop = "deleted"
             entity.iterate_sensors(self)
             entity.iterate_controls(self)
 
@@ -409,12 +413,16 @@ class Entity:
         return
 
     def entity_hot_swap_update_cb(self, entity, old_state, new_state, event):
+        if (self.destroyed):
+            return
         self.hot_swap_state = new_state
         self.ui.set_item_text(self.hotswapitem,
                               self.hot_swap + ' ' + self.hot_swap_state)
         return OpenIPMI.EVENT_NOT_HANDLED
     
     def entity_hot_swap_cb(self, entity, err, state):
+        if (self.destroyed):
+            return
         if (err):
             _oi_logging.error("Error getting entity hot-swap state: " + str(err))
             return
@@ -452,15 +460,18 @@ class Entity:
     def remove(self):
         self.d.entities.pop(self.name)
         self.ui.remove_entity(self)
+        self.destroyed = True
         return
 
     def entity_sensor_update_cb(self, op, entity, sensor):
+        if (self.destroyed):
+            return
         if (op == "added"):
             if (sensor.get_name() not in self.sensors):
                 e = _sensor.Sensor(self, sensor)
                 pass
             pass
-        elif (op == "removed"):
+        elif (op == "deleted"):
             if (sensor.get_name() in self.sensors):
                 self.sensors[sensor.get_name()].remove()
                 pass
@@ -468,12 +479,14 @@ class Entity:
         return
 
     def entity_control_update_cb(self, op, entity, control):
+        if (self.destroyed):
+            return
         if (op == "added"):
             if (control.get_name() not in self.controls):
                 e = _control.Control(self, control)
                 pass
             pass
-        elif (op == "removed"):
+        elif (op == "deleted"):
             if (control.get_name() in self.controls):
                 self.controls[control.get_name()].remove()
                 pass
@@ -481,6 +494,8 @@ class Entity:
         return
 
     def entity_presence_cb(self, entity, present, event):
+        if (self.destroyed):
+            return
         if (present):
             self.ui.set_item_active(self.treeroot)
         else:

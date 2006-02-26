@@ -446,9 +446,11 @@ class Sensor:
     def __init__(self, e, sensor):
         self.e = e
         self.name = sensor.get_name()
+        e.sensors[self.name] = self
         self.sensor_id = sensor.get_id()
         self.ui = e.ui
         ui = self.ui
+        self.destroyed = False
         self.updater = SensorRefreshData(self)
         ui.add_sensor(self.e, self)
         self.in_warning = False
@@ -701,9 +703,12 @@ class Sensor:
     def remove(self):
         self.e.sensors.pop(self.name)
         self.ui.remove_sensor(self)
+        self.destroyed = True
         return
 
     def handle_threshold_states(self, states):
+        if (self.destroyed):
+            return
         th = states.split()
         while len(th) > 0:
             v = th[0]
@@ -752,6 +757,8 @@ class Sensor:
 
     def threshold_reading_cb(self, sensor, err, raw_set, raw, value_set,
                              value, states):
+        if (self.destroyed):
+            return
         if (err):
             self.ui.set_item_text(self.treeroot, None)
             return
@@ -768,6 +775,8 @@ class Sensor:
         return
         
     def discrete_states_cb(self, sensor, err, states):
+        if (self.destroyed):
+            return
         if (err):
             self.ui.set_item_text(self.treeroot, None)
             return
@@ -775,6 +784,8 @@ class Sensor:
         return
         
     def sensor_get_event_enable_cb(self, sensor, err, states):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.event_enables, None)
             return
@@ -782,6 +793,8 @@ class Sensor:
         return
 
     def sensor_get_hysteresis_cb(self, sensor, err, positive, negative):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.hysteresis, None)
             return
@@ -791,6 +804,8 @@ class Sensor:
         return
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.thresholds, None)
             return
@@ -799,12 +814,16 @@ class Sensor:
 
     def threshold_event_cb(self, sensor, event_spec, raw_set, raw,
                            value_set, value, event):
+        if (self.destroyed):
+            return OpenIPMI.EVENT_NOT_HANDLED
         self.handle_threshold_states(event_spec)
         sensor.get_value(self)
         return OpenIPMI.EVENT_NOT_HANDLED
         
     def discrete_event_cb(self, sensor, event_spec, severity, old_severity,
                           event):
+        if (self.destroyed):
+            return OpenIPMI.EVENT_NOT_HANDLED
         return OpenIPMI.EVENT_NOT_HANDLED
     
     pass

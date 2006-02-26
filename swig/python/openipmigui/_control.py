@@ -275,6 +275,7 @@ class Control:
     def __init__(self, e, control):
         self.e = e
         self.name = control.get_name()
+        e.controls[self.name] = self
         self.control_type_str = control.get_type_string()
         self.control_id = control.get_id()
         self.ui = e.ui;
@@ -282,6 +283,7 @@ class Control:
         self.vals = [ ]
         self.ui.add_control(self.e, self)
         self.control_type = control.get_type()
+        self.destroyed = False
         if (self.control_type == OpenIPMI.CONTROL_IDENTIFIER):
             self.num_vals = control.identifier_get_max_length();
         else:
@@ -392,6 +394,8 @@ class Control:
         return
         
     def control_get_val_cb(self, control, err, vals):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.treeroot, None)
             return
@@ -401,6 +405,8 @@ class Control:
         return
         
     def control_get_id_cb(self, control, err, val):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.treeroot, None)
             return
@@ -410,6 +416,8 @@ class Control:
         return
 
     def control_get_light_cb(self, control, err, vals):
+        if (self.destroyed):
+            return
         if (err != 0):
             self.ui.set_item_text(self.treeroot, None)
             return
@@ -429,6 +437,7 @@ class Control:
     def remove(self):
         self.e.controls.pop(self.name)
         self.ui.remove_control(self)
+        self.destroyed = True
         return
 
     pass

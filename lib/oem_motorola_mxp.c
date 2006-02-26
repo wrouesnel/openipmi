@@ -6649,8 +6649,18 @@ amc_board_handler(ipmi_mc_t *mc)
 
     info->mc = mc;
 
+    rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_motorola_mxp.c(amc_board_handler):"
+		 " could not register board removal handler",
+		 MC_NAME(mc));
+	goto out_err;
+    }
+
     rv = ipmi_mc_set_sel_oem_event_handler(mc, mxp_event_handler, info);
     if (rv) {
+	ipmi_mc_remove_oem_removed_handler(mc, amc_removal_handler, info);
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(amc_board_handler):"
 		 " could not register event handler",
@@ -6678,7 +6688,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	goto out_err;
     }
 
-    /* The MXP has an SEL. */
+    /* Each MXP AMC has an SEL. */
     ipmi_mc_set_sel_device_support(mc, 1);
 
     /* AMC slot sensor */
@@ -6911,15 +6921,6 @@ amc_board_handler(ipmi_mc_t *mc)
 			    info->ent);
 	if (rv)
 	    goto out_err;
-    }
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_motorola_mxp.c(amc_board_handler):"
-		 " could not register removal handler",
-		 MC_NAME(mc));
-	goto out_err;
     }
 
     ipmi_mc_set_oem_data(mc, info);

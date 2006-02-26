@@ -250,6 +250,9 @@ struct lan_data_s
     /* Have we already been started? */
     int                        started;
 
+    /* Are we currently in cleanup?  Don't allow any outgoing messages. */
+    int                        in_cleanup;
+
     /* Protects modifiecations to working, curr_ip_addr, RMCP
        sequence numbers, the con_change_handler, and other
        connection-related data.  Note that if the seq_num_lock must
@@ -2581,8 +2584,12 @@ handle_msg_send(lan_timer_info_t      *info,
     {
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 
-	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
-	    return EINVAL;
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS) {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    ipmi_mem_free(info);
+	    rv = EINVAL;
+	    goto out;
+	}
 
 	if (ipmb->slave_addr == lan->slave_addr[ipmb->channel]) {
 	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
@@ -3417,7 +3424,6 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     int              rv;
     /* We store the address number in data4. */
 
-
     if (addr_num >= MAX_IP_ADDR)
 	return EINVAL;
 
@@ -3429,6 +3435,9 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 
     lan = (lan_data_t *) ipmi->con_data;
 
+    if (lan->in_cleanup)
+	return ECANCELED;
+
     /* Odd netfns are responses or unacknowledged data.  Just send
        them. */
     if (msg->netfn & 1)
@@ -3437,6 +3446,7 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
 
     /* Put it in the list first. */
     info->ipmi = ipmi;
@@ -3445,7 +3455,6 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
     if (rv) {
 	ipmi_mem_free(info);
-	ipmi_mem_free(rspi);
 	return rv;
     }
 
@@ -3463,12 +3472,15 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     info = NULL;
     if (! rv)
 	lan->outstanding_msg_count++;
+    ipmi_unlock(lan->seq_num_lock);
+    return rv;
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
     if (rv) {
 	if (info) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    if (info->timer)
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
 	    ipmi_mem_free(info);
 	}
     }
@@ -3516,16 +3528,15 @@ lan_send_command_option(ipmi_con_t              *ipmi,
 	rv = ENOMEM;
 	goto out_unlock2;
     }
+    memset(info, 0, sizeof(*info));
 
     /* Put it in the list first. */
     info->ipmi = ipmi;
     info->cancelled = 0;
 
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
-    if (rv) {
-	ipmi_mem_free(info);
-	return rv;
-    }
+    if (rv)
+	goto out_unlock;
 
     ipmi_lock(lan->seq_num_lock);
 
@@ -3566,12 +3577,18 @@ lan_send_command_option(ipmi_con_t              *ipmi,
     info = NULL;
     if (!rv)
 	lan->outstanding_msg_count++;
+    else if (!trspi && rspi)
+	/* If we allocated an rspi, free it on error. */
+	ipmi_mem_free(rspi);
+    ipmi_unlock(lan->seq_num_lock);
+    return rv;
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
     if (rv) {
 	if (info) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    if (info->timer)
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
 	    ipmi_mem_free(info);
 	}
     }
@@ -3682,8 +3699,7 @@ lan_cleanup(ipmi_con_t *ipmi)
     for (i=0; i<lan->cparm.num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
-    if (lan->close_done)
-	lan->close_done(ipmi, lan->close_cb_data);
+    lan->in_cleanup = 1;
 
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
@@ -3764,6 +3780,9 @@ lan_cleanup(ipmi_con_t *ipmi)
 	}
     }
     ipmi_unlock(lan->seq_num_lock);
+
+    if (lan->close_done)
+	lan->close_done(ipmi, lan->close_cb_data);
 
     if (ipmi->finished_with_stat) {
 	if (lan->stat_recv_packets)
