@@ -8158,8 +8158,6 @@ alloc_adm1021_sensor(ipmi_mc_t             *mc,
 	goto out;
 
  out:
-    if (ent)
-	_ipmi_entity_put(ent);
     if (rv)
 	ipmi_mem_free(info);
     return rv;

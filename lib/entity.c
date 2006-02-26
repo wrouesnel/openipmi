@@ -148,10 +148,7 @@ struct ipmi_entity_s
     dlr_ref_t key;
 
     /* Lock used for protecting misc data. */
-    //    ipmi_lock_t *lock;
-
     ipmi_lock_t *elock;
-    int lc;
 
     int usecount;
 
