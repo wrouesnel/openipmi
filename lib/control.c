@@ -695,8 +695,13 @@ control_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%scontrol.c(control_addr_response_handler): "
 		 "Could not convert control id to a pointer",
 		 DOMAIN_NAME(domain));
-	if (info->__rsp_handler)
+	if (info->__rsp_handler) {
+	    _ipmi_domain_entity_lock(control->domain);
+	    control->usecount++;
+	    _ipmi_domain_entity_unlock(control->domain);
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
+	    _ipmi_control_put(control);
+	}
     }
     return IPMI_MSG_ITEM_NOT_USED;
 }

@@ -725,8 +725,13 @@ sensor_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%ssensor.c(sensor_addr_rsp_handler):"
 		 " Could not convert sensor id to a pointer",
 		 DOMAIN_NAME(domain));
-	if (info->__rsp_handler)
+	if (info->__rsp_handler) {
+	    _ipmi_domain_entity_lock(sensor->domain);
+	    sensor->usecount++;
+	    _ipmi_domain_entity_unlock(sensor->domain);
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
+	    _ipmi_sensor_put(sensor);
+	}
     }
     return IPMI_MSG_ITEM_NOT_USED;
 }

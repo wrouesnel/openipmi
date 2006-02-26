@@ -632,7 +632,7 @@ rl_ipmish_cb_handler(char *cmdline)
 	ipmi_cmdlang_handle(&cmdlang, expansion);
     }
     if (expansion)
-	ipmi_mem_free(expansion);
+	free(expansion);
 }
 
 static void

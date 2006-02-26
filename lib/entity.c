@@ -1989,7 +1989,11 @@ states_read(ipmi_sensor_t *sensor,
     int           rv;
 
     if (err) {
+	_ipmi_domain_entity_lock(ent->domain);
+	_ipmi_entity_get(ent);
+	_ipmi_domain_entity_unlock(ent->domain);
 	detect_no_presence_sensor_presence(ent);
+	_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2015,7 +2019,11 @@ states_bit_read(ipmi_sensor_t *sensor,
     ipmi_entity_t *ent = cb_data;
 
     if (err) {
+	_ipmi_domain_entity_lock(ent->domain);
+	_ipmi_entity_get(ent);
+	_ipmi_domain_entity_unlock(ent->domain);
 	detect_no_presence_sensor_presence(ent);
+	_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2091,7 +2099,9 @@ entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
     ipmi_entity_t *ent = cb_data;
     int           rv;
 
+    _ipmi_domain_entity_lock(ent->domain);
     rv = _ipmi_entity_get(ent);
+    _ipmi_domain_entity_unlock(ent->domain);
     if (rv)
 	return;
 
@@ -6937,8 +6947,13 @@ entity_rsp_handler(ipmi_mc_t  *mc,
 		 "Could not convert entity id to a pointer, entity was"
 		 " probably destroyed while operation was in progress",
 		 MC_NAME(mc));
-	if (info->__rsp_handler)
+	if (info->__rsp_handler) {
+	    _ipmi_domain_entity_lock(info->__entity->domain);
+	    info->__entity->usecount++;
+	    _ipmi_domain_entity_unlock(info->__entity->domain);
 	    info->__rsp_handler(info->__entity, rv, NULL, info->__cb_data);
+	    _ipmi_entity_put(info->__entity);
+	}
     }
 }
 

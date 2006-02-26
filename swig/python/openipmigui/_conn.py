@@ -90,8 +90,24 @@ class Connection:
 
         d.connections[cnum] = self
 
+        v = [ 0 ]
+        rv = domain.is_connection_active(cnum, v)
+        if (rv == 0):
+            if (v[0] != 0):
+                self.active_str = "active"
+                pass
+            else:
+                self.active_str = "inactive"
+                pass
+            pass
+        else:
+            self.active_str = "inactive"
+            pass
+
         self.ui.add_connection(d, self)
-        self.ui.set_item_text(self.treeroot, domain.get_connection_type(cnum))
+        self.ui.set_item_text(self.treeroot,
+                              (domain.get_connection_type(cnum)
+                               + " (" + self.active_str + ")"))
 
         v = [ 0 ]
         rv = domain.num_connection_ports(cnum, v)
@@ -108,6 +124,11 @@ class Connection:
     def __str__(self):
         return self.name
 
+    def DoUpdate(self):
+        self.op = "checkactive"
+        self.domain_id.to_domain(self)
+        return
+    
     def SetPortUp(self, port, up):
         self.ports[port].SetUp(up)
         conup = False
@@ -144,6 +165,7 @@ class Connection:
         menu.Destroy()
 
     def Activate(self, event):
+        self.op = "activate"
         self.domain_id.to_domain(self)
         return
 
@@ -152,7 +174,30 @@ class Connection:
         return
     
     def domain_cb(self, domain):
-        domain.activate_connection(self.cnum)
+        if (self.op == "activate"):
+            domain.activate_connection(self.cnum)
+        elif (self.op == "checkactive"):
+            v = [ 0 ]
+            rv = domain.is_connection_active(self.cnum, v)
+            if (rv == 0):
+                if (v[0] != 0):
+                    new_active_str = "active"
+                    pass
+                else:
+                    new_active_str = "inactive"
+                    pass
+                pass
+            else:
+                new_active_str = "inactive"
+                pass
+
+            if (new_active_str != self.active_str):
+                self.active_str = new_active_str
+                self.ui.set_item_text(self.treeroot,
+                                      (domain.get_connection_type(self.cnum)
+                                       + " (" + self.active_str + ")"))
+                pass
+            pass
         return
 
     pass

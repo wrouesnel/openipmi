@@ -3985,7 +3985,7 @@ char *get_error_string(unsigned int val);
     }
 
     /*
-     * Remove the connection change handler.
+     * Remove the entity change handler.
      */
     int remove_entity_update_handler(swig_cb handler)
     {
@@ -4027,7 +4027,7 @@ char *get_error_string(unsigned int val);
     }
 
     /*
-     * Remove the connection change handler.
+     * Remove the mc change handler.
      */
     int remove_mc_update_handler(swig_cb handler)
     {
