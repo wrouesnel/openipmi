@@ -2409,10 +2409,17 @@ rsp_timeout_handler(void              *cb_data,
     rspi->msg.data = rspi->data;
     rspi->msg.data_len = 1;
 
-    memcpy(&rspi->addr,
-	   &(lan->seq_table[seq].addr),
-	   lan->seq_table[seq].addr_len);
-    rspi->addr_len = lan->seq_table[seq].addr_len;
+    if (lan->seq_table[seq].use_orig_addr) {
+	/* We did an address translation, so translate back. */
+	memcpy(&rspi->addr, &lan->seq_table[seq].orig_addr,
+	       lan->seq_table[seq].orig_addr_len);
+	rspi->addr_len = lan->seq_table[seq].orig_addr_len;
+    } else {
+	memcpy(&rspi->addr,
+	       &(lan->seq_table[seq].addr),
+	       lan->seq_table[seq].addr_len);
+	rspi->addr_len = lan->seq_table[seq].addr_len;
+    }
 
     handler = lan->seq_table[seq].rsp_handler;
 
@@ -3713,9 +3720,16 @@ lan_cleanup(ipmi_con_t *ipmi)
 
 	    rspi = lan->seq_table[i].rsp_item;
 
-	    memcpy(&rspi->addr, &(lan->seq_table[i].addr),
-		   lan->seq_table[i].addr_len);
-	    rspi->addr_len = lan->seq_table[i].addr_len;
+	    if (lan->seq_table[i].use_orig_addr) {
+		/* We did an address translation, so translate back. */
+		memcpy(&rspi->addr, &lan->seq_table[i].orig_addr,
+		       lan->seq_table[i].orig_addr_len);
+		rspi->addr_len = lan->seq_table[i].orig_addr_len;
+	    } else {
+		memcpy(&rspi->addr, &(lan->seq_table[i].addr),
+		       lan->seq_table[i].addr_len);
+		rspi->addr_len = lan->seq_table[i].addr_len;
+	    }
 	    handler = lan->seq_table[i].rsp_handler;
 	    info = lan->seq_table[i].timer_info;
 

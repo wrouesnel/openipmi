@@ -608,11 +608,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     if (sensor->destroyed) {
 	_ipmi_domain_entity_lock(sensor->domain);
 	sensor->usecount++;
-	_ipmi_domain_entity_unlock(sensor->domain);
-
 	rv = _ipmi_entity_get(sensor->entity);
 	if (! rv)
 	    entity = sensor->entity;
+	_ipmi_domain_entity_unlock(sensor->domain);
 
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, ECANCELED, NULL, info->__cb_data);
@@ -626,11 +625,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     if (!mc) {
 	_ipmi_domain_entity_lock(sensor->domain);
 	sensor->usecount++;
-	_ipmi_domain_entity_unlock(sensor->domain);
-
 	rv = _ipmi_entity_get(sensor->entity);
 	if (! rv)
 	    entity = sensor->entity;
+	_ipmi_domain_entity_unlock(sensor->domain);
 
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, ECANCELED, rsp, info->__cb_data);
@@ -656,11 +654,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 
 	_ipmi_domain_entity_lock(sensor->domain);
 	sensor->usecount++;
-	_ipmi_domain_entity_unlock(sensor->domain);
-
 	nrv = _ipmi_entity_get(sensor->entity);
 	if (! nrv)
 	    entity = sensor->entity;
+	_ipmi_domain_entity_unlock(sensor->domain);
 
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
@@ -705,13 +702,19 @@ sensor_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_sensor_t         *sensor = info->__sensor;
 
     if (sensor->destroyed) {
-	if (info->__rsp_handler)
+	if (info->__rsp_handler) {
+	    _ipmi_domain_mc_lock(sensor->domain);
+	    _ipmi_mc_get(sensor->mc);
+	    _ipmi_domain_mc_unlock(sensor->domain);
+	    _ipmi_domain_entity_lock(sensor->domain);
+	    _ipmi_entity_get(sensor->entity);
+	    sensor->usecount++;
+	    _ipmi_domain_entity_unlock(sensor->domain);
 	    info->__rsp_handler(NULL, ECANCELED, NULL, info->__cb_data);
-
-	_ipmi_domain_entity_lock(sensor->domain);
-	sensor->usecount++;
-	_ipmi_domain_entity_unlock(sensor->domain);
-	_ipmi_sensor_put(sensor);
+	    _ipmi_sensor_put(sensor);
+	    _ipmi_mc_put(sensor->mc);
+	    _ipmi_entity_put(sensor->entity);
+	}
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
@@ -726,11 +729,17 @@ sensor_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 " Could not convert sensor id to a pointer",
 		 DOMAIN_NAME(domain));
 	if (info->__rsp_handler) {
+	    _ipmi_domain_mc_lock(sensor->domain);
+	    _ipmi_mc_get(sensor->mc);
+	    _ipmi_domain_mc_unlock(sensor->domain);
 	    _ipmi_domain_entity_lock(sensor->domain);
+	    _ipmi_entity_get(sensor->entity);
 	    sensor->usecount++;
 	    _ipmi_domain_entity_unlock(sensor->domain);
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
 	    _ipmi_sensor_put(sensor);
+	    _ipmi_mc_put(sensor->mc);
+	    _ipmi_entity_put(sensor->entity);
 	}
     }
     return IPMI_MSG_ITEM_NOT_USED;
@@ -1842,7 +1851,9 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    if (osensor != NULL) {
 		/* This sensor was not in the new repository, so it must
 		   have been deleted. */
+		_ipmi_domain_entity_lock(domain);
 		_ipmi_sensor_get(osensor);
+		_ipmi_domain_entity_unlock(domain);
 		ipmi_sensor_destroy(osensor);
 	    }
 	}

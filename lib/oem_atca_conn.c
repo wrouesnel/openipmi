@@ -133,7 +133,8 @@ atca_oem_finish_check(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_conn_oem_check_done done = rspi->data1;
     void                     *cb_data = rspi->data2;
 
-    if (ipmi && (msg->data_len >= 8) && (msg->data[0] == 0)) {
+    if (ipmi && !ipmi->oem_data && (msg->data_len >= 8) && (msg->data[0] == 0))
+    {
 	atca_conn_info_t *info;
 
 	info = ipmi_mem_alloc(sizeof(*info));
