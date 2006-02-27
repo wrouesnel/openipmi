@@ -521,8 +521,12 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     entity_destroy_timer(ent->hot_swap_deact_info);
 
     if (ent->frudev_present) {
+	_ipmi_domain_mc_lock(ent->domain);
+	_ipmi_mc_get(ent->frudev_mc);
+	_ipmi_domain_mc_unlock(ent->domain);
 	ipmi_mc_remove_active_handler(ent->frudev_mc, entity_mc_active, ent);
 	_ipmi_mc_release(ent->frudev_mc);
+	_ipmi_mc_put(ent->frudev_mc);
     }
 
     if (ent->oem_info_cleanup_handler)
@@ -829,8 +833,11 @@ _ipmi_entity_put(ipmi_entity_t *ent)
  out2:
     /* Wait till here to start fetching FRUs, as we want to report the
        entity first before we start the fetch. */
-    if (entity_fru_fetch)
+    if (entity_fru_fetch) {
+	ent->usecount++;
 	ipmi_entity_fetch_frus(ent);
+	ent->usecount--;
+    }
     _ipmi_domain_entity_unlock(domain);
 }
 
@@ -1629,7 +1636,9 @@ try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
 
     /* Send a message to the FRU device and see if we can get some
        data. */
+    _ipmi_domain_mc_lock(ent->domain);
     _ipmi_mc_get(ent->frudev_mc);
+    _ipmi_domain_mc_unlock(ent->domain);
     rv = ipmi_mc_send_command(ent->frudev_mc, ent->info.lun, &msg,
 			      detect_frudev, info);
     _ipmi_mc_put(ent->frudev_mc);
@@ -2707,10 +2716,14 @@ iterate_sensor_prefunc(void *cb_data, void *item1, void *item2)
     ipmi_sensor_t         *sensor = item1;
     int                   rv;
     ipmi_mc_t             *mc = ipmi_sensor_get_mc(sensor);
+    ipmi_domain_t         *domain;
 
     if (!mc)
 	goto out_err;
+    domain = ipmi_mc_get_domain(mc);
+    _ipmi_domain_mc_lock(domain);
     rv = _ipmi_mc_get(mc);
+    _ipmi_domain_mc_unlock(domain);
     if (rv)
 	goto out_err;
     rv = _ipmi_sensor_get(sensor);
@@ -2771,10 +2784,13 @@ iterate_control_prefunc(void *cb_data, void *item1, void *item2)
     ipmi_control_t         *control = item1;
     int                   rv;
     ipmi_mc_t             *mc = ipmi_control_get_mc(control);
+    ipmi_domain_t         *domain = ipmi_mc_get_domain(mc);
 
     if (!mc)
 	goto out_err;
+    _ipmi_domain_mc_lock(domain);
     rv = _ipmi_mc_get(mc);
+    _ipmi_domain_mc_unlock(domain);
     if (rv)
 	goto out_err;
     rv = _ipmi_control_get(control);

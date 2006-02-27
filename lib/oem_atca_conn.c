@@ -200,6 +200,9 @@ handle_intel_atca(ipmi_con_t *conn, void *cb_data)
 {
     atca_conn_info_t *info = conn->oem_data;
 
+    if (!info)
+	return 0;
+
     /* This means that we don't advertise 0x20 as our address on the
        CMM, we use the real address. */
 #if 0
