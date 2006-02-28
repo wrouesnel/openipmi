@@ -6,6 +6,13 @@
 	* lib/mc.c: If the timer was stopped due to a not running
 	condition, mark the timer as stopped.
 
+	* swig/python/openipmigui/_domain.py: Fix the interpretation of
+	the "connected" parameter is the connection reporting.  It means
+	that any connection to the domain is up, not that the particular
+	connection is up.
+	
+	* configure.in: Move to version 2.0.6.
+
 2006-02-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Make sure use_orig_addr is handled in all cases,
@@ -21,8 +28,6 @@
 
 	* lib/sdr.c: Add a useful name and proper handling of shutdown
 	situations to avoid leaks.
-
-	* configure.in: Move to version 2.0.6.
 
 2006-02-26 Corey Minyard <cminyard@mvista.com>
 

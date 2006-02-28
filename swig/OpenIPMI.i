@@ -3867,7 +3867,7 @@ char *get_error_string(unsigned int val);
      * The conn_change_cb method on the first parameter will be
      * called when the connection changes status with the following
      * parameters: <self>, <domain>, <errorval>, <connection_number>,
-     * <port_number>, <still_connected>.
+     * <port_number>, <anything_still_connected>.
      */
     int add_connect_change_handler(swig_cb handler)
     {

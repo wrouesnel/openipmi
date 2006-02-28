@@ -410,7 +410,7 @@ class Domain:
             raise InvalidDomainError("Open domain failed, invalid parms")
         return
 
-    def conn_change_cb(self, domain, err, connum, portnum, connected):
+    def conn_change_cb(self, domain, err, connum, portnum, anything_connected):
         if (err):
             self.ui.new_log("Connection error for " + self.name
                             + ": " + OpenIPMI.get_error_string(err))
@@ -424,7 +424,7 @@ class Domain:
         if (connum not in self.connections):
             self.ui.new_log("Got connection for invalid connection number")
             return
-        self.connections[connum].SetPortUp(portnum, connected)
+        self.connections[connum].SetPortUp(portnum, err == 0)
         any_con_up = False
         for c in self.connections.itervalues():
             any_con_up = c.IsUp() or any_con_up
