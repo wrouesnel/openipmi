@@ -14,6 +14,8 @@
 	* lib/sdr.c: Add a useful name and proper handling of shutdown
 	situations to avoid leaks.
 
+	* configure.in: Move to version 2.0.6.
+
 2006-02-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, lib/ipmi.c: Don't copy address information for
@@ -48,8 +50,6 @@
 	* lib/entity.c: Fixed some possible deadlocks dealing with the
 	built-in hot-swap state machine and presence handling.
 	
-	* configure.in: Move to version 2.0.6.
-
 2006-02-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui.py, man/openipmigui.1:  Added some
