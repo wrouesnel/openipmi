@@ -193,6 +193,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
     unsigned int  seq;
     unsigned char *tmsg = data;
     int           chan;
+    int           to_ret = 0;
 
     if (data_len < 8) { /* Minimum size of an IPMI msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -234,9 +235,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	    msg->cmd = orig_msg->cmd;
 	    msg->data = tmsg + 6;
 	    msg->data_len = 1;
-	    if (ipmi->handle_send_rsp_err) {
-		ipmi->handle_send_rsp_err(ipmi, msg);
-	    }
+	    to_ret = -1;
 	} else {
 	    if (data_len < 15)
 		/* The response to a send message was not carrying the
@@ -398,7 +397,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
         ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
-    return 0;
+    return to_ret;
 }
 
 static void

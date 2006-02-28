@@ -13,6 +13,10 @@
 
 	* libedit/read.c: Don't beep on el_push, that causes way too much
 	beeping for my taste.
+
+	* lib/ipmi_lan.c, lib/ipmi_payload.c, include/OpenIPMI/ipmi_lan.h:
+	Make sure ipmi->handle_send_rsp_err is sent outside of the
+	sequence lock.
 	
 	* configure.in: Move to version 2.0.6.
 

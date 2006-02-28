@@ -2802,6 +2802,9 @@ handle_payload(ipmi_con_t    *ipmi,
     ipmi_msgi_t           *rspi;
     unsigned char         seq;
     int                   rv;
+    int                   (*handle_send_rsp)(ipmi_con_t *con, ipmi_msg_t *msg);
+
+    handle_send_rsp = NULL;
 
     if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE) {
 	if (payload_len < 1) {
@@ -2864,8 +2867,12 @@ handle_payload(ipmi_con_t    *ipmi,
 	 &lan->seq_table[seq].msg,
 	 tmsg,
 	 payload_len);
-    if (rv)
-	goto out_unlock;
+    if (rv) {
+	if (rv == -1)
+	    handle_send_rsp = ipmi->handle_send_rsp_err;
+	else
+	    goto out_unlock;
+    }
 
     /* We got a response from the connection, so reset the failure
        count. */
@@ -2899,6 +2906,9 @@ handle_payload(ipmi_con_t    *ipmi,
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
     
+    if (handle_send_rsp)
+	handle_send_rsp(ipmi, &rspi->msg);
+
     ipmi_handle_rsp_item(ipmi, rspi, handler);
 
  out:

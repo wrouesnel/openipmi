@@ -281,7 +281,8 @@ typedef struct ipmi_payload_s
 
     /* Fill in the rspi data structure from the given data, responses
        only.  This does *not* deliver the message, that is done by the
-       LAN code. */
+       LAN code.  If this returns -1, that means the LAN code should
+       call handle_send_rsp_err on the connection if it is defined. */
     int (*handle_recv_rsp)(ipmi_con_t    *conn,
 			   ipmi_msgi_t   *rspi,
 			   ipmi_addr_t   *orig_addr,
