@@ -2031,6 +2031,7 @@ void
 _ipmi_mc_startup_put(ipmi_mc_t *mc, char *name)
 {
     ipmi_lock(mc->lock);
+    mc->sel_timer_info->processing = 0;
     mc->startup_count--;
     if (mc->startup_reported || (mc->startup_count > 0)) {
 	ipmi_unlock(mc->lock);
@@ -2053,9 +2054,6 @@ mc_first_sels_read(ipmi_sel_info_t *sel,
     ipmi_mc_t *mc = cb_data;
 
     _ipmi_mc_startup_put(mc, "mc_first_sels_read");
-    ipmi_lock(mc->lock);
-    mc->sel_timer_info->processing = 0;
-    ipmi_unlock(mc->lock);
 }
 
 /* This is called after the first sensor scan for the MC, we start up

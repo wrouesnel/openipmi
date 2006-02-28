@@ -402,7 +402,7 @@ class IPMIGUI(wx.Frame):
                     pass
                 pass
             else:
-                self.set_item_color(item)
+                self.tree.SetItemTextColour(item, wx.BLACK)
                 pass
             pass
         return
