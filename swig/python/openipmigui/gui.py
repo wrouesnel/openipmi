@@ -414,6 +414,7 @@ class IPMIGUI(wx.Frame):
         return
 
     def set_item_color(self, item):
+        data = self.tree.GetPyData(item)
         if (data.num_critical > 0):
             self.tree.SetItemTextColour(item, wx.BLUE)
             return
