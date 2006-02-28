@@ -487,13 +487,13 @@ class Domain:
         
     def mc_update_cb(self, op, domain, mc):
         if (op == "added"):
-            if (mc.get_name() not in self.entities):
+            if (mc.get_name() not in self.mcs):
                 _mc.MC(self, mc)
                 pass
             pass
         elif (op == "deleted"):
-            if (mc.get_name() in self.entities):
-                self.entities[mc.get_name()].remove()
+            if (mc.get_name() in self.mcs):
+                self.mcs[mc.get_name()].remove()
                 pass
             pass
         else:

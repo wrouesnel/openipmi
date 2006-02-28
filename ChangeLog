@@ -3,6 +3,17 @@
 	* lib/ipmi_lan.c: Make sure use_orig_addr is handled in all cases,
 	including timeouts and shutdown.
 
+	* lib/domain.c: Set the connection name to something more useful.
+
+	* swig/python/openipmigui.py: Add a log to stdout option.
+
+	* lib/mc.c: Rework the startup code to properly handle all types
+	of failures.  Some failure cases were not handled correctly and
+	could leave things hanging.
+
+	* lib/sdr.c: Add a useful name and proper handling of shutdown
+	situations to avoid leaks.
+
 2006-02-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, lib/ipmi.c: Don't copy address information for

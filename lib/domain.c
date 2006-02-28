@@ -814,14 +814,15 @@ setup_domain(char          *name,
     domain->usecount = 1;
 
     for (i=0; i<num_con; i++) {
+	int len1 = strlen(domain->name);
 	domain->conn[i] = ipmi[i];
 	for (j=0; j<MAX_IPMI_USED_CHANNELS; j++)
 	    domain->con_ipmb_addr[i][j] = 0x20;
 	domain->con_active[i] = 1;
 	domain->con_up[i] = 0;
-	ipmi[i]->name = ipmi_mem_alloc(10);
+	ipmi[i]->name = ipmi_mem_alloc(len1 + 11);
 	if (ipmi[i]->name)
-	    snprintf(ipmi[i]->name, 10, "%d", i);
+	    snprintf(ipmi[i]->name, len1 + 11, "%s%d ", domain->name, i);
 	ipmi[i]->user_data = domain;
 
 	for (j=0; j<MAX_PORTS_PER_CON; j++)
@@ -2691,6 +2692,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	goto out;
 
     if (domain->got_invalid_dev_id) {
+	/* Failure getting device id, just try again. */
 	domain_send_mc_id(domain);
 	goto out_start_timer;
     }

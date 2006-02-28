@@ -50,15 +50,29 @@
 #include <OpenIPMI/internal/ipmi_oem.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 
+#define MAX_SEL_TIME_SET_RETRIES 10
+
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
+    char                name[IPMI_MC_NAME_LEN+1];
     int                 timer_running;
+    ipmi_lock_t         *lock;
     int                 cancelled;
     ipmi_mc_t           *mc;
-    ipmi_domain_t       *domain;
+    ipmi_mcid_t         mc_id;
     ipmi_sels_fetched_t handler;
     void                *cb_data;
+    os_handler_t        *os_hnd;
+    os_hnd_timer_id_t   *sel_timer;
+
+    int                 timer_should_run;
+    unsigned int        retries;
+    int                 sel_time_set;
+    int                 processing;
+
+    ipmi_mc_ptr_cb sels_first_read_handler;
+    void           *sels_first_read_cb_data;
 } mc_reread_sel_t;
 
 typedef struct mc_devid_data_s
@@ -90,11 +104,6 @@ typedef struct mc_devid_data_s
 
     uint8_t  aux_fw_revision[4];
 } mc_devid_data_t;
-
-typedef struct domain_up_info_s
-{
-    ipmi_mcid_t mcid;
-} domain_up_info_t;
 
 /*
  * The MC follows a state machine for it's status to keep reporting of
@@ -308,7 +317,6 @@ struct ipmi_mc_s
     ipmi_mc_del_event_cb sel_clear_handler;
 
     /* Timer for rescanning the sel periodically. */
-    os_hnd_timer_id_t *sel_timer;
     mc_reread_sel_t   *sel_timer_info;
     unsigned int      sel_scan_interval; /* seconds between SEL scans */
 
@@ -340,8 +348,6 @@ struct ipmi_mc_s
 
     ipmi_mc_ptr_cb sdrs_first_read_handler;
     void           *sdrs_first_read_cb_data;
-    ipmi_mc_ptr_cb sels_first_read_handler;
-    void           *sels_first_read_cb_data;
 
     /* Call these when the MC is destroyed. */
     locked_list_t *removed_handlers;
@@ -351,11 +357,6 @@ struct ipmi_mc_s
 
     /* Called after going active when the MC is fully up. */
     locked_list_t *fully_up_handlers;
-
-    /* The following are for waiting until a domain is up before
-       starting the SEL query, so that the domain will be registered
-       before events are fetched. */
-    domain_up_info_t *conup_info;
 
     /* Set if we are treating main SDRs like device SDRs. */
     int treat_main_as_device_sdrs;
@@ -384,26 +385,11 @@ static void mc_sel_new_event_handler(ipmi_sel_info_t *sel,
 				     ipmi_event_t    *event,
 				     void            *cb_data);
 
-static void sels_fetched_start_timer(ipmi_sel_info_t *sel,
-				     int             err,
-				     int             changed,
-				     unsigned int    count,
-				     void            *cb_data);
-
-static void con_up_handler(ipmi_domain_t *domain,
-			   int           err,
-			   unsigned int  conn_num,
-			   unsigned int  port_num,
-			   int           still_connected,
-			   void          *cb_data);
+static void sels_start_timer(mc_reread_sel_t *info);
+static void start_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info);
 
 static void call_active_handlers(ipmi_mc_t *mc);
 static void call_fully_up_handlers(ipmi_mc_t *mc);
-
-typedef struct mc_name_info
-{
-    char name[IPMI_MC_NAME_LEN];
-} mc_name_info_t;
 
 /***********************************************************************
  *
@@ -466,10 +452,19 @@ _ipmi_mc_name(const ipmi_mc_t *mc)
     return mc->name;
 }
 
+static os_handler_t *
+mc_get_os_hnd(ipmi_mc_t *mc)
+{
+    ipmi_domain_t *domain = mc->domain;
+    return ipmi_domain_get_os_hnd(domain);
+}
+
 static int
 check_mc_destroy(ipmi_mc_t *mc)
 {
     ipmi_domain_t *domain = mc->domain;
+    os_handler_t  *os_hnd = mc_get_os_hnd(mc);
+    int           rv;
 
     if ((mc->state == MC_INACTIVE)
 	&& (ipmi_controls_get_count(mc->controls) == 0)
@@ -487,8 +482,38 @@ check_mc_destroy(ipmi_mc_t *mc)
            SDRs that monitor the MC. */
 	_ipmi_remove_mc_from_domain(domain, mc);
 
-	if (mc->conup_info)
-	    ipmi_mem_free(mc->conup_info);
+	if (mc->sel_timer_info) {
+	    if (mc->sel_timer_info->lock) {
+		ipmi_lock(mc->sel_timer_info->lock);
+		if (mc->sel_timer_info->timer_running) {
+		    mc->sel_timer_info->cancelled = 1;
+		    rv = os_hnd->stop_timer(os_hnd,
+					    mc->sel_timer_info->sel_timer);
+		    ipmi_unlock(mc->sel_timer_info->lock);
+		    if (!rv) {
+			/* If we can stop the timer, free it and it's info.
+			   If we can't stop the timer, that means that the
+			   code is currently in the timer handler, so we let
+			   the "cancelled" value do this for us. */
+			ipmi_destroy_lock(mc->sel_timer_info->lock);
+			os_hnd->free_timer(os_hnd,
+					   mc->sel_timer_info->sel_timer);
+			ipmi_mem_free(mc->sel_timer_info);
+		    }
+		} else {
+		    ipmi_unlock(mc->sel_timer_info->lock);
+		    ipmi_destroy_lock(mc->sel_timer_info->lock);
+		    os_hnd->free_timer(os_hnd, mc->sel_timer_info->sel_timer);
+		    ipmi_mem_free(mc->sel_timer_info);
+		}
+	    } else {
+		/* Timer wasn't completely created. */
+		if (mc->sel_timer_info->sel_timer)
+		    os_hnd->free_timer(os_hnd, mc->sel_timer_info->sel_timer);
+		ipmi_mem_free(mc->sel_timer_info);
+	    }
+	}
+
 	if (mc->removed_handlers)
 	    locked_list_destroy(mc->removed_handlers);
     	if (mc->active_handlers)
@@ -518,8 +543,9 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 		unsigned int  addr_len,
 		ipmi_mc_t     **new_mc)
 {
-    ipmi_mc_t *mc;
-    int       rv = 0;
+    ipmi_mc_t    *mc;
+    int          rv = 0;
+    os_handler_t *os_hnd = ipmi_domain_get_os_hnd(domain);
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
@@ -550,34 +576,27 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     rv = ipmi_create_lock(domain, &mc->lock);
     if (rv)
 	goto out_err;
-    mc->removed_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    mc->removed_handlers = locked_list_alloc(os_hnd);
     if (!mc->removed_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
-    mc->active_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    mc->active_handlers = locked_list_alloc(os_hnd);
     if (!mc->active_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
-    mc->fully_up_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    mc->fully_up_handlers = locked_list_alloc(os_hnd);
     if (!mc->fully_up_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
     mc->sel = NULL;
-    mc->sel_timer_info = NULL;
     mc->sel_scan_interval = ipmi_domain_get_sel_rescan_time(domain);
 
     memcpy(&(mc->addr), addr, addr_len);
     mc->addr_len = addr_len;
     mc->sdrs = NULL;
-
-    mc->conup_info = ipmi_mem_alloc(sizeof(*(mc->conup_info)));
-    if (!mc->conup_info) {
-	rv = ENOMEM;
-	goto out_err;
-    }
 
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
@@ -591,6 +610,27 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     if (rv)
 	goto out_err;
 
+    mc_set_name(mc);
+
+    mc->sel_timer_info = ipmi_mem_alloc(sizeof(*mc->sel_timer_info));
+    if (!mc->sel_timer_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    memset(mc->sel_timer_info, 0, sizeof(*mc->sel_timer_info));
+    strncpy(mc->sel_timer_info->name, mc->name,
+	    sizeof(mc->sel_timer_info->name));
+    mc->sel_timer_info->mc_id = ipmi_mc_convert_to_id(mc);
+    mc->sel_timer_info->mc = mc;
+    mc->sel_timer_info->os_hnd = os_hnd;
+    rv = os_hnd->alloc_timer(os_hnd, &mc->sel_timer_info->sel_timer);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock(domain, &mc->sel_timer_info->lock);
+    if (rv)
+	goto out_err;
+
     rv = ipmi_sdr_info_alloc(domain, mc, 0, 1, &(mc->sdrs));
     if (rv)
 	goto out_err;
@@ -600,7 +640,6 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 				   mc_sel_new_event_handler,
 				   domain);
 
-    mc_set_name(mc);
  out_err:
     if (rv)
 	check_mc_destroy(mc);
@@ -608,13 +647,6 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 	*new_mc = mc;
 
     return rv;
-}
-
-static os_handler_t *
-mc_get_os_hnd(ipmi_mc_t *mc)
-{
-    ipmi_domain_t *domain = mc->domain;
-    return ipmi_domain_get_os_hnd(domain);
 }
 
 static int
@@ -628,13 +660,36 @@ call_removed_handler(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
+/* Must be called with the mc lock held. */
+static void
+mc_stop_timer(ipmi_mc_t *mc)
+{
+    os_handler_t *os_hnd = mc_get_os_hnd(mc);
+    int          rv;
+
+    /* Make sure the timer stops. */
+    ipmi_lock(mc->sel_timer_info->lock);
+    mc->sel_timer_info->timer_should_run = 0;
+    if (mc->sel_timer_info->timer_running) {
+	rv = os_hnd->stop_timer(os_hnd, mc->sel_timer_info->sel_timer);
+	if (!rv)
+	    mc->sel_timer_info->timer_running = 0;
+    }
+    if ((mc->startup_count > 0) && !mc->sel_timer_info->processing)
+	/* Hack: If we are processing, we will fail the processing or
+	   it will complete later and finish.  If we were not
+	   processing, then we were just waiting on the timer that was
+	   just cancelled.  We decrement if we were waiting on the
+	   timer. */
+	mc->startup_count--;
+    ipmi_unlock(mc->sel_timer_info->lock);
+}
+
 static void
 mc_cleanup(ipmi_mc_t *mc)
 {
     int           i;
-    int           rv;
     ipmi_domain_t *domain = mc->domain;
-    os_handler_t  *os_hnd = ipmi_domain_get_os_hnd(domain);
 
     /* Call the OEM handlers for removal, if it has been registered. */
     locked_list_iterate(mc->removed_handlers, call_removed_handler, mc);
@@ -669,34 +724,6 @@ mc_cleanup(ipmi_mc_t *mc)
 
     if (mc->sdrs)
 	ipmi_sdr_clean_out_sdrs(mc->sdrs);
-
-    /* Make sure the timer stops. */
-    if (mc->sel_timer_info) {
-	if (mc->sel_timer_info->timer_running) {
-	    mc->sel_timer_info->cancelled = 1;
-	    rv = os_hnd->stop_timer(os_hnd, mc->sel_timer);
-	    if (!rv) {
-		/* If we can stop the timer, free it and it's info.
-		   If we can't stop the timer, that means that the
-		   code is currently in the timer handler, so we let
-		   the "cancelled" value do this for us. */
-		os_hnd->free_timer(os_hnd, mc->sel_timer);
-		mc->sel_timer = NULL;
-		ipmi_mem_free(mc->sel_timer_info);
-	    }
-	} else {
-	    os_hnd->free_timer(os_hnd, mc->sel_timer);
-	    mc->sel_timer = NULL;
-	    ipmi_mem_free(mc->sel_timer_info);
-	}
-	mc->sel_timer_info = NULL;
-    }
-
-    if (mc->conup_info) {
-	ipmi_domain_remove_connect_change_handler(domain,
-						  con_up_handler,
-						  mc->conup_info);
-    }
 }
 
 /***********************************************************************
@@ -852,7 +879,9 @@ ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds)
     mc->sel_scan_interval = seconds;
     if (old_time == 0) {
 	/* The old time was zero, so we must restart the timer. */
-	sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
+	ipmi_lock(mc->sel_timer_info->lock);
+	sels_start_timer(mc->sel_timer_info);
+	ipmi_unlock(mc->sel_timer_info->lock);
     }
 }
 
@@ -1164,44 +1193,20 @@ ipmi_mc_set_sel_oem_event_handler(ipmi_mc_t                 *mc,
 
 static void mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id);
 
+/* Must be called with the info lock held. */
 static void
-sels_fetched_start_timer(ipmi_sel_info_t *sel,
-			 int             err,
-			 int             changed,
-			 unsigned int    count,
-			 void            *cb_data)
+sels_start_timer(mc_reread_sel_t *info)
 {
-    mc_reread_sel_t *info = cb_data;
-    ipmi_mc_t       *mc = info->mc;
-    os_handler_t    *os_hnd;
-    struct timeval  timeout;
+    info->processing = 0;
+    if (info->mc->sel_scan_interval != 0) {
+	os_handler_t   *os_hnd = info->os_hnd;
+	struct timeval timeout;
 
-    if (info->cancelled) {
-	ipmi_mem_free(info);
-	return;
-    }
-
-    /* After the first SEL fetch, disable looking at the timestamp, in
-       case someone messes with the SEL time. */
-    mc->startup_SEL_time = 0;
-
-    if (info->handler) {
-	ipmi_sels_fetched_t handler;
-	void                *mcb_data;
-
-	handler = info->handler;
-	mcb_data = info->cb_data;
-	info->handler = NULL;
-	handler(sel, err, changed, count, mcb_data);
-    }
-
-    if (mc->sel_scan_interval != 0) {
-	os_hnd = mc_get_os_hnd(mc);
-	timeout.tv_sec = mc->sel_scan_interval;
+	timeout.tv_sec = info->mc->sel_scan_interval;
 	timeout.tv_usec = 0;
 	info->timer_running = 1;
 	os_hnd->start_timer(os_hnd,
-			    mc->sel_timer,
+			    info->sel_timer,
 			    &timeout,
 			    mc_reread_sel_timeout,
 			    info);
@@ -1210,30 +1215,125 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
     }
 }
 
+/* Must be called with the info lock held, will release the lock. */
+static void
+sels_fetched_call_handler(mc_reread_sel_t *info, int err, int changed,
+			  int count)
+{
+    ipmi_sels_fetched_t handler = NULL;
+    void                *cb_data = NULL;
+    ipmi_mc_ptr_cb      handler2 = NULL;
+    void                *cb_data2 = NULL;
+
+    if (info->handler) {
+	handler = info->handler;
+	cb_data = info->cb_data;
+	info->handler = NULL;
+    }
+    if (info->sels_first_read_handler) {
+	handler2 = info->sels_first_read_handler;
+	cb_data2 = info->sels_first_read_cb_data;
+	info->sels_first_read_handler = NULL;
+    }
+    ipmi_unlock(info->lock);
+
+    if (handler2)
+	handler2(info->mc, cb_data2);
+
+    if (handler)
+	handler(info->mc->sel, err, changed, count, cb_data);
+}
+
+static void
+sels_restart(mc_reread_sel_t *info)
+{
+    /* After the first SEL fetch, disable looking at the timestamp, in
+       case someone messes with the SEL time. */
+    info->mc->startup_SEL_time = 0;
+    info->sel_time_set = 1;
+
+    sels_start_timer(info);
+}
+
+static void
+sels_fetched_start_timer(ipmi_sel_info_t *sel,
+			 int             err,
+			 int             changed,
+			 unsigned int    count,
+			 void            *cb_data)
+{
+    mc_reread_sel_t *info = cb_data;
+
+    ipmi_lock(info->lock);
+    if (info->cancelled) {
+	ipmi_unlock(info->lock);
+	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return;
+    } else if (! info->timer_should_run) {
+	sels_fetched_call_handler(info, ECANCELED, 0, 0);
+	return;
+    }
+
+    /* After the first SEL fetch, disable looking at the timestamp, in
+       case someone messes with the SEL time. */
+    info->mc->startup_SEL_time = 0;
+
+    sels_start_timer(info);
+    sels_fetched_call_handler(info, err, changed, count);
+}
+
+static void
+mc_reread_sel_timeout_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    mc_reread_sel_t *info = cb_data;
+    int             rv = EINVAL;
+
+    info->processing = 1;
+    if (! info->sel_time_set) {
+	start_sel_time_set(mc, info);
+    } else {
+	/* Only fetch the SEL if we know the connection is up. */
+	if (ipmi_domain_con_up(mc->domain))
+	    rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, info);
+
+	/* If we couldn't run the SEL get, then restart the timer now. */
+	if (rv)
+	    sels_start_timer(info);
+    }
+}
+
 static void
 mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
 {
     mc_reread_sel_t *info = cb_data;
-    ipmi_mc_t       *mc = info->mc;
-    int             rv = EINVAL;
+    ipmi_mcid_t     mc_id;
+    int             rv;
 
+    ipmi_lock(info->lock);
     if (info->cancelled) {
+	ipmi_unlock(info->lock);
+	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
+	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
+	return;
+    } else if (! info->timer_should_run) {
+	sels_fetched_call_handler(info, ECANCELED, 0, 0);
 	return;
     }
 
-    if (_ipmi_domain_get(info->domain))
-	return;
+    mc_id = info->mc_id;
 
-    /* Only fetch the SEL if we know the connection is up. */
-    if (ipmi_domain_con_up(mc->domain))
-	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, info);
-
-    /* If we couldn't run the SEL get, then restart the timer now. */
-    if (rv)
-	sels_fetched_start_timer(mc->sel, 0, 0, 0, info);
-
-    _ipmi_domain_put(info->domain);
+    rv = ipmi_mc_pointer_cb(mc_id, mc_reread_sel_timeout_cb, info);
+    if (rv) {
+	/* Strange, but correct.  If we get here but the MC no longer
+	   exists, we raced with it's destroy.  We still hold the info
+	   lock, so just don't start the timer and everything should
+	   be happy. */
+	info->timer_running = 0;
+    }
+    ipmi_unlock(info->lock);
 }
 
 typedef struct sel_reread_s
@@ -1637,32 +1737,43 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 		     ipmi_msg_t *rsp,
 		     void       *rsp_data)
 {
-    mc_name_info_t *info = rsp_data;
-    int            rv;
+    mc_reread_sel_t *info = rsp_data;
+    int             rv;
 
-    if (!mc) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%smc.c(startup_set_sel_time): "
-		 "MC went away during SEL time set", info->name);
+    ipmi_lock(info->lock);
+    if (info->cancelled) {
+	ipmi_unlock(info->lock);
+	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return;
+    } else if (! info->timer_should_run) {
+	sels_fetched_call_handler(info, ECANCELED, 0, 0);
+	return;
+    }
+
+    mc = info->mc;
+
+    if (rsp->data[0] != 0) {
+	info->retries++;
+	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(startup_set_sel_time): "
+		     "Unable to set the SEL time due to error: %x, aborting",
+		     mc->name, rsp->data[0]);
+	    mc->startup_SEL_time = 0;
+	    sels_restart(info);
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(startup_set_sel_time): "
+		     "Unable to set the SEL time due to error: %x, retrying",
+		     mc->name, rsp->data[0]);
+	    sels_start_timer(info);
+	}
 	goto out;
     }
 
-    if (mc->sels_first_read_handler) {
-	mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
-	mc->sels_first_read_handler = NULL;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%smc.c(startup_set_sel_time): "
-		 "Unable to set the SEL time due to error: %x",
-		 mc->name, rsp->data[0]);
-	mc->startup_SEL_time = 0;
-    }
-
-    if (!mc->sel_timer_info)
-	/* timer info is gone, just give up. */
-	return;
+    info->sel_time_set = 1;
 
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
     if (rv) {
@@ -1670,25 +1781,20 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 		 "%smc.c(startup_set_sel_time): "
 		 "Unable to start an SEL get due to error: %x",
 		 mc->name, rsp->data[0]);
-	sels_fetched_start_timer(mc->sel,
-				 rv,
-				 0,
-				 0,
-				 mc->sel_timer_info);
+	sels_restart(info);
     }
 
  out:
-    ipmi_mem_free(info);
+    ipmi_unlock(info->lock);
 }
 
 static void
-first_sel_op(ipmi_mc_t *mc)
+do_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
 {
     ipmi_msg_t     msg;
     int            rv;
     unsigned char  data[4];
     struct timeval now;
-    mc_name_info_t *info;
 
     /* Set the current system event log time.  We do this here so
        we can be sure that the entities are all there before
@@ -1700,39 +1806,22 @@ first_sel_op(ipmi_mc_t *mc)
     gettimeofday(&now, NULL);
     ipmi_set_uint32(data, now.tv_sec);
     mc->startup_SEL_time = ipmi_seconds_to_time(now.tv_sec);
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%smc.c(first_sel_op): "
-		 "Unable to start SEL time, out of memory",
-		 mc->name);
-	goto cont_op;
-    }
-    strncpy(info->name, mc->name, sizeof(info->name));
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, info);
     if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%smc.c(first_sel_op): "
-		 "Unable to start SEL time set due to error: %x",
-		 mc->name, rv);
-	ipmi_mem_free(info);
-	goto cont_op;
-    }
-    return;
-
- cont_op:
-    mc->startup_SEL_time = 0;
-    rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
-		      mc->sel_timer_info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%smc.c(first_sel_op): "
-		 "Unable to start SEL get due to error: %x",
-		 mc->name, rv);
-	sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
-	if (mc->sels_first_read_handler) {
-	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
-	    mc->sels_first_read_handler = NULL;
+	info->retries++;
+	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(first_sel_op): "
+		     "Unable to start SEL time set due to error: %x, aborting",
+		     mc->name, rv);
+	    mc->startup_SEL_time = 0;
+	    sels_restart(info);
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(first_sel_op): "
+		     "Unable to start SEL time set due to error: %x, retrying",
+		     mc->name, rv);
+	    sels_start_timer(info);
 	}
     }
 }
@@ -1742,33 +1831,64 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 		     ipmi_msg_t *rsp,
 		     void       *rsp_data)
 {
-    mc_name_info_t *info = rsp_data;
-    struct timeval now;
-    uint32_t       time;
-    int            rv;
+    mc_reread_sel_t *info = rsp_data;
+    struct timeval  now;
+    uint32_t        time;
+    int             rv;
 
-    if (!mc) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%smc.c(startup_set_sel_time): "
-		 "MC went away during SEL time get", info->name);
+    ipmi_lock(info->lock);
+    if (info->cancelled) {
+	ipmi_unlock(info->lock);
+	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return;
+    } else if (! info->timer_should_run) {
+	sels_fetched_call_handler(info, ECANCELED, 0, 0);
+	return;
+    }
+
+    /* MC must be valid if we are not cancelled. */
+    mc = info->mc;
+    
+    if (rsp->data[0] != 0) {
+	info->retries++;
+	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%smc.c(startup_set_sel_time): "
+		     "Unable to get the SEL time due to error: %x, aborting",
+		     mc->name, rsp->data[0]);
+	    mc->startup_SEL_time = 0;
+	    sels_restart(info);
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(startup_set_sel_time): "
+		     "Unable to get the SEL time due to error: %x, retrying",
+		     mc->name, rsp->data[0]);
+	    sels_start_timer(info);
+	}
 	goto out;
     }
 
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%smc.c(startup_set_sel_time): "
-		 "Unable to get the SEL time due to error: %x",
-		 mc->name, rsp->data[0]);
-	mc->startup_SEL_time = 0;
-	goto out_start;
-    }
-
     if (rsp->data_len < 5) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%smc.c(startup_got_sel_time): "
-		 "Get SEL time response too short for MC at 0x%x",
-		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
-	goto out_start;
+	info->retries++;
+	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%smc.c(startup_got_sel_time): "
+		     "Get SEL time response too short for MC at 0x%x,"
+		     " aborting",
+		     mc->name, ipmi_addr_get_slave_addr(&mc->addr));
+	    mc->startup_SEL_time = 0;
+	    sels_restart(info);
+	} else {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%smc.c(startup_got_sel_time): "
+		     "Get SEL time response too short for MC at 0x%x,"
+		     " retrying",
+		     mc->name, ipmi_addr_get_slave_addr(&mc->addr));
+	    sels_start_timer(info);
+	}
+	goto out;
     }
 
     gettimeofday(&now, NULL);
@@ -1777,7 +1897,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     if ((time < now.tv_sec) && ipmi_option_set_sel_time(mc->domain)) {
 	/* Time is in the past and setting time is requested, move it
 	   forward. */
-	first_sel_op(mc);
+	do_sel_time_set(mc, info);
     } else {
 	struct timeval tv;
 	/* Time is current or in the future, don't move it backwards
@@ -1793,74 +1913,45 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 		     "%smc.c(startup_got_sel_time): "
 		     "Unable to start SEL fetch due to error 0x%x",
 		     mc->name, rv);
-	    goto out_start;
+	    sels_restart(info);
 	}
     }
 
-    goto out;
-
- out_start:    
-    first_sel_op(mc);
-
  out:
-    ipmi_mem_free(info);
+    ipmi_unlock(info->lock);
 }
 
 static void
-con_up_mc(ipmi_mc_t *mc, void *cb_data)
+start_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
 {
-    ipmi_msg_t     msg;
-    int            rv;
-    mc_name_info_t *info;
+    ipmi_msg_t      msg;
+    int             rv;
 
-    /* Set the current system event log time.  We do this here so
-       we can be sure that the entities are all there before
-       reporting events. */
+    /* Set the current system event log time.  We do this here so we
+       can be sure that the entities are all there before reporting
+       events.  But first we fetch it to make sure it needs to be
+       changed. */
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_GET_SEL_TIME_CMD;
     msg.data = NULL;
     msg.data_len = 0;
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%smc.c(con_up_mc): "
-		 "Unable to start SEL time, out of memory",
-		 mc->name);
-	goto cont_op;
-    }
-    strncpy(info->name, mc->name, sizeof(info->name));
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_got_sel_time, info);
     if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%smc.c(con_up_mc): "
-		 "Unable to start SEL time set due to error: %x",
-		 mc->name, rv);
-	ipmi_mem_free(info);
-	goto cont_op;
+	info->retries++;
+	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%smc.c(start_sel_time_set): "
+		     "Unable to start SEL time set due to error: %x, aborting",
+		     mc->name, rv);
+	    sels_restart(info);
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(start_sel_time_set): "
+		     "Unable to start SEL time set due to error: %x, retrying",
+		     mc->name, rv);
+	    sels_start_timer(info);
+	}
     }
-    return;
-
- cont_op:
-    first_sel_op(mc);
-}
-
-static void
-con_up_handler(ipmi_domain_t *domain,
-	       int           err,
-	       unsigned int  conn_num,
-	       unsigned int  port_num,
-	       int           still_connected,
-	       void          *cb_data)
-{
-    domain_up_info_t *info = cb_data;
-
-    if (!still_connected)
-	return;
-
-    ipmi_domain_remove_connect_change_handler(domain,
-					      con_up_handler,
-					      info);
-    ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 }
 
 static int
@@ -1870,75 +1961,47 @@ start_sel_ops(ipmi_mc_t           *mc,
 	      void                *cb_data)
 {
     ipmi_domain_t   *domain = ipmi_mc_get_domain(mc);
-    mc_reread_sel_t *info;
-    int             rv;
-    os_handler_t    *os_hnd = mc_get_os_hnd(mc);
+    mc_reread_sel_t *info = mc->sel_timer_info;
+    int             rv = 0;
 
-    if (mc->sel_timer_info)
-	return EBUSY; /* Already configured. */
-
-    /* Allocate the system event log fetch timer. */
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%smc.c(start_sel_ops): "
-		 "Unable to allocate info for system event log timer."
-		 " System event log will not be queried",
-		 mc->name);
-	rv = ENOMEM;
-	goto sel_failure;
+    ipmi_lock(info->lock);
+    if (info->timer_should_run) {
+	ipmi_unlock(info->lock);
+	return EBUSY; /* Already started. */
     }
-    info->mc = mc;
-    info->domain = mc->domain;
-    info->cancelled = 0;
+
+    info->timer_should_run = 1;
+    info->retries = 0;
+    info->sel_time_set = 0;
+    info->processing = 1;
+
     info->handler = handler;
     info->cb_data = cb_data;
-    rv = os_hnd->alloc_timer(os_hnd, &(mc->sel_timer));
-    if (rv) {
-	ipmi_mem_free(info);
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%smc.c(start_sel_ops): "
-		 "Unable to allocate the system event log timer."
-		 " System event log will not be queried",
-		 mc->name);
-	goto sel_failure;
-    } else {
-	mc->sel_timer_info = info;
-    }
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */
-	con_up_mc(mc, NULL);
+	start_sel_time_set(mc, info);
+	ipmi_unlock(info->lock);
     } else if (fail_if_down) {
+	ipmi_mc_ptr_cb  handler2 = NULL;
+	void            *cb_data2 = NULL;
 	rv = EAGAIN;
-	ipmi_mem_free(info);
-	mc->sel_timer_info = NULL;
-	os_hnd->free_timer(os_hnd, mc->sel_timer);
-	mc->sel_timer = NULL;
-	goto sel_failure;
+	info->timer_should_run = 0;
+	/* SELs not started, just call the handler. */
+	if (mc->sel_timer_info->sels_first_read_handler) {
+	    handler2 = mc->sel_timer_info->sels_first_read_handler;
+	    cb_data2 = mc->sel_timer_info->sels_first_read_cb_data;
+	    mc->sel_timer_info->sels_first_read_handler = NULL;
+	}
+	ipmi_unlock(info->lock);
+
+	if (handler2)
+	    handler2(info->mc, cb_data2);
     } else {
 	/* The domain is not up yet, wait for it to come up then start
            the process. */
-	mc->conup_info->mcid = ipmi_mc_convert_to_id(mc);
-	rv = ipmi_domain_add_connect_change_handler(domain, con_up_handler,
-						    mc->conup_info);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%smc.c(start_sel_ops): "
-		     "Unable to add a connection change handler for the"
-		     " delayed SEL timer start, starting it now, but some"
-		     " events may come in before the connection is up.",
-		     mc->name);
-	    con_up_mc(mc, NULL);
-	}
-    }
-    return 0;
-
- sel_failure:
-    /* SELs not started, just call the handler. */
-    if (mc->sels_first_read_handler) {
-	mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
-	mc->sels_first_read_handler = NULL;
+	sels_start_timer(info);
+	ipmi_unlock(info->lock);
     }
     return rv;
 }
@@ -2009,15 +2072,22 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     if (event_rcvr)
 	send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
 
+    ipmi_lock(mc->lock);
     if (mc->sdrs_first_read_handler) {
-	mc->sdrs_first_read_handler(mc, mc->sdrs_first_read_cb_data);
+	ipmi_mc_ptr_cb handler = mc->sdrs_first_read_handler;
+	void           *cb_data = mc->sdrs_first_read_cb_data;
 	mc->sdrs_first_read_handler = NULL;
-    }
+	ipmi_unlock(mc->lock);
+	handler(mc, cb_data);
+    } else
+	ipmi_unlock(mc->lock);
 
     if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain)) {
 	int rv;
 	/* If the MC supports an SEL, start scanning its SEL. */
+	ipmi_lock(mc->lock);
 	rv = start_sel_ops(mc, 0, mc_first_sels_read, mc);
+	ipmi_unlock(mc->lock);
 	if (rv) {
 	    _ipmi_mc_startup_put(mc, "sensors_reread(2)");
 	}
@@ -2168,6 +2238,7 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	    break;
 
 	case MC_ACTIVE_PEND_CLEANUP:
+	    mc_stop_timer(mc);
 	    if (mc->startup_count > 0) {
 		ipmi_unlock(mc->lock);
 		goto still_in_startup;
@@ -2182,6 +2253,7 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	    break;
 
 	case MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP:
+	    mc_stop_timer(mc);
 	    if (mc->startup_count > 0) {
 		ipmi_unlock(mc->lock);
 		goto still_in_startup;
@@ -3046,8 +3118,10 @@ ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
 				    void           *cb_data)
 {
     CHECK_MC_LOCK(mc);
+    ipmi_lock(mc->lock);
     mc->sdrs_first_read_handler = handler;
     mc->sdrs_first_read_cb_data = cb_data;
+    ipmi_unlock(mc->lock);
     return 0;
 }
 
@@ -3056,8 +3130,10 @@ int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
 					void           *cb_data)
 {
     CHECK_MC_LOCK(mc);
-    mc->sels_first_read_handler = handler;
-    mc->sels_first_read_cb_data = cb_data;
+    ipmi_lock(mc->sel_timer_info->lock);
+    mc->sel_timer_info->sels_first_read_handler = handler;
+    mc->sel_timer_info->sels_first_read_cb_data = cb_data;
+    ipmi_unlock(mc->sel_timer_info->lock);
     return 0;
 }
 

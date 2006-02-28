@@ -83,6 +83,8 @@ typedef struct fetch_info_s
 
 struct ipmi_sdr_info_s
 {
+    char name[IPMI_MC_NAME_LEN+1+20];
+
     /* The thing holding the SDR repository. */
     ipmi_mcid_t mc;
 
@@ -182,6 +184,7 @@ struct ipmi_sdr_info_s
        fails due to a lost reservation, wait a random amount of time
        and restart it. */
     os_hnd_timer_id_t *restart_timer;
+    int               restart_timer_running;
 
     /* The actual current copy of the SDR repository. */
     unsigned int num_sdrs;
@@ -193,6 +196,8 @@ struct ipmi_sdr_info_s
 };
 
 static void internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs);
+static void restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id);
+
 
 static inline void sdr_lock(ipmi_sdr_info_t *sdrs)
 {
@@ -368,6 +373,9 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     }
     memset(sdrs, 0, sizeof(*sdrs));
 
+    i = ipmi_mc_get_name(mc, sdrs->name, sizeof(sdrs->name));
+    snprintf(sdrs->name+i, sizeof(sdrs->name)-i, "(%c,%d) ",
+	     sensor ? 's' : 'm', lun);
 
     sdrs->mc = ipmi_mc_convert_to_id(mc);
     sdrs->os_hnd = os_hnd;
@@ -519,7 +527,21 @@ ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
 	/* It's currently in fetch state, so let it be destroyed in
            the handler, since we can't cancel the handler or
            operation. */
+	if (sdrs->restart_timer_running) {
+	    /* Stop the timer.  If we fail, the timer handler is
+	       running (error is returned from the stop), just let it
+	       handle the stop.  Otherwise, we handle the stop. */
+	    int rv;
+
+	    rv = sdrs->os_hnd->stop_timer(sdrs->os_hnd, sdrs->restart_timer);
+	    if (!rv) {
+		sdr_unlock(sdrs);
+		restart_timer_cb(sdrs, sdrs->restart_timer);
+		goto out1;
+	    }
+	}
 	sdr_unlock(sdrs);
+    out1:
 	return 0;
     }
 
@@ -605,15 +627,18 @@ handle_reservation_check(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_reservation_check): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(1)");
+		 " progress(1)", sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(1)");
+		 "%ssdr.c(handle_reservation_check): "
+		 "MC went away while SDR fetch was in progress(1)",
+		 sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -625,8 +650,9 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%ssdr.c(handle_reservation_check): "
 		     "Lost reservation too many times trying to"
-		     " fetch the SDRs");
+		     " fetch the SDRs", sdrs->name);
 	    fetch_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
@@ -637,7 +663,8 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	    rv = start_fetch(sdrs, mc, 1);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "Could not start the SDR fetch: %x", rv);
+			 "%ssdr.c(handle_reservation_check): "
+			 "Could not start the SDR fetch: %x", sdrs->name, rv);
 		fetch_complete(sdrs, rv);
 		goto out;
 	    }
@@ -648,8 +675,9 @@ handle_reservation_check(ipmi_mc_t  *mc,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_reservation_check): "
 		 "IPMI error from SDR fetch reservation check: %x",
-		 rsp->data[0]);
+		 sdrs->name, rsp->data[0]);
 	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
@@ -693,7 +721,8 @@ start_reservation_check(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
 			      handle_reservation_check, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Could not send command to get an SDR: %x", rv);
+		 "%ssdr.c(start_reservation_check): "
+		 "Could not send command to get an SDR: %x", sdrs->name, rv);
 	fetch_complete(sdrs, rv);
 	return;
     }
@@ -818,7 +847,9 @@ info_send(ipmi_sdr_info_t *sdrs, fetch_info_t *info, ipmi_mc_t *mc)
     if (rv) {
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "initial_sdr_fetch: Couldn't send first SDR fetch: %x", rv);
+		 "%ssdr.c(info_send): "
+		 "initial_sdr_fetch: Couldn't send first SDR fetch: %x",
+		 sdrs->name, rv);
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	fetch_complete(sdrs, rv);
     } else {
@@ -841,8 +872,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (! ilist_remove_item_from_list(sdrs->outstanding_fetch, info)) {
 	ipmi_log(IPMI_LOG_SEVERE,
+		 "%ssdr.c(handle_sdr_data): "
 		 "Got SDR data but the info was not in the"
-		 " outstanding operation list");
+		 " outstanding operation list", sdrs->name);
 	goto out_unlock;
     }
 
@@ -852,8 +884,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    goto out_unlock;
 
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_data): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(2)");
+		 " progress(2)", sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -864,7 +897,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    goto out_unlock;
 
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(2)");
+		 "%ssdr.c(handle_sdr_data): "
+		 "MC went away while SDR fetch was in progress(2)",
+		 sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -877,7 +912,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	rv = start_fetch(sdrs, mc, 1);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Could not start the SDR fetch: %x", rv);
+		     "%ssdr.c(handle_sdr_data): "
+		     "Could not start the SDR fetch: %x", sdrs->name, rv);
 	    fetch_complete(sdrs, rv);
 	    goto out;
 	}
@@ -907,7 +943,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
 	    ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "To many retries trying to fetch SDRs");
+		     "%ssdr.c(handle_sdr_data): "
+		     "To many retries trying to fetch SDRs", sdrs->name);
 
 	    sdrs->fetch_err = EAGAIN;
 
@@ -939,7 +976,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Lost reservation too many times trying to fetch SDRs");
+		     "%ssdr.c(handle_sdr_data): "
+		     "Lost reservation too many times trying to fetch SDRs",
+		     sdrs->name);
 
 	    sdrs->fetch_err = EAGAIN;
 
@@ -958,7 +997,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		/* Cause the fetch to be aborted. */
 		sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
 		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "Could not start SDR fetch: %x", rv);
+			 "%ssdr.c(handle_sdr_data): "
+			 "Could not start SDR fetch: %x", sdrs->name, rv);
 
 		sdrs->fetch_err = rv;
 
@@ -991,7 +1031,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	sdrs->fetch_size -= SDR_FETCH_BYTES_DECR;
 	if (sdrs->fetch_size < MIN_SDR_FETCH_BYTES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "SDR target chould not support the minimum fetch size");
+		     "%ssdr.c(handle_sdr_data): "
+		     "SDR target chould not support the minimum fetch size",
+		     sdrs->name);
 
 	    sdrs->fetch_err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
 
@@ -1019,9 +1061,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
 
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_data): "
 		 "SDR fetch error getting sdr 0x%x: %x",
-		 info->sdr_rec,
-		 rsp->data[0]);
+		 sdrs->name, info->sdr_rec, rsp->data[0]);
 
 	sdrs->fetch_err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
 
@@ -1037,8 +1079,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_data): "
 		 "Got an invalid amount of SDR data: %d, expected %d",
-		 rsp->data_len, info->read_len+3);
+		 sdrs->name, rsp->data_len, info->read_len+3);
 
 	sdrs->fetch_err = EINVAL;
 
@@ -1131,9 +1174,11 @@ handle_sdr_data(ipmi_mc_t  *mc,
 					       * new_num_sdrs) + 9);
 		    if (!new_sdrs) {
 			ipmi_log(IPMI_LOG_ERR_INFO,
+				 "%ssdr.c(handle_sdr_data): "
 				 "SDR respository had more SDRs than"
 				 " originally thougt, but could not expand"
-				 " the SDR array because out of memory");
+				 " the SDR array because out of memory",
+				 sdrs->name);
 			fetch_complete(sdrs, ENOMEM);
 			goto out;
 		    }
@@ -1144,7 +1189,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		    sdrs->working_num_sdrs = new_num_sdrs;
 		} else {
 		    ipmi_log(IPMI_LOG_ERR_INFO,
-			     "Fetched more SDRs than the info said there were");
+			     "%ssdr.c(handle_sdr_data): "
+			     "Fetched more SDRs than the info said there were",
+			     sdrs->name);
 		
 		    sdrs->fetch_err = EINVAL;
 	    
@@ -1181,7 +1228,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	if (rv) {
 	    sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Could not send SDR fetch: %x", rv);
+		     "%ssdr.c(handle_sdr_data): "
+		     "Could not send SDR fetch: %x", sdrs->name, rv);
 	    
 	    sdrs->fetch_err = rv;
 	    
@@ -1234,15 +1282,18 @@ handle_reservation(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_reservation): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(3)");
+		 " progress(3)", sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(3)");
+		 "%ssdr.c(handle_reservation): "
+		 "MC went away while SDR fetch was in progress(3)",
+		 sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1258,13 +1309,16 @@ handle_reservation(ipmi_mc_t  *mc,
 	    goto reservation_set;
 	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting SDR fetch reservation: %x", rsp->data[0]);
+		 "%ssdr.c(handle_reservation): "
+		 "Error getting SDR fetch reservation: %x",
+		 sdrs->name, rsp->data[0]);
 	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
     if (rsp->data_len < 3) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR Reservation data not long enough");
+		 "%ssdr.c(handle_reservation): "
+		 "SDR Reservation data not long enough", sdrs->name);
 	fetch_complete(sdrs, EINVAL);
 	goto out;
     }
@@ -1276,7 +1330,8 @@ handle_reservation(ipmi_mc_t  *mc,
     rv = initial_sdr_fetch(sdrs, mc);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "initial SDR fetch failed: %x", rv);
+		 "%ssdr.c(handle_reservation): "
+		 "initial SDR fetch failed: %x", sdrs->name, rv);
 	fetch_complete(sdrs, EINVAL);
 	goto out;
     }
@@ -1301,15 +1356,18 @@ handle_sdr_info(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_info): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(4)");
+		 " progress(4)", sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(4)");
+		 "%ssdr.c(handle_sdr_info): "
+		 "MC went away while SDR fetch was in progress(4)",
+		 sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1334,13 +1392,17 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	    erase_timestamp = 0;
 	} else {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "IPMI Error getting SDR info: %x", rsp->data[0]);
+		     "%ssdr.c(handle_sdr_info): "
+		     "IPMI Error getting SDR info: %x",
+		     sdrs->name, rsp->data[0]);
 	    fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	    goto out;
 	}
     } else if (sdrs->sensor) {
 	if (rsp->data_len < 3) {
-	    ipmi_log(IPMI_LOG_ERR_INFO, "SDR info is not long enough");
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%ssdr.c(handle_sdr_info): "
+		     "SDR info is not long enough", sdrs->name);
 	    fetch_complete(sdrs, EINVAL);
 	    goto out;
 	}
@@ -1359,7 +1421,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 
 	if (sdrs->dynamic_population) {
 	    if (rsp->data_len < 7) {
-		ipmi_log(IPMI_LOG_ERR_INFO, "SDR info is not long enough");
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%ssdr.c(handle_sdr_info): "
+			 "SDR info is not long enough", sdrs->name);
 		fetch_complete(sdrs, EINVAL);
 		goto out;
 	    }
@@ -1370,7 +1434,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	erase_timestamp = 0;
     } else {
 	if (rsp->data_len < 15) {
-	    ipmi_log(IPMI_LOG_ERR_INFO, "SDR info is not long enough");
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%ssdr.c(handle_sdr_info): "
+		     "SDR info is not long enough", sdrs->name);
 	    fetch_complete(sdrs, EINVAL);
 	    goto out;
 	}
@@ -1424,7 +1490,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 					* sdrs->working_num_sdrs) + 9);
     if (!sdrs->working_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Could not allocate working SDR information");
+		 "%ssdr.c(handle_sdr_info): "
+		 "Could not allocate working SDR information",
+		 sdrs->name);
 	fetch_complete(sdrs, ENOMEM);
 	goto out;
     }
@@ -1452,7 +1520,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 				  handle_reservation, sdrs);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "handle_sdr_info: Couldn't send SDR reservation: %x", rv);
+		     "%ssdr.c(handle_sdr_info): "
+		     "handle_sdr_info: Couldn't send SDR reservation: %x",
+		     sdrs->name, rv);
 	    fetch_complete(sdrs, rv);
 	    goto out;
 	}
@@ -1469,8 +1539,6 @@ handle_sdr_info(ipmi_mc_t  *mc,
  out:
     return;
 }
-
-static void restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id);
 
 static int
 start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
@@ -1504,6 +1572,7 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 				  &tv,
 				  restart_timer_cb,
 				  sdrs);
+	sdrs->restart_timer_running = 1;
 	return 0;
     } else {
 	/* Get the SDR repository information first. */
@@ -1534,8 +1603,9 @@ handle_start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     rv = start_fetch(sdrs, mc, 0);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_start_fetch_cb): "
 		 "handle_start_fetch: error requesting SDR reserveration: %x",
-		 rv);
+		 sdrs->name, rv);
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     } else {
@@ -1555,9 +1625,11 @@ handle_start_fetch(void *cb_data, int shutdown)
     rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_start_fetch): "
 		 "handle_start_fetch: error finding MC: %x",
-		 rv);
+		 sdrs->name, rv);
 	sdrs->wait_err = rv;
+	sdr_lock(sdrs);
 	fetch_complete(sdrs, rv);
     }
     return OPQ_HANDLER_STARTED;
@@ -1568,13 +1640,17 @@ restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
 
+    sdr_lock(sdrs);
+    sdrs->restart_timer_running = 0;
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(restart_timer_cb): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(1)");
+		 " progress(1)", sdrs->name);
 	fetch_complete(sdrs, ECANCELED);
 	return;
     }
+    sdr_unlock(sdrs);
 
     handle_start_fetch(sdrs, 0);
 }
@@ -2037,8 +2113,9 @@ save_complete(ipmi_sdr_info_t *sdrs, int err)
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(save_complete): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(5)");
+		 " progress(5)", sdrs->name);
 	internal_destroy_sdr_info(sdrs);
 	/* The previous call unlocks the lock. */
 	return;
@@ -2112,15 +2189,18 @@ handle_sdr_write(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_write): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(6)");
+		 " progress(6)", sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(5)");
+		 "%ssdr.c(handle_sdr_write): "
+		 "MC went away while SDR fetch was in progress(5)",
+		 sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -2130,14 +2210,16 @@ handle_sdr_write(ipmi_mc_t  *mc,
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "handle_sdr_write: Lost reservation too many times");
+		     "%ssdr.c(handle_sdr_write): "
+		     "Lost reservation too many times", sdrs->name);
 	    save_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    rv = start_save(sdrs, mc);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "handle_sdr_write: Could not restart save operation");
+			 "%ssdr.c(handle_sdr_write): "
+			 "Could not restart save operation", sdrs->name);
 		save_complete(sdrs, rv);
 		goto out;
 	    }
@@ -2147,8 +2229,9 @@ handle_sdr_write(ipmi_mc_t  *mc,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_write: Error from write operation: %x",
-		 rsp->data[0]);
+		 "%ssdr.c(handle_sdr_write): "
+		 "Error from write operation: %x",
+		 sdrs->name, rsp->data[0]);
 	save_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
@@ -2178,7 +2261,9 @@ handle_sdr_write(ipmi_mc_t  *mc,
 
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_write: Could not send next write: %x", rv);
+		 "%ssdr.c(handle_sdr_write): "
+		 "handle_sdr_write: Could not send next write: %x",
+		 sdrs->name, rv);
 	save_complete(sdrs, rv);
 	goto out;
     }
@@ -2200,15 +2285,18 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_write_done): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(7)");
+		 " progress(7)", sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(6)");
+		 "%ssdr.c(handle_sdr_write_done): "
+		 "MC went away while SDR fetch was in progress(6)",
+		 sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -2218,15 +2306,16 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "handle_sdr_write_done: Lost reservation too many times");
+		     "%ssdr.c(handle_sdr_write_done): "
+		     "Lost reservation too many times", sdrs->name);
 	    save_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    rv = start_save(sdrs, mc);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "handle_sdr_write_done:"
-			 " Could not restart save operation");
+			 "%ssdr.c(handle_sdr_write_done): "
+			 " Could not restart save operation", sdrs->name);
 		save_complete(sdrs, rv);
 		goto out;
 	    }
@@ -2236,8 +2325,9 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_write_done: Error from write operation: %x",
-		 rsp->data[0]);
+		 "%ssdr.c(handle_sdr_write_done): "
+		 "Error from write operation: %x",
+		 sdrs->name, rsp->data[0]);
 	save_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
@@ -2245,8 +2335,9 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
     (sdrs->write_sdr_num)++;
     if (sdrs->write_sdr_num >= sdrs->num_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_write_done: Error from write operation: %x",
-		 rsp->data[0]);
+		 "%ssdr.c(handle_sdr_write_done): "
+		 "Error from write operation: %x",
+		 sdrs->name, rsp->data[0]);
 	save_complete(sdrs, 0);
 	goto out;
     }
@@ -2274,15 +2365,18 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_clear): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(8)");
+		 " progress(8)", sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(7)");
+		 "%ssdr.c(handle_sdr_clear): "
+		 "MC went away while SDR fetch was in progress(7)",
+		 sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -2305,7 +2399,8 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     rv = start_sdr_write(sdrs, &(sdrs->sdrs[0]), mc);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_write_done: Could not send next write: %x", rv);
+		 "%ssdr.c(handle_sdr_clear): "
+		 "Could not send next write: %x", sdrs->name, rv);
 	save_complete(sdrs, rv);
 	goto out;
     }
@@ -2328,29 +2423,34 @@ handle_save_reservation(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_save_reservation): "
 		 "SDR info was destroyed while an operation was in"
-		 " progress(9)");
+		 " progress(9)", sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress(8)");
+		 "%ssdr.c(handle_save_reservation): "
+		 "MC went away while SDR fetch was in progress(8)",
+		 sdrs->name);
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_save_reservation: Error getting reservation: %x",
-		 rsp->data[0]);
+		 "%ssdr.c(handle_save_reservation): "
+		 "Error getting reservation: %x",
+		 sdrs->name, rsp->data[0]);
 	save_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
     if (rsp->data_len < 3) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Reservation data not long enough");
+		 "%ssdr.c(handle_save_reservation): "
+		 "Reservation data not long enough", sdrs->name);
 	save_complete(sdrs, EINVAL);
 	goto out;
     }
@@ -2372,7 +2472,8 @@ handle_save_reservation(ipmi_mc_t  *mc,
 			      handle_sdr_clear, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_save_reservation: Couldn't send SDR clear: %x", rv);
+		 "%ssdr.c(handle_save_reservation): "
+		 "Couldn't send SDR clear: %x", sdrs->name, rv);
 	save_complete(sdrs, rv);
 	goto out;
     }
@@ -2409,7 +2510,8 @@ handle_start_save_cb(ipmi_mc_t *mc, void *cb_data)
     rv = start_save(sdrs, mc);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_start_save: error requesting reserveration: %x", rv);
+		 "%ssdr.c(handle_start_save_cb): "
+		 "error requesting reserveration: %x", sdrs->name, rv);
 	sdrs->wait_err = rv;
 	save_complete(sdrs, rv);
     } else {
@@ -2429,8 +2531,9 @@ handle_start_save(void *cb_data, int shutdown)
     rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_start_save: error finding MC: %x",
-		 rv);
+		 "%ssdr.c(handle_start_save): "
+		 "error finding MC: %x",
+		 sdrs->name, rv);
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     }
