@@ -2040,6 +2040,9 @@ mc_first_sels_read(ipmi_sel_info_t *sel,
     ipmi_mc_t *mc = cb_data;
 
     _ipmi_mc_startup_put(mc, "mc_first_sels_read");
+    ipmi_lock(mc->lock);
+    mc->sel_timer_info->processing = 0;
+    ipmi_unlock(mc->lock);
 }
 
 /* This is called after the first sensor scan for the MC, we start up
@@ -2134,6 +2137,7 @@ mc_startup(ipmi_mc_t *mc)
     ipmi_msg_t msg;
     int        rv = 0;
 
+    mc->sel_timer_info->processing = 1;
     mc->startup_count = 1;
     mc->startup_reported = 0;
 
