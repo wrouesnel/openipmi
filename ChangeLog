@@ -10,6 +10,9 @@
 	the "connected" parameter is the connection reporting.  It means
 	that any connection to the domain is up, not that the particular
 	connection is up.
+
+	* libedit/read.c: Don't beep on el_push, that causes way too much
+	beeping for my taste.
 	
 	* configure.in: Move to version 2.0.6.
 

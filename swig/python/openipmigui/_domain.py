@@ -413,7 +413,8 @@ class Domain:
     def conn_change_cb(self, domain, err, connum, portnum, anything_connected):
         if (err):
             self.ui.new_log("Connection error for " + self.name
-                            + ": " + OpenIPMI.get_error_string(err))
+                            + "(" + str(connum) + "," + str(portnum) + "): "
+                            + OpenIPMI.get_error_string(err))
             pass
         if (not self.first_conn):
             self.first_conn = True

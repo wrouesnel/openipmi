@@ -37,6 +37,6 @@ libedit_a_SOURCES = chared.c common.c el.c emacs.c hist.c key.c map.c parse.c \
 		search.h sig.h sys.h el_term.h tty.h vis.h filecomplete.h \
 		editline/readline.h
 
-EXTRA_DIST = makelist orig_editline.diff
+EXTRA_DIST = makelist orig_editline.diff orig_editline.diff2
 
 nodist_libedit_a_SOURCES = $(BUILT_SOURCES)
