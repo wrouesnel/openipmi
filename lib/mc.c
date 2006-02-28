@@ -1272,6 +1272,7 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
 	return;
     }
@@ -1302,6 +1303,10 @@ mc_reread_sel_timeout_cb(ipmi_mc_t *mc, void *cb_data)
 	if (rv)
 	    sels_start_timer(info);
     }
+
+    /* Have to unlock here, because the MC put processing may claim
+       this lock. */
+    ipmi_unlock(info->lock);
 }
 
 static void
@@ -1319,6 +1324,7 @@ mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
 	return;
     }
@@ -1332,8 +1338,8 @@ mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
 	   lock, so just don't start the timer and everything should
 	   be happy. */
 	info->timer_running = 0;
+	ipmi_unlock(info->lock);
     }
-    ipmi_unlock(info->lock);
 }
 
 typedef struct sel_reread_s
@@ -1748,6 +1754,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
 	return;
     }
@@ -1844,6 +1851,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
 	return;
     }

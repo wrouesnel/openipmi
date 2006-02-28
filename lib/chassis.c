@@ -364,6 +364,9 @@ chassis_mc_control_active_handler(ipmi_mc_t *mc,
     if (active)
 	return;
 
+    ipmi_mc_remove_active_handler(mc,
+				  chassis_mc_control_active_handler,
+				  control);
     _ipmi_domain_entity_lock(domain);
     _ipmi_entity_get(entity);
     _ipmi_domain_entity_unlock(domain);
