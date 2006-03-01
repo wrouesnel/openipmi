@@ -52,6 +52,8 @@
 
 #define MAX_SEL_TIME_SET_RETRIES 10
 
+#undef DEBUG_INFO_TRACKING
+
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
@@ -73,7 +75,23 @@ typedef struct mc_reread_sel_s
 
     ipmi_mc_ptr_cb sels_first_read_handler;
     void           *sels_first_read_cb_data;
+
+#ifdef DEBUG_INFO_TRACKING
+    struct {
+	int            line;
+	const char     *filename;
+	const char     *function;
+    } last[10];
+#define DEBUG_INFO(info) (memcpy(info->last, info->last+1,	\
+				 sizeof(info->last[0]) * 9),	\
+			  info->last[9].filename = __FILE__,	\
+			  info->last[9].line = __LINE__,	\
+			  info->last[9].function = __FUNCTION__)
+#else
+#define DEBUG_INFO(info)
+#endif
 } mc_reread_sel_t;
+
 
 typedef struct mc_devid_data_s
 {    
@@ -1197,6 +1215,7 @@ static void mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id);
 static void
 sels_start_timer(mc_reread_sel_t *info)
 {
+    DEBUG_INFO(info);
     info->processing = 0;
     if (info->mc->sel_scan_interval != 0) {
 	os_handler_t   *os_hnd = info->os_hnd;
@@ -1225,6 +1244,7 @@ sels_fetched_call_handler(mc_reread_sel_t *info, int err, int changed,
     ipmi_mc_ptr_cb      handler2 = NULL;
     void                *cb_data2 = NULL;
 
+    DEBUG_INFO(info);
     if (info->handler) {
 	handler = info->handler;
 	cb_data = info->cb_data;
@@ -1249,6 +1269,7 @@ sels_restart(mc_reread_sel_t *info)
 {
     /* After the first SEL fetch, disable looking at the timestamp, in
        case someone messes with the SEL time. */
+    DEBUG_INFO(info);
     info->mc->startup_SEL_time = 0;
     info->sel_time_set = 1;
 
@@ -1265,13 +1286,16 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
     mc_reread_sel_t *info = cb_data;
 
     ipmi_lock(info->lock);
+    DEBUG_INFO(info);
     if (info->cancelled) {
+	DEBUG_INFO(info);
 	ipmi_unlock(info->lock);
 	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	DEBUG_INFO(info);
 	info->processing = 0;
 	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
@@ -1292,17 +1316,23 @@ mc_reread_sel_timeout_cb(ipmi_mc_t *mc, void *cb_data)
     mc_reread_sel_t *info = cb_data;
     int             rv = EINVAL;
 
+    DEBUG_INFO(info);
     info->processing = 1;
     if (! info->sel_time_set) {
+	DEBUG_INFO(mc->sel_timer_info);
 	start_sel_time_set(mc, info);
     } else {
 	/* Only fetch the SEL if we know the connection is up. */
-	if (ipmi_domain_con_up(mc->domain))
+	if (ipmi_domain_con_up(mc->domain)) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, info);
+	}
 
 	/* If we couldn't run the SEL get, then restart the timer now. */
-	if (rv)
+	if (rv) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    sels_start_timer(info);
+	}
     }
 
     /* Have to unlock here, because the MC put processing may claim
@@ -1318,13 +1348,16 @@ mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
     int             rv;
 
     ipmi_lock(info->lock);
+    DEBUG_INFO(info);
     if (info->cancelled) {
+	DEBUG_INFO(info);
 	ipmi_unlock(info->lock);
 	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	DEBUG_INFO(info);
 	info->processing = 0;
 	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
@@ -1339,6 +1372,7 @@ mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
 	   exists, we raced with it's destroy.  We still hold the info
 	   lock, so just don't start the timer and everything should
 	   be happy. */
+	DEBUG_INFO(info);
 	info->processing = 0;
 	info->timer_running = 0;
 	ipmi_unlock(info->lock);
@@ -1750,13 +1784,16 @@ startup_set_sel_time(ipmi_mc_t  *mc,
     int             rv;
 
     ipmi_lock(info->lock);
+    DEBUG_INFO(info);
     if (info->cancelled) {
+	DEBUG_INFO(info);
 	ipmi_unlock(info->lock);
 	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	DEBUG_INFO(info);
 	info->processing = 0;
 	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
@@ -1768,6 +1805,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	info->retries++;
 	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(startup_set_sel_time): "
 		     "Unable to set the SEL time due to error: %x, aborting",
@@ -1775,6 +1813,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	    mc->startup_SEL_time = 0;
 	    sels_restart(info);
 	} else {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(startup_set_sel_time): "
 		     "Unable to set the SEL time due to error: %x, retrying",
@@ -1788,6 +1827,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
     if (rv) {
+	DEBUG_INFO(mc->sel_timer_info);
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%smc.c(startup_set_sel_time): "
 		 "Unable to start an SEL get due to error: %x",
@@ -1807,6 +1847,7 @@ do_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
     unsigned char  data[4];
     struct timeval now;
 
+    DEBUG_INFO(info);
     /* Set the current system event log time.  We do this here so
        we can be sure that the entities are all there before
        reporting events. */
@@ -1821,6 +1862,7 @@ do_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
     if (rv) {
 	info->retries++;
 	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(first_sel_op): "
 		     "Unable to start SEL time set due to error: %x, aborting",
@@ -1828,6 +1870,7 @@ do_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
 	    mc->startup_SEL_time = 0;
 	    sels_restart(info);
 	} else {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(first_sel_op): "
 		     "Unable to start SEL time set due to error: %x, retrying",
@@ -1848,13 +1891,16 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     int             rv;
 
     ipmi_lock(info->lock);
+    DEBUG_INFO(info);
     if (info->cancelled) {
+	DEBUG_INFO(info);
 	ipmi_unlock(info->lock);
 	info->os_hnd->free_timer(info->os_hnd, info->sel_timer);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return;
     } else if (! info->timer_should_run) {
+	DEBUG_INFO(info);
 	info->processing = 0;
 	info->timer_running = 0;
 	sels_fetched_call_handler(info, ECANCELED, 0, 0);
@@ -1867,6 +1913,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	info->retries++;
 	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%smc.c(startup_set_sel_time): "
 		     "Unable to get the SEL time due to error: %x, aborting",
@@ -1874,6 +1921,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	    mc->startup_SEL_time = 0;
 	    sels_restart(info);
 	} else {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(startup_set_sel_time): "
 		     "Unable to get the SEL time due to error: %x, retrying",
@@ -1886,6 +1934,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     if (rsp->data_len < 5) {
 	info->retries++;
 	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%smc.c(startup_got_sel_time): "
 		     "Get SEL time response too short for MC at 0x%x,"
@@ -1894,6 +1943,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	    mc->startup_SEL_time = 0;
 	    sels_restart(info);
 	} else {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%smc.c(startup_got_sel_time): "
 		     "Get SEL time response too short for MC at 0x%x,"
@@ -1910,11 +1960,13 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     if ((time < now.tv_sec) && ipmi_option_set_sel_time(mc->domain)) {
 	/* Time is in the past and setting time is requested, move it
 	   forward. */
+	DEBUG_INFO(mc->sel_timer_info);
 	do_sel_time_set(mc, info);
     } else {
 	struct timeval tv;
 	/* Time is current or in the future, don't move it backwards
 	   as that may mess other things up. */
+	DEBUG_INFO(mc->sel_timer_info);
         tv.tv_sec = time;
         tv.tv_usec = 0;
         mc->startup_SEL_time = ipmi_timeval_to_time(tv);
@@ -1922,6 +1974,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
 			  mc->sel_timer_info);
 	if (rv) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%smc.c(startup_got_sel_time): "
 		     "Unable to start SEL fetch due to error 0x%x",
@@ -1940,6 +1993,7 @@ start_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
     ipmi_msg_t      msg;
     int             rv;
 
+    DEBUG_INFO(info);
     /* Set the current system event log time.  We do this here so we
        can be sure that the entities are all there before reporting
        events.  But first we fetch it to make sure it needs to be
@@ -1950,6 +2004,7 @@ start_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
     msg.data_len = 0;
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_got_sel_time, info);
     if (rv) {
+	DEBUG_INFO(mc->sel_timer_info);
 	info->retries++;
 	if (info->retries > MAX_SEL_TIME_SET_RETRIES) {
 	    ipmi_log(IPMI_LOG_WARNING,
@@ -1978,7 +2033,9 @@ start_sel_ops(ipmi_mc_t           *mc,
     int             rv = 0;
 
     ipmi_lock(info->lock);
+    DEBUG_INFO(info);
     if (info->timer_should_run) {
+	DEBUG_INFO(info);
 	ipmi_unlock(info->lock);
 	return EBUSY; /* Already started. */
     }
@@ -1993,11 +2050,13 @@ start_sel_ops(ipmi_mc_t           *mc,
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */
+	DEBUG_INFO(info);
 	start_sel_time_set(mc, info);
 	ipmi_unlock(info->lock);
     } else if (fail_if_down) {
 	ipmi_mc_ptr_cb  handler2 = NULL;
 	void            *cb_data2 = NULL;
+	DEBUG_INFO(info);
 	rv = EAGAIN;
 	info->timer_should_run = 0;
 	/* SELs not started, just call the handler. */
@@ -2013,6 +2072,7 @@ start_sel_ops(ipmi_mc_t           *mc,
     } else {
 	/* The domain is not up yet, wait for it to come up then start
            the process. */
+	DEBUG_INFO(info);
 	sels_start_timer(info);
 	ipmi_unlock(info->lock);
     }
@@ -2031,6 +2091,7 @@ void
 _ipmi_mc_startup_put(ipmi_mc_t *mc, char *name)
 {
     ipmi_lock(mc->lock);
+    DEBUG_INFO(mc->sel_timer_info);
     mc->sel_timer_info->processing = 0;
     mc->startup_count--;
     if (mc->startup_reported || (mc->startup_count > 0)) {
@@ -2067,10 +2128,12 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	/* MC data is still valid, but the MC is not good any more.
 	   We saved it in rsp_data. */
         mc = cb_data;
+	DEBUG_INFO(mc->sel_timer_info);
 	_ipmi_mc_startup_put(mc, "sensors_reread(3)");
 	return; /* domain went away while processing. */
     }
 
+    DEBUG_INFO(mc->sel_timer_info);
     /* See if any presence has changed with the new sensors. */ 
     ipmi_detect_domain_presence_changes(mc->domain, 0);
 
@@ -2099,13 +2162,16 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain)) {
 	int rv;
 	/* If the MC supports an SEL, start scanning its SEL. */
+	DEBUG_INFO(mc->sel_timer_info);
 	ipmi_lock(mc->lock);
 	rv = start_sel_ops(mc, 0, mc_first_sels_read, mc);
 	ipmi_unlock(mc->lock);
 	if (rv) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    _ipmi_mc_startup_put(mc, "sensors_reread(2)");
 	}
     } else {
+	DEBUG_INFO(mc->sel_timer_info);
 	_ipmi_mc_startup_put(mc, "sensors_reread");
     }
 }
@@ -2125,6 +2191,7 @@ got_guid(ipmi_mc_t  *mc,
 	return; /* domain went away while processing. */
     }
 
+    DEBUG_INFO(mc->sel_timer_info);
     if ((rsp->data[0] == 0) && (rsp->data_len >= 17)) {
 	/* We have a GUID, save it */
 	ipmi_mc_set_guid(mc, rsp->data+1);
@@ -2133,11 +2200,14 @@ got_guid(ipmi_mc_t  *mc,
     if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc)))
     {
+	DEBUG_INFO(mc->sel_timer_info);
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, mc);
 	if (rv) {
+	    DEBUG_INFO(mc->sel_timer_info);
 	    sensors_reread(mc, 0, NULL);
 	}
     } else {
+	DEBUG_INFO(mc->sel_timer_info);
 	sensors_reread(mc, 0, NULL);
     }
 }
@@ -2148,6 +2218,7 @@ mc_startup(ipmi_mc_t *mc)
     ipmi_msg_t msg;
     int        rv = 0;
 
+    DEBUG_INFO(mc->sel_timer_info);
     mc->sel_timer_info->processing = 1;
     mc->startup_count = 1;
     mc->startup_reported = 0;
@@ -2175,6 +2246,7 @@ mc_startup(ipmi_mc_t *mc)
     _ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
     rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, mc);
     if (rv) {
+	DEBUG_INFO(mc->sel_timer_info);
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%smc.c(ipmi_mc_setup_new): "
 		 "Unable to send get guid command.",
@@ -2739,7 +2811,6 @@ typedef struct sdr_fetch_info_s
     ipmi_mcid_t      source_mc; /* This is used to scan the SDRs. */
     ipmi_mc_done_cb  done;
     void             *done_data;
-    opq_t            *sensor_wait_q;
     int              err;
     int              changed;
     ipmi_sdr_info_t  *sdrs;
@@ -2766,12 +2837,10 @@ ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc)
 }
 
 static void
-sdr_reread_done(sdr_fetch_info_t *info, ipmi_mc_t *mc, int err, int mc_valid)
+sdr_reread_done(sdr_fetch_info_t *info, ipmi_mc_t *mc, int err)
 {
     if (info->done)
 	info->done(mc, err, info->done_data);
-    if (mc_valid)
-	opq_op_done(info->sensor_wait_q);
     ipmi_mem_free(info);
 }
 
@@ -2782,7 +2851,7 @@ sdrs_fetched_mc_cb(ipmi_mc_t *mc, void *cb_data)
     int              rv = 0;
 
     if (info->err) {
-	sdr_reread_done(info, mc, info->err, 1);
+	sdr_reread_done(info, mc, info->err);
 	return;
     }
 
@@ -2799,7 +2868,7 @@ sdrs_fetched_mc_cb(ipmi_mc_t *mc, void *cb_data)
 	    ipmi_detect_domain_presence_changes(info->domain, 0);
     }
 
-    sdr_reread_done(info, mc, rv, 1);
+    sdr_reread_done(info, mc, rv);
 }
 
 static void
@@ -2817,38 +2886,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
     info->sdrs = sdrs;
     rv = ipmi_mc_pointer_cb(info->source_mc, sdrs_fetched_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 0);
-}
-
-static void
-sensor_read_mc_cb(ipmi_mc_t *mc, void *cb_data)
-{
-    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
-    int              rv;
-
-    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
-    if (rv == ENOSYS)
-	/* ENOSYS means that the sensor population is not dyanmic. */
-	sdr_reread_done(info, mc, 0, 1);
-    else if (rv)
-	sdr_reread_done(info, mc, rv, 1);
-}
-
-static int
-sensor_read_handler(void *cb_data, int shutdown)
-{
-    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
-    int              rv;
-
-    if (shutdown) {
-	sdr_reread_done(info, NULL, ECANCELED, 0);
-	return OPQ_HANDLER_STARTED;
-    }
-
-    rv = ipmi_mc_pointer_cb(info->source_mc, sensor_read_mc_cb, info);
-    if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 0);
-    return OPQ_HANDLER_STARTED;
+	sdr_reread_done(info, NULL, ECANCELED);
 }
 
 int
@@ -2875,11 +2913,7 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
     info->domain = ipmi_mc_get_domain(mc);
     info->done = done;
     info->done_data = done_data;
-    info->sensor_wait_q = _ipmi_sensors_get_waitq(sensors);
-    if (! opq_new_op(info->sensor_wait_q,
-		     sensor_read_handler, info, 0))
-	rv = ENOMEM;
-
+    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
     if (rv)
 	ipmi_mem_free(info);
 

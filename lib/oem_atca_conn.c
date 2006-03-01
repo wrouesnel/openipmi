@@ -52,7 +52,7 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_msg_t           *msg = &rspi->msg;
     ipmi_ll_ipmb_addr_cb handler = rspi->data1;
     void                 *cb_data = rspi->data2;
-    unsigned char        ipmb = 0;
+    unsigned char        ipmb[MAX_IPMI_USED_CHANNELS];
     int                  err = 0;
     atca_conn_info_t     *info;
 
@@ -64,22 +64,24 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     info = ipmi->oem_data;
 
+    memset(ipmb, 0, sizeof(*ipmb));
+
     if (msg->data[0] != 0) 
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 4)
 	err = EINVAL;
     else if ((msg->data[7] == 3) && (!info->dont_use_floating_addr))
-	ipmb = 0x20; /* This is a Dedicated ShMC and we are not doing
-			dual-ShMC addressing. */
+	ipmb[0] = 0x20; /* This is a Dedicated ShMC and we are not doing
+			   dual-ShMC addressing. */
     else
-	ipmb = msg->data[3];
+	ipmb[0] = msg->data[3];
 
     /* Note that there is no "inactive" connection with ATCA. */
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, info->hacks);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 1, info->hacks);
 
     if (handler)
-	handler(ipmi, err, &ipmb, 1, 1, info->hacks, cb_data);
+	handler(ipmi, err, ipmb, 1, 1, info->hacks, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 

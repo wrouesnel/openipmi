@@ -48,6 +48,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -77,10 +78,12 @@ ipmb_handler_amc(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_msg_t           *msg = &rspi->msg;
     ipmi_ll_ipmb_addr_cb handler = rspi->data1;
     void                 *cb_data = rspi->data2;
-    unsigned char        ipmb = 0;
+    unsigned char        ipmb[MAX_IPMI_USED_CHANNELS];
     unsigned char	 geo_pos = 0;
     int                  err = 0;
     
+    memset(ipmb, 0, sizeof(*ipmb));
+
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 16)
@@ -88,22 +91,22 @@ ipmb_handler_amc(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     else
     {	/* BMC ? */
 	if ((msg->data[6] & 0x06) == 0x06)
-	    ipmb = 0x20;
+	    ipmb[0] = 0x20;
 	else
 	{
 	    geo_pos = msg->data[13];
 	    if (geo_pos < 1 || geo_pos > 8)
 		err = EINVAL;
 	    else
-		ipmb = translateAdrs_amc[geo_pos];
+		ipmb[0] = translateAdrs_amc[geo_pos];
 	}
     }
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, 0);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 1, 0);
 
     if (handler)
-        handler(ipmi, err, &ipmb, 1, err == 0, 0, cb_data);
+        handler(ipmi, err, ipmb, 1, err == 0, 0, cb_data);
 
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -154,10 +157,12 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_msg_t           *msg = &rspi->msg;
     ipmi_ll_ipmb_addr_cb handler = rspi->data1;
     void                 *cb_data = rspi->data2;
-    unsigned char        ipmb = 0;
+    unsigned char        ipmb[MAX_IPMI_USED_CHANNELS];
     unsigned char	 geo_pos = 0;
     int                  err = 0;
     
+    memset(ipmb, 0, sizeof(*ipmb));
+
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 16)
@@ -165,22 +170,22 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     else
     {	/* BMC ? */
 	if ((msg->data[6] & 0x06) == 0x06)
-	    ipmb = 0x20;
+	    ipmb[0] = 0x20;
 	else
 	{
 	    geo_pos = msg->data[13];
 	    if (geo_pos < 1 || geo_pos > 31)
 		err = EINVAL;
 	    else
-		ipmb = translateAdrs[geo_pos];
+		ipmb[0] = translateAdrs[geo_pos];
 	}
     }
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, 0);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 1, 0);
 
     if (handler)
-        handler(ipmi, err, &ipmb, 1, err == 0, 0, cb_data);
+        handler(ipmi, err, ipmb, 1, err == 0, 0, cb_data);
 
     return IPMI_MSG_ITEM_NOT_USED;
 }

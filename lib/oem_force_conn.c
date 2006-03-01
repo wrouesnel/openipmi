@@ -33,6 +33,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -47,21 +48,23 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_msg_t           *msg = &rspi->msg;
     ipmi_ll_ipmb_addr_cb handler = rspi->data1;
     void                 *cb_data = rspi->data2;
-    unsigned char        ipmb = 0;
+    unsigned char        ipmb[MAX_IPMI_USED_CHANNELS];
     int                  err = 0;
     
+    memset(ipmb, 0, sizeof(*ipmb));
+
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 4)
 	err = EINVAL;
     else
-	ipmb = msg->data[2];
+	ipmb[0] = msg->data[2];
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, ipmb == 0x20, 0);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, ipmb[0] == 0x20, 0);
 
     if (handler)
-	handler(ipmi, err, &ipmb, 1, ipmb == 0x20, 0, cb_data);
+	handler(ipmi, err, ipmb, 1, ipmb[0] == 0x20, 0, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 

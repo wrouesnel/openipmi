@@ -1,3 +1,19 @@
+2006-03-01 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca_conn.c: Need to pass an entire channel set's worth
+	of IPMB addresses to the IPMB address change handlers.
+	* lib/oem_kontron_conn.c: ditto
+	* lib/oem_force_conn.c: ditto
+	* lib/oem_motorola_conn.c: ditto
+
+	* util/ipmi_malloc.c: Fixed some problems with some memory
+	debugging handling.  With memory debugging on, it would leak
+	memory!
+
+	* lib/sdr.c: Added some trace debugging stuff.
+
+	* configure.in: Move to version 2.0.6.
+
 2006-02-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/chassis.c: Make sure to remove the active handler from the
@@ -15,11 +31,18 @@
 	beeping for my taste.
 
 	* lib/ipmi_lan.c, lib/ipmi_payload.c, include/OpenIPMI/ipmi_lan.h:
-	Make sure ipmi->handle_send_rsp_err is sent outside of the
+	Make sure ipmi->handle_send_rsp_err is called outside of the
 	sequence lock.
-	
-	* configure.in: Move to version 2.0.6.
 
+	* lib/sensor.c, include/OpenIPMI/internal/ipmi_sensor.h: Removed
+	the internal sensors wait queue (part of ipmi_sensors_t).  This
+	was only used to serialized SDR access, but the sdr has it's own
+	wait queue, so this was kind of pointless.
+
+	* lib/mc.c: Removed the use of the sensor wait queue.  It caused
+	problems handling failure conditions and was pointless.  Also
+	added some debug tracing stuff.
+	
 2006-02-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Make sure use_orig_addr is handled in all cases,

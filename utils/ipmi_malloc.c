@@ -244,14 +244,6 @@ dbg_remove_free_queue(void)
     real_size = dbg_align(hdr->size);
 
     overwrite = 0;
-    for (i=hdr->size; i<real_size; i++)
-	if (data[i] != BYTE_SIGNATURE)
-	    overwrite = 1;
-    if (overwrite) {
-	mem_debug_log(data, hdr, trlr, NULL, "Overrun while free");
-	goto out;
-    }
-
     dp = (long *) data;
     for (i=0; i<real_size; i+=sizeof(long), dp++)
 	if (*dp != FREE_SIGNATURE)
@@ -281,6 +273,7 @@ enqueue_dbg_free(struct dbg_malloc_header  *hdr,
 	free_queue = hdr;
     }
     free_queue_tail = hdr;
+    free_queue_len++;
 }
 
 static void

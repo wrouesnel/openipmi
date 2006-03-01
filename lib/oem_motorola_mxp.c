@@ -9013,10 +9013,13 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     void                 *cb_data = rspi->data2;
     int                  active = 0;
     int                  err = 0;
-    unsigned char        ipmb = 0x20;
+    unsigned char        ipmb[MAX_IPMI_USED_CHANNELS];
     
     if (!ipmi)
 	return IPMI_MSG_ITEM_NOT_USED;
+
+    memset(ipmb, 0, sizeof(ipmb));
+    ipmb[0] = 0x20;
 
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
@@ -9030,10 +9033,10 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	active = 1;
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, active, 0);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, active, 0);
 
     if (handler)
-	handler(ipmi, err, &ipmb, 1, active, 0, cb_data);
+	handler(ipmi, err, ipmb, 1, active, 0, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 

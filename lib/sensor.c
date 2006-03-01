@@ -64,9 +64,6 @@ struct ipmi_sensor_info_s
 
     /* Total number of sensors we have in this. */
     unsigned int sensor_count;
-
-    opq_t *sensor_wait_q;
-    int  wait_err;
 };
 
 #define SENSOR_ID_LEN 32 /* 16 bytes are allowed for a sensor. */
@@ -786,15 +783,9 @@ ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors)
     sensors = ipmi_mem_alloc(sizeof(*sensors));
     if (!sensors)
 	return ENOMEM;
-    sensors->sensor_wait_q = opq_alloc(os_hnd);
-    if (! sensors->sensor_wait_q) {
-	ipmi_mem_free(sensors);
-	return ENOMEM;
-    }
 
     rv = ipmi_create_lock_os_hnd(os_hnd, &sensors->idx_lock);
     if (rv) {
-	opq_destroy(sensors->sensor_wait_q);
 	ipmi_mem_free(sensors);
 	return rv;
     }
@@ -814,12 +805,6 @@ unsigned int
 ipmi_sensors_get_count(ipmi_sensor_info_t *sensors)
 {
     return sensors->sensor_count;
-}
-
-opq_t *
-_ipmi_sensors_get_waitq(ipmi_sensor_info_t *sensors)
-{
-    return sensors->sensor_wait_q;
 }
 
 int
@@ -1015,8 +1000,6 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 	if (sensors->sensors_by_idx[i])
 	    ipmi_mem_free(sensors->sensors_by_idx[i]);
     }
-    if (sensors->sensor_wait_q)
-	opq_destroy(sensors->sensor_wait_q);
     if (sensors->idx_lock)
 	ipmi_destroy_lock(sensors->idx_lock);
     ipmi_mem_free(sensors);

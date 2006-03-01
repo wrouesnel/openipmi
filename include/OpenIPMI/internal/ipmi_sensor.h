@@ -57,10 +57,6 @@ void _ipmi_sensor_put(ipmi_sensor_t *sensor);
 /* Return the number of sensors in the data structure. */
 unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
 
-/* Get the waitq for the sensors repository.  This is used to
-   serialize SDR fetches. */
-opq_t *_ipmi_sensors_get_waitq(ipmi_sensor_info_t *sensors);
-
 /*
  * These are for OEM code to create their own sensors.
  */
