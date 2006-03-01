@@ -203,6 +203,8 @@ struct ipmi_entity_s
     int           presence_possibly_changed;
     unsigned int  presence_event_count; /* Changed when presence
 					   events are reported. */
+    /* Only allow one presence check at a time. */
+    int           in_presence_check;
 
     /* If the presence changes while the entity is in use, we store it
        in here and the count instead of actually changing it.  Then we
@@ -1555,11 +1557,14 @@ typedef struct ent_active_detect_s
 } ent_active_detect_t;
 
 static void
-detect_cleanup(ent_active_detect_t *info, ipmi_domain_t *domain)
+detect_cleanup(ent_active_detect_t *info, ipmi_entity_t *ent,
+	       ipmi_domain_t *domain)
 {
     ipmi_unlock(info->lock);
     ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
+    if (ent)
+	ent->in_presence_check = 0;
     _ipmi_put_domain_fully_up(domain, "detect_cleanup");
 }
 
@@ -1570,6 +1575,7 @@ detect_done(ipmi_entity_t *ent, ent_active_detect_t *info)
     presence_changed(ent, info->present);
     ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
+    ent->in_presence_check = 0;
     _ipmi_put_domain_fully_up(ent->domain, "detect_done");
 }
 
@@ -1585,7 +1591,7 @@ detect_frudev_handler(ipmi_entity_t *ent, void *cb_data)
 	   set present and we detect it as not present.  However, it
 	   is not possible to detect it as present and for something
 	   else to set it not present. */
-	detect_cleanup(info, ent->domain);
+	detect_cleanup(info, ent, ent->domain);
 	return;
     }
 
@@ -1609,7 +1615,7 @@ detect_frudev(ipmi_mc_t  *mc,
 	 * still has to be around in the place, but we can't rely on the
 	 * MC as it may have gone away if it failed or the domain is in
 	 * shutdown. */
-	detect_cleanup(info, info->ent_id.domain_id.domain);
+	detect_cleanup(info, NULL, info->ent_id.domain_id.domain);
 }
 
 /* This is the end of the line on checks.  We have to report something
@@ -1672,7 +1678,7 @@ control_detect_handler(ipmi_entity_t *ent, void *cb_data)
 	   set present and we detect it as not present.  However, it
 	   is not possible to detect it as present and for something
 	   else to set it not present. */
-	detect_cleanup(info, ent->domain);
+	detect_cleanup(info, ent, ent->domain);
 	return;
     }
 
@@ -1703,7 +1709,7 @@ detect_control_val(ipmi_control_t *control,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
-	    detect_cleanup(info, ipmi_control_get_domain(control));
+	    detect_cleanup(info, NULL, ipmi_control_get_domain(control));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1723,7 +1729,7 @@ detect_control_light(ipmi_control_t       *control,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
-	    detect_cleanup(info, ipmi_control_get_domain(control));
+	    detect_cleanup(info, NULL, ipmi_control_get_domain(control));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1744,7 +1750,7 @@ detect_control_id(ipmi_control_t *control,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
-	    detect_cleanup(info, ipmi_control_get_domain(control));
+	    detect_cleanup(info, NULL, ipmi_control_get_domain(control));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1765,7 +1771,7 @@ detect_control_display(ipmi_control_t *control,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
-	    detect_cleanup(info, ipmi_control_get_domain(control));
+	    detect_cleanup(info, NULL, ipmi_control_get_domain(control));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1836,7 +1842,7 @@ sensor_detect_handler(ipmi_entity_t *ent, void *cb_data)
 	   set present and we detect it as not present.  However, it
 	   is not possible to detect it as present and for something
 	   else to set it not present. */
-	detect_cleanup(info, ent->domain);
+	detect_cleanup(info, ent, ent->domain);
 	return;
     }
 
@@ -1869,7 +1875,7 @@ detect_states_read(ipmi_sensor_t *sensor,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
-	    detect_cleanup(info, ipmi_sensor_get_domain(sensor));
+	    detect_cleanup(info, NULL, ipmi_sensor_get_domain(sensor));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1892,7 +1898,7 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     info->done_count++;
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, sensor_detect_handler, info))
-	    detect_cleanup(info, ipmi_sensor_get_domain(sensor));
+	    detect_cleanup(info, NULL, ipmi_sensor_get_domain(sensor));
     } else
 	ipmi_unlock(info->lock);
 }
@@ -1954,12 +1960,14 @@ detect_no_presence_sensor_presence(ipmi_entity_t *ent)
 
     detect = ipmi_mem_alloc(sizeof(*detect));
     if (!detect) {
+	ent->in_presence_check = 0;
 	_ipmi_put_domain_fully_up(ent->domain,
 				  "detect_no_presence_sensor_presence");
 	return;
     }
     rv = ipmi_create_lock(ent->domain, &detect->lock);
     if (rv) {
+	ent->in_presence_check = 0;
 	_ipmi_put_domain_fully_up(ent->domain,
 				  "detect_no_presence_sensor_presence(2)");
 	ipmi_mem_free(detect);
@@ -2015,6 +2023,7 @@ states_read(ipmi_sensor_t *sensor,
 	present = ipmi_is_state_set(states, 0);
 
     presence_changed(ent, present);
+    ent->in_presence_check = 0;
     _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor), "states_read");
 }
 
@@ -2038,6 +2047,7 @@ states_bit_read(ipmi_sensor_t *sensor,
 
     present = ipmi_is_state_set(states, ent->presence_bit_offset);
     presence_changed(ent, present);
+    ent->in_presence_check = 0;
     _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor),
 			      "states_bit_read");
 }
@@ -2049,11 +2059,14 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     int                 rv;
 
     ent_lock(ent);
-    if ((!info->force) && (! ent->presence_possibly_changed)) {
+    if (ent->in_presence_check
+	|| ((!info->force) && (! ent->presence_possibly_changed)))
+    {
 	ent_unlock(ent);
 	return;
     }
     ent->presence_possibly_changed = 0;
+    ent->in_presence_check = 1;
 
     if (ent->hot_swappable) {
 	ent_unlock(ent);
@@ -2067,15 +2080,19 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	ipmi_sensor_id_t psi = ent->presence_sensor_id;
 	ent_unlock(ent);
 	rv = ipmi_sensor_id_get_states(psi, states_read, ent);
-	if (rv)
+	if (rv) {
+	    ent->in_presence_check = 0;
 	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(2)");
+	}
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
 	ipmi_sensor_id_t psi = ent->presence_bit_sensor_id;
 	ent_unlock(ent);
 	rv = ipmi_sensor_id_get_states(psi, states_bit_read, ent);
-	if (rv)
+	if (rv) {
+	    ent->in_presence_check = 0;
 	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(3)");
+	}
     } else {
 	ent_unlock(ent);
 	detect_no_presence_sensor_presence(ent);

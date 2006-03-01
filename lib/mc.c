@@ -398,6 +398,13 @@ struct ipmi_mc_s
     char name[IPMI_MC_NAME_LEN+1];
 };
 
+/* Cna the MC do normal operations like check SDRs, fetch the SEL,
+   etc?  Must be called with the MC lock held. */
+#define mc_op_ready(mc) \
+    (((mc)->state == MC_ACTIVE_IN_STARTUP) \
+     || ((mc)->state == MC_ACTIVE_PEND_FULLY_UP) \
+     || ((mc)->state == MC_ACTIVE))
+
 static void mc_sel_new_event_handler(ipmi_sel_info_t *sel,
 				     ipmi_mc_t       *mc,
 				     ipmi_event_t    *event,
@@ -1448,7 +1455,9 @@ ipmi_mc_reread_sel(ipmi_mc_t       *mc,
     }
 
     ipmi_lock(mc->lock);
-    if (mc->sel_timer_info) {
+    if (! mc_op_ready(mc)) {
+	rv = ECANCELED;
+    } else if (mc->sel_timer_info) {
 	/* SEL is already set up, just do a request. */
 	rv = ipmi_sel_get(mc->sel, cb, info);
     } else {
@@ -2900,9 +2909,6 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     CHECK_MC_LOCK(mc);
 
-    if (mc->in_destroy)
-	return ECANCELED;
-
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2913,7 +2919,13 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
     info->domain = ipmi_mc_get_domain(mc);
     info->done = done;
     info->done_data = done_data;
-    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
+
+    ipmi_lock(mc->lock);
+    if (! mc_op_ready(mc))
+	rv = ECANCELED;
+    else
+	rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
+    ipmi_unlock(mc->lock);
     if (rv)
 	ipmi_mem_free(info);
 

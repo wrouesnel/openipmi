@@ -573,8 +573,8 @@ class IPMIGUI(wx.Frame):
 
     def remove_domain(self, d):
         if (hasattr(d, "treeroot")):
-            self.tree.Delete(d.treeroot)
             self.cleanup_item(d.treeroot)
+            self.tree.Delete(d.treeroot)
             pass
         return
 
@@ -632,8 +632,8 @@ class IPMIGUI(wx.Frame):
     
     def remove_entity(self, e):
         if (hasattr(e, "treeroot")):
-            self.tree.Delete(e.treeroot)
             self.cleanup_item(e.treeroot)
+            self.tree.Delete(e.treeroot)
             pass
         return
 
@@ -646,8 +646,8 @@ class IPMIGUI(wx.Frame):
 
     def remove_mc(self, m):
         if (hasattr(m, "treeroot")):
-            self.tree.Delete(m.treeroot)
             self.cleanup_item(m.treeroot)
+            self.tree.Delete(m.treeroot)
             pass
         return
 
@@ -660,8 +660,8 @@ class IPMIGUI(wx.Frame):
 
     def remove_sensor(self, s):
         if (hasattr(s, "treeroot")):
-            self.tree.Delete(s.treeroot)
             self.cleanup_item(s.treeroot)
+            self.tree.Delete(s.treeroot)
             pass
         return
 
@@ -674,8 +674,8 @@ class IPMIGUI(wx.Frame):
 
     def remove_control(self, c):
         if (hasattr(c, "treeroot")):
-            self.tree.Delete(c.treeroot)
             self.cleanup_item(c.treeroot)
+            self.tree.Delete(c.treeroot)
             pass
         return
 

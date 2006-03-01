@@ -422,7 +422,8 @@ smi_send(smi_data_t        *smi,
 
     if (DEBUG_MSG) {
 	char buf1[32], buf2[32];
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08lx\n addr =", msgid);
+	ipmi_log(IPMI_LOG_DEBUG_START, "%soutgoing msgid=%08lx\n addr =",
+		 IPMI_CONN_NAME(smi->ipmi), msgid);
 	dump_hex((unsigned char *) addr, addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
@@ -851,8 +852,8 @@ gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     if (DEBUG_MSG) {
 	char buf1[32], buf2[32], buf3[32];
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming msgid=%08lx\n addr =",
-		 recv->msgid);
+	ipmi_log(IPMI_LOG_DEBUG_START, "%sincoming msgid=%08lx\n addr =",
+		 IPMI_CONN_NAME(ipmi), recv->msgid);
 	dump_hex((unsigned char *) recv->addr, recv->addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",

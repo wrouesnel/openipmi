@@ -418,7 +418,8 @@ open_get_recv_seq(ipmi_con_t    *ipmi,
     if (data_len < 1) { /* Minimum size of an IPMI msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message because too small(7)");
+		     "%sDropped message because too small(7)",
+		     IPMI_CONN_NAME(ipmi));
 	return EINVAL;
     }
     *seq = data[0];
@@ -1829,8 +1830,8 @@ lan_send_addr(lan_data_t              *lan,
 
     if (DEBUG_RAWMSG) {
 	char buf1[32], buf2[32];
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing seq %d\n addr =",
-		 seq);
+	ipmi_log(IPMI_LOG_DEBUG_START, "%soutgoing seq %d\n addr =",
+		 IPMI_CONN_NAME(lan->ipmi), seq);
 	dump_hex((unsigned char *) &(lan->cparm.ip_addr[addr_num]),
 		 sizeof(sockaddr_ip_t));
         ipmi_log(IPMI_LOG_DEBUG_CONT,
@@ -2286,7 +2287,8 @@ rsp_timeout_handler(void              *cb_data,
     }
 
     if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
+	ipmi_log(IPMI_LOG_DEBUG, "%sTimeout for seq #%d",
+		 IPMI_CONN_NAME(ipmi), seq);
 
     if (! lan->seq_table[seq].inuse) {
 	ipmi_unlock(lan->seq_num_lock);
@@ -2296,9 +2298,10 @@ rsp_timeout_handler(void              *cb_data,
     if (DEBUG_RAWMSG) {
 	ip_num = lan->seq_table[seq].last_ip_num;
 	ipmi_log(IPMI_LOG_DEBUG,
-		 "Seq #%d\n"
+		 "%sSeq #%d\n"
 		 "  addr_type=%d, ip_num=%d, fails=%d\n"
 		 "  fail_start_time=%ld.%6.6ld",
+		 IPMI_CONN_NAME(ipmi), 
 		 seq, lan->seq_table[seq].addr.addr_type,
 		 lan->seq_table[seq].last_ip_num,
 		 lan->ip[ip_num].consecutive_failures,
@@ -2560,7 +2563,7 @@ handle_msg_send(lan_timer_info_t      *info,
 	    ipmi_log(IPMI_LOG_FATAL,
 		     "%sipmi_lan.c(handle_msg_send): "
 		     "ipmi_lan: Attempted to start too many messages",
-		     IPMI_CONN_NAME(lan->ipmi));
+		     IPMI_CONN_NAME(ipmi));
 	    abort();
 	}
 
@@ -2571,7 +2574,8 @@ handle_msg_send(lan_timer_info_t      *info,
 
     if (DEBUG_MSG) {
 	char buf1[32], buf2[32];
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msg to IPMI addr =");
+	ipmi_log(IPMI_LOG_DEBUG_START, "%soutgoing msg to IPMI addr =",
+		 IPMI_CONN_NAME(ipmi));
 	dump_hex((unsigned char *) addr, addr_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT,
 		 "\n msg  = netfn=%s cmd=%s data_len=%d",
@@ -2713,7 +2717,7 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sipmi_lan.c(check_command_queue): "
 		     "Command was not able to be sent due to error 0x%x",
-		     IPMI_CONN_NAME(lan->ipmi), rv);
+		     IPMI_CONN_NAME(ipmi), rv);
 	    
 	    q_item->msg.netfn |= 1; /* Convert it to a response. */
 	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
@@ -2757,7 +2761,8 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 		lan->ipmi->add_stat(lan->ipmi->user_data,
 				    lan->stat_duplicates, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
+		ipmi_log(IPMI_LOG_DEBUG, "%sDropped message duplicate",
+			 IPMI_CONN_NAME(lan->ipmi));
 	    return EINVAL;
 	}
 
@@ -2769,7 +2774,8 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 	    lan->ipmi->add_stat(lan->ipmi->user_data,
 				lan->stat_seq_out_of_range, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
+	    ipmi_log(IPMI_LOG_DEBUG, "%sDropped message out of seq range",
+		     IPMI_CONN_NAME(lan->ipmi));
 	return EINVAL;
     }
 
@@ -2811,7 +2817,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	    if (lan->stat_too_short)
 		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Payload length to short");
+		ipmi_log(IPMI_LOG_DEBUG, "%sPayload length to short",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 
@@ -2829,8 +2836,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	if (lan->stat_invalid_payload)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_payload, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Unhandled payload: 0x%x",
-		     payload_type);
+	    ipmi_log(IPMI_LOG_DEBUG, "%sUnhandled payload: 0x%x",
+		     IPMI_CONN_NAME(ipmi), payload_type);
 	goto out;
     } else {
 	rv = payloads[payload_type]->get_recv_seq(ipmi, tmsg,
@@ -2842,8 +2849,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	    if (lan->stat_seq_err)
 		ipmi->add_stat(ipmi->user_data, lan->stat_seq_err, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Error getting sequence: 0x%x",
-			 rv);
+		ipmi_log(IPMI_LOG_DEBUG, "%sError getting sequence: 0x%x",
+			 IPMI_CONN_NAME(ipmi), rv);
 	    goto out;
 	}
     }
@@ -2854,8 +2861,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	    ipmi->add_stat(ipmi->user_data, lan->stat_rsp_no_cmd, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message seq not in use: 0x%x",
-		     seq);
+		     "%sDropped message seq not in use: 0x%x",
+		     IPMI_CONN_NAME(ipmi), seq);
 	goto out_unlock;
     }
 
@@ -2940,7 +2947,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     if (len < 16) { /* Minimum size of an RMCP+ msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message because too small(5)");
+		     "%sDropped message because too small(5)",
+		     IPMI_CONN_NAME(ipmi));
 	goto out;
     }
 
@@ -2953,7 +2961,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	if (len < 22) { /* Minimum size of an RMCP+ type 2 msg. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Dropped message because too small(6)");
+			 "%sDropped message because too small(6)",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 	memcpy(oem_iana, tmsg, 3);
@@ -2969,7 +2978,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message not valid session id (2)");
+		     "%sDropped message not valid session id (2)",
+		     IPMI_CONN_NAME(ipmi));
 	goto out;
     }
 
@@ -2985,7 +2995,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_size, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message payload length doesn't match up");
+		     "%sDropped message payload length doesn't match up",
+		     IPMI_CONN_NAME(ipmi));
 	goto out;
     }
 
@@ -3001,7 +3012,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 		ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Got authenticated msg but authentication not available");
+			 "%sGot authenticated msg but authentication"
+			 " not available", IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 
@@ -3023,7 +3035,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    if (lan->stat_auth_fail)
 		ipmi->add_stat(ipmi->user_data, lan->stat_auth_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Integrity failed");
+		ipmi_log(IPMI_LOG_DEBUG, "%sIntegrity failed",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 
@@ -3033,7 +3046,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    if (lan->stat_bad_size)
 		ipmi->add_stat(ipmi->user_data, lan->stat_bad_size, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Padding size not valid: %d", pad_len);
+		ipmi_log(IPMI_LOG_DEBUG, "%sPadding size not valid: %d",
+			 IPMI_CONN_NAME(ipmi), pad_len);
 	    goto out;
 	}
     }
@@ -3061,7 +3075,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     ipmi_unlock(lan->ip_lock);
     if (rv) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Invalid sequence number");
+	    ipmi_log(IPMI_LOG_DEBUG, "%sInvalid sequence number",
+		     IPMI_CONN_NAME(ipmi));
 	if (lan->stat_seq_out_of_range)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_seq_out_of_range, 1);
 	goto out;
@@ -3078,7 +3093,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 		ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Got encrypted msg but encryption not available");
+			 "%sGot encrypted msg but encryption not available",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 
@@ -3088,7 +3104,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    if (lan->stat_decrypt_fail)
 		ipmi->add_stat(ipmi->user_data, lan->stat_decrypt_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Decryption failed");
+		ipmi_log(IPMI_LOG_DEBUG, "%sDecryption failed",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
     }
@@ -3117,7 +3134,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Dropped message because too small(1)");
+			 "%sDropped message because too small(1)",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 
@@ -3128,7 +3146,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Dropped message because too small(2)");
+			 "%sDropped message because too small(2)",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 	data_len = data[13];
@@ -3138,7 +3157,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Dropped message because too small(3)");
+			 "%sDropped message because too small(3)",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 	/* authcode in message, add 16 to the above checks. */
@@ -3148,7 +3168,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	    /* Not enough data was supplied, reject the message. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
-			 "Dropped message because too small(4)");
+			 "%sDropped message because too small(4)",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 	data_len = data[29];
@@ -3161,8 +3182,10 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	if (lan->stat_invalid_auth)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype, "
-		     "expected %d, got %d", lan->ip[addr_num].working_authtype,
+	    ipmi_log(IPMI_LOG_DEBUG, "%sDropped message not valid authtype,"
+		     " expected %d, got %d",
+		     IPMI_CONN_NAME(ipmi),
+		     lan->ip[addr_num].working_authtype,
 		     data[4] & 0x0f);
 	goto out;
     }
@@ -3173,7 +3196,9 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	if (lan->stat_bad_session_id)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "%sDropped message not valid session id",
+		     IPMI_CONN_NAME(ipmi));
 	goto out;
     }
 
@@ -3188,7 +3213,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	    if (lan->stat_auth_fail)
 		ipmi->add_stat(ipmi->user_data, lan->stat_auth_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
+		ipmi_log(IPMI_LOG_DEBUG, "%sDropped message auth fail",
+			 IPMI_CONN_NAME(ipmi));
 	    goto out;
 	}
 	tmsg = data + 30;
@@ -3313,7 +3339,8 @@ rmcpp_find_ipmi(lan_fd_t      *item,
     if (lan && addr_match_lan(lan, sid, addr, addr_num))
 	ipmi = lan->ipmi;
     else if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	ipmi_log(IPMI_LOG_DEBUG, "tag doesn't match: %d", tag);
+	ipmi_log(IPMI_LOG_DEBUG, "%stag doesn't match: %d",
+		 IPMI_CONN_NAME(ipmi), tag);
     ipmi_unlock(item->con_lock);
 
     return ipmi;
@@ -4268,8 +4295,8 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 
     if (msg->data_len < 2) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(%s): Message data too short: %d",
-		 caller, msg->data_len);
+		 "%sipmi_lan.c(%s): Message data too short: %d",
+		 IPMI_CONN_NAME(ipmi), caller, msg->data_len);
 	handle_connected(ipmi, EINVAL, addr_num);
 	return EINVAL;
     }
@@ -4282,8 +4309,8 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 
     if (msg->data_len < min_length) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(%s): Message data too short: %d",
-		 caller, msg->data_len);
+		 "%sipmi_lan.c(%s): Message data too short: %d",
+		 IPMI_CONN_NAME(ipmi), caller, msg->data_len);
 	handle_connected(ipmi, EINVAL, addr_num);
 	return EINVAL;
     }
@@ -4387,9 +4414,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     privilege = msg->data[2] & 0xf;
     if (privilege != lan->cparm.privilege) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "Expected privilege %d, got %d",
-		 lan->cparm.privilege, privilege);
+		 IPMI_CONN_NAME(ipmi), lan->cparm.privilege, privilege);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4397,9 +4424,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     session_id = ipmi_get_uint32(msg->data+4);
     if (session_id != lan->ip[addr_num].precon_session_id) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 " Got wrong session id: 0x%x",
-		 session_id);
+		 IPMI_CONN_NAME(ipmi), session_id);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4407,8 +4434,8 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     mgsys_session_id = ipmi_get_uint32(msg->data+8);
     if (mgsys_session_id == 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 "Got NULL mgd system session id");
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "Got NULL mgd system session id", IPMI_CONN_NAME(ipmi));
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4416,8 +4443,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if ((msg->data[12] != 0) || (msg->data[15] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 "Got NULL or invalid authentication payload");
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "Got NULL or invalid authentication payload",
+		 IPMI_CONN_NAME(ipmi));
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4425,8 +4453,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if ((msg->data[20] != 1) || (msg->data[23] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 "Got NULL or invalid integrity payload");
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "Got NULL or invalid integrity payload",
+		 IPMI_CONN_NAME(ipmi));
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4434,8 +4463,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if ((msg->data[28] != 2) || (msg->data[31] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 "Got NULL or invalid confidentiality payload");
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "Got NULL or invalid confidentiality payload",
+		 IPMI_CONN_NAME(ipmi));
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4457,9 +4487,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if (!authp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned an auth algorithm that wasn't supported: %d",
-		 auth);
+		 IPMI_CONN_NAME(ipmi), auth);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4480,9 +4510,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if (!confp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned a conf algorithm that wasn't supported: %d",
-		 conf);
+		 IPMI_CONN_NAME(ipmi), conf);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -4503,9 +4533,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     if (!integp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned an integ algorithm that wasn't supported: %d",
-		 integ);
+		 IPMI_CONN_NAME(ipmi), integ);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }

@@ -12,6 +12,15 @@
 
 	* lib/sdr.c: Added some trace debugging stuff.
 
+	* lib/ipmi_lan.c, lib/ipmi_smi.c: Added printing of connection
+	names in debug output (where possible).
+
+	* lib/entity.c: Make sure only one presence check is running at a
+	time.
+
+	* swig/python/openipmigui/gui.py: Fixed some ordering problems,
+	make sure things are not used after deletion.
+
 	* configure.in: Move to version 2.0.6.
 
 2006-02-28 Corey Minyard <cminyard@mvista.com>
