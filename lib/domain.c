@@ -1949,7 +1949,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     rspi = ipmi_alloc_msg_item();
     if (!rspi) {
 	rv = ENOMEM;
-	goto out;
+	goto out_unlock;
     }
 
     rspi->data1 = domain;
