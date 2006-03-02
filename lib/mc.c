@@ -77,16 +77,18 @@ typedef struct mc_reread_sel_s
     void           *sels_first_read_cb_data;
 
 #ifdef DEBUG_INFO_TRACKING
+#define DIT_SIZE 100
+#define DIT_LAST (DIT_SIZE-1)
     struct {
 	int            line;
 	const char     *filename;
 	const char     *function;
-    } last[10];
+    } last[DIT_SIZE];
 #define DEBUG_INFO(info) (memcpy(info->last, info->last+1,	\
-				 sizeof(info->last[0]) * 9),	\
-			  info->last[9].filename = __FILE__,	\
-			  info->last[9].line = __LINE__,	\
-			  info->last[9].function = __FUNCTION__)
+				 sizeof(info->last[0]) * (DIT_LAST)),	\
+			  info->last[DIT_LAST].filename = __FILE__,	\
+			  info->last[DIT_LAST].line = __LINE__,	\
+			  info->last[DIT_LAST].function = __FUNCTION__)
 #else
 #define DEBUG_INFO(info)
 #endif

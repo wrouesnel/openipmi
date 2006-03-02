@@ -1694,6 +1694,7 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 	/* Wait a random value between 10 and 30 seconds */
 	tv.tv_sec = (tv.tv_sec % 20) + 10;
 	tv.tv_usec = 0;
+printf("***SDR START TIMER for %s: (%ld)\n ", sdrs->name, tv.tv_sec);
 	sdrs->os_hnd->start_timer(sdrs->os_hnd,
 				  sdrs->restart_timer,
 				  &tv,
@@ -1774,6 +1775,11 @@ restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
 
+{
+struct timeval tv;
+gettimeofday(&tv, NULL);
+printf("***SDR timer pop for %s: (%ld)\n ", sdrs->name, tv.tv_sec);
+}
     sdr_lock(sdrs);
     DEBUG_INFO(sdrs);
     sdrs->restart_timer_running = 0;
