@@ -90,13 +90,13 @@ class FruInfoDisplay(wx.Dialog):
             if (rv == OpenIPMI.einval):
                 return
             if (rv == 0):
+                if (name_s[0] == None):
+                    name_s[0] = str(i)
+                    pass
                 # Ignore other errors, just keep going
                 if (type_s[0] == "subnode"):
                     sub = tree.AppendItem(item, name_s[0])
                     self.add_fru_data(tree, sub, node_s[0])
-                elif (name_s[0] == None):
-                    sub = tree.AppendItem(item, str(i))
-                    tree.SetItemText(sub, value_s[0], 1)
                 else:
                     sub = tree.AppendItem(item, name_s[0])
                     tree.SetItemText(sub, value_s[0], 1)
