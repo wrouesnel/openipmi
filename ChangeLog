@@ -24,6 +24,11 @@
 	* swig/python/openipmigui/gui.py: Fixed some ordering problems,
 	make sure things are not used after deletion.
 
+	* swig/python/openipmigui/fru.py: Handle some problems dealing
+	with certain FRU data combinations.
+
+	* lib/sel.c, lib/mc.c: Fix the SEL name string.
+
 	* configure.in: Move to version 2.0.6.
 
 2006-02-28 Corey Minyard <cminyard@mvista.com>

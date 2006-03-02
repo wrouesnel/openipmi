@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -102,7 +103,7 @@ typedef struct sel_clear_req_s
     struct sel_clear_req_s *next;
 } sel_clear_req_t;
 
-#define SEL_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
+#define SEL_NAME_LEN (IPMI_MC_NAME_LEN + 32)
 
 struct ipmi_sel_info_s
 {
@@ -280,6 +281,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     ipmi_sel_info_t *sel = NULL;
     int             rv = 0;
     ipmi_domain_t   *domain;
+    int             i;
 
     CHECK_MC_LOCK(mc);
 
@@ -295,7 +297,8 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     }
     memset(sel, 0, sizeof(*sel));
 
-    strncpy(sel->name, _ipmi_mc_name(mc), sizeof(sel->name));
+    i = ipmi_mc_get_name(mc, sel->name, sizeof(sel->name));
+    snprintf(sel->name+i, sizeof(sel->name)-i, "(sel)");
 
     sel->events = alloc_ilist();
     if (!sel->events) {

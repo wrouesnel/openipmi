@@ -633,11 +633,11 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     if (rv)
 	goto out_err;
 
+    mc_set_name(mc);
+
     rv = ipmi_sel_alloc(mc, 0, &(mc->sel));
     if (rv)
 	goto out_err;
-
-    mc_set_name(mc);
 
     mc->sel_timer_info = ipmi_mem_alloc(sizeof(*mc->sel_timer_info));
     if (!mc->sel_timer_info) {
