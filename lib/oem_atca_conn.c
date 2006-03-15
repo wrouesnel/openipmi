@@ -58,7 +58,7 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     if (!ipmi) {
 	if (handler)
-	    handler(ipmi, ECANCELED, &ipmb, 1, 1, 0, cb_data);
+	    handler(ipmi, ECANCELED, ipmb, 1, 1, 0, cb_data);
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 

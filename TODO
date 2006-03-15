@@ -1,3 +1,4 @@
+Add domain statistics to the GUI.
 
 Add handling of event data for sensors that have defined event data
 information specific to that sensor type.

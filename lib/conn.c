@@ -489,6 +489,89 @@ ipmi_con_attr_cleanup(ipmi_con_t *con)
 
 /***********************************************************************
  *
+ * Statistics interfaces
+ *
+ **********************************************************************/
+struct ipmi_ll_stat_info_s
+{
+    ipmi_ll_con_add_stat_cb        adder;
+    ipmi_ll_con_register_stat_cb   reg;
+    ipmi_ll_con_unregister_stat_cb unreg;
+    void                           *user_data;
+};
+
+ipmi_ll_stat_info_t *
+ipmi_ll_con_alloc_stat_info(void)
+{
+    return ipmi_mem_alloc(sizeof(ipmi_ll_stat_info_t));
+}
+
+void
+ipmi_ll_con_free_stat_info(ipmi_ll_stat_info_t *info)
+{
+    ipmi_mem_free(info);
+}
+
+void
+ipmi_ll_con_stat_info_set_adder(ipmi_ll_stat_info_t     *info,
+				ipmi_ll_con_add_stat_cb adder)
+{
+    info->adder = adder;
+}
+
+void
+ipmi_ll_con_stat_info_set_register(ipmi_ll_stat_info_t          *info,
+				   ipmi_ll_con_register_stat_cb reg)
+{
+    info->reg = reg;
+}
+
+void
+ipmi_ll_con_stat_info_set_unregister(ipmi_ll_stat_info_t            *info,
+				     ipmi_ll_con_unregister_stat_cb unreg)
+{
+    info->unreg = unreg;
+}
+
+void
+ipmi_ll_con_stat_call_adder(ipmi_ll_stat_info_t *info,
+			    void                *stat,
+			    int                 count)
+{
+    info->adder(info, stat, count);
+}
+
+int
+ipmi_ll_con_stat_call_register(ipmi_ll_stat_info_t *info,
+			       const char          *name,
+			       const char          *instance,
+			       void                **stat)
+{
+    return info->reg(info, name, instance, stat);
+}
+
+void
+ipmi_ll_con_stat_call_unregister(ipmi_ll_stat_info_t *info,
+				 void                *stat)
+{
+    info->unreg(info, stat);
+}
+
+void
+ipmi_ll_con_stat_set_user_data(ipmi_ll_stat_info_t *info,
+			       void                *data)
+{
+    info->user_data = data;
+}
+
+void *
+ipmi_ll_con_stat_get_user_data(ipmi_ll_stat_info_t *info)
+{
+    return info->user_data;
+}
+
+/***********************************************************************
+ *
  * Init/shutdown
  *
  **********************************************************************/

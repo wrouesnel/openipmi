@@ -1,3 +1,19 @@
+2006-03-14 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: If the ipmi connections received in
+	ll_event_handler is invalid, ignore the event.
+
+	* lib/oem_atca_conn.c: Fix the passing of the ipmb array
+	in an error path.
+
+	* include/OpenIPMI/ipmi_conn.h, lib/conn.c: The statistics
+	interface for connections was broken for supporting multiple
+	domains with the same connection.  Add a new interface that is
+	capable of this.
+
+	* lib/lan.c: Add the new statistic interface support.
+	* lib/domain.c: ditto
+	
 2006-03-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Need to pass an entire channel set's worth

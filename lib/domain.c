@@ -317,6 +317,8 @@ struct ipmi_domain_s
     ipmi_domain_entity_cb cruft_entity_update_handler;
     void                  *cruft_entity_update_cb_data;
 
+    ipmi_ll_stat_info_t *con_stat_info;
+
     /* Option processing */
     unsigned int option_all : 1;
     unsigned int option_SDRs : 1;
@@ -754,6 +756,9 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->oem_data && domain->oem_data_destroyer)
 	domain->oem_data_destroyer(domain, domain->oem_data);
 
+    if (domain->con_stat_info)
+	ipmi_ll_con_free_stat_info(domain->con_stat_info);
+
     /* Locks must be last, because they can be used by many things. */
     if (domain->ipmb_ignores_lock)
 	ipmi_destroy_lock(domain->ipmb_ignores_lock);
@@ -768,6 +773,34 @@ cleanup_domain(ipmi_domain_t *domain)
     free_domain_cruft(domain);
 
     ipmi_mem_free(domain);
+}
+
+static int con_register_stat(ipmi_ll_stat_info_t *info,
+			     const char          *name,
+			     const char          *instance,
+			     void                **stat)
+{
+    ipmi_domain_stat_t *rstat;
+    int                rv;
+    ipmi_domain_t      *domain = ipmi_ll_con_stat_get_user_data(info);
+
+    rv = ipmi_domain_stat_register(domain, name, instance, &rstat);
+    if (!rv)
+	*stat = rstat;
+    return rv;
+}
+
+static void con_add_stat(ipmi_ll_stat_info_t *info,
+			 void                *stat,
+			 int                 value)
+{
+    ipmi_domain_stat_add(stat, value);
+}
+
+static void con_unregister_stat(ipmi_ll_stat_info_t *info,
+				void                *stat)
+{
+    ipmi_domain_stat_put(stat);
 }
 
 static int
@@ -813,6 +846,25 @@ setup_domain(char          *name,
     domain->in_shutdown = 0;
     domain->usecount = 1;
 
+    domain->stats = locked_list_alloc(domain->os_hnd);
+    if (!domain->stats) {
+	ipmi_mem_free(domain);
+	return ENOMEM;
+    }
+
+    domain->con_stat_info = ipmi_ll_con_alloc_stat_info();
+    if (!domain->con_stat_info) {
+	locked_list_destroy(domain->stats);
+	ipmi_mem_free(domain);
+	return ENOMEM;
+    }
+    ipmi_ll_con_stat_info_set_register(domain->con_stat_info,
+				       con_register_stat);
+    ipmi_ll_con_stat_info_set_adder(domain->con_stat_info, con_add_stat);
+    ipmi_ll_con_stat_info_set_unregister(domain->con_stat_info,
+					 con_unregister_stat);
+    ipmi_ll_con_stat_set_user_data(domain->con_stat_info, domain);
+
     for (i=0; i<num_con; i++) {
 	int len1 = strlen(domain->name);
 	domain->conn[i] = ipmi[i];
@@ -827,6 +879,9 @@ setup_domain(char          *name,
 
 	for (j=0; j<MAX_PORTS_PER_CON; j++)
 	    domain->port_up[j][i] = -1;
+
+	if (ipmi[i]->register_stat_handler)
+	    ipmi[i]->register_stat_handler(ipmi[i], domain->con_stat_info);
     }
 
     domain->connection_up = 0;
@@ -882,12 +937,6 @@ setup_domain(char          *name,
 
     domain->attr = locked_list_alloc(domain->os_hnd);
     if (!domain->attr) {
-	rv = ENOMEM;
-	goto out_err;
-    }
-
-    domain->stats = locked_list_alloc(domain->os_hnd);
-    if (!domain->stats) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -990,9 +1039,14 @@ setup_domain(char          *name,
     if (domain->si_mc)
 	_ipmi_mc_put(domain->si_mc);
 
-    if (rv)
+    if (rv) {
+	for (i=0; i<num_con; i++) {
+	    if (ipmi[i]->register_stat_handler)
+		ipmi[i]->unregister_stat_handler(ipmi[i],
+						 domain->con_stat_info);
+	}
 	cleanup_domain(domain);
-    else
+    } else
 	*new_domain = domain;
 
     return rv;
@@ -2846,6 +2900,8 @@ ll_event_handler(ipmi_con_t        *ipmi,
 	    if (domain->conn[i] == ipmi)
 		break;
 	}
+	if (i == MAX_CONS)
+	    goto out;
 	addr = (ipmi_addr_t *) &si;
 	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si.channel = i;
@@ -3720,8 +3776,12 @@ real_close_connection(ipmi_domain_t *domain)
 	    domain->close_count++;
     }
     for (i=0; i<MAX_CONS; i++) {
-	if (ipmi[i])
+	if (ipmi[i]) {
+	    if (ipmi[i]->register_stat_handler)
+		ipmi[i]->unregister_stat_handler(ipmi[i],
+						 domain->con_stat_info);
 	    ipmi[i]->close_connection_done(ipmi[i], conn_close, domain);
+	}
     }
 }
 
@@ -4835,28 +4895,6 @@ process_options(ipmi_domain_t      *domain,
     return 0;
 }
 
-int con_register_stat(void *user_data, char *name,
-		      char *instance,  void **stat)
-{
-    ipmi_domain_stat_t *rstat;
-    int                rv;
-
-    rv = ipmi_domain_stat_register(user_data, name, instance, &rstat);
-    if (!rv)
-	*stat = rstat;
-    return rv;
-}
-
-void con_add_stat(void *user_data, void *stat, int value)
-{
-    ipmi_domain_stat_add(stat, value);
-}
-
-void con_finished_with_stat(void *user_data, void *stat)
-{
-    ipmi_domain_stat_put(stat);
-}
-
 int
 ipmi_open_domain(char               *name,
 		 ipmi_con_t         *con[],
@@ -4887,20 +4925,16 @@ ipmi_open_domain(char               *name,
 
     priv = IPMI_PRIVILEGE_ADMIN;
     for (i=0; i<num_con; i++) {
-	con[i]->register_stat = con_register_stat;
-	con[i]->add_stat = con_add_stat;
-	con[i]->finished_with_stat = con_finished_with_stat;
-
 	/* Find the least-common demominator privilege for the
 	   connections. */
 	if ((con[i]->priv_level != 0) && (con[i]->priv_level < priv))
 	    priv = con[i]->priv_level;
 	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
 	if (rv)
-	    return rv;
+	    goto out_err;
 	rv = con[i]->add_ipmb_addr_handler(con[i], ll_addr_changed, domain);
 	if (rv)
-	    return rv;
+	    goto out_err;
     }
 
     /* Enable setting the event receiver (by default) if the privilege
@@ -4931,6 +4965,8 @@ ipmi_open_domain(char               *name,
 	    /* Only one port 0 */
 	    domain->port_up[0][i] = 0;
 	rv = con[i]->start_con(con[i]);
+	if (rv)
+	    break;
     }
     if (rv)
 	goto out_err;
@@ -4947,7 +4983,6 @@ ipmi_open_domain(char               *name,
 
     call_domain_change(domain, IPMI_ADDED);
 
- out:
     _ipmi_domain_put(domain);
     return rv;
 
@@ -4955,10 +4990,13 @@ ipmi_open_domain(char               *name,
     for (i=0; i<num_con; i++) {
 	con[i]->remove_con_change_handler(con[i], ll_con_changed, domain);
 	con[i]->remove_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	if (con[i]->register_stat_handler)
+	    con[i]->unregister_stat_handler(con[i],
+					    domain->con_stat_info);
     }
     remove_known_domain(domain);
     cleanup_domain(domain);
-    goto out;
+    return rv;
 }
 
 /***********************************************************************
@@ -5934,9 +5972,6 @@ ipmi_init_domain(ipmi_con_t               *con[],
 
     domain->in_startup = 1;
     for (i=0; i<num_con; i++) {
-	con[i]->register_stat = con_register_stat;
-	con[i]->add_stat = con_add_stat;
-	con[i]->finished_with_stat = con_finished_with_stat;
 	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
 	if (rv)
 	    return rv;
@@ -5978,6 +6013,9 @@ ipmi_init_domain(ipmi_con_t               *con[],
     for (i=0; i<num_con; i++) {
 	con[i]->remove_con_change_handler(con[i], ll_con_changed, domain);
 	con[i]->remove_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	if (con[i]->register_stat_handler)
+	    con[i]->unregister_stat_handler(con[i],
+					    domain->con_stat_info);
     }
     remove_known_domain(domain);
     cleanup_domain(domain);

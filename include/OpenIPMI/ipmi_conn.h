@@ -102,6 +102,38 @@ typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t    *ipmi,
 /* Used to handle knowing when the connection shutdown is complete. */
 typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
 
+/* Statistics interfaces. */
+typedef struct ipmi_ll_stat_info_s ipmi_ll_stat_info_t;
+typedef void (*ipmi_ll_con_add_stat_cb)(ipmi_ll_stat_info_t *info,
+					void                *stat,
+					int                 count);
+typedef int (*ipmi_ll_con_register_stat_cb)(ipmi_ll_stat_info_t *info,
+					    const char          *name,
+					    const char          *instance,
+					    void                **stat);
+typedef void (*ipmi_ll_con_unregister_stat_cb)(ipmi_ll_stat_info_t *info,
+					       void                *stat);
+ipmi_ll_stat_info_t *ipmi_ll_con_alloc_stat_info(void);
+void ipmi_ll_con_free_stat_info(ipmi_ll_stat_info_t *info);
+void ipmi_ll_con_stat_info_set_adder(ipmi_ll_stat_info_t     *info,
+				     ipmi_ll_con_add_stat_cb adder);
+void ipmi_ll_con_stat_info_set_register(ipmi_ll_stat_info_t          *info,
+					ipmi_ll_con_register_stat_cb reg);
+void ipmi_ll_con_stat_info_set_unregister(ipmi_ll_stat_info_t            *info,
+					  ipmi_ll_con_unregister_stat_cb ureg);
+void ipmi_ll_con_stat_call_adder(ipmi_ll_stat_info_t *info,
+				 void                *stat,
+				 int                 count);
+int ipmi_ll_con_stat_call_register(ipmi_ll_stat_info_t *info,
+				   const char          *name,
+				   const char          *instance,
+				   void                **stat);
+void ipmi_ll_con_stat_call_unregister(ipmi_ll_stat_info_t *info,
+				      void                *stat);
+void ipmi_ll_con_stat_set_user_data(ipmi_ll_stat_info_t *info,
+				    void                *data);
+void *ipmi_ll_con_stat_get_user_data(ipmi_ll_stat_info_t *info);
+
 /* Set this bit in the hacks if, even though the connection is to a
    device not at 0x20, the first part of a LAN command should always
    use 0x20. */
@@ -331,8 +363,8 @@ struct ipmi_con_s
        ipmi_con_attr_cleanup() when the connection is destroyed. */
     void *attr;
 
-    /* Statistics interfaces.  These may be NULL if the user doesn't
-       want statistics.  They pass in the user data field. */
+    /* Old statistics interfaces.  Do not use these, they don't work
+       any more. */
     int (*register_stat)(void *user_data, char *name,
 			 char *instance,  void **stat);
     void (*add_stat)(void *user_data, void *stat, int value);
@@ -362,6 +394,12 @@ struct ipmi_con_s
        the max_port that can be reported by ipmi_ll_con_changed_cb().
        If NULL, assume 1. */
     unsigned int (*get_num_ports)(ipmi_con_t *ipmi);
+
+    /* New statistics interface. */
+    int (*register_stat_handler)(ipmi_con_t          *ipmi,
+				 ipmi_ll_stat_info_t *info);
+    int (*unregister_stat_handler)(ipmi_con_t          *ipmi,
+				   ipmi_ll_stat_info_t *info);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
