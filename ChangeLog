@@ -4,6 +4,10 @@
 	SEL contents with per-event deletion.  This cleans those up to
 	make deleting large numbers of SEL entries more efficient.
 
+	* swig/python/openipmigui/_sel.py: Call DeleteAllItems, not
+	ClearAll, to remove all the elements of the list.  ClearAll
+	cleared the columns, too.
+
 2006-03-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: Fix a bug, the input length for binary/unicode data

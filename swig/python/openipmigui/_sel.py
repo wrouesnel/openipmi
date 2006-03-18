@@ -145,7 +145,7 @@ class SELDisplay(wx.Dialog):
             ev = it[1]
             del self.events[idx]
             ev.delete()
-        self.listc.ClearAll()
+        self.listc.DeleteAllItems()
         self.numevents = 0
         return
 
