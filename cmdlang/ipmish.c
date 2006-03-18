@@ -970,7 +970,7 @@ main(int argc, char *argv[])
 	sel = NULL;
 #endif
 	g_thread_init(NULL);
-	os_hnd = ipmi_glib_get_os_handler();
+	os_hnd = ipmi_glib_get_os_handler(0);
 	if (!os_hnd) {
 	    fprintf(stderr,
 		    "ipmi_smi_setup_con: Unable to allocate os handler\n");

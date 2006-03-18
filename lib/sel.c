@@ -159,6 +159,12 @@ struct ipmi_sel_info_s
     int                    fetch_retry_count;
     sel_fetch_handler_t    *fetch_handlers;
 
+    /* When we start a fetch, we start with this id.  This is the last
+       one we successfully fetches (or 0 if it is not valid) so we can
+       find the next valid id to fetch. */
+    int                    start_rec_id;
+    unsigned char          start_rec_id_data[14];
+
     /* A lock, primarily for handling race conditions fetching the data. */
     os_hnd_lock_t *sel_lock;
 
@@ -667,12 +673,29 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    goto out;
 	}
     }
-    if (rsp->data[0] != 0) {
-	if (sel->curr_rec_id != 0) {
+    if ((rsp->data[0] == 0) && (rsp->data_len < 19)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssel.c(handle_sel_data): "
+		 "Received a short SEL data message",
+		 sel->name);
+	fetch_complete(sel, EINVAL, 1);
+	goto out;
+    }
+
+    if ((rsp->data[0] != 0)
+	|| ((sel->start_rec_id != 0) && (sel->start_rec_id == sel->curr_rec_id)
+	    && (memcmp(sel->start_rec_id_data, rsp->data+5, 14) != 0)))
+    {
+	/* We got an error fetching the current id, or the current
+	   id's data was for our "start" record and it doesn't match
+	   the one we fetched, so it has changed.  We have to start
+	   over or handle the error. */
+	if (sel->start_rec_id != 0) {
 	    /* If we get a fetch error and it is not a lost
 	       reservation, it may be that another system deleted our
 	       "current" record.  Start over from the beginning of the
 	       SEL. */
+	    sel->start_rec_id = 0;
 	    sel->curr_rec_id = 0;
 	    del_event = NULL;
 	    goto start_request_sel_data;
@@ -798,6 +821,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    goto out;
 	}
     }
+    sel->start_rec_id = sel->curr_rec_id;
+    memcpy(sel->start_rec_id_data, rsp->data+5, 14);
     sel->curr_rec_id = sel->next_rec_id;
 
  start_request_sel_data:
@@ -916,11 +941,10 @@ handle_sel_info(ipmi_mc_t  *mc,
 
     sel_fixups(mc, sel);
 
-    /* If the timestamps still match, no need to re-fetch the repository */
-    if (sel->fetched
-	&& (add_timestamp == sel->last_addition_timestamp)
-	&& (erase_timestamp == sel->last_erase_timestamp))
-    {
+    /* If the timestamps still match, no need to re-fetch the
+       repository.  Note that we only check the add timestamp.  We
+       don't care if things were deleted. */
+    if (sel->fetched && (add_timestamp == sel->last_addition_timestamp)) {
 	/* If the operation completed successfully and everything in
 	   our SEL is deleted, then clear it with our old reservation.
 	   We also do the clear if the overflow flag is set; on some
@@ -942,15 +966,6 @@ handle_sel_info(ipmi_mc_t  *mc,
 	}
     }
 
-    /* Note that we only re-fetch from the beginning if the SEL is
-       erased.  The SEL is supposed to be ordered and only have new
-       records added onto the end.  So we can re-fetch from the last
-       added one to get the next event properly.  Unless, of course,
-       the SEL was erased. */
-    if (sel->last_erase_timestamp != erase_timestamp) {
-	sel->curr_rec_id = 0;
-    }
-
     sel->curr_addition_timestamp = add_timestamp;
     sel->curr_erase_timestamp = erase_timestamp;
 
@@ -964,12 +979,15 @@ handle_sel_info(ipmi_mc_t  *mc,
 	   there was nothing to do. */
 	sel->last_addition_timestamp = sel->curr_addition_timestamp;
 	sel->last_erase_timestamp = sel->curr_erase_timestamp;
+	sel->start_rec_id = 0;
+	sel->curr_rec_id = 0;
 
 	fetch_complete(sel, 0, 1);
 	goto out;
     }
 
     /* Fetch the first SEL entry. */
+    sel->curr_rec_id = sel->start_rec_id;
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_GET_SEL_ENTRY_CMD;
@@ -1607,11 +1625,11 @@ handle_sel_check(ipmi_mc_t  *mc,
 			 sel->name, rv);
 		sel_op_done(data, rv, 1);
 		goto out;
-	    } else if (data->record_id == sel->curr_rec_id)
+	    } else if (data->record_id == sel->start_rec_id)
 		/* We are deleting our "current" record (used for finding
 		   the next record), make sure we start again from
 		   scratch on the next fetch. */
-		sel->curr_rec_id = 0;
+		sel->start_rec_id = 0;
 	}
     }
 	

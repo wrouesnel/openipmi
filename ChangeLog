@@ -1,3 +1,9 @@
+2006-03-18 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sel.c: There were some subtle problems with deletes of large
+	SEL contents with per-event deletion.  This cleans those up to
+	make deleting large numbers of SEL entries more efficient.
+
 2006-03-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: Fix a bug, the input length for binary/unicode data

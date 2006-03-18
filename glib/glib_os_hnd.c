@@ -52,6 +52,7 @@
 #endif
 
 #include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_glib.h>
 
 #include <glib.h>
 

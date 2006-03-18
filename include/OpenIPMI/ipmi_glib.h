@@ -44,7 +44,7 @@ extern "C" {
    set_log_handler in the os_handler. */
 
 /* Allocate and configure an OS handler. */
-os_handler_t *ipmi_glib_get_os_handler(void);
+os_handler_t *ipmi_glib_get_os_handler(int priority);
 
 /* This is a convenience log handler that allows the glib stuff to be
    used without having to link with glib to get the log handler

@@ -681,7 +681,7 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
 				IPMI_STR_FRU_SEMANTICS, 0,
 				&rec->shelf_addr_type,
 				sizeof(rec->shelf_addr),
-				rec->shelf_addr_len);
+				&rec->shelf_addr_len);
     if (rv)
 	return rv;
     if ((p - mr_data) > 21)

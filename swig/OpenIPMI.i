@@ -2723,6 +2723,7 @@ solparm_clear_lock(ipmi_solparm_t    *solparm,
 }
 
 #if defined(HAVE_GLIB) || defined(HAVE_GLIB12)
+#include <OpenIPMI/ipmi_glib.h>
 static void
 glib_handle_log(const char *domain,
 		const char *pfx,

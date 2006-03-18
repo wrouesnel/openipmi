@@ -67,7 +67,7 @@ typedef struct ipmi_fru_record_s ipmi_fru_record_t;
 typedef struct fru_string_s
 {
     enum ipmi_str_type_e type;
-    unsigned short       length;
+    unsigned int         length;
     char                 *str;
 
     /* The raw offset from the start of the area, and the raw length
