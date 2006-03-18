@@ -676,11 +676,14 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
     mr_data_len--;
 
     p = mr_data;
-    rec->shelf_addr_len = ipmi_get_device_string(&p, mr_data_len,
-						 rec->shelf_addr,
-						 IPMI_STR_FRU_SEMANTICS, 0,
-						 &rec->shelf_addr_type,
-						 sizeof(rec->shelf_addr));
+    rv = ipmi_get_device_string(&p, mr_data_len,
+				rec->shelf_addr,
+				IPMI_STR_FRU_SEMANTICS, 0,
+				&rec->shelf_addr_type,
+				sizeof(rec->shelf_addr),
+				rec->shelf_addr_len);
+    if (rv)
+	return rv;
     if ((p - mr_data) > 21)
 	return EINVAL;
     mr_data += 21;

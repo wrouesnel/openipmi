@@ -40,6 +40,7 @@ class EventInfo:
     def __init__(self):
         self.sensor = None
         self.val = None
+        return
 
     def threshold_event_cb(self, sensor, event_spec, raw_set, raw,
                            value_set, value, event):
@@ -59,6 +60,8 @@ class EventInfo:
         self.val = (event_spec + ' ' + str(severity) +
                     '(' + str(old_severity) + ')')
         return
+
+    pass
 
 class SELDisplay(wx.Dialog):
     def __init__(self, o, type):
@@ -129,9 +132,11 @@ class SELDisplay(wx.Dialog):
             listc.SetItemData(idx, self.evnum)
             pass
         self.evnum += 1
+        return
         
     def ok(self, event):
         self.Close()
+        return
 
     def ClearAll(self, event):
         items = self.events.items()
@@ -142,9 +147,11 @@ class SELDisplay(wx.Dialog):
             ev.delete()
         self.listc.ClearAll()
         self.numevents = 0
+        return
 
     def OnClose(self, event):
         self.Destroy()
+        return
 
     def HandleMenu(self, event):
         self.curr_idx = event.GetIndex()
@@ -161,6 +168,7 @@ class SELDisplay(wx.Dialog):
             pass
         self.PopupMenu(menu, point)
         menu.Destroy()
+        return
 
     def DelItem(self, event):
         key = self.listc.GetItemData(self.curr_idx)
@@ -184,18 +192,22 @@ class SELDisplay(wx.Dialog):
         self.listc.DeleteItem(self.curr_idx)
         self.numevents -= 1
         ev.delete()
+        return
 
+    pass
 
 class DomainSELDisplay(SELDisplay):
     def __init__(self, domain_id):
         self.domain_id = domain_id
         self.init = True
         domain_id.to_domain(self)
+        return
 
     def OnClose(self, event):
         self.init = False
         self.domain_id.to_domain(self)
         SELDisplay.OnClose(self, event)
+        return
 
     def domain_cb(self, domain):
         if (self.init):
@@ -203,20 +215,27 @@ class DomainSELDisplay(SELDisplay):
             domain.add_event_handler(self)
         else:
             domain.remove_event_handler(self)
+            pass
+        return
 
     def event_cb(self, domain, ev):
         self.AddEvent(ev)
+        return
+
+    pass
 
 class MCSELDisplay(SELDisplay):
     def __init__(self, mc_id):
         self.init = True
         self.mc_id = mc_id
         mc_id.to_mc(self)
+        return
 
     def OnClose(self, event):
         self.init = False
         self.mc_id.to_mc(self)
         SELDisplay.OnClose(self, event)
+        return
 
     def mc_cb(self, mc):
         domain = mc.get_domain()
@@ -225,8 +244,14 @@ class MCSELDisplay(SELDisplay):
             domain.add_event_handler(self)
         else:
             domain.remove_event_handler(self)
+            pass
+        return
 
-    def event_cb(self, mc, ev):
+    def event_cb(self, domain, ev):
         mc_id = ev.get_mc_id()
         if (mc_id.cmp(self.mc_id) == 0):
             self.AddEvent(ev)
+            pass
+        return
+
+    pass

@@ -1,3 +1,20 @@
+2006-03-17 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi.c: Fix a bug, the input length for binary/unicode data
+	wasn't being checked in device string parsing.
+
+	* lib/ipmi.c, include/OpenIPMI/internal/ipmi_int.h: Modify
+	ipmi_get_device_string() to return an error instead of the length,
+	so that errors can be handled properly in device strings.
+
+	* lib/normal_fru.c: Adjust for previous change.
+	* lib/oem_atca.c: ditto
+	* lib/oem_atca_fru.c: ditto
+	* lib/entity.c: ditto
+	* lib/sensor.c: ditto
+
+	* swig/python/openipmigui/_sel.py: Cleaned up this file.
+
 2006-03-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: If the ipmi connections received in

@@ -3179,12 +3179,15 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	}
 
 	str = data + 5;
-	info->shelf_address_len
-	    = ipmi_get_device_string(&str, 21,
-				     info->shelf_address,
-				     IPMI_STR_FRU_SEMANTICS, 0,
-				     &info->shelf_address_type,
-				     sizeof(info->shelf_address));
+	
+	rv = ipmi_get_device_string(&str, 21,
+				    info->shelf_address,
+				    IPMI_STR_FRU_SEMANTICS, 0,
+				    &info->shelf_address_type,
+				    sizeof(info->shelf_address),
+				    &info->shelf_address_len);
+	if (rv)
+	    goto out;
 
 	/* We add 1 for adding 0x20 */
 	info->num_addresses = data[26] + 1;
@@ -3830,6 +3833,7 @@ sensor_fixup(ipmi_mc_t *mc, ipmi_sdr_t *sdr)
     enum ipmi_str_type_e type;
     char *cpustart;
     unsigned char *str;
+    int rv;
 
     if (sdr->data[3] != 0xa0)
 	/* Only do this fixup for boards. */
@@ -3838,16 +3842,20 @@ sensor_fixup(ipmi_mc_t *mc, ipmi_sdr_t *sdr)
     switch (sdr->type) {
     case IPMI_SDR_FULL_SENSOR_RECORD:
 	    str = sdr->data+42,
-	    name_len = ipmi_get_device_string(&str, sdr->length-42,
-			    		      name, IPMI_STR_SDR_SEMANTICS, 0,
-					      &type, 32);
+	    rv = ipmi_get_device_string(&str, sdr->length-42,
+					name, IPMI_STR_SDR_SEMANTICS, 0,
+					&type, 32, &name_len);
+	    if (rv)
+		name_len = 0;
 	    break;
 
     case IPMI_SDR_COMPACT_SENSOR_RECORD:
 	    str = sdr->data+26,
-	    name_len = ipmi_get_device_string(&str, sdr->length-26,
-			    		      name, IPMI_STR_SDR_SEMANTICS, 0,
-					      &type, 32);
+	    rv = ipmi_get_device_string(&str, sdr->length-26,
+					name, IPMI_STR_SDR_SEMANTICS, 0,
+					&type, 32, &name_len);
+	    if (rv)
+		name_len = 0;
 	    break;
     }
     name[name_len] = '\0';

@@ -405,13 +405,16 @@ fru_decode_string(ipmi_fru_t     *fru,
     int           force_unicode;
     fru_string_t  *out = strs->strings + num;
     unsigned char *in_start;
+    int           rv;
 
     out->offset = *in - start_pos;
     in_start = *in;
     force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
-    out->length = ipmi_get_device_string(in, *in_len, str,
-					 IPMI_STR_FRU_SEMANTICS, force_unicode,
-					 &out->type, sizeof(str));
+    rv = ipmi_get_device_string(in, *in_len, str,
+				IPMI_STR_FRU_SEMANTICS, force_unicode,
+				&out->type, sizeof(str), &out->length);
+    if (rv)
+	return rv;
     out->raw_len = *in - in_start;
     *in_len -= out->raw_len;
     out->raw_data = ipmi_mem_alloc(out->raw_len);

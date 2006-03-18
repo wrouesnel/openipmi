@@ -106,8 +106,10 @@ ipmi_get_unicode(int len,
 		 unsigned char **d, int in_len,
 		 char *out, int out_len)
 {
+    if (in_len < len)
+	return -1;
     if (out_len < len)
-	len = out_len;
+	return -1;
 
     memcpy(out, *d, len);
     *d += len;
@@ -132,10 +134,9 @@ ipmi_get_bcd_plus(int len,
 
     real_length = (in_len * 8) / 4;
     if (len > real_length)
-	len = real_length;
-    
+	return -1;
     if (len > out_len)
-	len = out_len;
+	return -1;
 
     bo = 0;
     pos = 0;
@@ -185,10 +186,9 @@ ipmi_get_6_bit_ascii(int len,
 
     real_length = (in_len * 8) / 6;
     if (len > real_length)
-	len = real_length;
-    
+	return -1;
     if (len > out_len)
-	len = out_len;
+	return -1;
 
     bo = 0;
     pos = 0;
@@ -235,10 +235,9 @@ ipmi_get_8_bit_ascii(int len,
 
     
     if (len > in_len)
-	len = in_len;
-
+	return -1;
     if (len > out_len)
-	len = out_len;
+	return -1;
 
     for (j=0; j<len; j++) {
 	*out = **d;
@@ -248,18 +247,19 @@ ipmi_get_8_bit_ascii(int len,
     return len;
 };
 
-unsigned int
+int
 ipmi_get_device_string(unsigned char        ** const pinput,
 		       unsigned int         in_len,
 		       char                 *output,
 		       int                  semantics,
 		       int                  force_unicode,
 		       enum ipmi_str_type_e *stype,
-		       unsigned int         max_out_len)
+		       unsigned int         max_out_len,
+		       unsigned int         *out_len)
 {
-    int           type;
-    int           len;
-    unsigned int  olen;
+    int type;
+    int len;
+    int olen;
 
     if (max_out_len == 0)
 	return 0;
@@ -317,7 +317,11 @@ ipmi_get_device_string(unsigned char        ** const pinput,
 	    olen = 0;
     }
 
-    return olen;
+    if (olen < 0)
+	return EINVAL;
+
+    *out_len = olen;
+    return 0;
 }
 
 /* Element will be zero if not present, n-1 if present. */

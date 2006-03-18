@@ -113,17 +113,19 @@ void ipmi_set_uint16(unsigned char *data, int val);
    actual length.  The max_out_len is the maximum number of characters
    to output, including the nil.  The type will be set to either
    unicode or ASCII.  The number of bytes put into the output string
-   is returned.  The input pointer will be updated to point to the
-   character after the used data. */
+   is returned in out_len.  The input pointer will be updated to point
+   to the character after the used data.  This returns a standard
+   error value. */
 #define IPMI_STR_SDR_SEMANTICS	0
 #define IPMI_STR_FRU_SEMANTICS	1
-unsigned int ipmi_get_device_string(unsigned char        **input,
-				    unsigned int         in_len,
-				    char                 *output,
-				    int                  semantics,
-				    int                  force_unicode,
-				    enum ipmi_str_type_e *type,
-				    unsigned int         max_out_len);
+int ipmi_get_device_string(unsigned char        **input,
+			   unsigned int         in_len,
+			   char                 *output,
+			   int                  semantics,
+			   int                  force_unicode,
+			   enum ipmi_str_type_e *type,
+			   unsigned int         max_out_len,
+			   unsigned int         *out_len);
 
 /* Store an IPMI device string in the most compact form possible.
    input is the input string (nil terminated), output is where to
