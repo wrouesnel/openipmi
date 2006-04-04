@@ -190,7 +190,7 @@ os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
 {
     os_handler_waiter_factory_t *nf;
     int                         rv;
-    int                         i;
+    unsigned int                i;
     int                         has_threads = 0;
 
     if (os_hnd->create_lock && os_hnd->create_cond

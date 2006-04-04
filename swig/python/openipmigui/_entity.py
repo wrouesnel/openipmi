@@ -32,11 +32,11 @@
 
 import OpenIPMI
 import _oi_logging
-import wx
 import _sensor
 import _control
 import _fru
-import _errstr
+import gui_popup
+import gui_setdialog
 
 id_st = 400
 
@@ -74,38 +74,11 @@ class EntityFruViewer:
 
     pass
 
-class ActivationTimeSetter(wx.Dialog):
+class ActivationTimeSetter:
     def __init__(self, e, name, func):
-        wx.Dialog.__init__(self, None, -1, "Set " + name + " for " + str(e))
         self.e = e
         self.name = name
         self.func = func
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        box1 = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self, -1, "Value:")
-        box1.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        self.value = wx.TextCtrl(self, -1, "")
-        box1.Add(self.value, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        sizer.Add(box1, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        
-        self.status = _errstr.ErrStr(self)
-        sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL | wx.GROW, 2)
-
-        box2 = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box2.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        box2.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.setting = False
 
         self.err = 0
         rv = e.entity_id.to_entity(self)
@@ -115,31 +88,19 @@ class ActivationTimeSetter(wx.Dialog):
         if (rv):
             _oi_logging.error("Error doing entity cb in activation time setter: "
                           + str(rv))
-            self.Destroy()
             pass
+
         return
 
-    def cancel(self, event):
-        self.Close()
-        return
-
-    def ok(self, event):
-        try:
-            self.acttime = int(self.value.GetValue())
-        except:
-            return
-        rv = self.s.sensor_id.to_sensor(self)
+    def ok(self, val):
+        self.acttime = int(val)
+        rv = self.e.entity_id.to_entity(self)
         if (rv == 0):
             rv = self.err
             pass
         if (rv != 0):
             _oi_logging.error("Error setting activation time: " + str(rv))
-            self.Close()
             pass
-        return
-
-    def OnClose(self, event):
-        self.Destroy()
         return
 
     def entity_cb(self, entity):
@@ -150,9 +111,14 @@ class ActivationTimeSetter(wx.Dialog):
             pass
         return
 
-    def entity_hot_swap_get_time_cb(self, entity, err):
-        self.value.SetValue(str())
-        self.Show(True)
+    def entity_hot_swap_get_time_cb(self, entity, err, time):
+        if (err):
+            _oi_logging.error("Error getting activation time: " + str(err))
+            return
+        gui_setdialog.SetDialog("Set " + self.name + " for " + str(self.e),
+                                [ time ],
+                                1,
+                                self);
         return
 
     pass
@@ -214,38 +180,28 @@ class Entity:
         return self.name
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        doit = False
+        menul = [ ]
 
         if (self.is_fru):
-            item = menu.Append(id_st+1, "View FRU Data")
-            wx.EVT_MENU(self.d.ui, id_st+1, self.ViewFruData)
-            doit = True
+            menul.append(["View FRU Data", self.ViewFruData])
             pass
             
         if (self.hot_swap == "Managed"):
-            item = menu.Append(id_st+2, "Request Activation")
-            wx.EVT_MENU(self.d.ui, id_st+2, self.RequestActivation)
-            item = menu.Append(id_st+3, "Activate")
-            wx.EVT_MENU(self.d.ui, id_st+3, self.Activate)
-            item = menu.Append(id_st+4, "Deactivate")
-            wx.EVT_MENU(self.d.ui, id_st+4, self.Deactivate)
+            menul.append(["Request Activation", self.RequestActivation])
+            menul.append(["Activate", self.Activate])
+            menul.append(["Deactivate", self.Deactivate])
             if (self.supports_auto_activate):
-                item = menu.Append(id_st+5, "Set Auto-activate Time")
-                wx.EVT_MENU(self.d.ui, id_st+5, self.SetAutoActTime)
+                menul.append(["Set Auto-activate Time", self.SetAutoActTime])
                 pass
             if (self.supports_auto_deactivate):
-                item = menu.Append(id_st+6, "Set Auto-deactivate Time")
-                wx.EVT_MENU(self.d.ui, id_st+6, self.SetAutoDeactTime)
+                menul.append(["Set Auto-deactivate Time",
+                              self.SetAutoDeactTime])
                 pass
-            doit = True
             pass
 
-        if (doit):
-            self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
+        if (len(menul) > 0):
+            gui_popup.popup(self.d.ui, event, menul)
             pass
-        menu.Destroy()
         return
 
     def RequestActivation(self, event):

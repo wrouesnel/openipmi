@@ -665,7 +665,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
     sdr_info_t      *info = cb_data;
     ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    int             i;
+    unsigned int    i;
     int             rv;
     int             total_size = 0;
 
@@ -1592,7 +1592,7 @@ got_users(ipmi_mc_t        *mc,
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     ipmi_user_t     *user;
     char            mc_name[IPMI_MC_NAME_LEN];
-    int             i, j, k;
+    unsigned int    i, j, k;
     char            str[17];
     unsigned int    count;
     unsigned int    channel;

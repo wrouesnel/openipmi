@@ -1260,8 +1260,8 @@ ipmi_get_error_string(unsigned int err,
 		      char         *buffer,
 		      unsigned int buf_len)
 {
-    int  len;
-    char *err_type;
+    unsigned int len;
+    char         *err_type;
 
     if (err == 0) {
 	strncpy(buffer, "Success (No error)", buf_len);

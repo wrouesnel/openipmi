@@ -1587,7 +1587,7 @@ got_parm(ipmi_pef_t     *pef,
     pefparms_t        *lp = &(pefparms[pefc->curr_parm]);
 
     /* Check the length, and don't forget the revision byte must be added. */
-    if ((!err) && (data_len < (lp->length+1))) {
+    if ((!err) && (data_len < (unsigned int) (lp->length+1))) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_pefparm_got_parm:"
 		 " Invalid data length on parm %d was %d, should have been %d",
@@ -2722,7 +2722,7 @@ ipmi_pefconfig_set_val(ipmi_pef_config_t *pefc,
 
     if (gdata[parm].iv_cnt) {
 	count = gdata[parm].iv_cnt(pefc);
-	if (index >= count)
+	if (index >= (int) count)
 	    return E2BIG;
     }
 
@@ -2773,7 +2773,7 @@ ipmi_pefconfig_data_free(void *data)
 unsigned int
 ipmi_pefconfig_str_to_parm(char *name)
 {
-    int i;
+    unsigned int i;
     for (i=0; i<NUM_GDATA_ENTRIES; i++) {
 	if (strcmp(name, gdata[i].fname) == 0)
 	    return i;

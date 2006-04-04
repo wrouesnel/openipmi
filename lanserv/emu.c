@@ -202,7 +202,7 @@ struct lmc_data_s
 
     sdrs_t main_sdrs;
     sdr_t  *part_add_sdr;
-    int    part_add_next;
+    unsigned int part_add_next;
     int    in_update_mode;
 
     unsigned char event_receiver;
@@ -984,10 +984,10 @@ handle_get_sdr(lmc_data_t    *mc,
 	       unsigned char *rdata,
 	       unsigned int  *rdata_len)
 {
-    uint16_t record_id;
-    int      offset;
-    int      count;
-    sdr_t    *entry;
+    uint16_t     record_id;
+    unsigned int offset;
+    unsigned int count;
+    sdr_t        *entry;
 
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -1110,9 +1110,9 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len)
 {
-    uint16_t record_id;
-    int      offset;
-    int      modal;
+    uint16_t     record_id;
+    unsigned int offset;
+    int          modal;
 
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -1468,8 +1468,8 @@ handle_read_fru_data(lmc_data_t    *mc,
 		     unsigned int  *rdata_len)
 {
     unsigned char devid;
-    int           offset;
-    int           count;
+    unsigned int  offset;
+    unsigned int  count;
 
     if (check_msg_length(msg, 4, rdata, rdata_len))
 	return;
@@ -1512,8 +1512,8 @@ handle_write_fru_data(lmc_data_t    *mc,
 		      unsigned int  *rdata_len)
 {
     unsigned char devid;
-    int           offset;
-    int           count;
+    unsigned int  offset;
+    unsigned int  count;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
@@ -1895,10 +1895,10 @@ handle_get_device_sdr(lmc_data_t    *mc,
 		      unsigned char *rdata,
 		      unsigned int  *rdata_len)
 {
-    uint16_t record_id;
-    int      offset;
-    int      count;
-    sdr_t    *entry;
+    uint16_t     record_id;
+    unsigned int offset;
+    unsigned int count;
+    sdr_t        *entry;
 
     if (!(mc->has_device_sdrs)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -3103,7 +3103,7 @@ handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
-    int led;
+    unsigned int led;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
@@ -3171,7 +3171,7 @@ handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
-    int led;
+    unsigned int led;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;

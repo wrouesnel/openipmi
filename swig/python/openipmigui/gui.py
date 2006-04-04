@@ -32,7 +32,7 @@
 import wx
 import wx.gizmos as gizmos
 import OpenIPMI
-import _domainDialog
+import gui_domainDialog
 import _saveprefs
 import _cmdwin
 import _oi_logging
@@ -242,7 +242,7 @@ class IPMIGUI(wx.Frame):
         return
 
     def openDomain(self, event):
-        dialog = _domainDialog.OpenDomainDialog(self.mainhandler)
+        dialog = gui_domainDialog.OpenDomainDialog(self.mainhandler)
         dialog.CenterOnScreen();
         dialog.Show(True);
         return

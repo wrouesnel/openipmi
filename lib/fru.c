@@ -1087,7 +1087,9 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if ((data[1] << fru->access_by_words) != (fru->last_cmd_len - 3)) {
+    if ((unsigned int) (data[1] << fru->access_by_words)
+	!= (fru->last_cmd_len - 3))
+    {
 	/* Write was incomplete for some reason.  Just go on but issue
 	   a warning. */
 	ipmi_log(IPMI_LOG_WARNING,

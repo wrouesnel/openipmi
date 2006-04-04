@@ -388,7 +388,7 @@ socklen_t addr_len[MAX_ADDR];
 int num_addr = 0;
 
 static char buffer[1024];
-static int pos = 0;
+static unsigned int pos = 0;
 static int echo = 1;
 
 static void

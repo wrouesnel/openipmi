@@ -152,17 +152,17 @@ struct ipmi_sel_info_s
 
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
-    int                    curr_rec_id;
-    int                    next_rec_id;
+    unsigned int           curr_rec_id;
+    unsigned int           next_rec_id;
     unsigned int           reservation;
     int                    sels_changed;
-    int                    fetch_retry_count;
+    unsigned int           fetch_retry_count;
     sel_fetch_handler_t    *fetch_handlers;
 
     /* When we start a fetch, we start with this id.  This is the last
        one we successfully fetches (or 0 if it is not valid) so we can
        find the next valid id to fetch. */
-    int                    start_rec_id;
+    unsigned int           start_rec_id;
     unsigned char          start_rec_id_data[14];
 
     /* A lock, primarily for handling race conditions fetching the data. */
@@ -881,8 +881,8 @@ handle_sel_info(ipmi_mc_t  *mc,
     unsigned char       cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t          cmd_msg;
     int                 rv;
-    int32_t             add_timestamp;
-    int32_t             erase_timestamp;
+    uint32_t            add_timestamp;
+    uint32_t            erase_timestamp;
     int                 fetched_num_sels;
 
     sel_lock(sel);
@@ -2175,8 +2175,8 @@ ipmi_get_all_sels(ipmi_sel_info_t *sel,
 		  int             *array_size,
 		  ipmi_event_t    **array)
 {
-    int i;
-    int rv = 0;
+    unsigned int i;
+    int          rv = 0;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -2184,7 +2184,7 @@ ipmi_get_all_sels(ipmi_sel_info_t *sel,
 	return EINVAL;
     }
 
-    if (*array_size < sel->num_sels) {
+    if (*array_size < (int) sel->num_sels) {
 	rv = E2BIG;
     } else if (sel->num_sels == 0) {
 	rv = 0;
@@ -2203,7 +2203,7 @@ ipmi_get_all_sels(ipmi_sel_info_t *sel,
 		array[i] = ipmi_event_dup(holder->event);
 	    }
 	    i++;
-	    if (i<sel->num_sels) {
+	    if (i < sel->num_sels) {
 		if (! ilist_next(&iter)) {
 		    rv = EINVAL;
 		    i--;

@@ -227,8 +227,8 @@ struct ipmi_entity_s
     /* Hot-swap sensors/controls */
     ipmi_sensor_t    *hot_swap_requester;
     ipmi_sensor_id_t hot_swap_requester_id;
-    unsigned int     hot_swap_offset;
-    unsigned int     hot_swap_requesting_val;
+    int              hot_swap_offset;
+    int              hot_swap_requesting_val;
     enum ipmi_hot_swap_states hot_swap_state;
     ipmi_control_t    *hot_swap_power;
     ipmi_control_id_t hot_swap_power_id;
@@ -2923,9 +2923,9 @@ decode_drear(ipmi_sdr_t *sdr,
 static int
 gdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 {
-    ipmi_sdr_t sdr;
-    int        len;
-    dlr_info_t *info = &ent->info;
+    ipmi_sdr_t   sdr;
+    unsigned int len;
+    dlr_info_t  *info = &ent->info;
 
     memset(&sdr, 0, sizeof(sdr));
 
@@ -2998,9 +2998,9 @@ decode_gdlr(ipmi_sdr_t         *sdr,
 static int
 frudlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 {
-    ipmi_sdr_t sdr;
-    int        len;
-    dlr_info_t *info = &ent->info;
+    ipmi_sdr_t   sdr;
+    unsigned int len;
+    dlr_info_t   *info = &ent->info;
 
     memset(&sdr, 0, sizeof(sdr));
 
@@ -3071,9 +3071,9 @@ decode_frudlr(ipmi_sdr_t         *sdr,
 static int
 mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 {
-    ipmi_sdr_t sdr;
-    int        len;
-    dlr_info_t *info = &ent->info;
+    ipmi_sdr_t   sdr;
+    unsigned int len;
+    dlr_info_t   *info = &ent->info;
 
     memset(&sdr, 0, sizeof(sdr));
 
@@ -3247,7 +3247,7 @@ add_sdr_info(entity_sdr_info_t *infos, dlr_info_t *dlr)
 static void
 destroy_sdr_info(entity_sdr_info_t *infos)
 {
-    int i;
+    unsigned int i;
 
     if (infos->dlrs) {
 	for (i=0; i<infos->next; i++) {
@@ -3264,7 +3264,7 @@ destroy_sdr_info(entity_sdr_info_t *infos)
 static void
 cleanup_sdr_info(entity_sdr_info_t *infos)
 {
-    int i;
+    unsigned int i;
 
     if (infos->dlrs) {
 	for (i=0; i<infos->next; i++) {
@@ -3311,7 +3311,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		 entity_sdr_info_t   *infos)
 {
     entity_found_t      *found;
-    int                 i, j;
+    unsigned int        i, j;
     int                 rv;
     ipmi_entity_t       *child;
     ipmi_entity_t       *ent;
@@ -3414,7 +3414,7 @@ static void
 put_entities(entity_sdr_info_t *infos)
 {
     entity_found_t      *found;
-    int                 i, j;
+    unsigned int        i, j;
 
     for (i=0; i<infos->next; i++) {
 	found = infos->found+i;
@@ -3468,7 +3468,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 		      ipmi_sdr_info_t    *sdrs)
 {
     unsigned int        count;
-    int                 i, j;
+    unsigned int        i, j;
     int                 rv;
     entity_sdr_info_t   infos;
     entity_sdr_info_t   *old_infos;
@@ -3788,7 +3788,7 @@ ipmi_sdr_entity_destroy(void *info)
 {
     entity_sdr_info_t   *infos = info;
     entity_found_t      *found;
-    int                 i, j;
+    unsigned int        i, j;
     int                 rv;
     ipmi_entity_t       *ent, *child;
 
@@ -4427,7 +4427,7 @@ ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length)
     CHECK_ENTITY_LOCK(ent);
 
     ent_lock(ent);
-    if (ent->info.id_len > length)
+    if ((int)ent->info.id_len > length)
 	clen = length;
     else
 	clen = ent->info.id_len;

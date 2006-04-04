@@ -5109,7 +5109,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 {
     int                rv;
     ipmi_entity_info_t *ents;
-    int                i;
+    unsigned int       i;
     int                ipmb_addr;
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     char               *name;
@@ -7448,7 +7448,7 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     ipmi_control_id_t cid;
     mxp_board_t       *binfo;
     int               rv;
-    int               i;
+    unsigned int      i;
 
     id.mcid = ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
@@ -8927,11 +8927,11 @@ amc_sdrs_fixup(ipmi_mc_t       *mc,
 	       void            *cb_data)
 {
     unsigned int count;
-    int          i;
+    unsigned int i;
     ipmi_sdr_t   sdr;
     int          rv;
     char         str[20];
-    int          len;
+    unsigned int len;
 
     rv = ipmi_get_sdr_count(sdrs, &count);
     if (rv)

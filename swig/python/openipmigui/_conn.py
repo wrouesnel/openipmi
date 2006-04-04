@@ -31,7 +31,7 @@
 #
 
 import OpenIPMI
-import wx
+import gui_popup
 import _SoL
 
 id_st = 1000
@@ -155,14 +155,10 @@ class Connection:
         return self.conup
     
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Activate")
-        wx.EVT_MENU(self.ui, id_st+1, self.Activate)
-        item = menu.Append(id_st+2, "Open SOL")
-        wx.EVT_MENU(self.ui, id_st+2, self.OpenSOL)
-        self.d.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.ui, event,
+                        [ [ "Activate", self.Activate ],
+                          [ "Open SOL", self.OpenSOL ] ])
+        return
 
     def Activate(self, event):
         self.op = "activate"

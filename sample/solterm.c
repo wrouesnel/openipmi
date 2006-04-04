@@ -215,7 +215,7 @@ usage(void)
 
 static void show_buffer_text(const void *data, size_t count)
 {
-	int i;
+	unsigned int i;
 
 	printf("[");
 	for (i = 0; i < count; ++i)
@@ -233,7 +233,7 @@ static void show_buffer_text(const void *data, size_t count)
 
 static void show_buffer_hex(const void *data, size_t count)
 {
-	int i;
+	unsigned int i;
 
 	printf("[");
 	for (i = 0; i < count; ++i)
@@ -245,7 +245,7 @@ static void show_buffer_hex(const void *data, size_t count)
 
 static int data_received(ipmi_sol_conn_t *conn, const void *data, size_t count, void *user_data)
 {
-	int i;
+	unsigned int i;
 	if (verbosity > 3)
 		show_buffer_text(data, count);
 	if (verbosity > 5)

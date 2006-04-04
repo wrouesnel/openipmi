@@ -44,7 +44,7 @@
 static int
 traverse_fru_node_tree(ipmi_cmd_info_t *cmd_info,
 		       ipmi_fru_node_t *node,
-		       int             length)
+		       unsigned int    length)
 {
     const char                *name;
     unsigned int              i;

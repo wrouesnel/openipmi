@@ -57,13 +57,13 @@ struct ipmi_sensor_info_s
     ipmi_sensor_t            **(sensors_by_idx[5]);
     /* Size of above sensor array, per LUN.  This will be 0 if the
        LUN has no sensors. */
-    int                      idx_size[5];
+    unsigned int             idx_size[5];
     /* In the above two, the 5th index is for non-standard sensors. */
 
-    ipmi_lock_t *idx_lock;
+    ipmi_lock_t              *idx_lock;
 
     /* Total number of sensors we have in this. */
-    unsigned int sensor_count;
+    unsigned int             sensor_count;
 };
 
 #define SENSOR_ID_LEN 32 /* 16 bytes are allowed for a sensor. */
@@ -126,7 +126,7 @@ struct ipmi_sensor_s
     unsigned int sensor_direction : 2;
 
     int          hot_swap_requester;
-    unsigned int hot_swap_requester_val;
+    int          hot_swap_requester_val;
 
     unsigned char sensor_type;
 
@@ -855,7 +855,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     if (num >= sensors->idx_size[4]) {
 	ipmi_sensor_t **new_array;
 	unsigned int  new_size;
-	int           i;
+	unsigned int  i;
 
 	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
 	   too much). */
@@ -985,7 +985,7 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 int
 ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 {
-    int i, j;
+    unsigned int i, j;
 
     if (sensors->destroyed)
 	return EINVAL;
@@ -1076,7 +1076,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     unsigned int  p, s_size = 0;
     int           val;
     int           rv;
-    int           i, j;
+    unsigned int  i;
+    int           j;
     int           share_count;
     int           id_string_mod_type;
     int           entity_instance_incr;
@@ -1550,7 +1551,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 			ipmi_sdr_info_t *sdrs)
 {
     int                 rv;
-    int                 i, j;
+    unsigned int        i, j;
     ipmi_sensor_t       **sdr_sensors = NULL;
     ipmi_sensor_t       **old_sdr_sensors;
     unsigned int        old_count;
@@ -2765,7 +2766,7 @@ ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
 
     CHECK_SENSOR_LOCK(sensor);
 
-    if (sensor->id_len > length)
+    if ((int) sensor->id_len > length)
 	clen = length;
     else
 	clen = sensor->id_len;
@@ -3179,8 +3180,8 @@ ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, const char *str)
 
 void
 ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
-				   unsigned int  offset,
-				   unsigned int  val_when_requesting)
+				   int           offset,
+				   int           val_when_requesting)
 {
     sensor->hot_swap_requester = offset;
     sensor->hot_swap_requester_val = val_when_requesting;
@@ -3188,8 +3189,8 @@ ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
 
 int
 ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
-				  unsigned int  *offset,
-				  unsigned int  *val_when_requesting)
+				  int           *offset,
+				  int           *val_when_requesting)
 {
     CHECK_SENSOR_LOCK(sensor);
 

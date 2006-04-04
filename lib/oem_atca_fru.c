@@ -109,7 +109,7 @@ typedef struct atca_p2p_cr_s
 
 static void atca_p2p_cleanup_rec(atca_p2p_cr_t *rec)
 {
-    int i;
+    unsigned int i;
 
     if (rec->descs) {
 	for (i=0; i<rec->desc_count; i++) {
@@ -404,7 +404,7 @@ atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
 	if (left < 3)
 	    goto out_invalid;
 	left -= 3;
-	if ((p[2] * 3) > left)
+	if ((unsigned int) (p[2] * 3) > left)
 	    goto out_invalid;
 	left -= p[2] * 3;
 	p += 3 + (p[2] * 3);
@@ -693,7 +693,7 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
     mr_data++;
     mr_data_len--;
 
-    if ((rec->addr_count * 3) > mr_data_len)
+    if ((unsigned int) (rec->addr_count * 3) > mr_data_len)
 	goto out_invalid;
 
     rec->addrs = ipmi_mem_alloc(sizeof(*(rec->addrs)) * rec->addr_count);

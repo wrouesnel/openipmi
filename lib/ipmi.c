@@ -101,10 +101,10 @@ ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)
     va_end(ap);
 }
 
-static unsigned int
-ipmi_get_unicode(int len,
-		 unsigned char **d, int in_len,
-		 char *out, int out_len)
+static int
+ipmi_get_unicode(unsigned int len,
+		 unsigned char **d, unsigned int in_len,
+		 char *out, unsigned int out_len)
 {
     if (in_len < len)
 	return -1;
@@ -116,21 +116,21 @@ ipmi_get_unicode(int len,
     return len;
 }
 
-static unsigned int
-ipmi_get_bcd_plus(int len,
-		  unsigned char **d, int in_len,
-		  char *out, int out_len)
+static int
+ipmi_get_bcd_plus(unsigned int len,
+		  unsigned char **d, unsigned int in_len,
+		  char *out, unsigned int out_len)
 {
     static char table[16] = {
 	'0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', ' ', '-', '.', ':', ',', '_'
     };
-    int pos;
-    int bo;
-    int val = 0;
-    int i;
-    int real_length;
-    char *out_s = out;
+    unsigned int pos;
+    unsigned int bo;
+    unsigned int val = 0;
+    unsigned int i;
+    unsigned int real_length;
+    char         *out_s = out;
 
     real_length = (in_len * 8) / 4;
     if (len > real_length)
@@ -162,10 +162,10 @@ ipmi_get_bcd_plus(int len,
     return out - out_s;
 }
 
-static unsigned int
-ipmi_get_6_bit_ascii(int len,
-		     unsigned char **d, int in_len,
-		     char *out, int out_len)
+static int
+ipmi_get_6_bit_ascii(unsigned int len,
+		     unsigned char **d, unsigned int in_len,
+		     char *out, unsigned int out_len)
 {
     static char table[64] = {
 	' ', '!', '"', '#', '$', '%', '&', '\'',
@@ -177,12 +177,12 @@ ipmi_get_6_bit_ascii(int len,
 	'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
 	'X', 'Y', 'Z', '[', '\\', ']', '^', '_' 
     };
-    int pos;
-    int bo;
-    int val = 0;
-    int i;
-    int real_length;
-    char *out_s = out;
+    unsigned int pos;
+    unsigned int bo;
+    unsigned int val = 0;
+    unsigned int i;
+    unsigned int real_length;
+    char         *out_s = out;
 
     real_length = (in_len * 8) / 6;
     if (len > real_length)
@@ -226,13 +226,12 @@ ipmi_get_6_bit_ascii(int len,
     return out - out_s;
 }
 
-static unsigned int
-ipmi_get_8_bit_ascii(int len,
-		     unsigned char **d, int in_len,
-		     char *out, int out_len)
+static int
+ipmi_get_8_bit_ascii(unsigned int len,
+		     unsigned char **d, unsigned int in_len,
+		     char *out, unsigned int out_len)
 {
-    int j;
-
+    unsigned int j;
     
     if (len > in_len)
 	return -1;
@@ -402,13 +401,13 @@ static void
 ipmi_set_bcdplus(const char    *input,
 		 unsigned int  in_len,
 		 unsigned char *output,
-		 int           *out_len)
+		 unsigned int  *out_len)
 {
-    int        len = *out_len;
-    const char *s = input;
-    int        pos = 0;
-    int        bit = 0;
-    int        count = 0;
+    unsigned int len = *out_len;
+    const char   *s = input;
+    unsigned int pos = 0;
+    unsigned int bit = 0;
+    unsigned int count = 0;
 
     while (in_len > 0) {
 	switch(bit) {
@@ -439,15 +438,15 @@ static void
 ipmi_set_6_bit_ascii(const char    *input,
 		     unsigned int  in_len,
 		     unsigned char *output,
-		     int           *out_len)
+		     unsigned int  *out_len)
 {
-    int        len = *out_len;
-    const char *s = input;
-    int        pos = 0;
-    int        bit = 0;
-    int        count = 0;
-    int        cval;
-    int        oval;
+    unsigned int len = *out_len;
+    const char   *s = input;
+    unsigned int pos = 0;
+    unsigned int bit = 0;
+    unsigned int count = 0;
+    unsigned int cval;
+    unsigned int oval;
 
     while (in_len > 0) {
 	cval = *s;
@@ -496,9 +495,9 @@ ipmi_set_6_bit_ascii(const char    *input,
 
 static void
 ipmi_set_8_bit_ascii(const char    *input,
-		     int           in_len,
+		     unsigned int  in_len,
 		     unsigned char *output,
-		     int           *out_len)
+		     unsigned int  *out_len)
 {
     char tmp[2];
     /* truncate if necessary. */
@@ -525,7 +524,7 @@ ipmi_set_device_string(const char           *input,
 		       unsigned int         in_len,
 		       unsigned char        *output,
 		       int                  force_unicode,
-		       int                  *out_len)
+		       unsigned int         *out_len)
 {
     const char   *s = input;
     int          bsize = 0; /* Start with 4-bit. */

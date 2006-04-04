@@ -73,7 +73,7 @@ typedef struct parm_check_s
 {
     unsigned char conf_num; /* The number we are interested in. */
     unsigned char set;      /* The specific selector. */
-    unsigned char data_len; /* The length of the data we are using. */
+    unsigned int  data_len; /* The length of the data we are using. */
     unsigned char data[22]; /* The actual data. */
     unsigned char mask[22]; /* The mask bits used to mask what we compare. */
 } parm_check_t;
@@ -483,7 +483,7 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
     int           pos;
     parm_check_t  *check;
     int           check_failed = 0;
-    int           i;
+    unsigned int  i;
 
     pet_lock(pet);
     if (pet->destroyed) {
@@ -722,7 +722,7 @@ pef_got_config(ipmi_pef_t    *pef,
     int           pos;
     parm_check_t  *check;
     int           check_failed = 0;
-    int           i;
+    unsigned int  i;
 
     pet_lock(pet);
     if (pet->destroyed) {

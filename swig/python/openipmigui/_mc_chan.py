@@ -37,7 +37,7 @@ import _oi_logging
 import _mc_lanparm
 import _mc_solparm
 import _mc_user
-import _errstr
+import gui_errstr
 
 id_st = 500
 
@@ -490,7 +490,7 @@ class MCChan(wx.Dialog):
 
         sizer.Add(self.tree, 1, wx.GROW, 0);
 
-        self.errstr = _errstr.ErrStr(self)
+        self.errstr = gui_errstr.ErrStr(self)
         sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         box = wx.BoxSizer(wx.HORIZONTAL)

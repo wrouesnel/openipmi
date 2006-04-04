@@ -230,7 +230,7 @@ fru_encode_fields(ipmi_fru_t        *fru,
 
     for (i=0; i<v->next; i++) {
 	fru_string_t *s = v->strings + i;
-	int          len;
+	unsigned int len;
 
 	if (offset != s->offset) {
 	    /* Bug in the FRU code.  Return a unique error code so it
@@ -282,7 +282,7 @@ fru_encode_fields(ipmi_fru_t        *fru,
 static int
 fru_setup_min_field(ipmi_fru_record_t *rec, int area, int changed)
 {
-    int            i;
+    unsigned int   i;
     unsigned int   min;
     unsigned int   start_offset;
     fru_variable_t *v;
@@ -324,7 +324,7 @@ fru_string_set(enum ipmi_str_type_e type,
     char         *newval;
     fru_string_t *val = vals->strings + num;
     unsigned char tstr[IPMI_MAX_STR_LEN+1];
-    int           raw_len = sizeof(tstr);
+    unsigned int  raw_len = sizeof(tstr);
     int           raw_diff;
     int           i;
 
@@ -442,7 +442,7 @@ fru_decode_string(ipmi_fru_t     *fru,
 static int
 fru_string_to_out(char *out, unsigned int *length, fru_string_t *in)
 {
-    int clen;
+    unsigned int clen;
 
     if (!in->str)
 	return ENOSYS;
@@ -1705,7 +1705,7 @@ static void
 multi_record_area_free(ipmi_fru_record_t *rec)
 {
     ipmi_fru_multi_record_area_t *u = fru_record_get_data(rec);
-    int                          i;
+    unsigned int                 i;
 
     if (u->records) {
 	for (i=0; i<u->num_records; i++) {
@@ -1725,7 +1725,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 {
     ipmi_fru_record_t       *rec;
     int                     err;
-    int                     i;
+    unsigned int            i;
     unsigned int            num_records;
     unsigned char           *orig_data = data;
     unsigned int            orig_data_len = data_len;
@@ -1990,7 +1990,7 @@ ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
     unsigned char                *new_data;
     ipmi_fru_record_t            *rec;
     int                          raw_diff = 0;
-    int                          i;
+    unsigned int                 i;
 
     if (!_ipmi_fru_is_normal_fru(fru))
 	return ENOSYS;
@@ -2098,7 +2098,7 @@ static int
 fru_encode_multi_record(ipmi_fru_t             *fru,
 			ipmi_fru_record_t      *rec,
 			ipmi_fru_multi_record_area_t *u,
-			int                    idx,
+			unsigned int           idx,
 			unsigned char          *data,
 			unsigned int           *offset)
 {
@@ -2137,7 +2137,7 @@ fru_encode_multi_record_area(ipmi_fru_t *fru, unsigned char *data)
     ipmi_fru_record_t *rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
     ipmi_fru_multi_record_area_t *u;
     int               rv;
-    int               i;
+    unsigned int      i;
     unsigned int      offset;
 
     if (!rec)
@@ -2199,7 +2199,7 @@ check_rec_position(ipmi_fru_t   *fru,
     ipmi_fru_record_t **recs = normal_fru_get_recs(fru);
     int               pos;
     unsigned int      data_len = _ipmi_fru_get_data_len(fru);
-    int               max_start = data_len - 8;
+    unsigned int      max_start = data_len - 8;
 
     /* Zero is invalid, and it must be a multiple of 8. */
     if ((offset == 0) || ((offset % 8) != 0))
@@ -2644,7 +2644,7 @@ static fru_data_rep_t frul[] =
 int
 ipmi_fru_str_to_index(char *name)
 {
-    int i;
+    unsigned int i;
     for (i=0; i<NUM_FRUL_ENTRIES; i++) {
 	if (strcmp(name, frul[i].name) == 0)
 	    return i;
@@ -2655,7 +2655,7 @@ ipmi_fru_str_to_index(char *name)
 char *
 ipmi_fru_index_to_str(int index)
 {
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return NULL;
 
     return frul[index].name;
@@ -2683,7 +2683,7 @@ ipmi_fru_get(ipmi_fru_t                *fru,
     enum ipmi_str_type_e stype;
     
 
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return EINVAL;
 
     p = frul + index;
@@ -2838,7 +2838,7 @@ ipmi_fru_set_int_val(ipmi_fru_t *fru,
     fru_data_rep_t *p;
     int            rv;
 
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return EINVAL;
 
     p = frul + index;
@@ -2864,7 +2864,7 @@ ipmi_fru_set_float_val(ipmi_fru_t *fru,
     fru_data_rep_t *p;
     int            rv;
 
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return EINVAL;
 
     p = frul + index;
@@ -2891,7 +2891,7 @@ ipmi_fru_set_time_val(ipmi_fru_t *fru,
     int            rv;
     
 
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return EINVAL;
 
     p = frul + index;
@@ -2921,7 +2921,7 @@ ipmi_fru_set_data_val(ipmi_fru_t                *fru,
     enum ipmi_str_type_e stype;
     
 
-    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
 	return EINVAL;
 
     p = frul + index;
@@ -4150,8 +4150,8 @@ std_get_mr_root(ipmi_fru_t          *fru,
 
 typedef struct fru_offset_s
 {
-    int type;
-    int offset;
+    int          type;
+    unsigned int offset;
 } fru_offset_t;
 
 static normal_fru_rec_data_t *

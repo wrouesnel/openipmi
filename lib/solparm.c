@@ -1037,7 +1037,7 @@ got_parm(ipmi_solparm_t    *solparm,
     solparms_t        *lp = &(solparms[solc->curr_parm]);
 
     /* Check the length, and don't forget the revision byte must be added. */
-    if ((!err) && (data_len < (lp->length+1))) {
+    if ((!err) && (data_len < (unsigned int) (lp->length+1))) {
 	if ((data_len == 1) && (lp->optional_offset)) {
 	    /* Some systems return zero-length data for optional parms. */
 	    unsigned char *opt = ((unsigned char *)solc) + lp->optional_offset;
@@ -1726,7 +1726,7 @@ ipmi_solconfig_set_val(ipmi_sol_config_t *solc,
 
     if (gdata[parm].iv_cnt) {
 	count = gdata[parm].iv_cnt(solc);
-	if (index >= count)
+	if (index >= (int) count)
 	    return E2BIG;
     }
 
@@ -1769,7 +1769,7 @@ ipmi_solconfig_data_free(void *data)
 unsigned int
 ipmi_solconfig_str_to_parm(char *name)
 {
-    int i;
+    unsigned int i;
     for (i=0; i<NUM_GDATA_ENTRIES; i++) {
 	if (strcmp(name, gdata[i].fname) == 0)
 	    return i;

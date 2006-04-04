@@ -92,7 +92,7 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     int            tmplen;
     unsigned char  *padpos;
     unsigned char  padval;
-    int            padlen;
+    unsigned int   padlen;
 
     if (!info)
 	return EINVAL;

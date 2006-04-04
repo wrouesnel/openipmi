@@ -715,7 +715,7 @@ mc_stop_timer(ipmi_mc_t *mc)
 static void
 mc_cleanup(ipmi_mc_t *mc)
 {
-    int           i;
+    unsigned int  i;
     ipmi_domain_t *domain = mc->domain;
 
     /* Call the OEM handlers for removal, if it has been registered. */
@@ -3108,9 +3108,9 @@ _ipmi_mc_device_data_compares(ipmi_mc_t  *mc,
     if (mc->real_devid.sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
 	return 0;
 
-    if (mc->real_devid.manufacturer_id != (rsp_data[7]
-					   | (rsp_data[8] << 8)
-					   | (rsp_data[9] << 16)))
+    if (mc->real_devid.manufacturer_id != (uint32_t) (rsp_data[7]
+						      | (rsp_data[8] << 8)
+						      | (rsp_data[9] << 16)))
 	return 0;
 
     if (mc->real_devid.product_id != (rsp_data[10] | (rsp_data[11] << 8)))
@@ -4444,12 +4444,12 @@ struct ipmi_user_s
 
 struct ipmi_user_list_s
 {
-    int               channel;
-    int               curr;
-    int               idx;
-    int               max;
-    int               enabled;
-    int               fixed;
+    unsigned int      channel;
+    unsigned int      curr;
+    unsigned int      idx;
+    unsigned int      max;
+    unsigned int      enabled;
+    unsigned int      fixed;
     ipmi_user_t       *users;
     int               supports_rmcpp;
 

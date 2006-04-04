@@ -32,7 +32,7 @@
 import OpenIPMI
 import wx
 import _term
-import _errstr
+import gui_errstr
 
 id_st = 1100
 
@@ -228,9 +228,9 @@ class SoL(wx.Frame):
                        wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(hsizer, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
-        self.errstr = _errstr.ErrStr(self)
+        self.errstr = gui_errstr.ErrStr(self)
         hsizer.Add(self.errstr, 4, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
-        self.statestr = _errstr.ErrStr(self)
+        self.statestr = gui_errstr.ErrStr(self)
         hsizer.Add(self.statestr, 1, wx.ALIGN_CENTRE | wx.ALL, 2)
         self.SetSizer(self.sizer)
 

@@ -37,7 +37,7 @@ get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
 }
 
 static int
-get_bitmask(char **toks, unsigned char *val, char *errstr, int size,
+get_bitmask(char **toks, unsigned char *val, char *errstr, unsigned int size,
 	    int empty_ok)
 {
     char *str;
@@ -680,7 +680,7 @@ mc_dump_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char *data;
     unsigned char devid;
     unsigned int  length;
-    int           i;
+    unsigned int  i;
     int           rv;
 
     rv = get_uchar(toks, &devid, "Device ID", 0);

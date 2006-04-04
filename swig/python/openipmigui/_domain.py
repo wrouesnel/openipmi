@@ -1,6 +1,6 @@
 # _domain.py
 #
-# openipmi GUI handling for domains
+# openipmi controller handling for domains
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>
@@ -30,7 +30,8 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
+import gui_popup
+import gui_setdialog
 import OpenIPMI
 import _entity
 import _mc
@@ -113,60 +114,22 @@ class DomainSelSet(DomainRefreshData):
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Modify Value")
-        wx.EVT_MENU(self.d.ui, id_st+1, self.modval)
-        self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.d.ui, event, [ [ "Modify Value", self.modval ] ])
         return
 
     def modval(self, event):
         self.init = True
         self.d.domain_id.to_domain(self)
-        dialog = wx.Dialog(None, -1, "Set SEL Rescan Time for " + str(self.d))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(dialog, -1, "Value:")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(dialog, -1, str(self.sel_rescan_time))
-        box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_setdialog.SetDialog("Set SEL Rescan Time for " + str(self.d),
+                                [ str(self.sel_rescan_time) ],
+                                1,
+                                self)
         return
 
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = self.field.GetValue()
-        try:
-            self.ival = int(val)
-        except:
-            return
+    def ok(self, val):
+        self.ival = int(val[0])
         self.init = False
         self.d.domain_id.to_domain(self)
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        self.dialog.Destroy()
         return
 
     def domain_cb(self, domain):
@@ -196,60 +159,25 @@ class DomainIPMBSet(DomainRefreshData):
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+10, "Modify Value")
-        wx.EVT_MENU(self.d.ui, id_st+10, self.modval)
-        self.d.ui.PopupMenu(menu, self.d.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.d.ui, event, [ [ "Modify Value", self.modval ] ])
         return
 
     def modval(self, event):
         self.init = True
         self.d.domain_id.to_domain(self)
-        dialog = wx.Dialog(None, -1, "Set IPMB Rescan Time for " + str(self.d))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(dialog, -1, "Value:")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(dialog, -1, str(self.ipmb_rescan_time))
-        box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_setdialog.SetDialog("Set IPMB Rescan Time for " + str(self.d),
+                                [ str(self.ipmb_rescan_time) ],
+                                1,
+                                self)
         return
 
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = self.field.GetValue()
+    def ok(self, val):
         try:
-            self.ival = int(val)
+            self.ival = int(val[0])
         except:
             return
         self.init = False
         self.d.domain_id.to_domain(self)
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        self.dialog.Destroy()
         return
 
     def domain_cb(self, domain):
@@ -369,18 +297,11 @@ class Domain:
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+20, "Close")
-        wx.EVT_MENU(self.ui, id_st+20, self.CloseMenuHandler)
-        item = menu.Append(id_st+21, "Reread SELs")
-        wx.EVT_MENU(self.ui, id_st+21, self.RereadSelsHandler)
-        item = menu.Append(id_st+22, "Display SELs")
-        wx.EVT_MENU(self.ui, id_st+22, self.DisplaySelsHandler)
-        item = menu.Append(id_st+23, "Rescan IPMB")
-        wx.EVT_MENU(self.ui, id_st+23, self.RescanIPMBHandler)
-        self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.ui, event,
+                        [ [ "Close",        self.CloseMenuHandler ],
+                          [ "Reread SELs",  self.RereadSelsHandler ],
+                          [ "Display SELs", self.DisplaySelsHandler ],
+                          [ "Rescan IPMB",  self.RescanIPMBHandler ] ])
         return
 
     def CloseMenuHandler(self, event):

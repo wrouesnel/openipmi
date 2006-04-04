@@ -31,8 +31,9 @@
 #
 
 import OpenIPMI
-import wx
-import wx.lib.scrolledpanel as scrolled
+import gui_popup
+import gui_setdialog
+import gui_lightset
 
 id_st = 200
 
@@ -59,57 +60,21 @@ class ControlSet:
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Modify Value")
-        wx.EVT_MENU(self.c.ui, id_st+1, self.modval)
-        item = menu.Append(id_st+2, "Set to 0")
-        wx.EVT_MENU(self.c.ui, id_st+2, self.SetTo0)
-        item = menu.Append(id_st+3, "Set to 1")
-        wx.EVT_MENU(self.c.ui, id_st+3, self.SetTo1)
-        self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.c.ui, event,
+                        [ [ "Modify Value", self.modval ],
+                          [ "Set to 0",     self.SetTo0 ],
+                          [ "Set to 1",     self.SetTo1 ] ])
         return
 
     def modval(self, event):
-        dialog = wx.Dialog(None, -1, "Set Control Values",
-                           size=wx.Size(300, 300))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self.values = scrolled.ScrolledPanel(dialog, -1,
-                                             size=wx.Size(300, 200))
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self.values, -1, "Value(s):")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        box2 = wx.BoxSizer(wx.VERTICAL)
-        self.fields = [ ]
-        for i in range(0, self.c.num_vals):
-            if (i >= len(self.c.vals)):
-                v = '0'
-            else:
-                v = str(self.c.vals[i])
-            field = wx.TextCtrl(self.values, -1, v)
-            self.fields.append(field)
-            box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        vals = self.c.vals
+        while (len(vals) < self.c.num_vals):
+            vals.append(0)
             pass
-        box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.values.SetSizer(box)
-        sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_setdialog.SetDialog("Set Control Values for " + self.c.name,
+                                vals,
+                                self.c.num_vals,
+                                self)
         return
 
     def SetTo0(self, event):
@@ -126,23 +91,12 @@ class ControlSet:
         self.dialog.Close()
         return
 
-    def ok(self, event):
+    def ok(self, vals):
         self.ival = [ ]
-        try:
-            for f in self.fields:
-                val = f.GetValue()
-                self.ival.append(int(val))
-                pass
+        for val in vals:
+            self.ival.append(int(val))
             pass
-        except:
-            return
         self.c.control_id.to_control(self)
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        self.dialog.Destroy()
-        self.dialog = None
         return
 
     def control_cb(self, control):
@@ -159,110 +113,18 @@ class LightSet:
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+10, "Modify Value")
-        wx.EVT_MENU(self.c.ui, id_st+10, self.modval)
-        self.c.ui.PopupMenu(menu, self.c.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.c.ui, event, [ [ "Modify Value", self.modval ] ])
         return
 
     def modval(self, event):
-        dialog = wx.Dialog(None, -1, "Set Light Values",
-                           size=wx.Size(300, 300))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self.values = scrolled.ScrolledPanel(dialog, -1,
-                                             size=wx.Size(300, 200))
-        self.lights = [ ]
-        box = wx.BoxSizer(wx.VERTICAL)
-        for i in range(0, self.c.num_vals):
-            if (len(self.c.vals) <= i):
-                ivals = ("", "black", '0', '1')
-            else:
-                ivals = self.c.vals[i]
-                pass
-            box2 = wx.BoxSizer(wx.HORIZONTAL)
-            label = wx.StaticText(self.values, -1, "Light " + str(i))
-            box2.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            if (self.c.lights[i][0]):
-                lc = wx.CheckBox(self.values, -1, "Local Control")
-                lc.SetValue(ivals[0] == "lc")
-                box2.Add(lc, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            else:
-                lc = None
-                pass
-            box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            color = wx.RadioBox(self.values, -1, "Color",
-                                wx.DefaultPosition, wx.DefaultSize,
-                                self.c.lights[i][1], 2, wx.RA_SPECIFY_COLS)
-            color.SetSelection(self.c.lights[i][1].index(ivals[1]))
-            box.Add(color, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            (b, ontime) = self.newField("On Time", self.values, ivals[2])
-            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            (b, offtime) = self.newField("Off Time", self.values, ivals[3])
-            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            self.lights.append((lc, color, ontime, offtime))
-            pass
-            
-        self.values.SetSizer(box)
-        sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_lightset.LightSet("Set Light Values for " + self.c.name,
+                              self.c.num_vals, self.c.lights, self.c.vals,
+                              self);
         return
 
-    def newField(self, name, parent, initval="", style=0):
-        if parent == None:
-            parent = self
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(parent, -1, name + ":")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        field = wx.TextCtrl(parent, -1, initval, style=style);
-        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        return box, field;
-
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = [ ]
-        try:
-            i = 0;
-            for f in self.lights:
-                lc = ""
-                if (f[0] != None) and f[0].GetValue():
-                    lc = "lc"
-                color = self.c.lights[i][1][f[1].GetSelection()]
-                ontime = str(f[2].GetValue())
-                offtime = str(f[3].GetValue())
-                val.append(' '.join([lc, color, ontime, offtime]))
-                i = i + 1
-                pass
-
-            self.ival = ';'.join(val)
-            self.c.control_id.to_control(self)
-            pass
-        except Exception, e:
-            return
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        self.dialog.Destroy()
+    def ok(self, val):
+        self.ival = ';'.join(val)
+        self.c.control_id.to_control(self)
         return
 
     def control_cb(self, control):

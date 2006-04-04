@@ -1,5 +1,5 @@
 
-AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
+AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
 bin_PROGRAMS = openipmicmd solterm rmcp_ping
 

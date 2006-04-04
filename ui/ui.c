@@ -4002,7 +4002,7 @@ static pef_table_t ask_table[] =
 void
 display_pef_config(void)
 {
-    int           i, j;
+    unsigned int  i, j;
     unsigned int  val;
     unsigned int  len;
     unsigned char data[128];
@@ -4480,7 +4480,7 @@ setpef_cmd(char *cmd, char **toks, void *cb_data)
     unsigned char data[30];
     char          *name;
     char          *str;
-    int           i;
+    unsigned int  i;
     int           rv = 0;
 
     if (!pef_config) {
@@ -4578,7 +4578,7 @@ lanparm_out_data(char *name, int rv, unsigned char *data, int len)
 void
 display_lanparm_config(void)
 {
-    int           i;
+    unsigned int  i;
     unsigned int  val;
     unsigned int  len;
     unsigned char data[128];
@@ -5052,7 +5052,7 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
     unsigned char data[30];
     char          *name;
     char          *str;
-    int           i, j;
+    unsigned int  i, j;
     int           rv = 0;
 
     if (!lanparm_config) {
@@ -5682,7 +5682,7 @@ list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 	ipmi_time_t         timestamp = ipmi_event_get_timestamp(event);
 	unsigned int        data_len = ipmi_event_get_data_len(event);
 	const unsigned char *data = ipmi_event_get_data_ptr(event);
-	int                 i;
+	unsigned int        i;
 
 	display_pad_out("  (%x %x) %4.4x:%2.2x %lld:",
 			mcid.channel, mcid.mc_num, record_id, type, timestamp);
@@ -5840,10 +5840,10 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 		  unsigned int    count,
 		  void            *cb_data)
 {
-    sdrs_info_t *info = cb_data;
-    int         i;
-    int         rv;
-    int         total_size = 0;
+    sdrs_info_t  *info = cb_data;
+    unsigned int i;
+    int          rv;
+    int          total_size = 0;
 
     if (err) {
 	ui_log("Error fetching sdrs: %x\n", err);
@@ -6948,7 +6948,7 @@ event_handler(ipmi_domain_t *domain,
     ipmi_time_t         timestamp = ipmi_event_get_timestamp(event);
     unsigned int        data_len = ipmi_event_get_data_len(event);
     const unsigned char *data = ipmi_event_get_data_ptr(event);
-    int                 i;
+    unsigned int        i;
     char                str[200];
     int                 pos;
 

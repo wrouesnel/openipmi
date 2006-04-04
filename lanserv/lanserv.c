@@ -468,14 +468,14 @@ handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
 	}
     }
 
-    if (rv < sizeof(*smsg)) {
+    if (rv < (int) sizeof(*smsg)) {
 	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d\n", rv);
 	return;
     }
 
     smsg = (struct ipmi_sock_msg *) rdata;
 
-    if (rv < (sizeof(*smsg) + smsg->data_len)) {
+    if (rv < ((int) sizeof(*smsg) + smsg->data_len)) {
 	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d, data_len was %d\n",
 	    rv, smsg->data_len);
 	return;

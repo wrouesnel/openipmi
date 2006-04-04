@@ -323,7 +323,7 @@ struct lan_data_s
     unsigned int               num_sends;
 
     /* The IP address we are currently using. */
-    int                        curr_ip_addr;
+    unsigned int               curr_ip_addr;
 
     /* Data about each IP address */
     lan_ip_data_t              ip[MAX_IP_ADDR];
@@ -1204,8 +1204,8 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	    if (item->lan[i]) {
 		/* Check for a matching IP address.  Can't have two
 		   systems with the same address in the same fd entry. */
-		int j, k;
-		lan_data_t *l = item->lan[i];
+		unsigned int j, k;
+		lan_data_t   *l = item->lan[i];
 
 		for (j=0; j<l->cparm.num_ip_addr; j++) {
 		    for (k=0; k<lan->cparm.num_ip_addr; k++) {
@@ -1386,9 +1386,9 @@ hash_lan_addr(const struct sockaddr *addr)
 static void
 lan_add_con(lan_data_t *lan)
 {
-    int        idx;
-    lan_link_t *head;
-    int        i;
+    int          idx;
+    lan_link_t   *head;
+    unsigned int i;
 
     ipmi_lock(lan_list_lock);
     idx = hash_lan(lan->ipmi);
@@ -1418,7 +1418,7 @@ lan_add_con(lan_data_t *lan)
 static void
 lan_remove_con_nolock(lan_data_t *lan)
 {
-    int i;
+    unsigned int i;
     if (!lan->link.lan)
 	/* Hasn't been initialized. */
 	return;
@@ -1799,7 +1799,7 @@ lan_send_addr(lan_data_t              *lan,
     unsigned char  *tmsg;
     unsigned int   pos;
     int            rv;
-    int            payload_type;
+    unsigned int   payload_type;
     int            out_of_session = 0;
     ipmi_payload_t *payload = NULL;
     unsigned char  oem_iana[3] = {0, 0, 0};
@@ -1942,7 +1942,7 @@ lan_send(lan_data_t              *lan,
 	/* We periodically switch between IP addresses, just to make sure
 	   they are all operational. */
 	if ((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0) {
-	    int addr_num = lan->curr_ip_addr + 1;
+	    unsigned int addr_num = lan->curr_ip_addr + 1;
 	    if (addr_num >= lan->cparm.num_ip_addr)
 		addr_num = 0;
 	    while (addr_num != lan->curr_ip_addr) {
@@ -1956,7 +1956,7 @@ lan_send(lan_data_t              *lan,
 	}
     } else {
 	/* Just rotate between IP addresses if we are not yet connected */
-	int addr_num = lan->curr_ip_addr + 1;
+	unsigned int addr_num = lan->curr_ip_addr + 1;
 	if (addr_num >= lan->cparm.num_ip_addr)
 	    addr_num = 0;
 	lan->curr_ip_addr = addr_num;
@@ -2078,7 +2078,7 @@ audit_timeout_handler(void              *cb_data,
     lan_data_t                   *lan;
     struct timeval               timeout;
     ipmi_msg_t                   msg;
-    int                          i;
+    unsigned int                 i;
     ipmi_system_interface_addr_t si;
     int                          start_up[MAX_IP_ADDR];
 
@@ -2266,9 +2266,9 @@ reset_session_data(lan_data_t *lan, int addr_num)
 }
 
 static void
-lost_connection(lan_data_t *lan, int addr_num)
+lost_connection(lan_data_t *lan, unsigned int addr_num)
 {
-    int i;
+    unsigned int i;
 
     ipmi_lock(lan->ip_lock);
     if (! lan->ip[addr_num].working) {
@@ -2801,13 +2801,13 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 		      int gt_allowed, int lt_allowed)
 {
     /* Check the sequence number. */
-    if ((seq - *in_seq) <= gt_allowed) {
+    if ((int) (seq - *in_seq) <= gt_allowed) {
 	/* It's after the current sequence number, but within 8.  We
            move the sequence number forward. */
 	*map <<= seq - *in_seq;
 	*map |= 1;
 	*in_seq = seq;
-    } else if ((*in_seq - seq) <= lt_allowed) {
+    } else if ((int) (*in_seq - seq) <= lt_allowed) {
 	/* It's before the current sequence number, but within 8. */
 	uint8_t bit = 1 << (*in_seq - seq);
 	if (*map & bit) {
@@ -3178,7 +3178,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	}
 
 	/* No authentication. */
-	if (len < (data[13] + 14)) {
+	if (len < (unsigned int) (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
 	    add_stat(ipmi, STAT_TOO_SHORT, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -3198,7 +3198,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 	/* authcode in message, add 16 to the above checks. */
-	if (len < (data[29] + 30)) {
+	if (len < (unsigned int) (data[29] + 30)) {
 	    add_stat(ipmi, STAT_TOO_SHORT, 1);
 	    /* Not enough data was supplied, reject the message. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -3288,7 +3288,7 @@ static int
 addr_match_lan(lan_data_t *lan, uint32_t sid, sockaddr_ip_t *addr,
 	       int *raddr_num)
 {
-    int addr_num;
+    unsigned int addr_num;
 
     /* Make sure the source address matches one we expect from
        this system. */
@@ -3792,8 +3792,8 @@ lan_unreg_stat_info(void *cb_data, void *item1, void *item2)
 static void
 cleanup_con(ipmi_con_t *ipmi)
 {
-    lan_data_t *lan = NULL;
-    int        i;
+    lan_data_t   *lan = NULL;
+    unsigned int i;
 
     if (ipmi) {
 	lan = (lan_data_t *) ipmi->con_data;
@@ -3858,9 +3858,9 @@ cleanup_con(ipmi_con_t *ipmi)
 static void
 lan_cleanup(ipmi_con_t *ipmi)
 {
-    lan_data_t *lan = ipmi->con_data;
-    int        rv;
-    int        i;
+    lan_data_t   *lan = ipmi->con_data;
+    int          rv;
+    unsigned int i;
 
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
@@ -4054,9 +4054,9 @@ lan_set_ipmb_addr(ipmi_con_t    *ipmi,
 		  int           active,
 		  unsigned int  hacks)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
-    int        changed = 0;
-    int        i;
+    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
+    int          changed = 0;
+    unsigned int i;
 
     for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (! ipmb_addr[i])
@@ -4085,9 +4085,9 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 unsigned int hacks,
 		 void         *cb_data)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
-    int        addr_num = (long) cb_data;
-    int        i;
+    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
+    unsigned int addr_num = (unsigned long) cb_data;
+    unsigned int i;
 
     if (err) {
 	handle_connected(ipmi, err, addr_num);
@@ -4388,18 +4388,18 @@ rmcpp_set_info(ipmi_con_t        *ipmi,
 static int
 got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_msg_t  *msg = &rspi->msg;
-    lan_data_t  *lan;
-    int         addr_num = (long) rspi->data4;
-    uint32_t    session_id;
-    uint32_t    mgsys_session_id;
-    int         privilege;
-    int         auth, integ, conf;
+    ipmi_msg_t   *msg = &rspi->msg;
+    lan_data_t   *lan;
+    int          addr_num = (long) rspi->data4;
+    uint32_t     session_id;
+    uint32_t     mgsys_session_id;
+    unsigned int privilege;
+    unsigned int auth, integ, conf;
     ipmi_rmcpp_authentication_t *authp = NULL;
     ipmi_rmcpp_confidentiality_t *confp = NULL;
     ipmi_rmcpp_integrity_t *integp = NULL;
-    auth_info_t *info;
-    int         rv;
+    auth_info_t  *info;
+    int          rv;
 
     if (check_rakp_rsp(ipmi, msg, "got_rmcpp_open_session_rsp", 36, addr_num))
 	goto out;
@@ -4583,21 +4583,21 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     data[1] = lan->cparm.privilege;
     ipmi_set_uint32(data+4, lan->ip[addr_num].precon_session_id);
     data[8] = 0; /* auth algorithm */
-    if (lan->cparm.auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
+    if ((int) lan->cparm.auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	data[11] = 0; /* Let the BMC pick */
     else {
 	data[11] = 8;
 	data[12] = lan->cparm.auth;
     }
     data[16] = 1; /* integrity algorithm */
-    if (lan->cparm.integ == IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
+    if ((int) lan->cparm.integ == IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
 	data[19] = 0; /* Let the BMC pick */
     else {
 	data[19] = 8;
 	data[20] = lan->cparm.integ;
     }
     data[24] = 2; /* confidentiality algorithm */
-    if (lan->cparm.conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
+    if ((int) lan->cparm.conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
 	data[27] = 0; /* Let the BMC pick */
     else {
 	data[27] = 8;
@@ -4873,7 +4873,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	lan->authdata = NULL;
     }
 
-    if (lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT) {
+    if ((int) lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT) {
 	/* Pick the most secure authentication type. */
 	if (msg->data[2] & (1 << IPMI_AUTHTYPE_MD5)) {
 	    lan->chosen_authtype = IPMI_AUTHTYPE_MD5;
@@ -5004,8 +5004,8 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 2;
-    if (((lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT)
-	 || (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS))
+    if ((((int) lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT)
+	 || ((int) lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS))
 	&& !force_ipmiv15)
     {
 	rsp_handler = auth_cap_done_p;
@@ -5028,7 +5028,7 @@ lan_start_con(ipmi_con_t *ipmi)
     lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
     int            rv;
     struct timeval timeout;
-    int            i;
+    unsigned int   i;
 
     ipmi_lock(lan->ip_lock);
     if (lan->started) {
@@ -5039,8 +5039,8 @@ lan_start_con(ipmi_con_t *ipmi)
 	   doesn't matter, the callback will be called properly
 	   later. */
 	if (lan->connected) {
-	    int i;
-	    int port_err[MAX_IP_ADDR];
+	    unsigned int i;
+	    int          port_err[MAX_IP_ADDR];
 
 	    for (i=0; i<lan->cparm.num_ip_addr; i++)
 		port_err[i] = lan->ip[i].working ? 0 : EINVAL;
@@ -5113,7 +5113,8 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     char s_ports[MAX_IP_ADDR][10];
     char *paddrs[MAX_IP_ADDR], *pports[MAX_IP_ADDR];
     unsigned char *p;
-    int i,rv;
+    unsigned int  i;
+    int           rv;
 
     if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
 	return EINVAL;
@@ -5269,8 +5270,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi_con_t         *ipmi = NULL;
     lan_data_t         *lan = NULL;
     int                rv;
-    int                i;
-    int		       count;
+    unsigned int       i;
+    unsigned int       count;
     struct sockaddr_in *pa;
     char               **ip_addrs = NULL;
     char               *tports[MAX_IP_ADDR];
@@ -5333,7 +5334,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
 	case IPMI_LANP_AUTHENTICATION_ALGORITHM:
 	    cparm.auth = parms[i].parm_val;
-	    if (cparm.auth != IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
+	    if ((int) cparm.auth != IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	    {
 		if (cparm.auth >= 64)
 		    return EINVAL;
@@ -5344,7 +5345,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
 	case IPMI_LANP_INTEGRITY_ALGORITHM:
 	    cparm.integ = parms[i].parm_val;
-	    if (cparm.integ != IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
+	    if ((int) cparm.integ != IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
 	    {
 		if (cparm.integ >= 64)
 		    return EINVAL;
@@ -5356,7 +5357,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
 	case IPMI_LANP_CONFIDENTIALITY_ALGORITHM:
 	    cparm.conf = parms[i].parm_val;
-	    if (cparm.conf != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
+	    if ((int)cparm.conf != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
 	    {
 		if (cparm.conf >= 64)
 		    return EINVAL;
@@ -5384,7 +5385,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
     if ((cparm.num_ip_addr == 0) || (ip_addrs == NULL))
 	return EINVAL;
-    if ((cparm.authtype != IPMI_AUTHTYPE_DEFAULT)
+    if (((int) cparm.authtype != IPMI_AUTHTYPE_DEFAULT)
 	&& (cparm.authtype != IPMI_AUTHTYPE_RMCP_PLUS)
 	&& ((cparm.authtype >= MAX_IPMI_AUTHS)
 	    || (ipmi_auths[cparm.authtype].authcode_init == NULL)))
@@ -5627,7 +5628,7 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
 {
     lan_link_t   *l;
     lan_data_t   *lan;
-    int          i;
+    unsigned int i;
     int          idx;
     lan_do_evt_t *found = NULL;
     lan_do_evt_t *next = NULL;
@@ -6163,7 +6164,7 @@ set_str_val(char **dest, const char *value, int null_ok, int *is_set,
     }
 
     if (len) {
-	int nlen = strlen(value);
+	unsigned int nlen = strlen(value);
 	if (nlen > max_len)
 	    return EINVAL;
 	memcpy(*dest, value, nlen);

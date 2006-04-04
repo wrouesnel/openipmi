@@ -253,7 +253,7 @@ event_handler(ipmi_con_t        *ipmi,
     unsigned int        type = ipmi_event_get_type(event);
     unsigned int        data_len = ipmi_event_get_data_len(event);
     const unsigned char *data = ipmi_event_get_data_ptr(event);
-    int                 i;
+    unsigned int        i;
 
     printf("Got event:\n");
     printf("  %4.4x (%2.2x):", record_id, type);
@@ -363,7 +363,7 @@ process_input_line(char *buf)
     char               *strtok_data;
     char               *endptr;
     char               *v = strtok_r(buf, " \t\r\n,.\"", &strtok_data);
-    int                pos = 0;
+    unsigned int       pos = 0;
     int                start;
     ipmi_addr_t        addr;
     unsigned int       addr_len;

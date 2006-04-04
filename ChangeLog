@@ -1,3 +1,10 @@
+2006-03-31 Corey Minyard <cminyard@mvista.com>
+
+	* */Makefile.am: Add -Wsign-compare to find signed/unsigned
+	comparison problems.
+	
+	* practically everything: Fixed signed/unsigned comparison problems.
+
 2006-03-18 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sel.c: There were some subtle problems with deletes of large

@@ -536,8 +536,8 @@ static int destroy_stat(void *cb_data, void *item1, void *item2);
 static void
 cleanup_domain(ipmi_domain_t *domain)
 {
-    int i;
-    int rv;
+    unsigned int i;
+    int          rv;
 
     /* This must be first, so that nuking the oustanding messages will
        cause the right thing to happen. */
@@ -4589,7 +4589,7 @@ ll_addr_changed(ipmi_con_t    *ipmi,
     int           u;
     int           start_connection;
     unsigned char old_addr[MAX_IPMI_USED_CHANNELS];
-    int           i;
+    unsigned int  i;
 
     rv = _ipmi_domain_get(domain);
     if (rv)
@@ -4851,7 +4851,7 @@ process_options(ipmi_domain_t      *domain,
 		ipmi_open_option_t *options,
 		unsigned int       num_options)
 {
-    int i;
+    unsigned int i;
 
     /* Option processing. */
     for (i=0; i<num_options; i++) {
@@ -4909,8 +4909,8 @@ ipmi_open_domain(char               *name,
 {
     int           rv;
     ipmi_domain_t *domain = NULL;
-    int           i;
-    int           priv;
+    unsigned int  i;
+    unsigned int  priv;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
@@ -5961,7 +5961,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
 {
     int           rv;
     ipmi_domain_t *domain;
-    int           i;
+    unsigned int  i;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;

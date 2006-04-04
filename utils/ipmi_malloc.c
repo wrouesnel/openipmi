@@ -136,7 +136,7 @@ ipmi_debug_malloc(size_t size, void **tb)
     struct dbg_malloc_header  *hdr;
     struct dbg_malloc_trailer *trlr;
     struct dbg_malloc_trailer *trlr2;
-    int                       i;
+    size_t                    i;
     size_t                    real_size;
 
     real_size = dbg_align(size);
@@ -223,7 +223,7 @@ dbg_remove_free_queue(void)
     struct dbg_malloc_trailer *trlr;
     size_t                    real_size;
     long                      *dp;
-    int                       i;
+    size_t                    i;
     char                      *data;
     int                       overwrite;
 	
@@ -282,7 +282,7 @@ ipmi_debug_free(void *to_free, void **tb)
     struct dbg_malloc_header  *hdr;
     struct dbg_malloc_trailer *trlr;
     struct dbg_malloc_trailer *trlr2;
-    int                       i;
+    size_t                    i;
     size_t                    real_size;
     long                      *dp;
     char                      *data = to_free;

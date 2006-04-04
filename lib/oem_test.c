@@ -135,7 +135,7 @@ test_event_handler_0(ipmi_mc_t    *mc,
 	ipmi_control_id_t id;
 	event_info_t      info;
 	int               rv;
-	unsigned long     timestamp;
+	ipmi_time_t       timestamp;
 
 	if (ipmi_event_get_data(event, data, 0, 13) != 13)
 	    return 0;

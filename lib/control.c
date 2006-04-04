@@ -52,12 +52,12 @@ struct ipmi_control_info_s
     ipmi_control_t           **controls_by_idx;
     /* Size of above control array.  This will be 0 if the LUN has no
        controls. */
-    int                      idx_size;
+    unsigned int             idx_size;
 
-    ipmi_lock_t *idx_lock;
+    ipmi_lock_t              *idx_lock;
 
     /* Total number of controls we have in this. */
-    unsigned int control_count;
+    unsigned int             control_count;
 
     opq_t *control_wait_q;
     int  wait_err;
@@ -465,7 +465,7 @@ ipmi_control_get_name(ipmi_control_t *control, char *name, int length)
 
     if (control->entity)
 	rv = ipmi_entity_get_name(control->entity, name, length);
-    if (length > control->id_len + 2)
+    if (length > (int) (control->id_len + 2))
 	length = control->id_len + 2; /* Leave space for the nil */
     rv += snprintf(name+rv, length, ".%s", control->id);
     return rv;
@@ -824,7 +824,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     if (num >= controls->idx_size) {
 	ipmi_control_t **new_array;
 	unsigned int   new_size;
-	int            i;
+	unsigned int   i;
 
 	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
 	   too much). */
@@ -902,7 +902,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 int
 ipmi_controls_destroy(ipmi_control_info_t *controls)
 {
-    int j;
+    unsigned int j;
 
     if (controls->destroyed)
 	return EINVAL;
@@ -1349,7 +1349,7 @@ ipmi_control_get_id(ipmi_control_t *control, char *id, int length)
 
     CHECK_CONTROL_LOCK(control);
 
-    if (control->id_len > length)
+    if ((int) control->id_len > length)
 	clen = length;
     else
 	clen = control->id_len;
@@ -1647,7 +1647,7 @@ typedef struct ipmi_light_s
 
 struct ipmi_light_setting_s
 {
-    unsigned int count;
+    int          count;
     ipmi_light_t *lights;
 };
 

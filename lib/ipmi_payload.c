@@ -86,7 +86,7 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) addr;
 
-	if ((msg->data_len + 7) > *out_data_len)
+	if ((unsigned int) (msg->data_len + 7) > *out_data_len)
 	    return E2BIG;
 	if (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	    tmsg[0] = 0x20;
@@ -116,7 +116,7 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	    do_broadcast = 1;
 	}
 
-	if ((msg->data_len + 15 + do_broadcast) > *out_data_len)
+	if ((unsigned int) (msg->data_len + 15 + do_broadcast) > *out_data_len)
 	    return E2BIG;
 
 	pos = 0;

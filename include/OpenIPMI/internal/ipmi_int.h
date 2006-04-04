@@ -137,7 +137,7 @@ void ipmi_set_device_string(const char           *input,
 			    unsigned int         in_len,
 			    unsigned char        *output,
 			    int                  force_unicode,
-			    int                  *out_len);
+			    unsigned int         *out_len);
 
 /* Generate a log.  Note that logs should not end in a newline, that
    will be automatically added as needed to the log.  */

@@ -1497,7 +1497,7 @@ got_parm(ipmi_lanparm_t    *lanparm,
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
     /* Check the length, and don't forget the revision byte must be added. */
-    if ((!err) && (data_len < (lp->length+1))) {
+    if ((!err) && (data_len < (unsigned int) (lp->length+1))) {
 	if ((data_len == 1) && (lp->optional_offset)) {
 	    /* Some systems return zero-length data for optional parms. */
 	    unsigned char *opt = ((unsigned char *)lanc) + lp->optional_offset;
@@ -2727,7 +2727,7 @@ ipmi_lanconfig_set_val(ipmi_lan_config_t *lanc,
 
     if (gdata[parm].iv_cnt) {
 	count = gdata[parm].iv_cnt(lanc);
-	if (index >= count)
+	if (index >= (int) count)
 	    return E2BIG;
     }
 
@@ -2769,7 +2769,7 @@ ipmi_lanconfig_data_free(void *data)
 unsigned int
 ipmi_lanconfig_str_to_parm(char *name)
 {
-    int i;
+    unsigned int i;
     for (i=0; i<NUM_GDATA_ENTRIES; i++) {
 	if (strcmp(name, gdata[i].fname) == 0)
 	    return i;

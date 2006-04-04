@@ -182,8 +182,7 @@ static int
 traverse_fru_node_tree(int indent, ipmi_fru_node_t *node)
 {
     const char                *name;
-    unsigned int              i;
-    int                       j;
+    unsigned int              i, j;
     enum ipmi_fru_data_type_e dtype;
     int                       intval, rv;
     time_t                    time;

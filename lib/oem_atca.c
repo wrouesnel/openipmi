@@ -350,8 +350,8 @@ check_for_msg_err(ipmi_mc_t *mc, int *rv, ipmi_msg_t *msg,
 static atca_ipmc_t *
 atca_find_minfo_from_ipmb(unsigned int ipmb_addr, atca_shelf_t *info)
 {
-    atca_ipmc_t *minfo = NULL;
-    int         i;
+    atca_ipmc_t  *minfo = NULL;
+    unsigned int i;
 
     if (ipmb_addr == 0x20)
 	/* We ignore the floating IPMB address if it comes up. */
@@ -1667,7 +1667,7 @@ fetch_fru_leds(atca_fru_t *finfo)
 static void
 destroy_fru_leds(atca_fru_t *finfo)
 {
-    int i;
+    unsigned int i;
 
     if (finfo->leds) {
 	for (i=0; i<finfo->num_leds; i++) {
@@ -2261,7 +2261,7 @@ realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
     atca_fru_t   **old_frus;
     atca_fru_t   **new_frus;
     unsigned int old_num_frus;
-    int          i, j;
+    unsigned int i, j;
 
     old_num_frus = minfo->num_frus;
     if (old_num_frus >= num_frus)
@@ -2303,11 +2303,11 @@ realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
 static atca_fru_t *
 atca_find_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
 {
-    int         ipmb_addr;
-    int         fru_id;
-    int         i;
-    atca_ipmc_t *minfo = NULL;
-    int         rv;
+    int          ipmb_addr;
+    int          fru_id;
+    unsigned int i;
+    atca_ipmc_t  *minfo = NULL;
+    int          rv;
 
     /* Has to be a logical FRU. */
     if (!ipmi_entity_get_is_logical_fru(entity))
@@ -2342,10 +2342,10 @@ atca_find_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
 static atca_fru_t *
 atca_find_mc_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
 {
-    int         ipmb_addr;
-    int         i;
-    atca_ipmc_t *minfo = NULL;
-    int         rv;
+    int          ipmb_addr;
+    unsigned int i;
+    atca_ipmc_t  *minfo = NULL;
+    int          rv;
 
     ipmb_addr = ipmi_entity_get_slave_address(entity);
     for (i=0; i<info->num_ipmcs; i++) {
@@ -2638,7 +2638,7 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 {
     atca_ipmc_t   *minfo = NULL;
     atca_fru_t    *finfo;
-    int           i;
+    unsigned int  i;
     unsigned int  ipmb_addr;
     int           rv;
 
@@ -2828,7 +2828,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 {
     ipmi_entity_info_t *ents;
     char               *name;
-    int                i;
+    unsigned int       i;
     int                rv;
 
     ents = ipmi_domain_get_entities(domain);
@@ -3167,7 +3167,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	    goto next_data_item;
 	}
 
-	if (len < (27 + (3 * data[26]))) {
+	if (len < (unsigned int) (27 + (3 * data[26]))) {
 	    /* length does not meet the minimum possible length. */
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%soem_atca.c(shelf_fru_fetched): "
@@ -3300,7 +3300,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 	_ipmi_entity_get(info->shelf_entity);
     _ipmi_domain_entity_unlock(domain);
     if (info->ipmcs) {
-	int i;
+	unsigned int i;
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
@@ -3333,7 +3333,7 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
     if (info->addresses)
 	ipmi_mem_free(info->addresses);
     if (info->ipmcs) {
-	int i;
+	unsigned int i;
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
@@ -3783,11 +3783,11 @@ typedef struct inst_list_s
 } inst_list_t;
 
 static void
-add_inst(inst_list_t *inst, int *curr,
+add_inst(inst_list_t *inst, unsigned int *curr,
 	 unsigned int entity_id, unsigned int entity_instance,
 	 unsigned int *container_id)
 {
-    int i;
+    unsigned int i;
 
     /* Ignore system-relative ones. */
     if (entity_instance < 0x60)
@@ -3829,7 +3829,7 @@ static void
 sensor_fixup(ipmi_mc_t *mc, ipmi_sdr_t *sdr)
 {
     char name[33];
-    int  name_len = 0;
+    unsigned int name_len = 0;
     enum ipmi_str_type_e type;
     char *cpustart;
     unsigned char *str;
@@ -3880,11 +3880,11 @@ misc_sdrs_fixup(ipmi_mc_t       *mc,
 		void            *cb_data)
 {
     unsigned int count;
-    int          i, j;
+    unsigned int i, j;
     ipmi_sdr_t   sdr;
     int          rv;
     inst_list_t  *inst = NULL;
-    int          next_inst = 0;
+    unsigned int next_inst = 0;
     unsigned int entity_id;
     unsigned int entity_instance;
     uint16_t     last_rec = 0;

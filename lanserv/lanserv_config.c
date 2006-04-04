@@ -162,7 +162,7 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
 static void
 cleanup_ascii(uint8_t *c, unsigned int len)
 {
-    int i;
+    unsigned int i;
 
     i = 0;
     while ((i < len) && (*c != 0)) {
@@ -199,8 +199,8 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 	strncpy((char *) data, tok, len);
 	cleanup_ascii(data, len);
     } else {
-	int  i;
-	char c[3];
+	unsigned int i;
+	char         c[3];
 	/* HEX pw */
 	if (strlen(tok) != 32) {
 	    *err = "HEX password or username not 32 HEX characters long";

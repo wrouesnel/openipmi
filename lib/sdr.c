@@ -144,28 +144,27 @@ struct ipmi_sdr_info_s
 
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
-    int                    curr_rec_id;
-    int                    read_offset; /* Next data to read, -1 if
-                                           the header */
+    unsigned int           curr_rec_id;
+    unsigned int           read_offset; /* Next data to read */
 
-    int                    fetch_size;
+    unsigned int           fetch_size;
 
-    int                    curr_read_rec_id;
-    int                    next_read_rec_id;
+    unsigned int           curr_read_rec_id;
+    unsigned int           next_read_rec_id;
     int                    curr_read_idx;
     int                    next_read_offset; /* -1 if header */
     int                    read_size;
 
     unsigned int           reservation;
-    int                    working_num_sdrs;
+    unsigned int           working_num_sdrs;
     ipmi_sdr_t             *working_sdrs;
     int                    sdrs_changed;
-    int                    fetch_retry_count;
-    int                    sdr_retry_count;
+    unsigned int           fetch_retry_count;
+    unsigned int           sdr_retry_count;
     int                    fetch_err;
 
-    int                    sdr_data_write;
-    int                    write_sdr_num;
+    unsigned int           sdr_data_write;
+    unsigned int           write_sdr_num;
 
     /* List of fetch info items for an in-progress fetch.  The free
        list holds fetch structures that are not currently in use, the
@@ -783,7 +782,7 @@ process_sdr_info(ipmi_sdr_info_t *sdrs, fetch_info_t *info)
 	memcpy(&sdr->data[info->offset-SDR_HEADER_SIZE],
 	       info->data+2, info->read_len);
     }
-    if (info->offset+info->read_len == sdr->length+SDR_HEADER_SIZE) {
+    if (info->offset+info->read_len == (uint32_t)sdr->length+SDR_HEADER_SIZE) {
 	sdrs->curr_rec_id = ipmi_get_uint16(info->data);
 	sdrs->read_offset = 0;
     } else {
@@ -818,7 +817,7 @@ check_and_process_info(ilist_iter_t *iter, void *item, void *cb_data)
 typedef struct cancel_same_or_newer_s
 {
     ipmi_sdr_info_t *sdrs;
-    int             idx;
+    unsigned int    idx;
 } cancel_same_or_newer_t;
 
 static void
@@ -1246,14 +1245,16 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		break;
 	    }
 
-	    if ((sdrs->curr_read_idx+1) >= sdrs->working_num_sdrs) {
+	    if ((unsigned int) (sdrs->curr_read_idx+1)
+		>= sdrs->working_num_sdrs)
+	    {
 		if (sdrs->sensor && (sdrs->working_num_sdrs < 512)) {
 		    /* The get device SDR command (stupidly) only
 		       reports the number of sensors, not the number
 		       of SDRs.  So we have to be able to expand, but
 		       keep it within reason (thus the "512" check
 		       above). */
-		    int new_num_sdrs = sdrs->working_num_sdrs + 10;
+		    unsigned int new_num_sdrs = sdrs->working_num_sdrs + 10;
 		    ipmi_sdr_t *new_sdrs;
 
 		    /* Allocate 9 extra bytes for the db info. */
@@ -1453,8 +1454,8 @@ handle_sdr_info(ipmi_mc_t  *mc,
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
     ipmi_msg_t      cmd_msg;
     int             rv;
-    int32_t         add_timestamp;
-    int32_t         erase_timestamp;
+    uint32_t        add_timestamp;
+    uint32_t        erase_timestamp;
 
 
     sdr_lock(sdrs);
@@ -1936,8 +1937,8 @@ ipmi_get_sdr_by_recid(ipmi_sdr_info_t *sdrs,
 		      int             recid,
 		      ipmi_sdr_t      *return_sdr)
 {
-    int i;
-    int rv = ENOENT;
+    unsigned int i;
+    int          rv = ENOENT;
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
@@ -1962,8 +1963,8 @@ ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdrs,
 		     int             type,
 		     ipmi_sdr_t      *return_sdr)
 {
-    int i;
-    int rv = ENOENT;
+    unsigned int i;
+    int          rv = ENOENT;
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
@@ -1996,7 +1997,7 @@ ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdrs,
 	return EINVAL;
     }
 
-    if (index >= sdrs->num_sdrs)
+    if ((unsigned int)index >= sdrs->num_sdrs)
 	rv = ENOENT;
     else
 	*return_sdr = sdrs->sdrs[index];
@@ -2018,7 +2019,7 @@ ipmi_set_sdr_by_index(ipmi_sdr_info_t *sdrs,
 	return EINVAL;
     }
 
-    if (index >= sdrs->num_sdrs)
+    if ((unsigned int)index >= sdrs->num_sdrs)
 	rv = ENOENT;
     else
 	sdrs->sdrs[index] = *sdr;
@@ -2031,8 +2032,8 @@ int ipmi_get_all_sdrs(ipmi_sdr_info_t *sdrs,
 		      int             *array_size,
 		      ipmi_sdr_t      *array)
 {
-    int i;
-    int rv = 0;
+    unsigned int i;
+    int          rv = 0;
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
@@ -2040,7 +2041,7 @@ int ipmi_get_all_sdrs(ipmi_sdr_info_t *sdrs,
 	return EINVAL;
     }
 
-    if (*array_size < sdrs->num_sdrs) {
+    if ((unsigned int)*array_size < sdrs->num_sdrs) {
 	rv = E2BIG;
     } else {
 	for (i=0; i<sdrs->num_sdrs; i++) {
@@ -2334,7 +2335,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
     int             rv;
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
-    int             wleft;
+    unsigned int    wleft;
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {

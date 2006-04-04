@@ -35,7 +35,7 @@ import OpenIPMI
 import wx
 import wx.gizmos as gizmos
 import _oi_logging
-import _errstr
+import gui_errstr
 
 id_st = 1400
 
@@ -66,7 +66,7 @@ class MCValueSet(wx.Dialog):
         self.field = wx.TextCtrl(self, -1, data.currval)
         sizer.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 
-        self.errstr = _errstr.ErrStr(self)
+        self.errstr = gui_errstr.ErrStr(self)
         sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         bbox = wx.BoxSizer(wx.HORIZONTAL)
@@ -128,7 +128,7 @@ class MCSolParm(wx.Dialog):
 
         sizer.Add(listc, 1, wx.GROW, 0)
 
-        self.errstr = _errstr.ErrStr(self)
+        self.errstr = gui_errstr.ErrStr(self)
         sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
 
         box = wx.BoxSizer(wx.HORIZONTAL)

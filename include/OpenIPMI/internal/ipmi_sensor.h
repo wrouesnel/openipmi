@@ -266,11 +266,11 @@ void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
    hot-swap.  This should generally be a slot sensor (sensor type
    21h). */
 int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
-				      unsigned int  *offset,
-				      unsigned int  *val_when_requesting);
+				      int           *offset,
+				      int           *val_when_requesting);
 void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
-					unsigned int  offset,
-					unsigned int  val_when_requesting);
+					int           offset,
+					int           val_when_requesting);
 
 /* Allow OEM code to call the event handlers.  Note that if the event
    is handled by the handlers, then "*event" will be set to NULL and

@@ -1,6 +1,6 @@
-# _errstr.py
+# _domain.py
 #
-# Fixes for broken wxPython 2.4 StatusBars
+# openipmi GUI handling for domains
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>
@@ -32,19 +32,14 @@
 
 import wx
 
-class ErrStr(wx.StatusBar):
-    def __init__(self, parent):
-        wx.StatusBar.__init__(self, parent, -1)
-        return
-
-    def SetError(self, text):
-        self.SetStatusText(text)
-        # In 2.4, it won't automatically show text, we have to clear
-        # it and sentit a paint event.
-        if (hasattr(self, "Clear")):
-            self.Clear()
-            self.ProcessEvent(wx.PaintEvent(-1))
-            pass
-        return
-
-    pass
+def popup(ui, event, handlers):
+    eitem = event.GetItem();
+    menu = wx.Menu();
+    i = 10000
+    for h in handlers:
+        item = menu.Append(i, h[0])
+        wx.EVT_MENU(ui, i, h[1])
+        i += 1
+    ui.PopupMenu(menu, ui.get_item_pos(eitem))
+    menu.Destroy()
+    return

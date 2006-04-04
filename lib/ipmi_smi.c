@@ -1227,9 +1227,9 @@ smi_set_ipmb_addr(ipmi_con_t    *ipmi,
 		  int           active,
 		  unsigned int  hacks)
 {
-    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
-    int        changed = 0;
-    int        i;
+    smi_data_t   *smi = (smi_data_t *) ipmi->con_data;
+    int          changed = 0;
+    unsigned int i;
 
     for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (! ipmb_addr[i])
@@ -1286,8 +1286,8 @@ handle_ipmb_addr(ipmi_con_t    *ipmi,
 		 unsigned int  hacks,
 		 void          *cb_data)
 {
-    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
-    int        i;
+    smi_data_t   *smi = (smi_data_t *) ipmi->con_data;
+    unsigned int i;
 
     if (err) {
 	call_con_change_handlers(smi, err, 0, 0);

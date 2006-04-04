@@ -435,7 +435,7 @@ out_binary(ipmi_cmdlang_t *info, const char *name, const char *value,
     out_data_t *out_data = info->user_data;
     unsigned char *data = (unsigned char *) value;
     int indent2 = (out_data->indent * 2) + strlen(name) + 1;
-    int i;
+    unsigned int i;
     char *sep = ":";
 
     if (info->help)
@@ -566,7 +566,7 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
     enum ipmi_cmdlang_out_types type;
     char                        *name, *value;
     int                         indent2;
-    int                         i;
+    unsigned int                i;
 
     if (handling_input && !done && cmd_redisp)
 	fputc('\n', stdout);

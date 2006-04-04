@@ -327,7 +327,7 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
     struct iovec vec[3];
     uint32_t sid, seq, *seqp;
     int rv;
-    int s;
+    unsigned int s;
 
     if (!session)
 	session = sid_to_session(lan, msg->sid);
@@ -2856,7 +2856,7 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
     int            tmplen;
     unsigned char  *padpos;
     unsigned char  padval;
-    int            padlen;
+    unsigned int   padlen;
 
     if (*hdr_left < 16)
 	return E2BIG;
@@ -3259,7 +3259,7 @@ void handle_rakp1_payload(lan_data_t *lan, msg_t *msg)
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
     }
-    if (28+name_len > msg->len) {
+    if ((unsigned int) (28+name_len) > msg->len) {
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "RAKP msg: name length doesn't match: %d", name_len);
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
@@ -3432,9 +3432,9 @@ check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
 void
 ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 {
-    int       len;
-    uint32_t  *seq;
-    msg_t     imsg;
+    unsigned int len;
+    uint32_t     *seq;
+    msg_t        imsg;
 
     imsg.data = msg->data-1;
     imsg.len = msg->len+1;

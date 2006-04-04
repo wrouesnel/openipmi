@@ -33,7 +33,7 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 import OpenIPMI
 import _domain
-import _errstr
+import gui_errstr
 
 authtypes = [ 'default', 'none', 'md2', 'md5', 'straight', 'rmcp+' ]
 privileges = [ 'default', 'callback', 'user', 'operator', 'admin', 'oem' ]
@@ -52,7 +52,7 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
         args = OpenIPMI.alloc_empty_args(str(contype))
         self.args = args
 
-        self.errstr = _errstr.ErrStr(self)
+        self.errstr = gui_errstr.ErrStr(self)
         self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
 
         i = 0
@@ -260,7 +260,7 @@ class OpenDomainDialog(wx.Dialog):
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
-        self.status = _errstr.ErrStr(self)
+        self.status = gui_errstr.ErrStr(self)
         self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL | wx.GROW, 2)
 
         self.conn = [ ConnInfo(self, mainhandler),
