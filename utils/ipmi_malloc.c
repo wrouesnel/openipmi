@@ -222,7 +222,7 @@ dbg_remove_free_queue(void)
     struct dbg_malloc_header  *hdr;
     struct dbg_malloc_trailer *trlr;
     size_t                    real_size;
-    long                      *dp;
+    unsigned long             *dp;
     size_t                    i;
     char                      *data;
     int                       overwrite;
@@ -244,8 +244,8 @@ dbg_remove_free_queue(void)
     real_size = dbg_align(hdr->size);
 
     overwrite = 0;
-    dp = (long *) data;
-    for (i=0; i<real_size; i+=sizeof(long), dp++)
+    dp = (unsigned long *) data;
+    for (i=0; i<real_size; i+=sizeof(unsigned long), dp++)
 	if (*dp != FREE_SIGNATURE)
 	    overwrite = 1;
     if (overwrite)
@@ -284,7 +284,7 @@ ipmi_debug_free(void *to_free, void **tb)
     struct dbg_malloc_trailer *trlr2;
     size_t                    i;
     size_t                    real_size;
-    long                      *dp;
+    unsigned long             *dp;
     char                      *data = to_free;
     int                       overwrite;
 
@@ -348,8 +348,8 @@ ipmi_debug_free(void *to_free, void **tb)
 #endif
 
     /* Fill the data area with a signature. */
-    dp = (long *) (((char *) hdr) + sizeof(*hdr));
-    for (i=0; i<real_size; i+=sizeof(long), dp++)
+    dp = (unsigned long *) (((char *) hdr) + sizeof(*hdr));
+    for (i=0; i<real_size; i+=sizeof(unsigned long), dp++)
 	*dp = FREE_SIGNATURE;
 
     enqueue_dbg_free(hdr, trlr);

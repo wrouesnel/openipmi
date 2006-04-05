@@ -1,15 +1,15 @@
 RPM		= rpmbuild
 RPMFLAGS	= -ta
 
-SUBDIRS    = include utils lib unix $(GLIB_DIR) libedit cmdlang ui lanserv \
-	     sample doc man $(SWIG_DIR)
+SUBDIRS    = include utils lib unix $(GLIB_DIR) $(TCL_DIR) libedit cmdlang \
+	     ui lanserv sample doc man $(SWIG_DIR)
 
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec ipmi.init ipmi.sysconf
 
 PKGCONFIGS = OpenIPMIutils.pc OpenIPMI.pc OpenIPMIui.pc OpenIPMIposix.pc \
 	     OpenIPMIpthread.pc OpenIPMIcmdlang.pc $(GLIB_PKGCONF) \
-	     $(GLIB12_PKGCONF)
+	     $(GLIB12_PKGCONF) $(TCL_PKGCONF)
 
 install-data-local: $(PKGCONFIGS)
 	$(mkinstalldirs) $(DESTDIR)$(libdir)/pkgconfig

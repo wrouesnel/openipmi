@@ -140,6 +140,28 @@ AC_ARG_WITH(glib12libs,
     gliblibs="$withval",
 )
 
+trytcl=yes
+AC_ARG_WITH(tcl,
+[  --with-tcl=yes|no               Look for tcl.],
+    if test "x$withval" = "xyes"; then
+      trytcl=yes
+    elif test "x$withval" = "xno"; then
+      trytcl=no
+    fi,
+)
+
+tclcflags=
+AC_ARG_WITH(tclcflags,
+[  --with-tclcflags=flags          Set the flags to compile with tcl.],
+    tclcflags="$withval",
+)
+
+tcllibs=
+AC_ARG_WITH(tcllibs,
+[  --with-tcllibs=libs             Set the libraries to link with tcl.],
+    tcllibs="$withval",
+)
+
 tryperl=yes
 perldir=
 AC_ARG_WITH(perl,
@@ -409,6 +431,51 @@ fi
 AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_SINGLE_LIB)
 
+# Handle TCL support
+TCL_LIBS=
+TCL_CFLAGS=
+havetcl=no
+if test "x$trytcl" != "xno"; then
+   FOUND_TCL_HEADER=no
+   if test "x$tclcflags" = "x"; then
+      AC_CHECK_HEADER(tcl.h, FOUND_TCL_HEADER=yes; )
+   else
+      TCL_CFLAGS="$tclcflags"
+      FOUND_TCL_HEADER=yes
+   fi
+   if test "x$tcllibs" = "x"; then
+      if test "x$FOUND_TCL_HEADER" = "xyes"; then
+         AC_CHECK_LIB(tcl, Tcl_DoOneEvent, TCL_LIBS=-ltcl)
+      fi
+   else
+      TCLLIBS="$tcllibs"
+   fi
+   if test "x$FOUND_TCL_HEADER" = "xyes" -a "x$TCL_LIBS" != "x"; then
+      havetcl=yes
+   fi
+fi
+
+echo "checking for tcl... $havetcl"
+   
+if test "x$havetcl" = "xyes"; then
+   AC_DEFINE([HAVE_TCL], [], [Have TCL libraries])
+   TCL_LIB='$(top_builddir)/tcl/libOpenIPMItcl.la'
+   TCL_PKGCONF=OpenIPMItcl.pc
+   TCL_TARGET=libOpenIPMItcl.la
+   TCL_DIR=tcl
+else
+   TCL_LIB=
+   TCL_PKGCONF=
+   TCL_TARGET=
+   TCL_DIR=
+fi
+AC_SUBST(TCL_CFLAGS)
+AC_SUBST(TCL_LIBS)
+
+AC_SUBST(TCL_LIB)
+AC_SUBST(TCL_PKGCONF)
+AC_SUBST(TCL_TARGET)
+AC_SUBST(TCL_DIR)
 
 # Handle PERL support
 if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
@@ -722,6 +789,7 @@ AC_OUTPUT(Makefile
 	  lib/Makefile
 	  unix/Makefile
 	  glib/Makefile
+	  tcl/Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  sample/Makefile

@@ -1,3 +1,9 @@
+2006-04-05 Corey Minyard <cminyard@mvista.com>
+
+	* tcl/*, include/OpenIPMI/ipmi_tcl.h, configure.in, Makefile.am:
+	Start adding TCL support.
+	* OpenIPMItcl.pc.in: ditto
+
 2006-03-31 Corey Minyard <cminyard@mvista.com>
 
 	* */Makefile.am: Add -Wsign-compare to find signed/unsigned
