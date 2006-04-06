@@ -22,4 +22,12 @@ libOpenIPMItcl_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-rpath $(libdir) -L$(DESTDIR)$(libdir) -R$(libdir) \
 	-Wl,-Map -Wl,libOpenIPMItcl.map $(TCL_LIBS)
 
+noinst_PROGRAMS = test_handlers
+
+test_handlers_SOURCES = test_handlers.c
+test_handlers_LDADD = libOpenIPMItcl.la \
+	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB)
+
+TESTS = test_handlers
+
 CLEANFILES = libOpenIPMItcl.map

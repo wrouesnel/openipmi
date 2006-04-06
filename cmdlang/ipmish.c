@@ -46,6 +46,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_glib.h>
+#include <OpenIPMI/ipmi_tcl.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_debug.h>
 #include <editline/readline.h>
@@ -876,6 +877,9 @@ static char *usage_str =
 #ifdef HAVE_GLIB
 "  --glib - use glib for the OS handler.\n"
 #endif
+#ifdef HAVE_TCL
+"  --tcl - use tcl for the OS handler.\n"
+#endif
 #ifdef HAVE_UCDSNMP
 "  --snmp - turn on SNMP trap handling.\n"
 #endif
@@ -901,6 +905,9 @@ main(int argc, char *argv[])
     char             *colstr;
 #ifdef HAVE_GLIB
     int              use_glib = 0;
+#endif
+#ifdef HAVE_TCL
+    int              use_tcl = 0;
 #endif
 
     colstr = getenv("COLUMNS");
@@ -942,6 +949,10 @@ main(int argc, char *argv[])
 #ifdef HAVE_GLIB
 	} else if (strcmp(arg, "--glib") == 0) {
 	    use_glib = 1;
+#endif
+#ifdef HAVE_TCL
+	} else if (strcmp(arg, "--tcl") == 0) {
+	    use_tcl = 1;
 #endif
 	} else if (strcmp(arg, "--help") == 0) {
 	    usage(argv[0]);
@@ -986,6 +997,19 @@ main(int argc, char *argv[])
 			  | G_LOG_FLAG_FATAL,
 			  glib_handle_log,
                           NULL);
+#endif
+#ifdef HAVE_TCL
+    } else if (use_tcl) {
+#ifdef HAVE_UCDSNMP
+	init_snmp = 0; /* No SNMP support for tcl yet. */
+	sel = NULL;
+#endif
+	os_hnd = ipmi_tcl_get_os_handler(0);
+	if (!os_hnd) {
+	    fprintf(stderr,
+		    "ipmi_smi_setup_con: Unable to allocate os handler\n");
+	    return 1;
+	}
 #endif
     } else {
 	os_hnd = ipmi_posix_setup_os_handler();

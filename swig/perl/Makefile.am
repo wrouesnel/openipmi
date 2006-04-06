@@ -22,7 +22,7 @@ OpenIPMI_LIB = @PERL_POSIX_LIB@ \
 	       $(top_builddir)/lib/libOpenIPMI.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
 	       $(top_builddir)/cmdlang/libOpenIPMIcmdlang.la \
-	       $(GLIB_SINGLE_LIB)
+	       $(GLIB_SINGLE_LIB) $(TCL_LIB)
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
@@ -47,7 +47,7 @@ install-exec-local: OpenIPMI.so OpenIPMI.pm
 	$(INSTALL_PROGRAM) OpenIPMI.so $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
 	$(INSTALL_PROGRAM) OpenIPMI.pm $(DESTDIR)$(PERL_INSTALL_DIR)
 
-TEST_LD_LIBRARY_PATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs
+TEST_LD_LIBRARY_PATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs:$(top_builddir)/tcl/.libs
 
 TESTS_ENVIRONMENT = LD_LIBRARY_PATH="$(TEST_LD_LIBRARY_PATH)" PERLLIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
 TESTS = test_fru test_chan test_lanparm test_pet test_pef

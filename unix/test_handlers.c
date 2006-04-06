@@ -234,7 +234,7 @@ main(int argc, char *argv[])
     ipmi_malloc_init(os_hnd);
     rv = os_handler_alloc_waiter_factory(os_hnd, 2, 0, &factory);
     if (rv != ENOSYS)
-	err_leave(rv, "Expected ENOSYS allocating threaded factory");
+	err_leave(rv, "Expected ENOSYS allocating threaded factory\n");
     rv = os_handler_alloc_waiter_factory(os_hnd, 0, 0, &factory);
     if (rv)
 	err_leave(rv, "Unable to allocate waiter factory\n");

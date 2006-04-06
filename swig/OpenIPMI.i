@@ -2952,6 +2952,22 @@ init_glib12(void)
 #endif
 }
 
+void
+init_tcl(void)
+{
+#ifdef HAVE_TCL
+    if (swig_os_hnd)
+	return;
+#ifdef OpenIPMI_HAVE_INIT_LANG
+    init_lang();
+#endif
+    swig_os_hnd = ipmi_tcl_get_os_handler(0);
+#else
+    fprintf(stderr, "Error: no support for init_tcl()\n");
+    abort();
+#endif
+}
+
 /*
  * Initialize the OS handler and use the POSIX version.
  */

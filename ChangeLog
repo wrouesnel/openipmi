@@ -1,3 +1,12 @@
+2006-04-06 Corey Minyard <cminyard@mvista.com>
+
+	* tcl/tcl_os_hnd.c, tcl/test_handlers.c: Get these working.
+
+	* cmdlang/ipmish.c: Add TCL support.
+	* swig/OpenIPMI.i: ditto
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+
 2006-04-05 Corey Minyard <cminyard@mvista.com>
 
 	* tcl/*, include/OpenIPMI/ipmi_tcl.h, configure.in, Makefile.am:

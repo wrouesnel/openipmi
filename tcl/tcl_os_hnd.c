@@ -123,7 +123,7 @@ static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
     Tcl_DeleteFileHandler(fd_data->fd);
-    free(handler);
+    free(fd_data);
     return 0;
 }
 
@@ -480,6 +480,7 @@ cond_broadcast(os_handler_t  *handler,
     return 0;
 }
 
+#if 0
 static int
 create_thread(os_handler_t       *handler,
 	      int                priority,
@@ -500,6 +501,7 @@ thread_exit(os_handler_t *handler)
     Tcl_ExitThread(0);
     return 0;
 }
+#endif
 
 static void
 timeout_callback(ClientData data)
@@ -514,11 +516,16 @@ perform_one_op(os_handler_t   *os_hnd,
     /* Note that this is not technically 100% correct in a
        multi-threaded environment, since another thread may run
        it, but it is pretty close, I guess. */
-    int   time_ms = (timeout->tv_sec * 1000) + ((timeout->tv_usec+500) / 1000);
-    Tcl_TimerToken token = Tcl_CreateTimerHandler(time_ms, timeout_callback,
-						  NULL);
+    int   time_ms;
+    Tcl_TimerToken token = NULL;
+
+    if (timeout) {
+	time_ms= (timeout->tv_sec * 1000) + ((timeout->tv_usec+500) / 1000);
+	token = Tcl_CreateTimerHandler(time_ms, timeout_callback, NULL);
+    }
     Tcl_DoOneEvent(TCL_ALL_EVENTS);
-    Tcl_DeleteTimerHandler(token);
+    if (token)
+	Tcl_DeleteTimerHandler(token);
     return 0;
 }
 
@@ -707,8 +714,10 @@ static os_handler_t ipmi_tcl_os_handler =
     .cond_wake = cond_wake,
     .cond_broadcast = cond_broadcast,
 
+#if 0
     .create_thread = create_thread,
     .thread_exit = thread_exit,
+#endif
 
     .free_os_handler = free_os_handler,
 
