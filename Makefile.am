@@ -5,7 +5,7 @@ SUBDIRS    = include utils lib unix $(GLIB_DIR) $(TCL_DIR) libedit cmdlang \
 	     ui lanserv sample doc man $(SWIG_DIR)
 
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
-	     OpenIPMI.spec ipmi.init ipmi.sysconf
+	     OpenIPMI.spec ipmi.init ipmi.sysconf COPYING.BSD
 
 PKGCONFIGS = OpenIPMIutils.pc OpenIPMI.pc OpenIPMIui.pc OpenIPMIposix.pc \
 	     OpenIPMIpthread.pc OpenIPMIcmdlang.pc $(GLIB_PKGCONF) \
