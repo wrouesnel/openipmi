@@ -32,54 +32,31 @@
 
 import OpenIPMI
 import _oi_logging
-import wx
-import wx.gizmos as gizmos
+import gui_treelist
 
-class FruInfoDisplay(wx.Dialog):
+class FruInfoDisplay(gui_treelist.TreeList):
     def __init__(self, fru, name):
         self.fru = fru;
-        wx.Dialog.__init__(self, None, -1, "FRU info for " + name,
-                           size=wx.Size(400, 600),
-                           style=wx.RESIZE_BORDER)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        tree = gizmos.TreeListCtrl(self)
-        tree.AddColumn("Name")
-        tree.AddColumn("Value")
-        tree.SetMainColumn(0)
-        tree.SetColumnWidth(0, 300)
-        tree.SetColumnWidth(1, 100)
-        
-        sizer.Add(tree, 1, wx.GROW, 0)
-
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        sizer.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
         name_s = [ "" ]
         node_s = [ None ]
         rv = fru.get_root_node(name_s, node_s)
         if (rv != 0):
             _oi_logging.error("unable to get FRU node: " + str(rv))
-            self.Destroy();
             return
-        treeroot = tree.AddRoot(name_s[0])
-        self.add_fru_data(tree, treeroot, node_s[0])
-        tree.Expand(treeroot)
 
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True)
+        gui_treelist.TreeList.__init__(self, "FRU info for " + name,
+                                       name_s[0],
+                                       [("Name", 300), ("Value", 100)]);
+
+        self.add_fru_data(self.treeroot, node_s[0])
+        self.AfterDone()
+        return
 
     def ok(self, event):
         self.Close()
+        return
 
-    def OnClose(self, event):
-        self.Destroy()
-
-    def add_fru_data(self, tree, item, node):
+    def add_fru_data(self, item, node):
         i = 0
         while True:
             name_s = [ "" ]
@@ -95,11 +72,12 @@ class FruInfoDisplay(wx.Dialog):
                     pass
                 # Ignore other errors, just keep going
                 if (type_s[0] == "subnode"):
-                    sub = tree.AppendItem(item, name_s[0])
-                    self.add_fru_data(tree, sub, node_s[0])
+                    sub = self.Append(item, name_s[0], [])
+                    self.add_fru_data(sub, node_s[0])
                 else:
-                    sub = tree.AppendItem(item, name_s[0])
-                    tree.SetItemText(sub, value_s[0], 1)
+                    self.Append(item, name_s[0], [value_s[0]])
                     pass
                 pass
             i = i + 1
+            pass
+        return

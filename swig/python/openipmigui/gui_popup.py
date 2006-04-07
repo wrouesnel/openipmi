@@ -32,7 +32,7 @@
 
 import wx
 
-def popup(ui, event, handlers):
+def popup(ui, event, handlers, point=None):
     eitem = event.GetItem();
     menu = wx.Menu();
     i = 10000
@@ -40,6 +40,10 @@ def popup(ui, event, handlers):
         item = menu.Append(i, h[0])
         wx.EVT_MENU(ui, i, h[1])
         i += 1
-    ui.PopupMenu(menu, ui.get_item_pos(eitem))
+        pass
+    if (point == None):
+        point = ui.get_item_pos(eitem)
+        pass
+    ui.PopupMenu(menu, point)
     menu.Destroy()
     return
