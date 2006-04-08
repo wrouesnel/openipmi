@@ -118,7 +118,7 @@ class ActivationTimeSetter:
         gui_setdialog.SetDialog("Set " + self.name + " for " + str(self.e),
                                 [ time ],
                                 1,
-                                self);
+                                self)
         return
 
     pass

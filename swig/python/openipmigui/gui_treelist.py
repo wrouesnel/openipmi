@@ -116,7 +116,7 @@ class TreeList(wx.Dialog):
         i = 1
         for v in values:
             if (v != None):
-                self.tree.SetItemText(sub, v, i)
+                self.tree.SetItemText(sub, str(v), i)
             i += 1
             pass
         if (data != None):
@@ -131,7 +131,15 @@ class TreeList(wx.Dialog):
     def GetColumn(self, node, colnum):
         return self.tree.GetItemText(node, colnum)
 
-    def SetError(str):
+    def SetError(self, str):
         self.errstr.SetError(str)
         return
+
+    def add_data(self, parent, name, value, data=None):
+        item = self.Append(parent, name, value, data);
+        if (data != None):
+            data.SetItem(item)
+            pass
+        return item
+
     pass

@@ -31,32 +31,33 @@
 #
 
 import OpenIPMI
-import wx
-import wx.gizmos as gizmos
+import gui_popup
+import gui_treelist
+import gui_setdialog
 import _oi_logging
 import _mc_lanparm
 
 id_st = 900
 
 class BoolSetter:
-    def __init__(self, mcusers, user, item, setter):
+    def __init__(self, mcusers, user, setter):
         self.mcusers = mcusers
-        self.item = item
         self.setter = setter
         self.user = user
-        mcusers.tree.SetPyData(item, self)
+        return
+    
+    def SetItem(self, item):
+        self.item = item
         return
     
     def HandleMenu(self, event, eitem, point):
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Toggle Value")
-        wx.EVT_MENU(menu, id_st+1, self.togglevalue)
-        self.mcusers.tree.PopupMenu(menu, point)
-        menu.Destroy()
+        gui_popup.popup(self.mcusers, event,
+                        [ ("Toggle Value", self.togglevalue) ],
+                        point)
         return
 
     def togglevalue(self, event):
-        val = str(self.mcusers.tree.GetItemText(self.item, 1))
+        val = str(self.mcusers.GetColumn(self.item, 1))
         if (val == "True") or (val == "true"):
             val = "false"
             bval = 0
@@ -66,90 +67,92 @@ class BoolSetter:
             pass
         rv = self.setter(bval)
         if (rv):
-            mcusers.errstr.SetStatusText("Could not toggle value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            self.mcusers.SetError("Could not toggle value: "
+                                   + OpenIPMI.get_error_string(rv), 0)
             return
         self.user.changed = True
-        self.mcusers.tree.SetItemText(self.item, val, 1);
+        self.mcusers.SetColumn(self.item, val, 1);
         return
 
     pass
 
 class IntSetter:
-    def __init__(self, mcusers, user, item, setter, name, currval):
+    def __init__(self, mcusers, user, setter, name, currval):
         self.mcusers = mcusers
-        self.item = item
         self.setter = setter
         self.name = name
         self.currval = currval
         self.user = user
-        mcusers.tree.SetPyData(item, self)
+        return
+    
+    def SetItem(self, item):
+        self.item = item
         return
     
     def HandleMenu(self, event, eitem, point):
-        menu = wx.Menu();
-        item = menu.Append(id_st+10, "Modify Value")
-        wx.EVT_MENU(menu, id_st+10, self.modval)
-        self.mcusers.tree.PopupMenu(menu, point)
-        menu.Destroy()
+        gui_popup.popup(self.mcusers, event,
+                        [ ("Modify Value", self.modval) ],
+                        point)
         return
 
     def modval(self, event):
-        dialog = wx.Dialog(None, -1, "Set Value for " + self.name,
-                           size=wx.Size(300, 300))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self.dialog, -1, "Value: ")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(self.dialog, -1, str(self.currval))
-        box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_setdialog.SetDialog("Set Value for " + self.name,
+                                [ str(self.currval) ],
+                                1,
+                                self)
         return
 
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = self.field.GetValue()
-        try:
-            val = int(val)
-            pass
-        except:
-            mcusers.errstr.SetStatusText("Invalid integer value", 0)
-            return
-            
+    def ok(self, vals):
+        val = int(vals[0])
         rv = self.setter(val)
         if (rv):
-            mcusers.errstr.SetStatusText("Could not set value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            mcusers.SetError("Could not set value: "
+                             + OpenIPMI.get_error_string(rv), 0)
             return
         self.user.changed = True
-        self.mcusers.tree.SetItemText(self.item, str(val), 1)
+        self.mcusers.SetColumn(self.item, str(val), 1)
         self.currval = val
-        self.dialog.Close()
         return
 
-    def OnClose(self, event):
-        self.dialog.Destroy()
-        self.dialog = None
-        self.field = None
+    pass
+
+class StrSetter:
+    def __init__(self, mcusers, user, setter, name, currval, prompt):
+        self.mcusers = mcusers
+        self.setter = setter
+        self.name = name
+        self.currval = currval
+        self.user = user
+        self.prompt = prompt
+        return
+    
+    def SetItem(self, item):
+        self.item = item
+        return
+    
+    def HandleMenu(self, event, eitem, point):
+        gui_popup.popup(self.mcusers, event,
+                        [ (self.prompt, self.modval) ],
+                        point)
+        return
+
+    def modval(self, event):
+        gui_setdialog.SetDialog(self.prompt + " for " + self.name,
+                                [ str(self.currval) ],
+                                1,
+                                self)
+        return
+
+    def ok(self, vals):
+        val = str(vals[0])
+        rv = self.setter(val)
+        if (rv):
+            mcusers.SetError("Could not set value: "
+                             + OpenIPMI.get_error_string(rv))
+            return
+        self.user.changed = True
+        self.mcusers.SetColumn(self.item, str(val), 1)
+        self.currval = val
         return
 
     pass
@@ -161,115 +164,36 @@ def GetPrivilegeString(val):
         return OpenIPMI.privilege_string(val)
     return
 
-class StrSetter:
-    def __init__(self, mcusers, user, item, setter, name, currval, prompt):
-        self.mcusers = mcusers
-        self.item = item
-        self.setter = setter
-        self.name = name
-        self.currval = currval
-        self.user = user
-        self.prompt = prompt
-        mcusers.tree.SetPyData(item, self)
-        return
-    
-    def HandleMenu(self, event, eitem, point):
-        menu = wx.Menu();
-        item = menu.Append(id_st+10, self.prompt)
-        wx.EVT_MENU(menu, id_st+10, self.modval)
-        self.mcusers.tree.PopupMenu(menu, point)
-        menu.Destroy()
-        return
-
-    def modval(self, event):
-        dialog = wx.Dialog(None, -1, self.prompt + " for " + self.name,
-                           size=wx.Size(300, 300))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self.dialog, -1, "Value: ")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(self.dialog, -1, str(self.currval))
-        box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
-        return
-
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = self.field.GetValue()
-        rv = self.setter(str(val))
-        if (rv):
-            mcusers.errstr.SetStatusText("Could not set value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
-            return
-        self.user.changed = True
-        self.mcusers.tree.SetItemText(self.item, str(val), 1)
-        self.currval = val
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        if (self.dialog):
-            self.dialog.Destroy()
-        self.dialog = None
-        self.field = None
-        return
-
-    pass
-
 class PrivSetter:
-    def __init__(self, mcusers, user, item, setter):
+    def __init__(self, mcusers, user, setter):
         self.mcusers = mcusers
-        self.item = item
         self.setter = setter
         self.user = user
-        mcusers.tree.SetPyData(item, self)
+        return
+    
+    def SetItem(self, item):
+        self.item = item
         return
     
     def HandleMenu(self, event, eitem, point):
-        menu = wx.Menu();
-        item = menu.Append(id_st+20, "Callback")
-        wx.EVT_MENU(menu, id_st+20, self.callback)
-        item = menu.Append(id_st+21, "User")
-        wx.EVT_MENU(menu, id_st+21, self.handleuser)
-        item = menu.Append(id_st+22, "Operator")
-        wx.EVT_MENU(menu, id_st+22, self.operator)
-        item = menu.Append(id_st+23, "Admin")
-        wx.EVT_MENU(menu, id_st+23, self.admin)
-        item = menu.Append(id_st+24, "OEM")
-        wx.EVT_MENU(menu, id_st+24, self.oem)
-        item = menu.Append(id_st+25, "NO ACCESS")
-        wx.EVT_MENU(menu, id_st+25, self.noaccess)
-        self.mcusers.tree.PopupMenu(menu, point)
-        menu.Destroy()
+        gui_popup.popup(self.mcusers, event,
+                        [ ("Callback", self.callback),
+                          ("User", self.handleuser),
+                          ("Operator", self.operator),
+                          ("Admin", self.admin),
+                          ("OEM", self.oem),
+                          ("NO ACCESS", self.noaccess) ],
+                        point)
         return
 
     def setval(self, val):
         rv = self.setter(val)
         if (rv):
-            mcusers.errstr.SetStatusText("Could not set value: "
-                                        + OpenIPMI.get_error_string(rv), 0)
+            mcusers.SetError("Could not set value: "
+                             + OpenIPMI.get_error_string(rv))
             return
         self.user.changed = True
-        self.mcusers.tree.SetItemText(self.item, GetPrivilegeString(val), 1)
+        self.mcusers.SetColumn(self.item, GetPrivilegeString(val), 1)
         return
         
     def callback(self, event):
@@ -317,49 +241,24 @@ class SetUserHandler:
 
     pass
 
-class MCUsers(wx.Dialog):
+class MCUsers(gui_treelist.TreeList):
     def __init__(self, mc, channel, max_users, enabled_users, fixed_users,
                  users):
-        wx.Dialog.__init__(self, None, -1, "User info for " + mc.get_name()
-                           + " channel " + str(channel),
-                           size=wx.Size(500, 600),
-                           style=wx.RESIZE_BORDER)
+        gui_treelist.TreeList.__init__(self, "user info for " + mc.get_name()
+                                       + " channel " + str(channel),
+                                       "Users",
+                                       [ ("Name", 300), ("Value", 400) ] )
+        
         self.mc_id = mc.get_id()
         self.count = 0;
         self.users = users
         self.channel = channel
         self.in_save = False
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.tree = gizmos.TreeListCtrl(self)
-        self.tree.AddColumn("Name")
-        self.tree.AddColumn("Value")
-        self.tree.SetMainColumn(0)
-        self.tree.SetColumnWidth(0, 300)
-        self.tree.SetColumnWidth(1, 400)
-        self.treeroot = self.tree.AddRoot("Users")
-
-        sizer.Add(self.tree, 1, wx.GROW, 0);
-
-        self.errstr = wx.StatusBar(self, -1)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        save = wx.Button(self, -1, "Save")
-        wx.EVT_BUTTON(self, save.GetId(), self.save)
-        box.Add(save, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box.Add(cancel, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        item = self.tree.AppendItem(self.treeroot, "Max Users")
-        self.tree.SetItemText(item, str(max_users), 1)
-        item = self.tree.AppendItem(self.treeroot, "Enabled Users")
-        self.tree.SetItemText(item, str(enabled_users), 1)
-        item = self.tree.AppendItem(self.treeroot, "Fixed Users")
-        self.tree.SetItemText(item, str(fixed_users), 1)
+        item = self.add_data(self.treeroot, "Max Users", [ str(max_users) ])
+        item = self.add_data(self.treeroot, "Enabled Users",
+                           [ str(enabled_users) ])
+        item = self.add_data(self.treeroot, "Fixed Users", [str(fixed_users)])
         
         for u in users:
             v = [ 0 ]
@@ -368,31 +267,33 @@ class MCUsers(wx.Dialog):
             num = v[0]
             if (rv == 0):
                 u.num = num
-                us = self.tree.AppendItem(self.treeroot, str(num))
                 nm = u.get_name()
+                setter = StrSetter(self, u, u.set_password_auto,
+                                   "Password", "", "Set Password")
                 if (nm):
                     nm = str(nm)
-                    self.tree.SetItemText(us, nm, 1)
-                    pass
+                    us = self.add_data(self.treeroot, str(num), [nm], setter)
                 else:
+                    us = self.add_data(self.treeroot, str(num), [], setter)
                     nm = ""
                     pass
-                StrSetter(self, u, us, u.set_password_auto, "Password", "",
-                          "Set Password")
-                item = self.tree.AppendItem(us, "Name")
-                self.tree.SetItemText(item, nm, 1)
+                setter.SetItem(us)
                 if (num > fixed_users):
-                    StrSetter(self, u, item, u.set_name, "Name", nm,
-                              "Modify Value")
+                    setter = StrSetter(self, u, u.set_name, "Name", nm,
+                                       "Modify Value")
+                else:
+                    setter = None;
+                    pass
+                item = self.add_data(us, "Name", [nm], setter)
+
                 rv = u.get_enable(v)
                 if (rv == 0):
                     s = IntToBoolStr(v[0])
                 else:
                     s = "?"
                     pass
-                item = self.tree.AppendItem(us, "Enabled")
-                self.tree.SetItemText(item, s, 1)
-                BoolSetter(self, u, item, u.set_enable)
+                item = self.add_data(us, "Enabled", [s],
+                                     BoolSetter(self, u, u.set_enable))
 
                 rv = u.get_link_auth_enabled(v)
                 if (rv == 0):
@@ -400,9 +301,9 @@ class MCUsers(wx.Dialog):
                 else:
                     s = "?"
                     pass
-                item = self.tree.AppendItem(us, "Link Auth Enabled")
-                self.tree.SetItemText(item, s, 1)
-                BoolSetter(self, u, item, u.set_link_auth_enabled)
+                item = self.add_data(us, "Link Auth Enabled", [s],
+                                     BoolSetter(self, u,
+                                                u.set_link_auth_enabled))
 
                 rv = u.get_msg_auth_enabled(v)
                 if (rv == 0):
@@ -410,9 +311,9 @@ class MCUsers(wx.Dialog):
                 else:
                     s = "?"
                     pass
-                item = self.tree.AppendItem(us, "Msg Auth Enabled")
-                self.tree.SetItemText(item, s, 1)
-                BoolSetter(self, u, item, u.set_msg_auth_enabled)
+                item = self.add_data(us, "Msg Auth Enabled", [s],
+                                     BoolSetter(self, u,
+                                                u.set_msg_auth_enabled))
 
                 rv = u.get_access_cb_only(v)
                 if (rv == 0):
@@ -420,9 +321,8 @@ class MCUsers(wx.Dialog):
                 else:
                     s = "?"
                     pass
-                item = self.tree.AppendItem(us, "Access Callback Only")
-                self.tree.SetItemText(item, s, 1)
-                BoolSetter(self, u, item, u.set_access_cb_only)
+                item = self.add_data(us, "Access Callback Only", [s],
+                                     BoolSetter(self, u, u.set_access_cb_only))
 
                 rv = u.get_privilege_limit(v)
                 if (rv == 0):
@@ -430,9 +330,9 @@ class MCUsers(wx.Dialog):
                 else:
                     s = "?"
                     pass
-                item = self.tree.AppendItem(us, "Privilege Limit")
-                self.tree.SetItemText(item, s, 1)
-                PrivSetter(self, u, item, u.set_privilege_limit)
+                item = self.add_data(us, "Privilege Limit", [s],
+                                     PrivSetter(self, u,
+                                                u.set_privilege_limit))
 
                 rv = u.get_session_limit(v)
                 if (rv == 0):
@@ -441,34 +341,13 @@ class MCUsers(wx.Dialog):
                     s = "?"
                     v[0] = 0
                     pass
-                item = self.tree.AppendItem(us, "Session Limit")
-                self.tree.SetItemText(item, s, 1)
-                IntSetter(self, u, item, u.set_session_limit,
-                          "Session Limit", v[0])
+                item = self.add_data(us, "Session Limit", [s],
+                                     IntSetter(self, u, u.set_session_limit,
+                                               "Session Limit", v[0]))
                 pass
             pass
-
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
-        self.tree.Expand(self.treeroot)
-        self.SetSizer(sizer)
-        self.Show(True)
-        return
-
-    def TreeMenu(self, event):
-        eitem = event.GetItem()
-        data = self.tree.GetPyData(eitem)
-        if (data and hasattr(data, "HandleMenu")):
-            rect = self.tree.GetBoundingRect(eitem)
-            if (rect == None):
-                point = None
-            else:
-                # FIXME - why do I have to add 25?
-                point = wx.Point(rect.GetLeft(), rect.GetBottom()+25)
-                pass
-            data.HandleMenu(event, eitem, point)
-            pass
+        
+        self.AfterDone()
         return
 
     def cancel(self, event):
@@ -486,17 +365,15 @@ class MCUsers(wx.Dialog):
     def mc_cb(self, mc):
         self.errnum = 0
         self.waitcount = 0
-        self.errstr.SetFieldsCount(0)
+        self.SetError("")
         for u in self.users:
             if (u.changed):
                 rv = mc.set_user(u, self.channel, u.num,
                                  SetUserHandler(self, u.num))
                 if (rv):
-                    self.errstr.SetFieldsCount(self.errnum+1)
-                    self.errstr.SetStatusText("Error setting user "
-                                              + str(u.num)  + ": "
-                                              + OpenIPMI.get_error_string(rv),
-                                              self.errnum)
+                    self.SetError("Error setting user "
+                                  + str(u.num)  + ": "
+                                  + OpenIPMI.get_error_string(rv))
                     self.errnum += 1
                 else:
                     self.waitcount += 1
@@ -511,10 +388,8 @@ class MCUsers(wx.Dialog):
 
     def user_set(self, mc, err, num):
         if (err):
-            self.errstr.SetFieldsCount(self.errnum+1)
-            self.errstr.SetStatusText("Error setting user " + str(num) + ": "
-                                      + OpenIPMI.get_error_string(err),
-                                      self.errnum)
+            self.SetError("Error setting user " + str(num) + ": "
+                          + OpenIPMI.get_error_string(err))
             self.errnum += 1
             pass
         self.waitcount -= 1
@@ -526,6 +401,4 @@ class MCUsers(wx.Dialog):
             pass
         return
     
-    def OnClose(self, event):
-        self.Destroy()
-        return
+    pass

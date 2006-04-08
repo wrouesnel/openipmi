@@ -254,8 +254,8 @@ class BoolSetter:
             pass
         rv = self.setter(bval)
         if (rv):
-            mcchan.SetError("Could not toggle value: "
-                            + OpenIPMI.get_error_string(rv))
+            self.mcchan.SetError("Could not toggle value: "
+                                 + OpenIPMI.get_error_string(rv))
             return
         self.mcchan.SetColumn(self.item, val, 1);
         return
@@ -392,13 +392,6 @@ class MCChan(gui_treelist.TreeList):
 
         return
 
-    def add_data(self, parent, name, value, data=None):
-        item = self.Append(parent, name, [ value ], data);
-        if (data != None):
-            data.SetItem(item)
-            pass
-        return item
-
     def add_info(self, ch, oinfo):
         info = oinfo.info
         item = self.Append(ch, "Info", [])
@@ -406,25 +399,25 @@ class MCChan(gui_treelist.TreeList):
         rv = info.get_medium(v)
         if (not rv):
             self.add_data(item, "Medium",
-                          OpenIPMI.channel_medium_string(v[0]))
+                          [OpenIPMI.channel_medium_string(v[0])])
             pass
         rv = info.get_protocol_type(v)
         if (not rv):
             self.add_data(item, "Protocol Type",
-                          OpenIPMI.channel_protocol_string(v[0]))
+                          [OpenIPMI.channel_protocol_string(v[0])])
             pass
         rv = info.get_session_support(v)
         if (not rv):
             self.add_data(item, "Session Support",
-                          OpenIPMI.channel_session_support_string(v[0]))
+                          [OpenIPMI.channel_session_support_string(v[0])])
             pass
         v = info.get_vendor_id()
         if (v):
-            self.add_data(item, "Vendor ID", v)
+            self.add_data(item, "Vendor ID", [v])
             pass
         v = info.get_aux_info()
         if (v):
-            self.add_data(item, "Aux Info", v)
+            self.add_data(item, "Aux Info", [v])
             pass
         return
     
@@ -434,29 +427,29 @@ class MCChan(gui_treelist.TreeList):
         v = [ 0 ]
         rv = info.get_alerting_enabled(v)
         if (not rv):
-            mitem = self.add_data(item, "Alerting Enabled", str(v[0] != 0),
+            mitem = self.add_data(item, "Alerting Enabled", [str(v[0] != 0)],
                                   BoolSetter(self, info.set_alerting_enabled))
             pass
         rv = info.get_per_msg_auth(v)
         if (not rv):
-            mitem = self.add_data(item, "Per Msg Auth", str(v[0] != 0),
+            mitem = self.add_data(item, "Per Msg Auth", [str(v[0] != 0)],
                                   BoolSetter(self, info.set_per_msg_auth))
             pass
         rv = info.get_user_auth(v)
         if (not rv):
-            mitem = self.add_data(item, "User Auth", str(v[0] != 0),
+            mitem = self.add_data(item, "User Auth", [str(v[0] != 0)],
                                   BoolSetter(self, info.set_user_auth))
             pass
         rv = info.get_access_mode(v)
         if (not rv):
             mitem = self.add_data(item, "Access Mode",
-                                  OpenIPMI.channel_access_mode_string(v[0]),
+                                  [OpenIPMI.channel_access_mode_string(v[0])],
                                   AccessSetter(self, info.set_access_mode))
             pass
         rv = info.get_privilege_limit(v)
         if (not rv):
             mitem = self.add_data(item, "Privilege Limit",
-                                  OpenIPMI.privilege_string(v[0]),
+                                  [OpenIPMI.privilege_string(v[0])],
                                   PrivSetter(self, info.set_privilege_limit))
             pass
         return
