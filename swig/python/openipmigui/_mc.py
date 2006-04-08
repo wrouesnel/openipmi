@@ -30,7 +30,8 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import OpenIPMI
-import wx
+import gui_popup
+import gui_setdialog
 import _oi_logging
 import _sel
 import _mc_chan
@@ -122,60 +123,24 @@ class MCSelSet:
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Modify Value")
-        wx.EVT_MENU(self.m.ui, id_st+1, self.modval)
-        self.m.ui.PopupMenu(menu, self.m.ui.get_item_pos(eitem))
-        menu.Destroy()
+        gui_popup.popup(self.m.ui, event,
+                        [ ("Modify Value", self.modval) ])
         return
 
     def modval(self, event):
         self.init = True
         self.m.mc_id.to_mc(self)
-        dialog = wx.Dialog(None, -1, "Set SEL Rescan Time for " + str(self.m))
-        self.dialog = dialog
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(dialog, -1, "Value:")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        self.field = wx.TextCtrl(dialog, -1, str(self.sel_rescan_time))
-        box.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(dialog, -1, "Cancel")
-        wx.EVT_BUTTON(dialog, cancel.GetId(), self.cancel)
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(dialog, -1, "Ok")
-        wx.EVT_BUTTON(dialog, ok.GetId(), self.ok)
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
-        dialog.SetSizer(sizer)
-        wx.EVT_CLOSE(dialog, self.OnClose)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
+        gui_setdialog.SetDialog("Set SEL Rescan Time for " + str(self.m),
+                                [ str(self.sel_rescan_time) ],
+                                1,
+                                self)
         return
 
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
-    def ok(self, event):
-        val = self.field.GetValue()
-        try:
-            self.ival = int(val)
-        except:
-            return
+    def ok(self, vals):
+        self.ival = int(vals[0])
         self.init = False
         self.m.mc_id.to_mc(self)
-        self.dialog.Close()
-        return
-
-    def OnClose(self, event):
-        self.dialog.Destroy()
         return
 
     def mc_cb(self, mc):
@@ -300,6 +265,7 @@ class MC:
     def remove(self):
         self.d.mcs.pop(self.name)
         self.ui.remove_mc(self)
+        return
 
     def Changed(self, mc):
         self.has_sel = (mc.sel_device_support() != 0)
@@ -341,84 +307,82 @@ class MC:
         self.ui.set_item_text(self.aux_fw_revision, mc.aux_fw_revision())
                                                
         self.ui.set_item_text(self.mguid, mc.get_guid())
+        return
 
     def HandleExpand(self, event):
         for i in self.refreshers:
             i.DoUpdate()
+            pass
+        return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
+        l = [ ]
         if self.has_sel:
-            item = menu.Append(id_st+10, "Reread SELs")
-            wx.EVT_MENU(self.ui, id_st+10, self.RereadSelsHandler)
-            item = menu.Append(id_st+11, "Display SELs")
-            wx.EVT_MENU(self.ui, id_st+11, self.DisplaySelsHandler)
-            item = menu.Append(id_st+12, "Enable Event Log")
-            wx.EVT_MENU(self.ui, id_st+12, self.EnableEventLogHandler)
-            item = menu.Append(id_st+13, "Disable Event Log")
-            wx.EVT_MENU(self.ui, id_st+13, self.DisableEventLogHandler)
+            l.append( ("Reread SELs", self.RereadSelsHandler) )
+            l.append( ("Display SELs", self.DisplaySelsHandler) )
+            l.append( ("Enable Event Log", self.EnableEventLogHandler) )
+            l.append( ("Disable Event Log", self.DisableEventLogHandler) )
             pass
         if self.event_gen:
-            item = menu.Append(id_st+14, "Enable Events")
-            wx.EVT_MENU(self.ui, id_st+14, self.EnableEventsHandler)
-            item = menu.Append(id_st+15, "Disable Events")
-            wx.EVT_MENU(self.ui, id_st+15, self.DisableEventsHandler)
+            l.append( ("Enable Events", self.EnableEventsHandler) )
+            l.append( ("Disable Events", self.DisableEventsHandler) )
             pass
         if self.has_dev_sdrs:
-            item = menu.Append(id_st+16, "Refetch SDRs")
-            wx.EVT_MENU(self.ui, id_st+16, self.RefetchSDRsHandler)
+            l.append( ("Refetch SDRs", self.RefetchSDRsHandler) )
             pass
         if self.has_pef:
-            item = menu.Append(id_st+20, "PEF Parms")
-            wx.EVT_MENU(self.ui, id_st+20, self.PEFParms)
-            item = menu.Append(id_st+21, "Clear PEF Lock")
-            wx.EVT_MENU(self.ui, id_st+21, self.PEFLockClear)
+            l.append( ("PEF Parms", self.PEFParms) )
+            l.append( ("Clear PEF Lock", self.PEFLockClear) )
             pass
-        item = menu.Append(id_st+17, "Cold Reset")
-        wx.EVT_MENU(self.ui, id_st+17, self.ColdResetHandler)
-        item = menu.Append(id_st+18, "Warm Reset")
-        wx.EVT_MENU(self.ui, id_st+18, self.WarmResetHandler)
-        item = menu.Append(id_st+19, "Channel Info")
-        wx.EVT_MENU(self.ui, id_st+19, self.ChannelInfoHandler)
-        
-        self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
-        menu.Destroy()
+        l.append( ("Cold Reset", self.ColdResetHandler) )
+        l.append( ("Warm Reset", self.WarmResetHandler) )
+        l.append( ("Channel Info", self.ChannelInfoHandler) )
+        gui_popup.popup(self.ui, event, l)
+        return
 
     def RereadSelsHandler(self, event):
         dop = MCOpHandler(self, "reread_sel")
         dop.DoOp()
+        return
 
     def DisplaySelsHandler(self, event):
         _sel.MCSELDisplay(self.mc_id)
+        return
 
     def EnableEventLogHandler(self, event):
         self.cb_state = "enable_event_log"
         self.mc_id.to_mc(self)
+        return
 
     def DisableEventLogHandler(self, event):
         self.cb_state = "disable_event_log"
         self.mc_id.to_mc(self)
+        return
 
     def EnableEventsHandler(self, event):
         self.cb_state = "enable_events"
         self.mc_id.to_mc(self)
+        return
 
     def DisableEventsHandler(self, event):
         self.cb_state = "disable_events"
         self.mc_id.to_mc(self)
+        return
 
     def ColdResetHandler(self, event):
         self.cb_state = "cold_reset"
         self.mc_id.to_mc(self)
+        return
 
     def WarmResetHandler(self, event):
         self.cb_state = "warm_reset"
         self.mc_id.to_mc(self)
+        return
 
     def ChannelInfoHandler(self, event):
         self.cb_state = "channel_info"
         self.mc_id.to_mc(self)
+        return
 
     def RefetchSDRsHandler(self, event):
         self.cb_state = "refetch_sdrs"
@@ -473,6 +437,7 @@ class MC:
         if (rv):
             self.ui.ReportError("Error starting PEF config fetch: " +
                                 OpenIPMI.get_error_string(rv))
+            pass
         return
 
     def pef_got_config_cb(self, pef, err, pefconfig):

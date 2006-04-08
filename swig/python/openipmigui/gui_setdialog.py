@@ -33,30 +33,61 @@
 import wx
 import wx.lib.scrolledpanel as scrolled
 
+def isbool(v):
+    return type(v) == type(True)
+
 class SetDialog(wx.Dialog):
-    def __init__(self, name, default, count, handler):
+    def __init__(self, name, default, count, handler, labels=None):
         self.handler = handler
         wx.Dialog.__init__(self, None, -1, name)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.values = scrolled.ScrolledPanel(self, -1,
                                              size=wx.Size(300, 200))
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        if (count == 1):
-            label = wx.StaticText(self.values, -1, "Value:")
+        if (labels == None):
+            box = wx.BoxSizer(wx.HORIZONTAL)
+            if (count == 1):
+                label = wx.StaticText(self.values, -1, "Value:")
+            else:
+                label = wx.StaticText(self.values, -1, "Value(s):")
+                pass
+            box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            box2 = wx.BoxSizer(wx.VERTICAL)
+            self.fields = [ ]
+            for i in range(0, count):
+                if (isbool(default[i])):
+                    field = wx.CheckBox(self.values, -1, "")
+                else:
+                    v = str(default[i])
+                    field = wx.TextCtrl(self.values, -1, v)
+                    pass
+                self.fields.append(field)
+                box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                pass
+            box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            self.values.SetSizer(box)
+            sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         else:
-            label = wx.StaticText(self.values, -1, "Value(s):")
+            box = wx.BoxSizer(wx.VERTICAL)
+            self.fields = [ ]
+            for i in range(0, count):
+                box2 = wx.BoxSizer(wx.HORIZONTAL)
+                if (isbool(default[i])):
+                    field = wx.CheckBox(self.values, -1, labels[i])
+                    field.SetValue(default[i])
+                    pass
+                else:
+                    label = wx.StaticText(self.values, -1, labels[i])
+                    box2.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                    v = str(default[i])
+                    field = wx.TextCtrl(self.values, -1, v)
+                    pass
+                self.fields.append(field)
+                box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                pass
             pass
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        box2 = wx.BoxSizer(wx.VERTICAL)
-        self.fields = [ ]
-        for i in range(0, count):
-            v = str(default[i])
-            field = wx.TextCtrl(self.values, -1, v)
-            self.fields.append(field)
-            box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            pass
-        box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.values.SetupScrolling()
         self.values.SetSizer(box)
         sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         

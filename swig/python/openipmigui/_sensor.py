@@ -29,9 +29,9 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-import wx
-import wx.lib.scrolledpanel as scrolled
 import OpenIPMI
+import gui_popup
+import gui_setdialog
 import _oi_logging
 
 id_st = 700
@@ -109,69 +109,26 @@ def discrete_event_str_to_full(s, name):
         pass
     return s[0:l-1] + ' ' + t + ' (' + name + ')'
 
-class SensorHysteresisSet(wx.Dialog):
+class SensorHysteresisSet:
     def __init__(self, s):
-        wx.Dialog.__init__(self, None, -1, "Set Hysteresis for " + str(s))
         self.s = s
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self, -1, "Positive:")
-        box.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        self.pos = wx.TextCtrl(self, -1, "")
-        box.Add(self.pos, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(self, -1, "Negative:")
-        box.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        self.neg = wx.TextCtrl(self, -1, "")
-        box.Add(self.neg, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
-            self.Destroy()
+            s.gui.ReportError("Unable to convert " + s.name
+                              + "to a sensor for hysteresis setting")
             pass
         return
-
-    def cancel(self, event):
-        self.Close()
-        return
         
-    def ok(self, event):
-        try:
-            self.positive = int(self.pos.GetValue())
-        except:
-            return
-        try:
-            self.negative = int(self.neg.GetValue())
-        except:
-            return
+    def ok(self, vals):
+        self.positive = int(vals[0])
+        self.negative = int(vals[1])
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
             pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor thresholds: " + str(rv))
-            self.Close()
             pass
-        return
-
-    def OnClose(self, event):
-        self.Destroy()
         return
 
     def sensor_cb(self, sensor):
@@ -188,9 +145,9 @@ class SensorHysteresisSet(wx.Dialog):
             _oi_logging.error("Error getting sensor hysteresis: " + str(err))
             self.Destroy()
         else:
-            self.pos.SetValue(str(positive))
-            self.neg.SetValue(str(negative))
-            self.Show(True);
+            gui_setdialog.SetDialog("Set hysteresis for " + self.s.name,
+                                              [ positive, negative ], 2, self,
+                                              [ "Positive", "Negative" ])
             pass
         return
 
@@ -206,67 +163,32 @@ class SensorHysteresisSet(wx.Dialog):
     pass
 
 
-class SensorThresholdsSet(wx.Dialog):
+class SensorThresholdsSet:
     def __init__(self, s):
-        wx.Dialog.__init__(self, None, -1, "Set Thresholds for " + str(s))
         self.s = s
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.thresholds = { }
-        for th in s.settable_thresholds.split():
-            box = wx.BoxSizer(wx.HORIZONTAL)
-            label = wx.StaticText(self, -1, threshold_str_to_full(th))
-            box.Add(label, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-            th_text_box = wx.TextCtrl(self, -1, "")
-            self.thresholds[th] = th_text_box
-            box.Add(th_text_box, 0, wx.ALIGN_LEFT | wx.ALL, 5)
-            sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-            pass
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
-            self.Destroy()
+            s.gui.ReportError("Unable to convert " + s.name
+                              + "to a sensor for threshold setting")
             pass
         return
 
-    def cancel(self, event):
-        self.Close()
-        return
-
-    def ok(self, event):
+    def ok(self, vals):
         tlist = [ ]
-        for ths in self.thresholds.iteritems():
-            try:
-                tlist.append(ths[0] + " " + str(float(ths[1].GetValue())))
-            except:
-                return
+        i = 0
+        for th in self.thresholds:
+            tlist.append(th + " " + str(float(vals[i])))
+            i += 1
             pass
         self.threshold_str = ":".join(tlist)
+        self.setting = True
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
             pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor thresholds: " + str(rv))
-            self.Close()
             pass
-        return
-
-    def OnClose(self, event):
-        self.Destroy()
         return
 
     def sensor_cb(self, sensor):
@@ -276,22 +198,25 @@ class SensorThresholdsSet(wx.Dialog):
             rv = sensor.get_thresholds(self)
             if (rv != 0):
                 _oi_logging.error("Error getting sensor thresholds: " + str(rv))
-                self.Destroy()
                 return
-            self.setting = True
             pass
         return
 
     def sensor_get_thresholds_cb(self, sensor, err, th):
         if (err != 0):
             _oi_logging.error("Error getting sensor thresholds: " + str(err))
-            self.Destroy()
             return
+        self.thresholds = [ ]
+        defaults = [ ]
+        labels = [ ]
         for i in th.split(':'):
             j = i.split()
-            self.thresholds[j[0]].SetValue(j[1])
+            self.thresholds.append(j[0])
+            defaults.append(j[1])
+            labels.append(threshold_str_to_full(j[0]))
             pass
-        self.Show()
+        gui_setdialog.SetDialog("Set Thresholds for " + str(self.s),
+                                defaults, len(defaults), self, labels)
         return
 
     def sensor_set_thresholds_cb(self, sensor, err):
@@ -300,134 +225,98 @@ class SensorThresholdsSet(wx.Dialog):
         else:
             sensor.get_thresholds(self.s)
             pass
-        self.Close()
         return
 
     pass
 
 
-class SensorEventEnablesSet(wx.Dialog):
+class SensorEventEnablesSet:
     def __init__(self, s):
-        wx.Dialog.__init__(self, None, -1, "Set Event Enables for " + str(s),
-                           size=wx.Size(400, 250))
         self.s = s
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        sbox = scrolled.ScrolledPanel(self, -1, size=wx.Size(400, 200))
-        sbox_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self.enable = wx.CheckBox(sbox, -1, "Enable Events")
-        sbox_sizer.Add(self.enable, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        self.scanning = wx.CheckBox(sbox, -1, "Scanning")
-        sbox_sizer.Add(self.scanning, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-
-        self.event_enables = { }
-        if (self.s.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE):
-            for the in s.events_supported:
-                if (s.is_threshold):
-                    the_box = wx.CheckBox(sbox, -1,
-                                          threshold_event_str_to_full(the))
-                else:
-                    name = s.events_supported_name[the]
-                    the_box = wx.CheckBox(sbox, -1,
-                                          discrete_event_str_to_full(the, name))
-                self.event_enables[the] = the_box
-                sbox_sizer.Add(the_box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-                pass
-            pass
-        sbox.SetupScrolling()
-        sbox.SetSizer(sbox_sizer)
-        sizer.Add(sbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        box.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-
         self.setting = False
         if (s.sensor_id.to_sensor(self) != 0):
-            self.Destroy()
+            s.gui.ReportError("Unable to convert " + s.name
+                              + "to a sensor for event enable setting")
             pass
         return
 
-    def cancel(self, event):
-        self.Close()
-        return
-
-    def ok(self, event):
+    def ok(self, vals):
         tlist = [ ]
-        if (self.enable.GetValue()):
+        if (vals[0]):
             tlist.append("events")
             pass
-        if (self.scanning.GetValue()):
+        del vals[0]
+        if (vals[0]):
             tlist.append("scanning")
             pass
-        for ths in self.event_enables.iteritems():
-            if ths[1].GetValue():
-                tlist.append(ths[0])
+        del vals[0]
+
+        for en in self.enables:
+            if vals[0]:
+                tlist.append(en)
                 pass
+            del vals[0]
             pass
         self.event_enable_str = " ".join(tlist)
+        self.setting = True
         rv = self.s.sensor_id.to_sensor(self)
         if (rv == 0):
             rv = self.err
             pass
         if (rv != 0):
             _oi_logging.error("Error setting sensor event enables: " + str(rv))
-            self.Close()
             pass
         return
         
-
-    def OnClose(self, event):
-        self.Destroy()
-        return
-
     def sensor_cb(self, sensor):
         if (self.setting):
             self.err = sensor.set_event_enables(self.event_enable_str, self)
         else:
             rv = sensor.get_event_enables(self)
             if (rv != 0):
-                _oi_logging.error("Error getting sensor event enables: " + str(rv))
-                self.Destroy()
+                _oi_logging.error("Error getting sensor event enables: "
+                                  + str(rv))
                 return
-            self.setting = True
             pass
         return
 
     def sensor_get_event_enable_cb(self, sensor, err, st):
         if (err != 0):
-            _oi_logging.error("Error getting sensor event enables: " + str(err))
-            self.Destroy()
+            _oi_logging.error("Error getting sensor event enables: "
+                              + str(err))
             return
+        defaults = [ False, False ]
+        labels = [ "Enable Events", "Scanning" ]
+        en = { }
+        for i in self.s.events_supported:
+            en[i] = False
+            pass
         for i in st.split(' '):
             if (i == "events"):
-                self.enable.SetValue(True)
+                defaults[0] = True
             elif (i == "scanning"):
-                self.scanning.SetValue(True)
+                defaults[1] = True
             elif (i == "busy"):
                 pass
             elif (self.s.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE):
-                try:
-                    self.event_enables[i].SetValue(True)
-                except:
-                    _oi_logging.warning("Sensor " + s.name + " returned enable "
-                                    + i + " but the sensor reports it in a"
-                                    + " callback.")
-                    pass
+                en[i] = True
                 pass
             pass
-        self.Show()
+        
+        self.enables = [ ]
+        for i in self.s.events_supported:
+            defaults.append(en[i])
+            self.enables.append(i)
+            if (self.s.is_threshold):
+                labels.append(threshold_event_str_to_full(i))
+            else:
+                name = s.events_supported_name[i]
+                labels.append(discrete_event_str_to_full(i, name))
+                pass
+            pass
 
+        gui_setdialog.SetDialog("Set Event Enables for " + str(self.s),
+                                defaults, len(defaults), self, labels)
         return
 
     def sensor_event_enable_cb(self, sensor, err):
@@ -436,7 +325,6 @@ class SensorEventEnablesSet(wx.Dialog):
         else:
             sensor.get_event_enables(self.s)
             pass
-        self.Close()
         return
 
     pass
@@ -654,35 +542,24 @@ class Sensor:
         return
 
     def HandleMenu(self, event):
-        eitem = event.GetItem();
-        menu = wx.Menu();
-        doit = False
+        l = [ ]
         if (self.event_support != OpenIPMI.EVENT_SUPPORT_NONE):
-            item = menu.Append(id_st+1, "Rearm")
-            wx.EVT_MENU(self.ui, id_st+1, self.Rearm)
-            doit = True
+            l.append( ("Rearm", self.Rearm) )
             pass
         if (self.threshold_support == OpenIPMI.THRESHOLD_ACCESS_SUPPORT_SETTABLE):
-            item = menu.Append(id_st+2, "Set Thresholds")
-            wx.EVT_MENU(self.ui, id_st+2, self.SetThresholds)
-            doit = True
+            l.append( ("Set Thresholds", self.SetThresholds) )
             pass
         if (self.hysteresis_support == OpenIPMI.HYSTERESIS_SUPPORT_SETTABLE):
-            item = menu.Append(id_st+3, "Set Hysteresis")
-            wx.EVT_MENU(self.ui, id_st+3, self.SetHysteresis)
-            doit = True
+            l.append( ("Set Hysteresis", self.SetHysteresis) )
             pass
         if ((self.event_support == OpenIPMI.EVENT_SUPPORT_PER_STATE)
             or (self.event_support == OpenIPMI.EVENT_SUPPORT_ENTIRE_SENSOR)):
-            item = menu.Append(id_st+4, "Set Event Enables")
-            wx.EVT_MENU(self.ui, id_st+4, self.SetEventEnables)
-            doit = True
+            l.append( ("Set Event Enables", self.SetEventEnables) )
             pass
 
-        if (doit):
-            self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
+        if (len(l) > 0):
+            gui_popup.popup(self.ui, event, l)
             pass
-        menu.Destroy()
         return
 
     def Rearm(self, event):
