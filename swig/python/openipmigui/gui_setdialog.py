@@ -32,6 +32,7 @@
 
 import wx
 import wx.lib.scrolledpanel as scrolled
+import gui_errstr
 
 def isbool(v):
     return type(v) == type(True)
@@ -43,7 +44,7 @@ class SetDialog(wx.Dialog):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.values = scrolled.ScrolledPanel(self, -1,
-                                             size=wx.Size(300, 200))
+                                             size=wx.Size(300, 150))
         if (labels == None):
             box = wx.BoxSizer(wx.HORIZONTAL)
             if (count == 1):
@@ -65,8 +66,6 @@ class SetDialog(wx.Dialog):
                 box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
                 pass
             box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            self.values.SetSizer(box)
-            sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
         else:
             box = wx.BoxSizer(wx.VERTICAL)
             self.fields = [ ]
@@ -90,6 +89,9 @@ class SetDialog(wx.Dialog):
         self.values.SetupScrolling()
         self.values.SetSizer(box)
         sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+
+        self.errstr = gui_errstr.ErrStr(self)
+        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
         
         bbox = wx.BoxSizer(wx.HORIZONTAL)
         cancel = wx.Button(self, -1, "Cancel")
@@ -99,8 +101,6 @@ class SetDialog(wx.Dialog):
         wx.EVT_BUTTON(self, ok.GetId(), self.ok);
         bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        # FIXME - add error string.
 
         self.SetSizer(sizer)
         wx.EVT_CLOSE(self, self.OnClose)
@@ -118,8 +118,13 @@ class SetDialog(wx.Dialog):
             vals.append(f.GetValue())
             pass
         try:
-            self.handler.ok(vals)
+            err = self.handler.ok(vals)
+            if (err != None):
+                self.errstr.SetError(err)
+                return
+            pass
         except:
+            self.errstr.SetError("Value invalid")
             return
         self.Close()
         return

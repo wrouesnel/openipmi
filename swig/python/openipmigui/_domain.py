@@ -129,14 +129,20 @@ class DomainSelSet(DomainRefreshData):
     def ok(self, val):
         self.ival = int(val[0])
         self.init = False
-        self.d.domain_id.to_domain(self)
+        rv = self.d.domain_id.to_domain(self)
+        if (rv == 0):
+            rv = self.err
+            pass
+        if (rv != 0):
+            return ("Error setting SEL rescan time: "
+                    + OpenIPMI.get_error_string(rv))        
         return
 
     def domain_cb(self, domain):
         if self.init:
             self.sel_rescan_time = domain.get_sel_rescan_time()
         else:
-            domain.set_sel_rescan_time(self.ival)
+            self.err = domain.set_sel_rescan_time(self.ival)
             self.d.sel_rescan_time = self.ival
             self.refr.DoUpdate()
             pass
@@ -172,19 +178,22 @@ class DomainIPMBSet(DomainRefreshData):
         return
 
     def ok(self, val):
-        try:
-            self.ival = int(val[0])
-        except:
-            return
+        self.ival = int(val[0])
         self.init = False
-        self.d.domain_id.to_domain(self)
+        rv = self.d.domain_id.to_domain(self)
+        if (rv == 0):
+            rv = self.err
+            pass
+        if (rv != 0):
+            return ("Error setting IPMB rescan time: "
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def domain_cb(self, domain):
         if self.init:
             self.ipmb_rescan_time = domain.get_ipmb_rescan_time()
         else:
-            domain.set_ipmb_rescan_time(self.ival)
+            self.err = domain.set_ipmb_rescan_time(self.ival)
             self.d.ipmb_rescan_time = self.ival
             self.refr.DoUpdate()
             pass

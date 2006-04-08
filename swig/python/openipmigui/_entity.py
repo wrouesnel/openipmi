@@ -99,8 +99,8 @@ class ActivationTimeSetter:
             rv = self.err
             pass
         if (rv != 0):
-            _oi_logging.error("Error setting activation time: " + str(rv))
-            pass
+            return ("Error setting activation time: "
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def entity_cb(self, entity):

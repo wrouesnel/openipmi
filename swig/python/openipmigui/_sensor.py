@@ -127,8 +127,8 @@ class SensorHysteresisSet:
             rv = self.err
             pass
         if (rv != 0):
-            _oi_logging.error("Error setting sensor thresholds: " + str(rv))
-            pass
+            return ("Error setting sensor thresholds: "
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def sensor_cb(self, sensor):
@@ -187,8 +187,8 @@ class SensorThresholdsSet:
             rv = self.err
             pass
         if (rv != 0):
-            _oi_logging.error("Error setting sensor thresholds: " + str(rv))
-            pass
+            return ("Error setting sensor thresholds: "
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def sensor_cb(self, sensor):
@@ -264,8 +264,8 @@ class SensorEventEnablesSet:
             rv = self.err
             pass
         if (rv != 0):
-            _oi_logging.error("Error setting sensor event enables: " + str(rv))
-            pass
+            return ("Error setting sensor event enables: "
+                    + OpenIPMI.get_error_string(rv))
         return
         
     def sensor_cb(self, sensor):

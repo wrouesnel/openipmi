@@ -106,9 +106,8 @@ class IntSetter:
         val = int(vals[0])
         rv = self.setter(val)
         if (rv):
-            mcusers.SetError("Could not set value: "
-                             + OpenIPMI.get_error_string(rv), 0)
-            return
+            return ("Could not set value: "
+                    + OpenIPMI.get_error_string(rv))
         self.user.changed = True
         self.mcusers.SetColumn(self.item, str(val), 1)
         self.currval = val
@@ -147,9 +146,8 @@ class StrSetter:
         val = str(vals[0])
         rv = self.setter(val)
         if (rv):
-            mcusers.SetError("Could not set value: "
-                             + OpenIPMI.get_error_string(rv))
-            return
+            return ("Could not set value: "
+                    + OpenIPMI.get_error_string(rv))
         self.user.changed = True
         self.mcusers.SetColumn(self.item, str(val), 1)
         self.currval = val

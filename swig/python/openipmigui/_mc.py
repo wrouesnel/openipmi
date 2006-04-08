@@ -140,14 +140,20 @@ class MCSelSet:
     def ok(self, vals):
         self.ival = int(vals[0])
         self.init = False
-        self.m.mc_id.to_mc(self)
+        rv = self.m.mc_id.to_mc(self)
+        if (rv == 0):
+            rv = self.err
+            pass
+        if (rv != 0):
+            return ("Error setting SEL rescan time: "
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def mc_cb(self, mc):
         if self.init:
             self.sel_rescan_time = mc.get_sel_rescan_time()
         else:
-            mc.set_sel_rescan_time(self.ival)
+            self.err = mc.set_sel_rescan_time(self.ival)
             self.refr.DoUpdate()
             pass
         return
