@@ -5853,7 +5853,7 @@ lan_free_args(ipmi_args_t *args)
     memset(largs->bmc_key, 0, sizeof(largs->bmc_key));
 }
 
-ipmi_args_t *
+static ipmi_args_t *
 get_startup_args(ipmi_con_t *ipmi)
 {
     ipmi_args_t      *args;

@@ -296,8 +296,11 @@ struct ipmi_sol_transmitter_context_s {
 };
 
 struct ipmi_sol_conn_s {
-    /* The IPMI connection over which this SoL connection operates. */
+    /* The IPMI connection for commands. */
     ipmi_con_t *ipmi;
+
+    /* The IPMI connection for SOL data. */
+    ipmi_con_t *ipmid;
 
     /* Used to know how many users are using this right now. */
     unsigned int refcount;
@@ -1498,7 +1501,7 @@ transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
     /*
      * And fire it off!
      */
-    rv = conn->ipmi->send_command_option
+    rv = conn->ipmid->send_command_option
 	(conn->ipmi,
 	 (ipmi_addr_t *)&transmitter->sol_conn->sol_payload_addr,
 	 sizeof(transmitter->sol_conn->sol_payload_addr),
@@ -2483,6 +2486,145 @@ get_sane_payload_size(int b1, int b2)
 }
 
 static void
+finish_activate_payload(ipmi_sol_conn_t *conn)
+{
+    if (conn->max_outbound_payload_size > IPMI_SOL_MAX_DATA_SIZE)
+	conn->transmitter.scratch_area_size = IPMI_SOL_MAX_DATA_SIZE;
+    else
+	conn->transmitter.scratch_area_size = conn->max_outbound_payload_size;
+
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_active_payload_response): "
+	     "Connected to BMC SoL through port %d.",
+	     /*		conn->hostname,*/
+	     conn->payload_port_number);
+
+#ifdef IPMI_SOL_VERBOSE
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(handle_active_payload_response): "
+	     "BMC requested transmit limit %d bytes, receive limit %d bytes.",
+	     conn->max_outbound_payload_size,
+	     conn->max_inbound_payload_size);
+
+    if (conn->max_outbound_payload_size > conn->transmitter.scratch_area_size)
+	ipmi_log(IPMI_LOG_WARNING,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Limiting transmit to %d bytes.",
+		 conn->transmitter.scratch_area_size);
+#endif
+
+    /*
+     * Set the hardware handshaking bits to match the "holdoff" option...
+     */
+    ipmi_lock(conn->transmitter.oob_op_lock);
+    if (conn->auxiliary_payload_data & IPMI_SOL_AUX_DEASSERT_HANDSHAKE)
+	conn->transmitter.oob_persistent_op
+	    |= (IPMI_SOL_OPERATION_CTS_PAUSE
+		| IPMI_SOL_OPERATION_DROP_DCD_DSR);
+    else
+	conn->transmitter.oob_persistent_op
+	    &= ~(IPMI_SOL_OPERATION_CTS_PAUSE
+		 | IPMI_SOL_OPERATION_DROP_DCD_DSR);
+    ipmi_unlock(conn->transmitter.oob_op_lock);
+
+    /*
+     * And officially bring the connection "up"!
+     */
+    ipmi_sol_set_connection_state(conn, ipmi_sol_state_connected, 0);
+}
+
+static void ipmid_changed(ipmi_con_t   *ipmid, 
+			  int          err,
+			  unsigned int port_num,
+			  int          any_port_up,
+			  void         *cb_data)
+{
+    ipmi_sol_conn_t *conn = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Error setting up new port: %d", err);
+	goto out_err;
+    }
+
+    finish_activate_payload(conn);
+    return;
+
+ out_err:
+    send_close(conn, NULL); 
+    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, err);
+}
+
+/*
+ * Create a new IPMI connection to the BMC on the port specified in
+ * the payload port number.
+ */
+static int
+setup_new_ipmi(ipmi_sol_conn_t *conn)
+{
+    ipmi_args_t *args;
+    int         rv;
+    char        pname[20];
+
+    ipmi_log(IPMI_LOG_INFO,
+	     "ipmi_sol.c(setup_new_ipmi): "
+	     "Setting up new IPMI connection to port %d.",
+	     conn->payload_port_number);
+
+    if (!conn->ipmi->get_startup_args) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Required a new port, but connection doesn't support "
+		 "fetching arguments.");
+	return ENOSYS;
+    }
+
+    args = conn->ipmi->get_startup_args(conn->ipmi);
+    if (!args) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Unable to get arguments from the IPMI connection.");
+	return ENOMEM;
+    }
+
+    snprintf(pname, sizeof(pname), "%d", conn->payload_port_number);
+    rv = ipmi_args_set_val(args, -1, "Port", pname);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Error setting port argument: %d.", rv);
+	return rv;
+    }
+
+    rv = ipmi_args_setup_con(args, conn->ipmi->os_hnd, NULL, &conn->ipmid);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Error setting up new connection: %d.", rv);
+	return rv;
+    }
+
+    rv = conn->ipmid->add_con_change_handler(conn->ipmid, ipmid_changed, conn);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Error adding connection change handler: %d.", rv);
+	return rv;
+    }
+
+    rv = conn->ipmid->start_con(conn->ipmid);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "ipmi_sol.c(handle_active_payload_response): "
+		 "Error starting secondary connection: %d.", rv);
+	return rv;
+    }
+
+    return 0;
+}
+
+static void
 handle_activate_payload_response(ipmi_sol_conn_t *conn,
 				 ipmi_msg_t      *msg_in)
 {
@@ -2528,63 +2670,25 @@ handle_activate_payload_response(ipmi_sol_conn_t *conn,
 	= get_sane_payload_size(msg_in->data[7], msg_in->data[8]);
 
     conn->payload_port_number = (msg_in->data[10] << 8) + msg_in->data[9];
-
-    if (conn->payload_port_number != IPMI_LAN_STD_PORT) {
-	/* TODO: Currently don't handle ports other than the standard one! */
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "ipmi_sol.c(handle_active_payload_response): "
-		 "BMC requested connection through port %d."
-		 " Ports other than %d are not currently supported.",
-		 conn->payload_port_number, IPMI_LAN_STD_PORT);
-
-	send_close(conn, NULL); 
-	ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, ENOSYS);
-	return;
-    }
-
-    if (conn->max_outbound_payload_size > IPMI_SOL_MAX_DATA_SIZE)
-	conn->transmitter.scratch_area_size = IPMI_SOL_MAX_DATA_SIZE;
-    else
-	conn->transmitter.scratch_area_size = conn->max_outbound_payload_size;
-
-    ipmi_log(IPMI_LOG_INFO,
-	     "ipmi_sol.c(handle_active_payload_response): "
-	     "Connected to BMC SoL through port %d.",
-	     /*		conn->hostname,*/
-	     conn->payload_port_number);
-
-#ifdef IPMI_SOL_VERBOSE
-    ipmi_log(IPMI_LOG_INFO,
-	     "ipmi_sol.c(handle_active_payload_response): "
-	     "BMC requested transmit limit %d bytes, receive limit %d bytes.",
-	     conn->max_outbound_payload_size,
-	     conn->max_inbound_payload_size);
-
-    if (conn->max_outbound_payload_size > conn->transmitter.scratch_area_size)
+    if (conn->payload_port_number == 28418) {
+	/* Bad byte-swapping */
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_sol.c(handle_active_payload_response): "
-		 "Limiting transmit to %d bytes.",
-		 conn->transmitter.scratch_area_size);
-#endif
+		 "Got a badly byte-swapped UDP port, most likely.  Setting"
+		 " it to the proper value.");
+	conn->payload_port_number = IPMI_LAN_STD_PORT;
+    }
 
-    /*
-     * Set the hardware handshaking bits to match the "holdoff" option...
-     */
-    ipmi_lock(conn->transmitter.oob_op_lock);
-    if (conn->auxiliary_payload_data & IPMI_SOL_AUX_DEASSERT_HANDSHAKE)
-	conn->transmitter.oob_persistent_op
-	    |= (IPMI_SOL_OPERATION_CTS_PAUSE
-		| IPMI_SOL_OPERATION_DROP_DCD_DSR);
-    else
-	conn->transmitter.oob_persistent_op
-	    &= ~(IPMI_SOL_OPERATION_CTS_PAUSE
-		 | IPMI_SOL_OPERATION_DROP_DCD_DSR);
-    ipmi_unlock(conn->transmitter.oob_op_lock);
-
-    /*
-     * And officially bring the connection "up"!
-     */
-    ipmi_sol_set_connection_state(conn, ipmi_sol_state_connected, 0);
+    if (conn->payload_port_number != IPMI_LAN_STD_PORT) {
+	int rv = setup_new_ipmi(conn);
+	if (rv) {
+	    send_close(conn, NULL); 
+	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, rv);
+	}
+    } else {
+	conn->ipmid = conn->ipmi;
+	finish_activate_payload(conn);
+    }
 }
 
 static int

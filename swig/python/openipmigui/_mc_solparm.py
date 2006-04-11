@@ -163,7 +163,7 @@ class MCSolParm(wx.Dialog):
                     data = MCLPData(i, lastv, vals[0], vals[1], vals[2])
                     itemdata.append(data)
                     if (v[0] == 0):
-                        InsertStringItem(j, vals[0])
+                        listc.InsertStringItem(j, vals[0])
                     else:
                         x = [ "" ]
                         err = OpenIPMI.solconfig_enum_idx(i, lastv, x)

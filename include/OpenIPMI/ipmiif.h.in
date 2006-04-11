@@ -1937,7 +1937,8 @@ int ipmi_domain_remove_domain_change_handler(ipmi_domain_change_cb handler,
 /* Allocate an args object for the given connection type. */
 int ipmi_args_alloc(char *con_type, ipmi_args_t **args);
 
-/* Returns the type (smi, lan, etc) of the connextion. */
+/* Returns the type (smi, lan, etc) of the connextion.  Returns a
+   static string (should not be freed). */
 const char *ipmi_args_get_type(ipmi_args_t *args);
 
 /* The following lets you discover the valid fields in an args array.
