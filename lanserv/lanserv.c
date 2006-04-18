@@ -70,7 +70,9 @@
 #include <popt.h> /* Option parsing made easy */
 #include <malloc.h>
 #include <sys/ioctl.h>
+#if HAVE_SYSLOG
 #include <syslog.h>
+#endif
 
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -687,7 +689,9 @@ lanserv_log(int logtype, msg_t *msg, char *format, ...)
 	timelen--;
     }
     if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
+#if HAVE_SYSLOG
 	vsyslog(LOG_NOTICE, format, ap);
+#endif
     } else {
 	strcpy(fullformat, timebuf);
 	strcat(fullformat, ": ");
@@ -696,8 +700,10 @@ lanserv_log(int logtype, msg_t *msg, char *format, ...)
 	    vprintf(fullformat, ap);
 	    printf("\n");
 	}
+#if HAVE_SYSLOG
 	if (logtype != DEBUG)
 	    vsyslog(LOG_NOTICE, fullformat, ap);
+#endif
     }
     va_end(ap);
 }
@@ -781,7 +787,9 @@ main(int argc, const char *argv[])
     struct timeval time_now;
     void (*handle_msg_ipmi)(int smi_fd, lan_data_t *lan);
 
+#if HAVE_SYSLOG
     openlog(argv[0], LOG_CONS, LOG_DAEMON);
+#endif
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((o = poptGetNextOpt(poptCtx)) >= 0) {

@@ -735,6 +735,8 @@ fi
 AC_SUBST(OPENSSLLIBS)
 AC_SUBST(OPENSSLINCS)
 
+AC_HAVE_FUNCS(syslog)
+
 # Everything from here to AC_OUTPUT is for libedit
 
 # AC_PROG_LIBTOOL runs AC_CANONICAL_HOST
