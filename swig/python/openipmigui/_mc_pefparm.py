@@ -139,6 +139,7 @@ class MCPefParm(wx.Dialog):
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         i = 0
+        j = 0
         rv = True
         v = [ 0 ]
         itemdata = [ ]
