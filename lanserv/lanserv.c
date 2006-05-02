@@ -79,7 +79,6 @@
 #include <OpenIPMI/lanserv.h>
 
 #include <linux/ipmi.h>
-#include <net/af_ipmi.h>
 
 
 static int debug = 0;
@@ -186,22 +185,6 @@ ipmb_addr_change_dev(lan_data_t    *lan,
     }    
 }
 
-static void
-ipmb_addr_change_sock(lan_data_t    *lan,
-		      unsigned char addr)
-{
-    unsigned int slave_addr = addr;
-    int          rv;
-    misc_data_t  *info = lan->user_info;
-
-    info->bmc_ipmb = addr;
-    rv = ioctl(info->smi_fd, SIOCIPMISETADDR, &slave_addr);
-    if (rv) {
-	lan->log(OS_ERROR, NULL,
-		 "Error setting IPMB address: 0x%x", errno);
-    }    
-}
-
 static int
 smi_send_dev(lan_data_t *lan, msg_t *msg)
 {
@@ -253,92 +236,6 @@ smi_send_dev(lan_data_t *lan, msg_t *msg)
     req.msgid = (long) msg;
 
     rv = ioctl(info->smi_fd, IPMICTL_SEND_COMMAND, &req);
-    if (rv == -1)
-	return errno;
-    else
-	return 0;
-}
-
-static int
-smi_send_sock(lan_data_t *lan, msg_t *msg)
-{
-    struct msghdr            req;
-    struct iovec             iov;
-    struct sockaddr_ipmi     addr;
-    misc_data_t              *info = lan->user_info;
-    struct ipmi_sock_msg     *smsg;
-    unsigned char            data[IPMI_MAX_MSG_LENGTH + sizeof(*smsg)];
-    struct ipmi_timing_parms *tparms;
-    struct cmsghdr           *cmsg;
-    unsigned char            cmsg_data[CMSG_SPACE(sizeof(tparms))];
-    int                      rv;
-
-
-    if (msg->len > IPMI_MAX_MSG_LENGTH)
-	return EMSGSIZE;
-    
-    req.msg_name = (unsigned char *) &addr;
-
-    smsg = (struct ipmi_sock_msg *) data;
-
-    addr.sipmi_family = AF_IPMI;
-    req.msg_namelen = SOCKADDR_IPMI_OVERHEAD;
-
-    if (msg->cmd == IPMI_SEND_MSG_CMD) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr.ipmi_addr;
-	int                   pos;
-	/* Send message has special handling */
-	
-	if (msg->len < 8)
-	    return EMSGSIZE;
-
-	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
-	ipmb->channel = msg->data[0] & 0xf;
-	pos = 1;
-	if (msg->data[pos] == 0) {
-	    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
-	    pos++;
-	}
-	ipmb->slave_addr = msg->data[pos];
-	ipmb->lun = msg->data[pos+1] & 0x3;
-	req.msg_namelen += sizeof(*ipmb);
-	smsg->netfn = msg->data[pos+1] >> 2;
-	smsg->cmd = msg->data[pos+5];
-	smsg->data_len = msg->len-(pos + 7); /* Subtract last checksum, too */
-	memcpy(smsg->data, msg->data+pos+6, smsg->data_len);
-    } else {
-	/* Normal message to the BMC. */
-	struct ipmi_system_interface_addr *si = (void *) &addr.ipmi_addr;
-
-	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si->channel = 0xf;
-	si->lun = msg->rs_lun;
-	req.msg_namelen += sizeof(*si);
-	smsg->netfn = msg->netfn;
-	smsg->cmd = msg->cmd;
-	smsg->data_len = msg->len;
-	memcpy(smsg->data, msg->data, smsg->data_len);
-    }
-
-    smsg->msgid = (long) msg;
-
-    iov.iov_base = smsg;
-    iov.iov_len = sizeof(*smsg) + smsg->data_len;
-    req.msg_iov = &iov;
-    req.msg_iovlen = 1;
-
-    req.msg_control = cmsg_data;
-    req.msg_controllen = sizeof(cmsg_data);
-    cmsg = CMSG_FIRSTHDR(&req);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = IPMI_CMSG_TIMING_PARMS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(*tparms));
-    tparms = (struct ipmi_timing_parms *) CMSG_DATA(cmsg);
-    tparms->retries = 1;
-    tparms->retry_time_ms = 0;
-    req.msg_controllen = cmsg->cmsg_len;
-
-    rv = sendmsg(info->smi_fd, &req, 0);
     if (rv == -1)
 	return errno;
     else
@@ -445,81 +342,6 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 }
 
 static void
-handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
-{
-    struct sockaddr_ipmi addr;
-    socklen_t            addr_len;
-    struct ipmi_sock_msg *smsg;
-    unsigned char        data[IPMI_MAX_MSG_LENGTH+7];
-    unsigned char        rdata[IPMI_MAX_MSG_LENGTH + sizeof(*smsg)];
-    unsigned char        *dp;
-    int                  rv;
-    msg_t                *msg;
-    misc_data_t          *info = lan->user_info;
-
-    addr_len = sizeof(addr);
-    rv = recvfrom(smi_fd, rdata, sizeof(rdata), 0,
-		  (struct sockaddr *) &addr, &addr_len);
-    if (rv == -1) {
-	/* FIXME - no handling for EMSGSIZE. */
-	if (errno == EINTR) {
-	    return; /* Try again later. */
-	} else {
-	    lanserv_log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
-	    return;
-	}
-    }
-
-    if (rv < (int) sizeof(*smsg)) {
-	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d\n", rv);
-	return;
-    }
-
-    smsg = (struct ipmi_sock_msg *) rdata;
-
-    if (rv < ((int) sizeof(*smsg) + smsg->data_len)) {
-	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d, data_len was %d\n",
-	    rv, smsg->data_len);
-	return;
-    }
-
-    dp = smsg->data;
-
-    if (dp[0] == IPMI_TIMEOUT_CC)
-	/* Ignore timeouts, we let the LAN code do the timeouts. */
-	return;
-
-    /* We only handle responses. */
-    if (smsg->recv_type != IPMI_RESPONSE_RECV_TYPE)
-	return;
-
-    msg = (msg_t *) smsg->msgid;
-
-    if (addr.ipmi_addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	/* Nothing to do. */
-    } else if (addr.ipmi_addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr.ipmi_addr; 
-
-	data[0] = 0; /* return code. */
-	data[1] = info->bmc_ipmb;
-	data[2] = (smsg->netfn << 2) | 2;
-	data[3] = ipmb_checksum(data+1, 2, 0);
-	data[4] = ipmb->slave_addr;
-	data[5] = (msg->data[4] & 0xfc) | ipmb->lun;
-	data[6] = smsg->cmd;
-	memcpy(data+7, smsg->data, smsg->data_len);
-	dp = data;
-	smsg->data_len += 8;
-	data[smsg->data_len-1] = ipmb_checksum(data+1, smsg->data_len-2, 0);
-    } else {
-	lanserv_log(DEBUG, NULL, "Error!\n");
-	return;
-    }
-
-    ipmi_handle_smi_rsp(lan, msg, dp, smsg->data_len);
-}
-
-static void
 handle_msg_lan(int lan_fd, lan_data_t *lan)
 {
     int                len;
@@ -565,32 +387,10 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
 }
 
 static int
-ipmi_open(char *ipmi_dev, int *using_socket)
+ipmi_open(char *ipmi_dev)
 {
     int ipmi_fd;
-    int rv;
-    struct sockaddr_ipmi addr;
 
-    ipmi_fd = socket(PF_IPMI, SOCK_DGRAM, 0);
-    if (ipmi_fd == -1) {
-	goto try_dev;
-    }
-    addr.sipmi_family = AF_IPMI;
-    if (ipmi_dev == 0)
-	addr.if_num = 0;
-    else
-	addr.if_num = atoi(ipmi_dev);
-    rv = bind(ipmi_fd, (struct sockaddr *) &addr, sizeof(addr));
-    if (rv == -1) {
-	perror("Could not bind IPMI net socket");
-	goto try_dev;
-    }
-    if (rv != -1) {
-	*using_socket = 1;
-	goto out;
-    }
-
- try_dev:
     if (ipmi_dev) {
 	ipmi_fd = open(ipmi_dev, O_RDWR);
     } else {
@@ -617,9 +417,7 @@ ipmi_open(char *ipmi_dev, int *using_socket)
 	if (rv == -1)
 	    perror("Could not set timing parms");
     }
-    *using_socket = 0;
 
- out:
     return ipmi_fd;
 }
 
@@ -780,7 +578,6 @@ main(int argc, const char *argv[])
     int rv;
     int o;
     int i;
-    int using_socket;
     poptContext poptCtx;
     struct timeval timeout;
     struct timeval time_next;
@@ -818,20 +615,14 @@ main(int argc, const char *argv[])
     if (lanserv_read_config(&lan, data.config_file, addr, addr_len, &num_addr))
 	exit(1);
 
-    data.smi_fd = ipmi_open(ipmi_dev, &using_socket);
+    data.smi_fd = ipmi_open(ipmi_dev);
     if (data.smi_fd == -1)
 	exit(1);
 
     lan.lan_send = lan_send;
-    if (using_socket) {
-	handle_msg_ipmi = handle_msg_ipmi_sock;
-	lan.smi_send = smi_send_sock;
-	lan.ipmb_addr_change = ipmb_addr_change_sock;
-    } else {
-	handle_msg_ipmi = handle_msg_ipmi_dev;
-	lan.smi_send = smi_send_dev;
-	lan.ipmb_addr_change = ipmb_addr_change_dev;
-    }
+    handle_msg_ipmi = handle_msg_ipmi_dev;
+    lan.smi_send = smi_send_dev;
+    lan.ipmb_addr_change = ipmb_addr_change_dev;
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
     lan.log = lanserv_log;

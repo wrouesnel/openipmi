@@ -234,24 +234,49 @@ in re-licensing parts of OpenIPMI, contact MontaVista software.
 
 The source tree here consists of the following directories:
 
-  include - Most of the include files used by the systems, all the
-  public ones.
-
-  utils - Basic utilities (mostly authentication) that other parts of
-  the system use.  This is a non-shared library that the other shared
-  libraries pick up stuff from.
-
-  lib - The main library for OpenIPMI.
-
-  ui - A cheesy user interface for OpenIPMI, mostly for testing.
-
-  lanserv - An IPMI LAN server, it turns an SMI interface into a LAN
-  interface.
-
-  sample - Some sample code, and the ipmicmd utility.
-
-  doc - The documentation.
-
-  man - The man pages.
++---cmdlang - A command-line interpreter that gives access to the
+|             OpenIPMI library.  Includes a user interface named
+|             openipmish that demonstrates how to use it.
+|  
++--- doc - The main documentation for OpenIPMI
+|
++---glib - A glib OS handler.
+|  
++---include
+|   +---linux - linux-specific include files
+|   \---OpenIPMI - User-visible include files for OpenIPMI
+|       \---internal - Internal include files, only for plugins
+|
++---lanserv - Code to provide a LAN interface to an IPMI device and
+|             to provide an IPMI simulator
+|  
++---lib - The man OpenIPMI code.  This is where all the logic for the
+|         handling of IPMI messages is.
+|  
++---libedit - A readline replacement that provides cmdlang/openipmish
+|   |         with command line editing.
+|   \---editline - Include files for libedit
+|
++---man - The man pages for the 
+|
++---sample - Sample code and utilities that use the OpenIPMI library.
+|  
++---swig - The main interpreter interface.  swig is a program that
+|   |      takes a general description of a C/C++ interface and
+|   |      provides the equivalent interface in various interpreters.
+|   +---perl - Perl-specific code for swig, including sample code and
+|   |          tests.
+|   \---python - Python-specific code for swig.
+|       \---openipmigui - A GUI for OpenIPMI, written in Python.
+|
++---tcl - A TCL OS handler
+|
++---ui - A depracated UI for OpenIPMI.
+|  
++---unix - A POSIX OS handler, one for threaded and one for
+|          non-threaded applications/
+|  
+\---utils - General utility code used by both the OpenIPMI library
+            and by the lanserv code.
 
 

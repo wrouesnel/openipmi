@@ -229,6 +229,11 @@ ipmi_oem_atca_conn_init(void)
     if (rv)
 	return rv;
 
+    rv = ipmi_register_oem_conn_handler(0x000157, 0x080b,
+					handle_intel_atca, NULL);
+    if (rv)
+	return rv;
+
     rv = ipmi_register_oem_conn_handler(0x000157, 0x080c,
 					handle_intel_atca, NULL);
     if (rv)
@@ -243,4 +248,5 @@ ipmi_oem_atca_conn_shutdown(void)
     ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
     ipmi_deregister_oem_conn_handler(0x000157, 0x0841);
     ipmi_deregister_oem_conn_handler(0x000157, 0x080c);
+    ipmi_deregister_oem_conn_handler(0x000157, 0x080b);
 }

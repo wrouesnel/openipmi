@@ -1,3 +1,11 @@
+2006-05-02 Corey Minyard <cminyard@mvista.com>
+
+	* include/Makefile.am, include/net, lib/ipmi_smi.c, lanserv/lanserv.c:
+	Remove include/net, as the socket interface is not used any
+	more.
+
+	* README: Improved the code structure information.
+
 2006-04-18 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, lanserv/lanserv.c: Add detection for syslog.

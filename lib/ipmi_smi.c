@@ -49,7 +49,6 @@
 #include <ctype.h>
 
 #include <linux/ipmi.h>
-#include <net/af_ipmi.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>

@@ -2988,7 +2988,8 @@ fru_mr_array_idx_destroy(ipmi_fru_node_t *node)
     ipmi_fru_t         *fru = info->fru;
 
     ipmi_fru_deref(fru);
-    ipmi_fru_put_node(info->mr_node);
+    if (info->mr_node)
+	ipmi_fru_put_node(info->mr_node);
     ipmi_mem_free(info);
 }
 
