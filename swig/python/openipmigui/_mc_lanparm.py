@@ -38,8 +38,6 @@ import gui_list
 import gui_popup
 import gui_setdialog
 
-id_st = 800
-
 class MCLPData:
     def __init__(self, glist, lpc, parm, aidx, pname, ptype, origval):
         self.glist = glist

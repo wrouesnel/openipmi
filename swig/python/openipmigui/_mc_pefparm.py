@@ -32,117 +32,110 @@
 
 import sys
 import OpenIPMI
-import wx
-import wx.gizmos as gizmos
 import _oi_logging
 import gui_errstr
-
-id_st = 1500
+import gui_list
+import gui_popup
+import gui_setdialog
 
 class MCPEFData:
-    def __init__(self, parm, idx, pname, ptype, origval):
+    def __init__(self, glist, pefc, parm, aidx, pname, ptype, origval):
+        self.glist = glist
+        self.pefc = pefc
         self.parm = parm
-        self.idx = idx
+        self.aidx = aidx
         self.pname = pname
         self.ptype = ptype
         self.origval = origval
         self.currval = origval
         return
 
-    pass
-
-class MCValueSet(wx.Dialog):
-    def __init__(self, mcpef, idx, data):
-        wx.Dialog.__init__(self, None, -1,
-                           "Set value for " + data.pname,
-                           size=wx.Size(300, 300),
-                           style=wx.RESIZE_BORDER)
-        self.mcpef = mcpef
-        self.idx = idx
-        self.data = data
-    
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.field = wx.TextCtrl(self, -1, data.currval)
-        sizer.Add(self.field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        self.errstr = gui_errstr.ErrStr(self)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True);
+    def SetItem(self, idx):
+        self.idx = idx;
         return
 
-    def OnClose(self, event):
-        self.Destroy()
-        return
-    
-    def cancel(self, event):
-        self.Close()
+    def HandleMenu(self, event, idx, point):
+        if (self.ptype == "bool"):
+            menul = [ ("Toggle Value", self.togglevalue) ]
+        elif (self.ptype == "enum"):
+            menul = [ ]
+            nval = [ 0 ]
+            sval = [ "" ]
+            val = 0;
+            while (val != -1):
+                rv = OpenIPMI.pefconfig_enum_val(self.parm, val, nval, sval)
+                if (rv == 0):
+                    menul.append( (sval[0] + " (" + str(val) + ")",
+                                   self.setenum,
+                                   val) )
+                    pass
+                val = nval[0];
+                pass
+            pass
+        else:
+            menul = [ ("Set Value", self.setvalue) ]
+            pass
+        gui_popup.popup(self.glist, event, menul, point)
         return
 
-    def ok(self, event):
-        val = str(self.field.GetValue())
-        rv = self.mcpef.pefc.set_val(self.data.parm, self.data.idx,
-                                   self.data.ptype, val)
+    def ok(self, vals):
+        rv = self.pefc.set_val(self.parm, self.aidx, self.ptype, str(vals[0]))
         if (rv != 0):
-            self.errstr.SetError("Invalid data value")
+            self.glist.SetError("Invalid data value: "
+                                + OpenIPMI.get_error_string(rv))
             return
-        self.data.currval = val
-        self.mcpef.listc.SetStringItem(self.idx, 1, val)
-        self.Close()
+        self.currval = vals[0]
+        self.glist.SetColumn(self.idx, 1, vals[0])
+        return
+    
+    def setvalue(self, event):
+        gui_setdialog.SetDialog("Set value for " + self.pname,
+                                [ self.currval ], 1, self)
+        return
+
+    def setenum(self, val):
+        rv = self.pefc.set_val(self.parm, self.aidx, "integer", str(val))
+        if (rv != 0):
+            self.glist.SetError("Could not set value to " + str(val) + ": "
+                                + OpenIPMI.get_error_string(rv))
+            return
+        self.currval = val
+        nval = [ 0 ]
+        sval = [ "" ]
+        OpenIPMI.pefconfig_enum_val(self.parm, val, nval, sval)
+        self.glib.SetColumn(self.idx, 1, sval[0])
+        return
+    
+    def togglevalue(self, event):
+        if (self.currval == "true"):
+            newval = "false"
+        else:
+            newval = "true"
+            pass
+        rv = self.pefc.set_val(self.parm, self.aidx, self.ptype, newval)
+        if (rv != 0):
+            self.glist.SetError("Could not toggle value: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+            
+        self.currval = newval
+        self.glist.SetColumn(self.idx, 1, newval)
         return
 
     pass
-                 
-class MCPefParm(wx.Dialog):
+
+class MCPefParm(gui_list.List):
     def __init__(self, m, pef, pefc):
-        wx.Dialog.__init__(self, None, -1,
-                           "PEFPARMS for " + m.name,
-                           size=wx.Size(500, 600),
-                           style=wx.RESIZE_BORDER)
+        gui_list.List.__init__(self,
+                               "PEFPARMS for " + m.name,
+                               [ ("Name", 150), ("Value", 250) ])
         self.pef = pef
         self.pefc = pefc
         
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.listc = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_EDIT_LABELS)
-        listc = self.listc
-        listc.InsertColumn(0, "Name")
-        listc.InsertColumn(1, "Value")
-        listc.SetColumnWidth(0, 200)
-        listc.SetColumnWidth(1, 400)
-
-        sizer.Add(listc, 1, wx.GROW, 0)
-
-        self.errstr = gui_errstr.ErrStr(self)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        save = wx.Button(self, -1, "Save")
-        wx.EVT_BUTTON(self, save.GetId(), self.save)
-        box.Add(save, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        box.Add(cancel, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
         i = 0
         j = 0
         rv = True
         v = [ 0 ]
-        itemdata = [ ]
         while (rv):
             lastv = v[0]
             rv = pefc.get_val(i, v)
@@ -158,21 +151,19 @@ class MCPefParm(wx.Dialog):
                             vals[1] = "enum"
                             pass
                         pass
-                    data = MCPEFData(i, lastv, vals[0], vals[1], vals[2])
-                    itemdata.append(data)
+
+                    data = MCPEFData(self, pefc, i, lastv,
+                                     vals[0], vals[1], vals[2])
+
                     if (v[0] == 0):
-                        listc.InsertStringItem(j, vals[0])
+                        title = vals[0]
                     else:
                         x = [ "" ]
                         err = OpenIPMI.pefconfig_enum_idx(i, lastv, x)
                         if (err):
-                            listc.InsertStringItem(j,
-                                                   vals[0] + "[" +
-                                                   str(lastv) + "]")
+                            title = vals[0] + "[" + str(lastv) + "]"
                         else:
-                            listc.InsertStringItem(j,
-                                                   vals[0] + "[" +
-                                                   x[0] + "]")
+                            title = vals[0] + "[" + x[0] + "]"
                             pass
                         pass
                     if (vals[1] == "enum"):
@@ -180,12 +171,14 @@ class MCPefParm(wx.Dialog):
                         sval = [ "" ]
                         OpenIPMI.pefconfig_enum_val(data.parm, int(vals[2]),
                                                     nval, sval)
-                        listc.SetStringItem(j, 1, sval[0])
+                        value = sval[0]
                         pass
                     else:
-                        listc.SetStringItem(j, 1, vals[2])
+                        value = vals[2]
                         pass
-                    listc.SetItemData(j, len(itemdata)-1)
+
+                    self.add_data(title, [ value ], data)
+                    
                     j += 1
                     if (v[0] == 0):
                         i += 1
@@ -202,101 +195,7 @@ class MCPefParm(wx.Dialog):
                 pass
             pass
 
-        self.itemdata = itemdata
-        
-        wx.EVT_LIST_ITEM_RIGHT_CLICK(self.listc, -1, self.ListMenu)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True)
-        return
-
-    def OnClose(self, event):
-        if (self.pef):
-            self.pef.clear_lock(self.pefc)
-        self.Destroy();
-        return
-
-    def ListMenu(self, event):
-        pos = event.GetIndex()
-        self.current_position = pos
-        idx = self.listc.GetItemData(self.current_position)
-        data = self.itemdata[idx]
-
-        rect = self.listc.GetItemRect(pos)
-        if (rect == None):
-            point = None
-        else:
-            # FIXME - why do I have to subtract 25?
-            point = wx.Point(rect.GetLeft(), rect.GetBottom()-25)
-            pass
-                
-        menu = wx.Menu()
-        if (data.ptype == "bool"):
-            item = menu.Append(id_st+1, "Toggle Value")
-            wx.EVT_MENU(menu, id_st+1, self.togglevalue)
-        elif (data.ptype == "enum"):
-            nval = [ 0 ]
-            sval = [ "" ]
-            val = 0;
-            while (val != -1):
-                rv = OpenIPMI.pefconfig_enum_val(data.parm, val, nval, sval)
-                if (rv == 0):
-                    item = menu.Append(id_st + val,
-                                       sval[0] + " (" + str(val) + ")")
-                    wx.EVT_MENU(menu, id_st + val, self.setenum)
-                    pass
-                val = nval[0];
-                pass
-            pass
-        else:
-            item = menu.Append(id_st+2, "Set Value")
-            wx.EVT_MENU(menu, id_st+2, self.setvalue)
-            pass
-        self.listc.PopupMenu(menu, point)
-        menu.Destroy()
-        return
-
-    def setvalue(self, event):
-        idx = self.listc.GetItemData(self.current_position)
-        data = self.itemdata[idx]
-        MCValueSet(self, idx, data)
-        return
-
-    def setenum(self, event):
-        idx = self.listc.GetItemData(self.current_position)
-        data = self.itemdata[idx]
-        val = event.GetId() - id_st
-        rv = self.pefc.set_val(data.parm, data.idx, "integer", str(val))
-        if (rv != 0):
-            self.errstr.SetError("Could not set value to "+str(val)+": "
-                                 + OpenIPMI.get_error_string(rv))
-            return
-        data.currval = val
-        nval = [ 0 ]
-        sval = [ "" ]
-        OpenIPMI.pefconfig_enum_val(data.parm, val, nval, sval)
-        self.listc.SetStringItem(self.current_position, 1, sval[0])
-        return
-    
-    def togglevalue(self, event):
-        idx = self.listc.GetItemData(self.current_position)
-        data = self.itemdata[idx]
-        if (data.currval == "true"):
-            newval = "false"
-        else:
-            newval = "true"
-            pass
-        rv = self.pefc.set_val(data.parm, data.idx,
-                              data.ptype, newval)
-        if (rv != 0):
-            self.errstr.SetError("Could not toggle value: "
-                                 + OpenIPMI.get_error_string(rv))
-            return
-            
-        data.currval = newval
-        self.listc.SetStringItem(self.current_position, 1, newval)
+        self.AfterDone()
         return
 
     def save(self, event):
@@ -316,4 +215,12 @@ class MCPefParm(wx.Dialog):
         self.Close()
         return
 
+    def do_on_close(self):
+        # Do it here, not in cancel, to handle closing the window without
+        # clicking on "save" or "cancel"
+        if (self.pef):
+            self.pef.clear_lock(self.pefc)
+            pass
+        return
+    
     pass

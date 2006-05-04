@@ -33,8 +33,31 @@
 import OpenIPMI
 import wx
 import sys
+import gui_list
+import gui_popup
 
-id_st = 1300
+class EventData:
+    def __init__(self, slist, ev, has_second_data):
+        self.slist = slist
+        self.ev = ev
+        self.has_second_data = has_second_data
+        return
+
+    def HandleMenu(self, event, idx, point):
+        gui_popup.popup(self.slist, event,
+                        [ ("Delete", self.delete, idx) ],
+                        point)
+        return
+
+    def delete(self, idx):
+        self.slist.DelItem(idx)
+        if (self.has_second_data):
+            self.slist.DelItem(idx)
+            pass
+        self.ev.delete()
+        return
+    
+    pass
 
 class EventInfo:
     def __init__(self):
@@ -63,135 +86,52 @@ class EventInfo:
 
     pass
 
-class SELDisplay(wx.Dialog):
+class SELDisplay(gui_list.List):
     def __init__(self, o, type):
         self.o = o
         self.type = type
         self.numevents = 0
-        wx.Dialog.__init__(self, None, -1, "SEL for " + o.get_name(),
-                           size=wx.Size(500, 600),
-                           style=wx.RESIZE_BORDER)
+        gui_list.List.__init__(self, "SEL for " + o.get_name(),
+                               [ ("RecNum", 64), ("Type", 40),
+                                 ("Time/Sensor", 200), ("Data", 400) ])
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.listc = wx.ListCtrl(self, style=wx.LC_REPORT)
-        listc = self.listc
-        listc.InsertColumn(0, "RecNum")
-        listc.InsertColumn(1, "Type")
-        listc.InsertColumn(2, "Time/Sensor")
-        listc.InsertColumn(3, "Data")
-        
-        sizer.Add(listc, 1, wx.GROW, 0)
-        
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        clearall = wx.Button(self, -1, "Clear All")
-        wx.EVT_BUTTON(self, clearall.GetId(), self.ClearAll)
-        box.Add(clearall, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-
-        self.evnum = 0
-        self.events = { }
+        self.events = [ ]
         
         ev = o.first_event()
         while (ev != None):
             self.AddEvent(ev)
             ev = o.next_event(ev)
+            pass
 
-        listc.SetColumnWidth(0, 65)
-        listc.SetColumnWidth(1, 40)
-        listc.SetColumnWidth(2, 200)
-        listc.SetColumnWidth(3, 400)
-
-        wx.EVT_LIST_ITEM_RIGHT_CLICK(self, -1, self.HandleMenu)
-
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True)
+        self.AfterDone()
         return
 
     def AddEvent(self, ev):
-        listc = self.listc
         evinfo = EventInfo()
         ev.call_handler(evinfo)
-        idx = listc.InsertStringItem(self.numevents, str(ev.get_record_id()))
-        self.numevents += 1
-        listc.SetStringItem(idx, 1, str(ev.get_type()))
-        listc.SetStringItem(idx, 2, str(ev.get_timestamp()))
-        listc.SetStringItem(idx, 3, str(ev.get_data()))
-        self.events[self.evnum] = ev
-        listc.SetItemData(idx, self.evnum)
+
+        data = EventData(self, ev, evinfo.sensor != None)
+        self.events.append(data)
+        self.Append(str(ev.get_record_id()),
+                    [ str(ev.get_type()), str(ev.get_timestamp()),
+                      str(ev.get_data()) ],
+                    data)
         if (evinfo.sensor):
-            idx = listc.InsertStringItem(self.numevents, "")
-            self.numevents += 1
-            listc.SetStringItem(idx, 2, evinfo.sensor)
-            listc.SetStringItem(idx, 3, evinfo.val)
-            listc.SetItemData(idx, self.evnum)
+            # Can only delete the using the first item.
+            self.Append("", [ "", evinfo.sensor, evinfo.val ])
             pass
-        self.evnum += 1
         return
         
     def ok(self, event):
         self.Close()
         return
 
-    def ClearAll(self, event):
-        items = self.events.items()
-        for it in items:
-            idx = it[0]
-            ev = it[1]
-            del self.events[idx]
-            ev.delete()
+    def clear(self, event):
+        for data in self.events:
+            data.ev.delete()
+            pass
+        self.events = [ ]
         self.listc.DeleteAllItems()
-        self.numevents = 0
-        return
-
-    def OnClose(self, event):
-        self.Destroy()
-        return
-
-    def HandleMenu(self, event):
-        self.curr_idx = event.GetIndex()
-        menu = wx.Menu();
-        item = menu.Append(id_st+1, "Delete")
-        wx.EVT_MENU(self, id_st+1, self.DelItem)
-
-        rect = self.listc.GetItemRect(self.curr_idx)
-        if (rect == None):
-            point = None
-        else:
-            # FIXME - why do I have to subtract 25?
-            point = wx.Point(rect.GetLeft(), rect.GetBottom()-25)
-            pass
-        self.PopupMenu(menu, point)
-        menu.Destroy()
-        return
-
-    def DelItem(self, event):
-        key = self.listc.GetItemData(self.curr_idx)
-        ev = self.events[key]
-        del self.events[key]
-        if (self.curr_idx > 0):
-            key2 = self.listc.GetItemData(self.curr_idx - 1)
-            if (key2 == key):
-                self.listc.DeleteItem(self.curr_idx-1)
-                self.numevents -= 1
-                self.curr_idx -= 1
-                pass
-            pass
-        if (self.curr_idx+1 < self.numevents):
-            key2 = self.listc.GetItemData(self.curr_idx + 1)
-            if (key2 == key):
-                self.listc.DeleteItem(self.curr_idx+1)
-                self.numevents -= 1
-                pass
-            pass
-        self.listc.DeleteItem(self.curr_idx)
-        self.numevents -= 1
-        ev.delete()
         return
 
     pass
@@ -203,10 +143,9 @@ class DomainSELDisplay(SELDisplay):
         domain_id.to_domain(self)
         return
 
-    def OnClose(self, event):
+    def do_on_close(self):
         self.init = False
         self.domain_id.to_domain(self)
-        SELDisplay.OnClose(self, event)
         return
 
     def domain_cb(self, domain):
@@ -231,12 +170,11 @@ class MCSELDisplay(SELDisplay):
         mc_id.to_mc(self)
         return
 
-    def OnClose(self, event):
+    def do_on_close(self):
         self.init = False
         self.mc_id.to_mc(self)
-        SELDisplay.OnClose(self, event)
         return
-
+    
     def mc_cb(self, mc):
         domain = mc.get_domain()
         if self.init:

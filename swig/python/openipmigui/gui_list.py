@@ -80,6 +80,11 @@ class List(wx.Dialog):
             wx.EVT_BUTTON(self, ok.GetId(), self.cancel)
             box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
             pass
+        if hasattr(self, "clear"):
+            ok = wx.Button(self, -1, "Clear")
+            wx.EVT_BUTTON(self, ok.GetId(), self.clear)
+            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            pass
         sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
 
         wx.EVT_LIST_ITEM_RIGHT_CLICK(self.listc, -1, self.ListMenu)
@@ -159,4 +164,11 @@ class List(wx.Dialog):
             pass
         return idx
 
+    def DeleteAllItems(self):
+        self.listc.DeleteAllItems()
+        self.list_data = [ ]
+        self.list_hash = { }
+        self.currkey = 0
+        return
+    
     pass
