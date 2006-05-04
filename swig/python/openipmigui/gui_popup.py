@@ -32,13 +32,31 @@
 
 import wx
 
+class PopupSelector:
+    def __init__(self, handler, val):
+        self.handler = handler
+        self.val = val;
+        return
+
+    def handle(self, event):
+        self.handler(self.val)
+        return
+
+    pass
+
 def popup(ui, event, handlers, point=None):
     eitem = event.GetItem();
     menu = wx.Menu();
     i = 10000
     for h in handlers:
         item = menu.Append(i, h[0])
-        wx.EVT_MENU(ui, i, h[1])
+        if (len(h) >= 3):
+            p = PopupSelector(h[1], h[2])
+            wx.EVT_MENU(ui, i, p.handle)
+            pass
+        else:
+            wx.EVT_MENU(ui, i, h[1])
+            pass
         i += 1
         pass
     if (point == None):
