@@ -1,3 +1,16 @@
+2006-05-12 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_posix.h: Remove selector interface.
+	
+	* unix/posix_os_hnd.c: Remove selector interface and make
+	sset_log_handler static.
+	* unix/posix_thread_os_hnd.c: ditto
+
+	* cmdlang/os_debug.c: Make sset_log_handler static.
+
+	* unix/selector.c: Rework the mutex code to use the os handler,
+	not some special interfaces that break static compiles.
+
 2006-05-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/Makefile.am, include/net, lib/ipmi_smi.c, lanserv/lanserv.c:

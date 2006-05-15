@@ -787,8 +787,8 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
-void sset_log_handler(os_handler_t *handler,
-		      os_vlog_t    log_handler)
+static void sset_log_handler(os_handler_t *handler,
+			     os_vlog_t    log_handler)
 {
     pt_os_hnd_data_t *info = handler->internal_data;
 
@@ -901,43 +901,6 @@ ipmi_posix_thread_setup_os_handler(int wake_sig)
 
  out:
     return os_hnd;
-}
-
-/*
- * Support for the selector code.
- */
-
-int
-posix_mutex_alloc(void **val)
-{
-    void *m = malloc(sizeof(pthread_mutex_t));
-    int  rv;
-
-    if (!m)
-	return ENOMEM;
-
-    rv = pthread_mutex_init(m, NULL);         
-    if (rv) {
-	free(m);
-	return rv;
-    }
-    *val = m;
-    return 0;
-}
-
-void posix_mutex_free(void *val)
-{
-    free(val);
-}
-
-void posix_mutex_lock(void *val)
-{
-    pthread_mutex_lock(val);
-}
-
-void posix_mutex_unlock(void *val)
-{
-    pthread_mutex_unlock(val);
 }
 
 /*

@@ -31,7 +31,6 @@
 #
 
 import OpenIPMI
-import wx
 import sys
 import gui_list
 import gui_popup

@@ -494,8 +494,8 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
-void sset_log_handler(os_handler_t *handler,
-		      os_vlog_t    log_handler)
+static void sset_log_handler(os_handler_t *handler,
+			     os_vlog_t    log_handler)
 {
     iposix_info_t *info = handler->internal_data;
 
@@ -604,29 +604,6 @@ ipmi_posix_setup_os_handler(void)
 
  out:
     return os_hnd;
-}
-
-/*
- * Support for the selector code.
- */
-
-int
-posix_mutex_alloc(void **val)
-{
-    *val = NULL;
-    return 0;
-}
-
-void posix_mutex_free(void *val)
-{
-}
-
-void posix_mutex_lock(void *val)
-{
-}
-
-void posix_mutex_unlock(void *val)
-{
 }
 
 /*
