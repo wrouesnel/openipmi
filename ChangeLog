@@ -1,3 +1,8 @@
+2006-05-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c, lib/ipmi_lan.c: Fix a couple of more signed/unsigned
+	comparison warning.
+
 2006-05-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_posix.h: Remove selector interface.

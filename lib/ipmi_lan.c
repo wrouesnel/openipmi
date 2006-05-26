@@ -4232,7 +4232,7 @@ session_privilege_set(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if (lan->cparm.privilege != (msg->data[1] & 0xf)) {
+    if (lan->cparm.privilege != (unsigned int) (msg->data[1] & 0xf)) {
 	/* Requested privilege level did not match. */
         handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
