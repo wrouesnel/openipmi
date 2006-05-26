@@ -2962,6 +2962,8 @@ init_tcl(void)
     init_lang();
 #endif
     swig_os_hnd = ipmi_tcl_get_os_handler(0);
+    ipmi_init(swig_os_hnd);
+    ipmi_cmdlang_init(swig_os_hnd);
 #else
     fprintf(stderr, "Error: no support for init_tcl()\n");
     abort();

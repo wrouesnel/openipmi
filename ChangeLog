@@ -3,6 +3,8 @@
 	* lib/mc.c, lib/ipmi_lan.c: Fix a couple of more signed/unsigned
 	comparison warning.
 
+	* swig/OpenIPMI.i: Fix the TCL init code.
+
 2006-05-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_posix.h: Remove selector interface.
