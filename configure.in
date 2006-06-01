@@ -304,7 +304,14 @@ if test "x$POPTLIBS" = "x"; then
 fi
 
 # Check for GDBM
-AC_CHECK_HEADER(gdbm.h, AC_DEFINE([HAVE_GDBM], [], [Have GDBM libraries]) GDBM_LIB=-lgdbm; )
+have_gdbm_h="no"
+GDBM_LIB=
+AC_CHECK_HEADER(gdbm.h, have_gdbm_h="yes"; )
+if test "x$have_gdbm_h" = "xyes"; then
+   AC_CHECK_LIB(gdbm, gdbm_open,
+		AC_DEFINE([HAVE_GDBM], [], [Have GDBM libraries])
+		GDBM_LIB=-lgdbm; )
+fi
 AC_SUBST(GDBM_LIB)
 
 # Find pkg-config
@@ -448,7 +455,7 @@ if test "x$trytcl" != "xno"; then
          AC_CHECK_LIB(tcl, Tcl_DoOneEvent, TCL_LIBS=-ltcl)
       fi
    else
-      TCLLIBS="$tcllibs"
+      TCL_LIBS="$tcllibs"
    fi
    if test "x$FOUND_TCL_HEADER" = "xyes" -a "x$TCL_LIBS" != "x"; then
       havetcl=yes

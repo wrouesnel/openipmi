@@ -2952,6 +2952,10 @@ init_glib12(void)
 #endif
 }
 
+#if defined(HAVE_TCL)
+#include <OpenIPMI/ipmi_tcl.h>
+#endif
+
 void
 init_tcl(void)
 {
@@ -2962,6 +2966,7 @@ init_tcl(void)
     init_lang();
 #endif
     swig_os_hnd = ipmi_tcl_get_os_handler(0);
+    swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
     ipmi_cmdlang_init(swig_os_hnd);
 #else

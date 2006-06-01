@@ -1,3 +1,18 @@
+2006-06-01 Corey Minyard <cminyard@mvista.com>
+
+	* swig/OpenIPMI.i: Fix some problems with TCL not doing logs
+	correctly.
+
+2006-05-31 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: For gdbm, make sure to check for the library and
+	not just the header file.
+
+2006-05-30 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Fix the TCL_LIBS value when --with-tcllibs is
+	hand-specified.
+
 2006-05-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, lib/ipmi_lan.c: Fix a couple of more signed/unsigned
