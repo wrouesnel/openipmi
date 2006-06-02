@@ -128,7 +128,7 @@ class MCPefParm(gui_list.List):
     def __init__(self, m, pef, pefc):
         gui_list.List.__init__(self,
                                "PEFPARMS for " + m.name,
-                               [ ("Name", 150), ("Value", 250) ])
+                               [ ("Name", 250), ("Value", 250) ])
         self.pef = pef
         self.pefc = pefc
         
@@ -198,7 +198,7 @@ class MCPefParm(gui_list.List):
         self.AfterDone()
         return
 
-    def save(self, event):
+    def save(self):
         rv = self.pef.set_config(self.pefc)
         if (rv != 0):
             self.errstr.SetError("Error setting config: "
@@ -211,7 +211,7 @@ class MCPefParm(gui_list.List):
         self.Close()
         return
 
-    def cancel(self, event):
+    def cancel(self):
         self.Close()
         return
 
@@ -220,7 +220,9 @@ class MCPefParm(gui_list.List):
         # clicking on "save" or "cancel"
         if (self.pef):
             self.pef.clear_lock(self.pefc)
+            self.pef = None
             pass
+        self.pefc = None
         return
     
     pass

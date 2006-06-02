@@ -30,21 +30,15 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
+import Tix
 
-class ErrStr(wx.StatusBar):
+class ErrStr(Tix.Label):
     def __init__(self, parent):
-        wx.StatusBar.__init__(self, parent, -1)
+        Tix.Label.__init__(self, parent, relief="ridge", bd=5)
         return
 
     def SetError(self, text):
-        self.SetStatusText(text)
-        # In 2.4, it won't automatically show text, we have to clear
-        # it and sentit a paint event.
-        if (hasattr(self, "Clear")):
-            self.Clear()
-            self.ProcessEvent(wx.PaintEvent(-1))
-            pass
+        self.config(text=text)
         return
 
     pass

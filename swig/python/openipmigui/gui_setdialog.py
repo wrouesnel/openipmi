@@ -30,92 +30,96 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
-import wx.lib.scrolledpanel as scrolled
+import Tix
 import gui_errstr
 
 def isbool(v):
     return type(v) == type(True)
 
-class SetDialog(wx.Dialog):
+class SetDialog(Tix.DialogShell):
     def __init__(self, name, default, count, handler, labels=None):
         self.handler = handler
-        wx.Dialog.__init__(self, None, -1, name)
+        Tix.DialogShell.__init__(self, title=name)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        self.values = scrolled.ScrolledPanel(self, -1,
-                                             size=wx.Size(300, 150))
+        sw = Tix.ScrolledWindow(self, height=150, width=100)
+        self.values = sw.window
         if (labels == None):
-            box = wx.BoxSizer(wx.HORIZONTAL)
             if (count == 1):
-                label = wx.StaticText(self.values, -1, "Value:")
+                label = Tix.Label(self.values, text="Value:")
             else:
-                label = wx.StaticText(self.values, -1, "Value(s):")
+                label = Tix.Label(self.values, text="Value(s):")
                 pass
-            box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            box2 = wx.BoxSizer(wx.VERTICAL)
+            label.grid(row=0, column=0, sticky="e")
             self.fields = [ ]
+            row = 0
             for i in range(0, count):
                 if (isbool(default[i])):
-                    field = wx.CheckBox(self.values, -1, "")
-                else:
-                    v = str(default[i])
-                    field = wx.TextCtrl(self.values, -1, v)
-                    pass
-                self.fields.append(field)
-                box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-                pass
-            box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        else:
-            box = wx.BoxSizer(wx.VERTICAL)
-            self.fields = [ ]
-            for i in range(0, count):
-                box2 = wx.BoxSizer(wx.HORIZONTAL)
-                if (isbool(default[i])):
-                    field = wx.CheckBox(self.values, -1, labels[i])
-                    field.SetValue(default[i])
+                    field = Tix.BooleanVar()
+                    field.set(default[i])
+                    w = Tix.Checkbutton(self.values, variable=field)
                     pass
                 else:
-                    label = wx.StaticText(self.values, -1, labels[i])
-                    box2.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-                    v = str(default[i])
-                    field = wx.TextCtrl(self.values, -1, v)
+                    field = Tix.Entry(self.values)
+                    field.insert("0", str(default[i]))
+                    w = field
                     pass
+                w.grid(row=row, column=1, sticky="ew")
+                row += 1
                 self.fields.append(field)
-                box2.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-                box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
                 pass
             pass
-        self.values.SetupScrolling()
-        self.values.SetSizer(box)
-        sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        else:
+            self.fields = [ ]
+            row = 0
+            for i in range(0, count):
+                label = Tix.Label(self.values, text=labels[i])
+                label.grid(row=row, column=0)
+                if (isbool(default[i])):
+                    field = Tix.BooleanVar()
+                    field.set(default[i])
+                    w = Tix.Checkbutton(self.values, variable=field)
+                    pass
+                else:
+                    field = Tix.Entry(self.values)
+                    field.insert("0", str(default[i]))
+                    w = field
+                    pass
+                self.fields.append(field)
+                w.grid(row=row, column=1, sticky="ew")
+                row += 1
+                pass
+            pass
 
-        self.errstr = gui_errstr.ErrStr(self)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
+        sw.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.errstr = gui_errstr.ErrStr(self)
+        self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True);
+        bbox = Tix.ButtonBox(self)
+        bbox.add("cancel", text="Cancel", command=lambda w=self: w.cancel())
+        bbox.add("ok", text="Ok", command=lambda w=self: w.ok())
+        bbox.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
+
+        self.bind("<Destroy>", self.OnDestroy)
+
+        self.popup()
         return
     
-    def cancel(self, event):
-        self.Close()
+    def OnDestroy(self, event):
+        if (hasattr(self, "do_on_close")):
+            self.do_on_close()
+            pass
+        self.handler = None
         return
 
-    def ok(self, event):
+    def cancel(self):
+        self.destroy()
+        return
+
+    def ok(self):
         vals = [ ]
         for f in self.fields:
-            vals.append(f.GetValue())
+            vals.append(f.get().strip())
             pass
         try:
             err = self.handler.ok(vals)
@@ -126,11 +130,7 @@ class SetDialog(wx.Dialog):
         except:
             self.errstr.SetError("Value invalid")
             return
-        self.Close()
-        return
-
-    def OnClose(self, event):
-        self.Destroy()
+        self.destroy()
         return
 
     pass

@@ -30,7 +30,7 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import OpenIPMI
-import wx
+#import wx
 import _term
 import gui_errstr
 
@@ -49,7 +49,7 @@ class SolTerm(_term.Terminal):
         self.SoL.HandleOutput(data);
         return
 
-class SoL(wx.Frame):
+class SoL: #(wx.Frame):
     def __init__(self, ui, domain_id, cnum):
         self.ui = ui
         self.cnum = cnum;

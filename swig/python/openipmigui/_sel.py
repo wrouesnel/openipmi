@@ -39,7 +39,7 @@ class EventData:
     def __init__(self, slist, ev, has_second_data):
         self.slist = slist
         self.ev = ev
-        self.has_second_data = has_second_data
+        self.second_key = None
         return
 
     def HandleMenu(self, event, idx, point):
@@ -49,9 +49,9 @@ class EventData:
         return
 
     def delete(self, idx):
-        self.slist.DelItem(idx)
-        if (self.has_second_data):
-            self.slist.DelItem(idx)
+        self.slist.DelItem(self.key)
+        if (self.second_key != None):
+            self.slist.DelItem(self.second_key)
             pass
         self.ev.delete()
         return
@@ -111,26 +111,31 @@ class SELDisplay(gui_list.List):
 
         data = EventData(self, ev, evinfo.sensor != None)
         self.events.append(data)
-        self.Append(str(ev.get_record_id()),
-                    [ str(ev.get_type()), str(ev.get_timestamp()),
-                      str(ev.get_data()) ],
-                    data)
+        data.key = self.Append(str(ev.get_record_id()),
+                               [ str(ev.get_type()), str(ev.get_timestamp()),
+                                 str(ev.get_data()) ],
+                               data)
         if (evinfo.sensor):
             # Can only delete the using the first item.
-            self.Append("", [ "", evinfo.sensor, evinfo.val ])
+            data.second_key = self.Append("", [ "", evinfo.sensor, evinfo.val ],
+                                          data)
             pass
         return
         
-    def ok(self, event):
+    def ok(self):
         self.Close()
         return
 
-    def clear(self, event):
+    def clear(self):
         for data in self.events:
             data.ev.delete()
             pass
         self.events = [ ]
-        self.listc.DeleteAllItems()
+        self.DeleteAllItems()
+        return
+
+    def do_on_close(self):
+        self.events = None
         return
 
     pass
@@ -145,6 +150,7 @@ class DomainSELDisplay(SELDisplay):
     def do_on_close(self):
         self.init = False
         self.domain_id.to_domain(self)
+        SELDisplay.do_on_close(self)
         return
 
     def domain_cb(self, domain):
@@ -172,6 +178,7 @@ class MCSELDisplay(SELDisplay):
     def do_on_close(self):
         self.init = False
         self.mc_id.to_mc(self)
+        SELDisplay.do_on_close(self)
         return
     
     def mc_cb(self, mc):

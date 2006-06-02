@@ -59,7 +59,7 @@
 #  c - Control
 
 import os
-import wx
+import Tix
 import sys
 import OpenIPMI
 from openipmigui import _domain
@@ -69,10 +69,11 @@ from openipmigui import _cmdwin
 
 
 class DomainHandler:
-    def __init__(self, preffile, log_file):
+    def __init__(self, preffile, log_file, histfile):
         self.domains = { };
         self.preffile = preffile
         self.log_file = log_file
+        self.histfile = histfile
         return
 
     def domain_change_cb(self, op, domain):
@@ -99,35 +100,25 @@ class DomainHandler:
         self.ui.new_log(level + ": " + log)
         return
 
+    def quit(self):
+        _cmdwin._HistorySave(self.histfile)
+
+        OpenIPMI.set_log_handler(DummyLogHandler())
+        OpenIPMI.shutdown_everything()
+        if (self.debug_mem):
+            print "OpenIPMI is shutdown, memory problems (SEGVs) after this"
+            print " are likely due to OpenIPMI data not being freed until"
+            print " after this point due to the python garbage collector"
+            pass
+        sys.exit()
+        return
+
 class DummyLogHandler:
     def __init__(self):
         pass
 
     def log(self, level, log):
         sys.stderr.write(level + ": " + log + "\n")
-
-class IPMIGUI_App(wx.App):
-    def __init__(self, mainhandler):
-        self.name = "IPMI GUI"
-        self.mainhandler = mainhandler
-        self.initialized = False
-        wx.App.__init__(self);
-        return
-
-    def OnInit(self):
-        self.ui = gui.IPMIGUI(self.mainhandler)
-        self.mainhandler.SetUI(self.ui)
-    
-        self.SetTopWindow(self.ui)
-
-        OpenIPMI.add_domain_change_handler(self.mainhandler)
-        OpenIPMI.set_log_handler(self.mainhandler)
-
-        _domain.RestoreDomains(self.mainhandler)
-
-        return True
-
-    pass
 
 class CmdlangEventHandler:
     def __init__(self, app):
@@ -159,17 +150,9 @@ def trace(frame, event, arg):
     return trace
 
 def run(args):
-    if ((wx.VERSION[0] < 2)
-        or ((wx.VERSION[0] == 2) and (wx.VERSION[1] < 4))
-        or ((wx.VERSION[0] == 2) and (wx.VERSION[1] == 4)
-            and (wx.VERSION[2] < 2))):
-        print "Error: wxPython version must be 2.4.2 or greater"
-        return
-
     preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     histfile = os.path.join(os.environ['HOME'], '.openipmigui.history')
 
-    use_glib_12 = False
     debug_msg = False
     debug_rawmsg = False
     debug_mem = False
@@ -177,16 +160,13 @@ def run(args):
     read_preffile = True
     log_file = None
 
-    # Get rid of program name.
-    if (len(args) > 0):
-        del args[0]
+    # Skip program name.
+    carg = 1
 
-    while (len(args) > 0):
-        arg = args[0]
-        del args[0]
-        if (arg == "--glib12"):
-            use_glib_12 = True
-        elif (arg == "--dmsg"):
+    while (carg < len(args)):
+        arg = args[carg]
+        carg += 1
+        if (arg == "--dmsg"):
             debug_msg = True
         elif (arg == "--drawmsg"):
             debug_msg = True
@@ -204,8 +184,8 @@ def run(args):
             if (len(args) == 0):
                 print "No argument given for -p";
                 return
-            preffile = args[0]
-            del args[0]
+            preffile = args[carg]
+            carg += 1
         else:
             print "Unknown argument: " + arg
             return
@@ -213,17 +193,9 @@ def run(args):
 
     if (debug_mem):
         OpenIPMI.enable_debug_malloc()
-    if (use_glib_12):
-        OpenIPMI.init_glib12()
         pass
-    elif ((wx.VERSION[0] == 2) and (wx.VERSION[1] <= 4)):
-        # Version 2.4 of wxPython uses glib1.2, but OpenIPMI usually
-        # uses 2.0 if available.  Force glib 1.2 :(
-        OpenIPMI.init_glib12()
-        pass
-    else:
-        OpenIPMI.init()
-        pass
+
+    OpenIPMI.init_tcl()
 
     if (debug_rawmsg):
         OpenIPMI.enable_debug_rawmsg()
@@ -239,20 +211,28 @@ def run(args):
         _saveprefs.restore(preffile)
     _cmdwin._HistoryRestore(histfile)
     
-    mainhandler = DomainHandler(preffile, log_file)
+    mainhandler = DomainHandler(preffile, log_file, histfile)
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
 
-    app = IPMIGUI_App(mainhandler)
+    top = Tix.Tk()
+    mainhandler.top = top
+    mainhandler.debug_mem = debug_mem
+    top.title('OpenIPMI GUI')
 
-    OpenIPMI.set_cmdlang_event_handler(CmdlangEventHandler(app))
+    ui = gui.IPMIGUI(top, mainhandler)
+    mainhandler.SetUI(ui)
 
-    app.MainLoop()
+    OpenIPMI.add_domain_change_handler(mainhandler)
+    OpenIPMI.set_log_handler(mainhandler)
 
-    _cmdwin._HistorySave(histfile)
+    _domain.RestoreDomains(mainhandler)
 
-    OpenIPMI.set_log_handler(DummyLogHandler())
-    OpenIPMI.shutdown_everything()
+    OpenIPMI.set_cmdlang_event_handler(CmdlangEventHandler(mainhandler))
+
+    top.mainloop()
+
+    mainhandler.quit()
 
 
 if __name__ == "__main__":

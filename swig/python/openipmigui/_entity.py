@@ -305,7 +305,7 @@ class Entity:
                 pass
 
             self.eop = None
-            self.ui.tree.Delete(old_treeroot)
+            self.ui.remove_entity(old_treeroot)
             pass
         
         self.parent = None # Kill circular reference

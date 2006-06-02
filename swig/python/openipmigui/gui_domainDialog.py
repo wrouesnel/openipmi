@@ -29,8 +29,7 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-import wx
-import wx.lib.scrolledpanel as scrolled
+import Tix
 import OpenIPMI
 import _domain
 import gui_errstr
@@ -41,23 +40,40 @@ auth_algs = [ 'default', 'rakp_none', 'rakp_hmac_sha1', 'rakp_hmac_md5' ]
 integ_algs = [ 'default', 'none', 'hmac_sha1', 'hmac_md5', 'md5' ]
 conf_algs = [ 'default', 'none', 'aes_cbc_128', 'xrc4_128', 'xrc4_40' ]
 
-class ConnTypeInfo(scrolled.ScrolledPanel):
+class EnumHolder:
+    def __init__(self):
+        self.value = ""
+        return
+
+    def get(self):
+        return self.value
+
+    def set(self, val):
+        self.value = val
+
+    def SelectType(self, newbutton, selected):
+        if (selected == "0"):
+            return
+        self.value = newbutton
+        return
+    
+    pass
+
+class ConnTypeInfo(Tix.Frame):
     def __init__(self, contype, parent):
-        scrolled.ScrolledPanel.__init__(self, parent, -1,
-                                        size=wx.Size(400, 200))
+        Tix.Frame.__init__(self, parent)
         self.contype = contype
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.fields = [ ]
 
         args = OpenIPMI.alloc_empty_args(str(contype))
         self.args = args
 
         self.errstr = gui_errstr.ErrStr(self)
-        self.sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
+        self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
         i = 0
         rv = 0
-        box = None
+        frame = None
         while (rv == 0):
             name = [ "" ]
             vtype = [ "" ]
@@ -79,64 +95,71 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
                     password = False
                     pass
                 
-                do_box = True
                 if (vtype[0] == "bool"):
-                    fw = wx.CheckBox(self, -1, name[0])
-                    if ((value[0] != None) and (value[0] == "true")):
-                        fw.SetValue(1)
+                    if (frame == None):
+                        didframe = True
+                        frame = Tix.Frame(self)
+                        frame.pack(side=Tix.TOP)
+                        newframe = frame
                         pass
-                    sw = fw
+                    else:
+                        newframe = None
+                        pass
+                    fw = Tix.BooleanVar()
+                    w = Tix.Checkbutton(frame, text=name[0], variable=fw)
+                    w.pack(side=Tix.LEFT, padx=10)
+                    if ((value[0] != None) and (value[0] == "true")):
+                        fw.set(True)
+                        pass
                     pass
                 elif (vtype[0] == "enum"):
                     do_box = False
-                    fw = wx.RadioBox(self, -1, name[0],
-                                     wx.DefaultPosition, wx.DefaultSize,
-                                     vrange, 2, wx.RA_SPECIFY_COLS)
+                    fw = EnumHolder()
                     if (value[0] != None):
-                        fw.SetStringSelection(value[0])
+                        fw.set(value[0])
                         pass
-                    sw = fw
+                    else:
+                        fw.set(vrange[0])
+                        pass
+                    w = Tix.Select(self, label=name[0], allowzero=0, radio=1,
+                                   command=fw.SelectType)
+                    for v in vrange:
+                        w.add(v, text=v)
+                        pass
+                    newframe = None
+                    w.invoke(fw.get())
+                    w.pack()
                     pass
                 elif (vtype[0] == "str"):
-                    bbox = wx.BoxSizer(wx.HORIZONTAL)
-                    label = wx.StaticText(self, -1, name[0] + ":")
-                    bbox.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                    if (frame == None):
+                        didframe = True
+                        frame = Tix.Frame(self)
+                        frame.pack(side=Tix.TOP)
+                        newframe = frame
+                        pass
+                    else:
+                        newframe = None
+                        pass
+
                     if (value[0] == None):
                         value[0] = ""
                         pass
-                    style = 0
                     if (password):
-                        style = wx.TE_PASSWORD
-                    fw = wx.TextCtrl(self, -1, value[0], style=style);
-                    bbox.Add(fw, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-                    sw = bbox
+                        options="entry.show '*' entry.width 20"
+                    else:
+                        options="entry.width 20"
+                        pass
+                    w = Tix.LabelEntry(frame, label=name[0], options=options)
+                    w.pack(side=Tix.LEFT, padx=10)
+                    fw = w.entry
                     pass
                 else:
                     continue
-
-                if (do_box):
-                    if (box == None):
-                        box = wx.BoxSizer(wx.HORIZONTAL)
-                        self.sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-                        done = False
-                        pass
-                    else:
-                        done = True;
-                        pass
-                    box.Add(sw, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-                    if (done):
-                        box = None
-                    pass
-                else:
-                    self.sizer.Add(sw, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-                    box = None;
-                    pass
+                frame = newframe
                 self.fields.append( (i, name[0], vtype[0], fw) )
                 pass
             i += 1
             pass
-        self.SetupScrolling()
-        self.SetSizer(self.sizer)
         return
 
     def SetupArgs(self):
@@ -147,17 +170,17 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
             vtype = f[2]
             fw = f[3]
             if (vtype == "bool"):
-                if (fw.IsChecked()):
+                if (fw.get()):
                     val = "true"
                 else:
                     val = "false"
                     pass
                 pass
             elif (vtype == "enum"):
-                val = str(fw.GetStringSelection())
+                val = str(fw.get())
                 pass
             elif (vtype == "str"):
-                val = str(fw.GetValue())
+                val = str(fw.get())
                 if (val == ""):
                     val = None
                     pass
@@ -171,107 +194,117 @@ class ConnTypeInfo(scrolled.ScrolledPanel):
                 raise Exception()
             pass
         return args
+
+    def Cleanup(self):
+        self.args = None
+        return
+
     pass
 
-class ConnInfo(wx.Panel):
+class ConnInfo(Tix.ScrolledWindow):
     def __init__(self, parent, mainhandler, enable=True):
         self.contypes = { }
         OpenIPMI.parse_args_iter_help(self)
         if (len(self.contypes) == 0):
             return
         
-        wx.Panel.__init__(self, parent, -1, size=wx.Size(400, 300))
+        Tix.ScrolledWindow.__init__(self, parent, height=300, width=600)
         self.parent = parent
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer = self.sizer
         self.enable = enable;
+
         if (not enable):
-            self.enable_box = wx.CheckBox(self, -1, "Enable")
-            sizer.Add(self.enable_box, 0, wx.ALIGN_CENTRE | wx.ALL, 5);
+            self.enablevar = Tix.BooleanVar()
+            self.enable_box = Tix.Checkbutton(self.window, text="Enable",
+                                              variable=self.enablevar)
+            self.enable_box.pack(side=Tix.TOP)
             pass
 
-        self.contype = wx.RadioBox(self, -1, "Connection Type",
-                                   wx.DefaultPosition, wx.DefaultSize,
-                                   self.contypes.keys(), 2, wx.RA_SPECIFY_COLS)
-        wx.EVT_RADIOBOX(self, self.contype.GetId(), self.selectType)
-        self.sizer.Add(self.contype, 0, wx.ALIGN_CENTRE, 2)
+        self.contype = Tix.Select(self.window, label="Connection Type",
+                                  radio=1, allowzero=0,
+                                  command=self.selectType)
+        for key in self.contypes.keys():
+            self.contype.add(key, text=key)
+            pass
+        self.contype.pack(side=Tix.TOP)
 
         self.coninfos = [ ]
-        self.currcon = 0
 
         show = True
-        panel = wx.Panel(self, -1, size=wx.Size(400, 200))
-        self.sizer.Add(panel, 0, wx.ALIGN_CENTRE, 0)
+        panel = Tix.Frame(self.window)
+        panel.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         for ct in self.contypes.keys():
             cti = ConnTypeInfo(ct, panel)
             if (show):
-                cti.Show(True)
+                cti.pack()
+                self.currcon = cti
                 show = False
-            else:
-                cti.Show(False)
                 pass
             self.coninfos.append(cti)
             pass
 
-        self.SetSizer(self.sizer)
+        self.contype.invoke(self.contypes.keys()[0])
         return
 
     def parse_args_iter_help_cb(self, name, help):
         self.contypes[name] = help
         return
 
-    def selectType(self, event):
-        oldcurr = self.currcon
-        self.currcon = event.GetInt()
-        self.coninfos[oldcurr].Show(False)
-        self.coninfos[self.currcon].Show(True)
-        self.parent.Layout()
+    def selectType(self, newbutton, selected):
+        if (selected == "0"):
+            return
+        self.currcon.pack_forget()
+        for cti in self.coninfos:
+            if (newbutton == cti.contype):
+                self.currcon = cti;
+                cti.pack()
+                pass
+            pass
         return
 
     def FillinConn(self):
         if (not self.enable):
-            if (not self.enable_box.IsChecked()):
+            if (not self.enablevar.get()):
                 return None
             pass
-        cti = self.coninfos[self.contype.GetSelection()]
-        return cti.SetupArgs()
+        return self.currcon.SetupArgs()
 
-class OpenDomainDialog(wx.Dialog):
+    def Cleanup(self):
+        for cti in self.coninfos:
+            cti.Cleanup()
+            pass
+        self.currcon = None
+        return
+
+    pass
+
+class OpenDomainDialog(Tix.Toplevel):
     def __init__(self, mainhandler):
-        wx.Dialog.__init__(self, None, -1, "Open Domain",
-                           size=wx.Size(400, 700),
-                           pos=wx.DefaultPosition,
-                           style=wx.RESIZE_BORDER)
-
+        Tix.Toplevel.__init__(self)
+        self.title("Domain Creation Dialog")
+        
         self.mainhandler = mainhandler
 
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        box, self.name = self.newField("Domain name")
-        self.sizer.Add(box, 0, wx.ALIGN_LEFT | wx.ALL, 2)
-        self.name.SetFocus()
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel)
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        self.sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.name = Tix.LabelEntry(self, label="Domain name")
+        self.name.pack(side=Tix.TOP, fill=Tix.X, expand=1)
+
+        bbox = Tix.ButtonBox(self)
+        bbox.add("cancel", text="Cancel", command=lambda w=self: w.cancel())
+        bbox.add("ok", text="Ok", command=lambda w=self: w.ok())
+        bbox.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
 
         self.status = gui_errstr.ErrStr(self)
-        self.sizer.Add(self.status, 0, wx.ALIGN_LEFT | wx.ALL | wx.GROW, 2)
+        self.status.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
 
         self.conn = [ ConnInfo(self, mainhandler),
                       ConnInfo(self, mainhandler, False) ]
-        self.sizer.Add(self.conn[0], 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        self.sizer.Add(self.conn[1], 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        self.conn[0].pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
+        self.conn[1].pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
+        self.name.entry.focus()
 
-        self.SetSizer(self.sizer)
+        self.bind("<Destroy>", self.OnDestroy)
 
-        wx.EVT_CLOSE(self, self.OnClose)
-        
+        return
+
     def newField(self, name, initval="", parent=None, style=0):
         if parent == None:
             parent = self
@@ -282,12 +315,22 @@ class OpenDomainDialog(wx.Dialog):
         box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         return box, field;
 
-    def cancel(self, event):
-        self.Close(True)
+    def OnDestroy(self, event):
+        # This doesn't get cleaned up properly by Python til after
+        # exit, but we need to make sure the args get freed now, or
+        # it won't be freed until after the OS handler is destroyed.
+        for c in self.conn:
+            c.Cleanup()
+            pass
+        return
+    
+    def cancel(self):
+        self.destroy()
+        return
 
-    def ok(self, event):
+    def ok(self):
         self.status.SetError("")
-        name = str(self.name.GetValue())
+        name = str(self.name.entry.get())
         if (name == ""):
             self.status.SetError("No name specified")
             return
@@ -306,8 +349,7 @@ class OpenDomainDialog(wx.Dialog):
             self.status.SetError("Error opening domain")
             return
 
-        self.Close(True)
+        self.destroy()
+        return
 
-    def OnClose(self, event):
-        self.Destroy()
-
+    pass

@@ -367,7 +367,7 @@ class MCChan(gui_treelist.TreeList):
     def __init__(self, m, mc):
         gui_treelist.TreeList.__init__(self, "Channel info for " + m.name,
                                        "Channels",
-                                       [ ("Name", 300), ("Value", 400) ] )
+                                       [ ("Name", 200), ("Value", 400) ] )
         self.m = m;
         self.mc_id = mc.get_id()
         self.count = 0;
@@ -489,11 +489,11 @@ class MCChan(gui_treelist.TreeList):
             self.setup()
         return
 
-    def cancel(self, event):
+    def cancel(self):
         self.Close()
         return
     
-    def save(self, event):
+    def save(self):
         self.mc_id.to_mc(self)
         return
 
@@ -513,3 +513,9 @@ class MCChan(gui_treelist.TreeList):
         self.Close()
         return
 
+    def do_on_close(self):
+        self.mc_id = None
+        self.info = None
+        return
+
+    pass

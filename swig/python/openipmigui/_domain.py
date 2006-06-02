@@ -130,19 +130,16 @@ class DomainSelSet(DomainRefreshData):
         self.ival = int(val[0])
         self.init = False
         rv = self.d.domain_id.to_domain(self)
-        if (rv == 0):
-            rv = self.err
-            pass
         if (rv != 0):
             return ("Error setting SEL rescan time: "
-                    + OpenIPMI.get_error_string(rv))        
+                    + OpenIPMI.get_error_string(rv))
         return
 
     def domain_cb(self, domain):
         if self.init:
             self.sel_rescan_time = domain.get_sel_rescan_time()
         else:
-            self.err = domain.set_sel_rescan_time(self.ival)
+            domain.set_sel_rescan_time(self.ival)
             self.d.sel_rescan_time = self.ival
             self.refr.DoUpdate()
             pass

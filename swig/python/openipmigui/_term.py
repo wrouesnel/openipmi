@@ -30,8 +30,8 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
-import wx.lib.colourdb
+#import wx
+#import wx.lib.colourdb
 
 id_st = 1200
 
@@ -1018,7 +1018,7 @@ class TestTerm(Terminal):
         return
     pass
 
-class MyApp(wx.App):
+class MyApp: #(wx.App):
     def __init__(self):
         self.name = "app"
         wx.App.__init__(self);

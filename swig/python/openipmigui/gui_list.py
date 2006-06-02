@@ -30,127 +30,101 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
+import Tix
 import gui_errstr
 
-class ListData:
-    def __init__(self, key, data):
-        self.key = key
-        self.data = data
-        return
-
-    pass
-
-class List(wx.Dialog):
+class List(Tix.DialogShell):
     def __init__(self, name, columns):
-        wx.Dialog.__init__(self, None, -1, name,
-                           size=wx.Size(400, 600),
-                           style=wx.RESIZE_BORDER)
+        Tix.DialogShell.__init__(self, title=name)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        listc = wx.ListCtrl(self, style=wx.LC_REPORT)
+        slist = Tix.ScrolledHList(self,
+                                  options=("hlist.header 1"
+                                           + " hlist.itemtype text"
+                                           + " hlist.columns "
+                                           + str(len(columns))),
+                                  width=500, height=500)
+        listc = slist.hlist
         self.listc = listc
+        slist.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         
         i = 0
         for c in columns:
-            listc.InsertColumn(i, c[0])
-            listc.SetColumnWidth(i, c[1])
+            listc.header_create(i, text=c[0])
+            listc.column_width(i, c[1])
             i += 1
             pass
         
-        sizer.Add(listc, 1, wx.GROW, 0)
-
         self.errstr = gui_errstr.ErrStr(self)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
+        self.errstr.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         
-        box = wx.BoxSizer(wx.HORIZONTAL)
+        bbox = Tix.ButtonBox(self)
         if hasattr(self, "ok"):
-            ok = wx.Button(self, -1, "Ok")
-            wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("ok", text="Ok", command=self.ok)
             pass
         if hasattr(self, "save"):
-            ok = wx.Button(self, -1, "Save")
-            wx.EVT_BUTTON(self, ok.GetId(), self.save)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("save", text="Save", command=self.save)
             pass
         if hasattr(self, "cancel"):
-            ok = wx.Button(self, -1, "Cancel")
-            wx.EVT_BUTTON(self, ok.GetId(), self.cancel)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("cancel", text="Cancel", command=self.cancel)
             pass
         if hasattr(self, "clear"):
-            ok = wx.Button(self, -1, "Clear")
-            wx.EVT_BUTTON(self, ok.GetId(), self.clear)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("clear", text="Clear", command=self.clear)
             pass
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        bbox.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        wx.EVT_LIST_ITEM_RIGHT_CLICK(self.listc, -1, self.ListMenu)
+        listc.bind("<Button-3>", self.ListMenu)
 
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
+        self.bind("<Destroy>", self.OnDestroy)
 
-        self.list_data = [ ]
         self.list_hash = { }
         self.currkey = 0
 
         return
 
     def AfterDone(self):
-        self.Show(True)
+        self.popup()
         return
 
-    def OnClose(self, event):
+    def Close(self):
+        self.destroy()
+        return
+
+    def OnDestroy(self, event):
         if (hasattr(self, "do_on_close")):
             self.do_on_close()
             pass
-        self.Destroy()
+        self.list_hash = None
         return
 
     def ListMenu(self, event):
-        idx = event.GetIndex()
-        key = self.listc.GetItemData(idx)
-        data = self.list_hash[key].data
+        w = event.widget
+        key = w.nearest(event.y)
+        data = self.list_hash[key]
         if (data and hasattr(data, "HandleMenu")):
-            rect = self.listc.GetItemRect(idx)
-            if (rect == None):
-                point = None
-            else:
-                point = wx.Point(rect.GetLeft(), rect.GetBottom())
-                pass
-            data.HandleMenu(event, idx, point)
+            data.HandleMenu(event, key, event)
             pass
         return
 
-    def DelItem(self, idx):
-        key = self.listc.GetItemData(idx)
-        self.listc.DeleteItem(idx)
+    def DelItem(self, key):
+        self.listc.delete_entry(key)
         del self.list_hash[key]
-        del self.list_data[idx]
         return
 
     def Append(self, name, values, data=None):
-        idx = len(self.list_data)
-        self.listc.InsertStringItem(idx, name)
+        key = str(self.currkey)
+        self.currkey += 1
+        self.listc.add(key, text=name)
+        self.list_hash[key] = data
         i = 1
         for v in values:
             if (v != None):
-                self.listc.SetStringItem(idx, i, str(v))
+                self.listc.item_create(key, i, text=str(v))
             i += 1
             pass
-        key = self.currkey;
-        self.currkey += 1
-        ldata = ListData(key, data)
-        self.list_hash[key] = ldata
-        self.list_data.append(key)
-        self.listc.SetItemData(idx, key)
-        return idx
+        return key
 
     def SetColumn(self, idx, colnum, value):
-        self.listc.SetStringItem(idx, colnum, value)
+        self.listc.item_configure(idx, colnum, text=value)
         return
 
     def SetError(self, str):
@@ -165,8 +139,7 @@ class List(wx.Dialog):
         return idx
 
     def DeleteAllItems(self):
-        self.listc.DeleteAllItems()
-        self.list_data = [ ]
+        self.listc.delete_all()
         self.list_hash = { }
         self.currkey = 0
         return

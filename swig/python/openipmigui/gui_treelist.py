@@ -30,106 +30,123 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
-import wx.gizmos as gizmos
+import Tix
 import gui_errstr
 
-class TreeList(wx.Dialog):
+class TreeList(Tix.DialogShell):
     def __init__(self, name, root, columns):
-        wx.Dialog.__init__(self, None, -1, name,
-                           size=wx.Size(400, 600),
-                           style=wx.RESIZE_BORDER)
+        Tix.DialogShell.__init__(self, title=name)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        tree = gizmos.TreeListCtrl(self)
+        self.numcolumns = len(columns)
+        
+        stree = Tix.Tree(self,
+                         options=("hlist.columns " + str(self.numcolumns)
+                                  + " hlist.itemtype text"
+                                  + " hlist.header 1"),
+                                  width=500, height=500)
+        self.stree = stree
+        tree = stree.hlist
         i = 0
         for c in columns:
-            tree.AddColumn(c[0])
-            tree.SetColumnWidth(i, c[1])
+            tree.header_create(i, text=c[0])
+            tree.column_width(i, c[1])
             i += 1
             pass
-        tree.SetMainColumn(0)
+        stree.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         
-        sizer.Add(tree, 1, wx.GROW, 0)
-
         self.errstr = gui_errstr.ErrStr(self)
-        sizer.Add(self.errstr, 0, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 5)
+        self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
         
-        box = wx.BoxSizer(wx.HORIZONTAL)
+        bbox = Tix.ButtonBox(self)
         if hasattr(self, "ok"):
-            ok = wx.Button(self, -1, "Ok")
-            wx.EVT_BUTTON(self, ok.GetId(), self.ok)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("ok", text="Ok", command=self.ok)
             pass
         if hasattr(self, "save"):
-            ok = wx.Button(self, -1, "Save")
-            wx.EVT_BUTTON(self, ok.GetId(), self.save)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("save", text="Save", command=self.save)
             pass
         if hasattr(self, "cancel"):
-            ok = wx.Button(self, -1, "Cancel")
-            wx.EVT_BUTTON(self, ok.GetId(), self.cancel)
-            box.Add(ok, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+            bbox.add("cancel", text="Cancel", command=self.cancel)
             pass
-        sizer.Add(box, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        if hasattr(self, "clear"):
+            bbox.add("clear", text="Clear", command=self.clear)
+            pass
+        bbox.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
-        treeroot = tree.AddRoot(root)
+        tree.bind("<Button-3>", self.TreeMenu)
 
-        wx.EVT_TREE_ITEM_RIGHT_CLICK(tree, -1, self.TreeMenu)
+        self.bind("<Destroy>", self.OnDestroy)
 
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-
+        self.treeroot = ""
         self.tree = tree
-        self.treeroot = treeroot
-
+        self.treehash = { }
+        self.currkey = 0
         return
 
-    def OnClose(self, event):
-        self.Destroy()
+    def Close(self):
+        self.destroy()
+        return
+
+    def OnDestroy(self, event):
+        if (hasattr(self, "do_on_close")):
+            self.do_on_close()
+            pass
+        self.treehash = None
         return
 
     def TreeMenu(self, event):
-        eitem = event.GetItem()
-        data = self.tree.GetPyData(eitem)
+        w = event.widget
+        key = w.nearest(event.y)
+        data = self.treehash[key]
         if (data and hasattr(data, "HandleMenu")):
-            rect = self.tree.GetBoundingRect(eitem)
-            if (rect == None):
-                point = None
-            else:
-                # FIXME - why do I have to add 25?
-                point = wx.Point(rect.GetLeft(), rect.GetBottom()+25)
-                pass
-            data.HandleMenu(event, eitem, point)
+            data.HandleMenu(event, key, event)
             pass
         return
 
     def AfterDone(self):
-        self.tree.Expand(self.treeroot)
-        self.Show(True)
+        self.popup()
         return
 
     def Append(self, node, name, values, data=None):
-        sub = self.tree.AppendItem(node, name)
+        hide = False
+        if (node == ""):
+            key = str(self.currkey)
+        else:
+            key = node + "." + str(self.currkey)
+            mode = self.stree.getmode(node)
+            if (mode == "none"):
+                self.stree.setmode(node, "open")
+                hide = True
+                pass
+            elif (mode == "open"):
+                hide = True
+                pass
+            pass
+        self.currkey += 1
+        self.tree.add(key, text=name)
+        if (hide):
+            self.tree.hide_entry(key)
+            pass
         i = 1
         for v in values:
             if (v != None):
-                self.tree.SetItemText(sub, str(v), i)
+                self.tree.item_create(key, i, text=str(v))
+            else:
+                self.tree.item_create(key, i)
+                pass
             i += 1
             pass
-        if (data != None):
-            self.tree.SetPyData(sub, data)
+        for j in range(i, self.numcolumns):
+            self.tree.item_create(key, j)
             pass
-        return sub
+        self.treehash[key] = data
+        return key
 
     def SetColumn(self, node, value, colnum):
-        self.tree.SetItemText(node, value, colnum)
+        self.tree.item_configure(node, colnum, text=value)
         return
 
     def GetColumn(self, node, colnum):
-        return self.tree.GetItemText(node, colnum)
+        return self.tree.item_cget(node, colnum, "-text")
 
     def SetError(self, str):
         self.errstr.SetError(str)

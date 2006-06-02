@@ -30,38 +30,55 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
+import Tix
 
 class PopupSelector:
-    def __init__(self, handler, val):
+    def __init__(self, handler, val, pd):
         self.handler = handler
         self.val = val;
+        self.pd = pd
         return
 
-    def handle(self, event):
+    def handle(self):
+        self.pd.done = True
         self.handler(self.val)
         return
 
     pass
 
+class PopupDone:
+    def __init__(self):
+        self.done = False;
+        pass
+
+    def setdone(self, event):
+        self.done = True
+        return
+    
+    pass
+
 def popup(ui, event, handlers, point=None):
-    eitem = event.GetItem();
-    menu = wx.Menu();
-    i = 10000
+    menu = Tix.Menu(ui, tearoff=0);
+    pd = PopupDone()
     for h in handlers:
-        item = menu.Append(i, h[0])
         if (len(h) >= 3):
-            p = PopupSelector(h[1], h[2])
-            wx.EVT_MENU(ui, i, p.handle)
+            p = PopupSelector(h[1], h[2], pd)
             pass
         else:
-            wx.EVT_MENU(ui, i, h[1])
+            p = PopupSelector(h[1], None, pd)
             pass
-        i += 1
+        menu.add("command", command=p.handle, label=h[0])
         pass
     if (point == None):
-        point = ui.get_item_pos(eitem)
+        point = event
         pass
-    ui.PopupMenu(menu, point)
-    menu.Destroy()
+    menu.post(point.x_root, point.y_root)
+    menu.grab_set_global()
+    menu.bind("<FocusOut>", pd.setdone)
+    menu.bind("<ButtonRelease-3>", pd.setdone)
+    while (not pd.done):
+        event.widget.tk.dooneevent()
+        pass
+    menu.grab_release()
+    menu.destroy()
     return

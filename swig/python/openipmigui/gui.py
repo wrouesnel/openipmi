@@ -29,49 +29,26 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-import wx
-import wx.gizmos as gizmos
+import Tix
 import OpenIPMI
-import gui_domainDialog
 import _saveprefs
-import _cmdwin
 import _oi_logging
+import gui_domainDialog
 
 init_treenamewidth = 150
-init_sashposition = 100
+init_sashposition = 500
 init_bsashposition = 400
-init_windowwidth = 400
+init_windowwidth = 800
 init_windowheight = 500
 init_logevents = False
 init_fullevents = False
 
 refresh_timer_time = 10000
 
-id_st = 100
-
 class IPMITreeDummyItem:
-    def __init__(self):
+    def __init__(self, treestr):
+        self.treestr = treestr
         return
-
-    pass
-
-class IPMITreeCtrl(gizmos.TreeListCtrl):
-    def __init__(self, parent):
-        gizmos.TreeListCtrl.__init__(self, parent)
-        self.AddColumn("Name")
-        self.AddColumn("Value")
-        self.SetMainColumn(0)
-        self.SetColumnWidth(0, init_treenamewidth)
-        self.SetColumnWidth(1, 800)
-        return
-
-    def OnCompareItems(self, item1, item2):
-        t1 = self.GetItemText(item1)
-        t2 = self.GetItemText(item2)
-        self.log.WriteText('compare: ' + t1 + ' <> ' + t2 + '\n')
-        if t1 < t2: return -1
-        if t1 == t2: return 0
-        return 1
 
     pass
 
@@ -80,155 +57,181 @@ class IPMICloser:
         self.ui = ui
         self.count = count
         return
-    
+
     def domain_cb(self, domain):
         domain.close(self)
-        return
 
     def domain_close_done_cb(self):
         self.count = self.count - 1
         if (self.count == 0):
-            _cmdwin.init_history = self.ui.cmdwindow.history
-            self.ui.Destroy()
+            #FIXME - _cmdwin.init_history = self.ui.cmdwindow.history
+            self.ui.mainhandler.top.destroy()
             pass
         return
     pass
 
-class IPMIGUI_Timer(wx.Timer):
-    def __init__(self, ui):
-        wx.Timer.__init__(self)
-        self.ui = ui
-        self.Start(refresh_timer_time, oneShot=True)
-        return
+class IPMIGUI(Tix.Frame):
+    def __init__(self, top, mainhandler):
+        Tix.Frame.__init__(self, top, bd=2, relief=Tix.RAISED)
 
-    def Notify(self):
-        self.ui.Timeout()
-        self.Start(refresh_timer_time, oneShot=True)
-        return
-
-    pass
-
-class IPMIGUI(wx.Frame):
-    def __init__(self, mainhandler):
-        wx.Frame.__init__(self, None, -1, "IPMI GUI",
-                          size=wx.Size(init_windowwidth, init_windowheight))
+        self.top = top
 
         self.mainhandler = mainhandler
 
+        self.inactive_style = Tix.DisplayStyle(Tix.TEXT, fg="grey", bg='white',
+                                               refwindow=top)
+        self.active_style = Tix.DisplayStyle(Tix.TEXT, fg="black", bg="white",
+                                             refwindow=top)
+        self.critical_style = Tix.DisplayStyle(Tix.TEXT, fg="blue", bg='white',
+                                               refwindow=top)
+        self.severe_style = Tix.DisplayStyle(Tix.TEXT, fg="red", bg='white',
+                                             refwindow=top)
+        self.warn_style = Tix.DisplayStyle(Tix.TEXT, fg="yellow", bg='white',
+                                           refwindow=top)
+        
+        self.logeventsv = Tix.IntVar()
+        self.logeventsv.set(init_logevents)
         self.logevents = init_logevents
-        self.fullevents = init_fullevents
-        OpenIPMI.cmdlang_set_evinfo(self.fullevents)
+        self.fulleventsv = Tix.IntVar()
+        self.fulleventsv.set(init_fullevents)
+        OpenIPMI.cmdlang_set_evinfo(self.fulleventsv.get())
         
-        menubar = wx.MenuBar()
-        
-        filemenu = wx.Menu()
-        filemenu.Append(wx.ID_EXIT, "E&xit\tCtrl-Q", "Exit")
-        wx.EVT_MENU(self, wx.ID_EXIT, self.quit);
-        item = filemenu.Append(id_st+1, "&Open Domain\tCtrl-O", "Open Domain")
-        wx.EVT_MENU(self, id_st+1, self.openDomain);
-        item = filemenu.Append(id_st+2, "&Save Prefs\tCtrl-S", "Save Prefs")
-        wx.EVT_MENU(self, id_st+2, self.savePrefs);
-        menubar.Append(filemenu, "&File")
-        
-        viewmenu = wx.Menu()
-        item = viewmenu.Append(id_st+3, "&Expand All\tCtrl-E", "Expand All")
-        wx.EVT_MENU(self, id_st+3, self.ExpandAll);
-        item = viewmenu.Append(id_st+4,"&Collapse All\tCtrl-C", "Collapse All")
-        wx.EVT_MENU(self, id_st+4, self.CollapseAll);
-        menubar.Append(viewmenu, "&View")
+        fileb = Tix.Menubutton(self, text="File", underline=0, takefocus=0)
+        filemenu = Tix.Menu(fileb, tearoff=0)
+        fileb["menu"] = filemenu
+        filemenu.add_command(label="Exit", underline=1, accelerator="Ctrl+Q",
+                             command = lambda self=self: self.quit() )
+        top.bind_all("<Control-Q>", self.quit)
+        top.bind_all("<Control-q>", self.quit)
+        filemenu.add_command(label="Open Domain", underline=1,
+                             accelerator="Ctrl+O",
+                             command = lambda self=self: self.openDomain() )
+        top.bind_all("<Control-O>", self.openDomain)
+        top.bind_all("<Control-o>", self.openDomain)
+        filemenu.add_command(label="Save Prefs", underline=1,
+                             accelerator="Ctrl+S",
+                             command = lambda self=self: self.savePrefs() )
+        top.bind_all("<Control-S>", self.savePrefs)
+        top.bind_all("<Control-s>", self.savePrefs)
 
-        self.settingsmenu = wx.Menu()
-        self.EnabEvent = self.settingsmenu.AppendCheckItem(id_st+5,
-                                                           "Enable Events",
-                                                           "Enable Events")
-        wx.EVT_MENU(self, id_st+5, self.EnableEvents);
-        self.settingsmenu.Check(id_st+5, self.logevents)
-        self.EnabEvent = self.settingsmenu.AppendCheckItem(id_st+6,
-                                                           "Full Event Info",
-                                                           "Full Event Info")
-        wx.EVT_MENU(self, id_st+6, self.FullEventInfo);
-        self.settingsmenu.Check(id_st+6, self.fullevents)
-        menubar.Append(self.settingsmenu, "&Settings")
+        viewb = Tix.Menubutton(self, text="View", underline=0, takefocus=0)
+        viewmenu = Tix.Menu(viewb, tearoff=0)
+        viewb["menu"] = viewmenu
+        viewmenu.add_command(label="Expand All", underline=1,
+                             accelerator="Ctrl+E",
+                             command = lambda self=self: self.ExpandAll() )
+        top.bind_all("<Control-E>", self.ExpandAll)
+        top.bind_all("<Control-e>", self.ExpandAll)
+        viewmenu.add_command(label="Collapse All", underline=1,
+                             accelerator="Ctrl+C",
+                             command = lambda self=self: self.CollapseAll() )
+        top.bind_all("<Control-C>", self.CollapseAll)
+        top.bind_all("<Control-c>", self.CollapseAll)
 
-        self.SetMenuBar(menubar)
+        setb = Tix.Menubutton(self, text="Settings", underline=0, takefocus=0)
+        viewmenu = Tix.Menu(setb, tearoff=0)
+        setb["menu"] = viewmenu
+        viewmenu.add_checkbutton(label="Enable Events", underline=0,
+                                 command=lambda w=self: w.EnableEvents(),
+                                 variable=self.logeventsv)
+        viewmenu.add_checkbutton(label="Full Event Info", underline=0,
+                                 command=lambda w=self: w.FullEventInfo(),
+                                 variable=self.fulleventsv)
 
-        self.bsplitter = wx.SplitterWindow(self, -1)
-        self.bsplitter.SetMinimumPaneSize(10)
+        vpane = Tix.PanedWindow(self, orientation="vertical",
+                                width=init_windowwidth,
+                                height=init_windowheight)
+        self.vpane = vpane
+        objevpane = vpane.add("objectsevents", size=init_bsashposition)
+        cmdpane = vpane.add("command")
+        hpane = Tix.PanedWindow(objevpane, orientation="horizontal")
+        self.hpane = hpane
+        objpane = hpane.add("objects", size=init_sashposition)
+        evpane = hpane.add("events")
 
-        self.splitter = wx.SplitterWindow(self.bsplitter, -1)
-        self.splitter.SetMinimumPaneSize(10)
+        self.tree = Tix.Tree(objpane, options="hlist.columns 2")
+        self.tree.hlist.add("D", itemtype=Tix.TEXT, text="Domains")
+        self.tree.setmode("D", "none")
+        self.treedata = { }
+        self.treedata["D"] = IPMITreeDummyItem("D")
+        self.setup_item("D", active=True)
+        self.tree.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
+        self.tree.hlist.bind("<Button-3>", self.TreeMenu)
 
-        self.tree = IPMITreeCtrl(self.splitter)
-        self.treeroot = self.tree.AddRoot("Domains")
-        self.tree.SetPyData(self.treeroot, self)
-        self.setup_item(self.treeroot, active=True)
-
-        self.logwindow = wx.TextCtrl(self.splitter, -1,
-                                     style=(wx.TE_MULTILINE
-                                            | wx.TE_READONLY
-                                            | wx.HSCROLL))
-        self.logcount = 0
+        self.numloglines = 1
         self.maxloglines = 1000
+        self.logwindow = Tix.ScrolledText(evpane)
+        self.logwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
+        self.logwindow.text.insert("end", "GUI Log Window")
 
-        self.splitter.SplitVertically(self.tree, self.logwindow)
-        self.splitter.SetSashPosition(init_sashposition)
+        self.cmdwindow = Tix.ScrolledText(cmdpane)
+        self.cmdwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        self.bpanel = wx.Panel(self.bsplitter, -1)
-        bpsizer = wx.BoxSizer(wx.VERTICAL)
-        self.cmdwindow = _cmdwin.CommandWindow(self.bpanel)
-        bpsizer.Add(self.cmdwindow, 1, wx.ALIGN_CENTRE | wx.ALL | wx.GROW, 2)
-        self.bpanel.SetSizer(bpsizer)
-        self.bsplitter.SplitHorizontally(self.splitter, self.bpanel)
-        self.bsplitter.SetSashPosition(init_bsashposition)
+        hpane.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        wx.EVT_TREE_ITEM_RIGHT_CLICK(self.tree, -1, self.TreeMenu)
-        wx.EVT_TREE_ITEM_EXPANDED(self.tree, -1, self.TreeExpanded)
-
-        wx.EVT_CLOSE(self, self.OnClose)
+        vpane.pack(side=Tix.BOTTOM, fill=Tix.BOTH, expand=1)
+        fileb.pack(side=Tix.LEFT)
+        viewb.pack(side=Tix.LEFT)
+        setb.pack(side=Tix.LEFT)
         
-        self.CreateStatusBar(1)
-        self.SetStatusText("Welcome to the OpenIPMI GUI!", 0)
+        self.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        self.Show(True)
+        self.itemval = 0
+
+        self.in_destroy = False
+
+        self.bind("<Destroy>", self.OnDestroy)
 
         self.last_scan = None
-        self.timer = IPMIGUI_Timer(self)
+        self.timer_timeout_ms = 200
+        top.after(self.timer_timeout_ms, self.Timeout)
         return
 
     def ReportError(self, str):
+        if (self.in_destroy):
+            return
         self.SetStatusText(str, 0)
         return
     
     def Timeout(self):
-        if self.last_scan != None:
+        if (self.in_destroy):
+            return
+        if (self.last_scan != None):
             next = self.last_scan
         else:
-            next = self.tree.GetFirstVisibleItem()
+            next = self.tree.hlist.info_next("D")
             pass
         callcount = 0
         checkcount = 0
-        while (callcount < 100) and (checkcount < 1000) and next.IsOk():
-            data = self.tree.GetPyData(next)
+        while (callcount < 100) and (checkcount < 1000) and (next != ""):
+            if (self.tree.hlist.info_hidden(next) == "1"):
+                # Not on the screen, ignore it
+                next = self.tree.hlist.info_next(next)
+                continue
+            data = self.treedata[next]
             if (data != None) and (hasattr(data, "DoUpdate")):
                 callcount = callcount + 1
                 data.DoUpdate()
                 pass
-            next = self.tree.GetNextVisible(next)
+            next = self.tree.hlist.info_next(next)
             checkcount = checkcount + 1
             pass
             
-        if next.IsOk():
+        if (next != ""):
             self.last_scan = next
         else:
             self.last_scan = None
             pass
+        
+        self.top.after(self.timer_timeout_ms, self.Timeout)
         return
         
-    def quit(self, event):
-        self.Close(True)
+    def quit(self, event=None):
+        self.destroy()
         return
 
-    def OnClose(self, event):
+    def OnDestroy(self, event):
+        self.in_destroy = True
         self.closecount = len(self.mainhandler.domains)
         if (self.closecount == 0):
             _cmdwin.init_history = self.cmdwindow.history
@@ -241,13 +244,11 @@ class IPMIGUI(wx.Frame):
             pass
         return
 
-    def openDomain(self, event):
+    def openDomain(self, event=None):
         dialog = gui_domainDialog.OpenDomainDialog(self.mainhandler)
-        dialog.CenterOnScreen();
-        dialog.Show(True);
         return
 
-    def savePrefs(self, event):
+    def savePrefs(self, event=None):
         self.mainhandler.savePrefs()
         return
 
@@ -262,7 +263,7 @@ class IPMIGUI(wx.Frame):
             pass
         return
         
-    def ExpandAll(self, event):
+    def ExpandAll(self, event=None):
         self.tree.Expand(self.treeroot)
         self.ExpandItem(self.treeroot)
         return
@@ -278,47 +279,56 @@ class IPMIGUI(wx.Frame):
             pass
         return
         
-    def CollapseAll(self, event):
+    def CollapseAll(self, event=None):
         self.CollapseItem(self.treeroot)
         return
         
-    def EnableEvents(self, event):
-        self.logevents = self.settingsmenu.IsChecked(id_st+5)
+    def EnableEvents(self, event=None):
+        self.logevents = self.logeventsv.get() != 0
+        print "logevents = " + str(self.logevents)
         return
     
-    def FullEventInfo(self, event):
-        self.fullevents = self.settingsmenu.IsChecked(id_st+6)
-        OpenIPMI.cmdlang_set_evinfo(self.fullevents)
+    def FullEventInfo(self, event=None):
+        print "fullevents = " + str(self.fulleventsv.get())
+        OpenIPMI.cmdlang_set_evinfo(self.fulleventsv.get())
         return
     
     def new_log(self, log):
-        newlines = log.count('\n') + 1
-        self.logwindow.AppendText(log + "\n")
-        self.logcount += newlines
-        while (self.logcount > self.maxloglines):
-            end = self.logwindow.GetLineLength(0)
-            self.logwindow.Remove(0, end+1)
-            self.logcount -= 1
+        if (self.in_destroy):
+            return
+        self.numloglines += log.count("\n") + 1
+        self.logwindow.text.insert("end", "\n" + log)
+        overrun = self.numloglines - self.maxloglines
+        if (overrun > 0):
+            self.logwindow.text.delete("1.0", str(overrun+1)+".0")
+            self.numloglines -= overrun
             pass
         return
 
     def setup_item(self, item, active=False):
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         data.active = active
         data.num_warning = 0
         data.num_severe = 0
         data.num_critical = 0
+        self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text="",
+                                    style=self.active_style)
         if (not active):
-            self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+            self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
+            pass
+        else:
+            self.tree.hlist.item_configure(item, 0, style=self.active_style)
             pass
         return
 
     def cleanup_item(self, item):
-        data = self.tree.GetPyData(item)
+        if (self.in_destroy):
+            return
+        data = self.treedata[item]
         if (data == None):
             return
-        parent = self.tree.GetItemParent(item)
-        if not parent.IsOk():
+        parent = self.parent_item(item)
+        if (parent != None):
             return
         while (data.num_warning > 0):
             data.num_warning = data.num_warning - 1;
@@ -335,110 +345,181 @@ class IPMIGUI(wx.Frame):
         return
 
     def add_domain(self, d):
+        if (self.in_destroy):
+            return
         d.name_str = str(d)
-        d.treeroot = self.tree.AppendItem(self.treeroot, d.name_str)
-        self.tree.SetPyData(d.treeroot, d)
+        item = "D." + str(self.itemval)
+        self.itemval += 1
+        d.treeroot = item
+        self.tree.hlist.add(d.treeroot, itemtype=Tix.TEXT, text=d.name_str)
+        self.tree.setmode(d.treeroot, "open")
+        self.tree.close(d.treeroot)
+        self.treedata[d.treeroot] = d
         self.setup_item(d.treeroot, active=True)
-        d.entityroot = self.tree.AppendItem(d.treeroot, "Entities")
-        self.tree.SetPyData(d.entityroot, IPMITreeDummyItem())
-        self.setup_item(d.entityroot, active=True)
-        d.mcroot = self.tree.AppendItem(d.treeroot, "MCs")
-        self.tree.SetPyData(d.mcroot, IPMITreeDummyItem())
-        self.setup_item(d.mcroot, active=True)
-        d.conns = self.tree.AppendItem(d.treeroot, "Connections")
-        self.tree.SetPyData(d.conns, IPMITreeDummyItem())
-        self.setup_item(d.conns, active=True)
-        self.tree.Expand(self.treeroot)
+        
+        lstr = d.treeroot + ".E"
+        self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="Entities")
+        self.tree.setmode(lstr, "none")
+        self.tree.close(lstr)
+        self.tree.hlist.hide_entry(lstr)
+        self.treedata[lstr] = IPMITreeDummyItem(lstr)
+        self.setup_item(lstr, active=True)
+        
+        lstr = d.treeroot + ".M"
+        self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="MCs")
+        self.tree.setmode(lstr, "none")
+        self.tree.close(lstr)
+        self.tree.hlist.hide_entry(lstr)
+        self.treedata[lstr] = IPMITreeDummyItem(lstr)
+        self.setup_item(lstr, active=True)
+        
+        lstr = d.treeroot + ".C"
+        self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="Connections")
+        self.tree.setmode(lstr, "none")
+        self.tree.close(lstr)
+        self.tree.hlist.hide_entry(lstr)
+        self.treedata[lstr] = IPMITreeDummyItem(lstr)
+        self.setup_item(lstr, active=True)
+        
         return
 
-    def prepend_item(self, o, name, value, data=None, parent=None):
+    def item_sethide(self, parent, item):
+        mode = self.tree.getmode(parent)
+        if (mode == "open"):
+            self.tree.hlist.hide_entry(item)
+        elif (mode == "close"):
+            pass
+        else:
+            self.tree.setmode(parent, "open")
+            self.tree.hlist.hide_entry(item)
+            pass
+        return
+
+    def prepend_item(self, o, name, value, data=None):
+        if (self.in_destroy):
+            return
+        item = o.treeroot + '.' + str(self.itemval)
         if (data == None):
-            data = IPMITreeDummyItem()
+            data = IPMITreeDummyItem(item)
             pass
         data.name_str = name
-        if (parent == None):
-            parent = o.treeroot
-            pass
-        item = self.tree.PrependItem(parent, name + ":")
+        self.itemval += 1
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=name + ":", at=0)
+        mode = self.tree.getmode(o.treeroot)
+        self.item_sethide(o.treeroot, item)
         if (value == None):
-            self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+            self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text="",
+                                        style=self.active_style)
+            self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
         else:
-            self.tree.SetItemText(item, value, 1)
-            self.tree.SetItemTextColour(item, wx.BLACK)
+            self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text=value,
+                                        style=self.active_style)
+            self.tree.hlist.item_configure(item, 0, style=self.active_style)
             pass
-        self.tree.SetPyData(item, data)
+        self.treedata[item] = data
         return item
 
     def append_item(self, o, name, value, data=None, parent=None):
-        if (data == None):
-            data = IPMITreeDummyItem()
-            pass
-        data.name_str = name
+        if (self.in_destroy):
+            return
         if (parent == None):
             parent = o.treeroot
             pass
-        item = self.tree.AppendItem(parent, name + ":")
-        if (value == None):
-            self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
-        else:
-            self.tree.SetItemText(item, value, 1)
-            self.tree.SetItemTextColour(item, wx.BLACK)
+        item = parent + '.' + str(self.itemval)
+        if (data == None):
+            data = IPMITreeDummyItem(item)
             pass
-        self.tree.SetPyData(item, data)
+        data.name_str = name
+        self.itemval += 1
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=name + ":")
+        mode = self.tree.getmode(parent)
+        if (mode == "open"):
+            self.tree.hlist.hide_entry(item)
+        elif (mode == "close"):
+            pass
+        else:
+            self.tree.setmode(parent, "open")
+            self.tree.hlist.hide_entry(item)
+            pass
+        if (value == None):
+            self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text="",
+                                        style=self.active_style)
+            self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
+        else:
+            self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text=value,
+                                        style=self.active_style)
+            self.tree.hlist.item_configure(item, 0, style=self.active_style)
+            pass
+        self.treedata[item] = data
         return item
 
     def set_item_text(self, item, value):
-        data = self.tree.GetPyData(item)
+        if (self.in_destroy):
+            return
+        data = self.treedata[item]
         name = data.name_str
         if (value == None):
-            self.tree.SetItemText(item, "", 1)
-            self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+            self.tree.hlist.item_configure(item, 1, style=self.inactive_style,
+                                           text="")
             pass
         else:
-            self.tree.SetItemText(item, value, 1)
+            self.tree.hlist.item_configure(item, 1, text=value)
             if (hasattr(data, "active")):
                 if (data.active):
                     self.set_item_color(item)
                     pass
                 pass
             else:
-                self.tree.SetItemTextColour(item, wx.BLACK)
+                self.tree.hlist.item_configure(item, 0, style=self.active_style)
                 pass
             pass
         return
 
     def set_item_inactive(self, item):
-        data = self.tree.GetPyData(item)
+        if (self.in_destroy):
+            return
+        data = self.treedata[item]
         data.active = False
-        self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
+        self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
         return
 
-    def set_item_color(self, item):
-        data = self.tree.GetPyData(item)
-        if (data.num_critical > 0):
-            self.tree.SetItemTextColour(item, wx.BLUE)
-            return
-        if (data.num_severe > 0):
-            self.tree.SetItemTextColour(item, wx.RED)
-            return
-        if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
-            return
-        self.tree.SetItemTextColour(item, wx.BLACK)
-        return
-        
     def set_item_active(self, item):
-        data = self.tree.GetPyData(item)
+        if (self.in_destroy):
+            return
+        data = self.treedata[item]
         data.active = True
         self.set_item_color(item)
         return
+
+    def parent_item(self, item):
+        idx = item.rfind(".")
+        if (idx == -1):
+            return None
+        return item[0:idx]
+        
+    def set_item_color(self, item):
+        data = self.treedata[item]
+        if (data.num_critical > 0):
+            self.tree.hlist.item_configure(item, 0, style=self.critical_style)
+            return
+        if (data.num_severe > 0):
+            self.tree.hlist.item_configure(item, 0, style=self.severe_style)
+            return
+        if (data.num_warning > 0):
+            self.tree.hlist.item_configure(item, 0, style=self.warn_style)
+            return
+        
+        self.tree.hlist.item_configure(item, 0, style=self.active_style)
+        return
         
     def incr_item_warning(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
            self.incr_item_warning(parent); 
            pass
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_warning = data.num_warning + 1
@@ -449,16 +530,18 @@ class IPMIGUI(wx.Frame):
         if (data.num_severe > 0):
             return
         if (data.num_warning == 1):
-            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
+            self.tree.hlist.item_configure(item, 0, style=self.warn_style)
             pass
         return
         
     def decr_item_warning(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
-           self.decr_item_warning(parent);
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
+           self.decr_item_warning(parent); 
            pass
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_warning = data.num_warning - 1
@@ -470,14 +553,17 @@ class IPMIGUI(wx.Frame):
             return
         if (data.num_warning > 0):
             return
-        self.tree.SetItemTextColour(item, wx.BLACK)
+        self.tree.hlist.item_configure(item, 0, style=self.active_style)
         return
         
     def incr_item_severe(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
            self.incr_item_severe(parent); 
-        data = self.tree.GetPyData(item)
+           pass
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_severe = data.num_severe + 1
@@ -486,14 +572,18 @@ class IPMIGUI(wx.Frame):
         if (data.num_critical > 0):
             return
         if (data.num_severe == 1):
-            self.tree.SetItemTextColour(item, wx.RED)
+            self.tree.hlist.item_configure(item, 0, style=self.severe_style)
+            pass
+        return
         
     def decr_item_severe(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
            self.decr_item_severe(parent); 
            pass
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_severe = data.num_severe - 1
@@ -504,33 +594,37 @@ class IPMIGUI(wx.Frame):
         if (data.num_severe > 0):
             return
         if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
+            self.tree.hlist.item_configure(item, 0, style=self.warn_style)
             return
-        self.tree.SetItemTextColour(item, wx.BLACK)
+        self.tree.hlist.item_configure(item, 0, style=self.active_style)
         return
         
     def incr_item_critical(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
            self.incr_item_critical(parent); 
            pass
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_critical = data.num_critical + 1
         if (not data.active):
             return
         if (data.num_critical == 1):
-            self.tree.SetItemTextColour(item, wx.BLUE)
+            self.tree.hlist.item_configure(item, 0, style=self.critical_style)
             pass
         return
         
     def decr_item_critical(self, item):
-        parent = self.tree.GetItemParent(item)
-        if parent.IsOk():
+        if (self.in_destroy):
+            return
+        parent = self.parent_item(item)
+        if (parent != None):
            self.decr_item_critical(parent); 
            pass
-        data = self.tree.GetPyData(item)
+        data = self.treedata[item]
         if (data == None):
             return
         data.num_critical = data.num_critical - 1
@@ -539,12 +633,12 @@ class IPMIGUI(wx.Frame):
         if (data.num_critical > 0):
             return
         if (data.num_severe > 0):
-            self.tree.SetItemTextColour(item, wx.RED)
+            self.tree.hlist.item_configure(item, 0, style=self.severe_style)
             return
         if (data.num_warning > 0):
-            self.tree.SetItemTextColour(item, wx.NamedColour('YELLOW'))
+            self.tree.hlist.item_configure(item, 0, style=self.warn_style)
             return
-        self.tree.SetItemTextColour(item, wx.BLACK)
+        self.tree.hlist.item_configure(item, 0, style=self.active_style)
         return
         
     def get_item_pos(self, item):
@@ -555,8 +649,9 @@ class IPMIGUI(wx.Frame):
         return wx.Point(rect.GetLeft(), rect.GetBottom()+25)
 
     def TreeMenu(self, event):
-        item = event.GetItem()
-        data = self.tree.GetPyData(item)
+        w = event.widget
+        item = w.nearest(event.y)
+        data = self.treedata[item]
         if (data != None) and (hasattr(data, "HandleMenu")):
             data.HandleMenu(event)
             pass
@@ -572,110 +667,173 @@ class IPMIGUI(wx.Frame):
         return
 
     def remove_domain(self, d):
+        if (self.in_destroy):
+            return
         if (hasattr(d, "treeroot")):
             self.cleanup_item(d.treeroot)
-            self.tree.Delete(d.treeroot)
+            self.tree.hlist.delete("entry", d.treeroot)
             pass
         return
 
     def add_connection(self, d, c):
-        parent = d.conns
+        if (self.in_destroy):
+            return
+        parent = d.treeroot + ".C"
+        item = parent + '.' + str(self.itemval)
+        self.itemval += 1
+        c.treeroot = item
         c.name_str = str(c)
-        c.treeroot = self.tree.AppendItem(parent, c.name_str)
-        self.tree.SetPyData(c.treeroot, c)
-        self.setup_item(c.treeroot, active=True)
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=c.name_str)
+        self.tree.setmode(item, "none")
+        self.tree.close(item)
+        self.item_sethide(parent, item)
+        self.treedata[item] = c
+        self.setup_item(item, active=True)
         return
         
     def add_port(self, c, p):
-        parent = c.treeroot
+        if (self.in_destroy):
+            return
+        item = c.treeroot + '.' + str(self.itemval)
+        self.itemval += 1
+        p.treeroot = item
         p.name_str = str(p)
-        p.treeroot = self.tree.AppendItem(parent, p.name_str)
-        self.tree.SetPyData(p.treeroot, p)
-        self.setup_item(p.treeroot, active=True)
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=p.name_str)
+        self.tree.setmode(item, "none")
+        self.tree.close(item)
+        self.item_sethide(c.treeroot, item)
+        self.treedata[item] = p
+        self.setup_item(item, active=True)
         return
         
     def add_entity(self, d, e, parent=None):
+        if (self.in_destroy):
+            return
         if (parent == None):
-            parent = d.entityroot
+            parent = d.treeroot + ".E"
+            pass
         else:
             parent = parent.treeroot
             pass
         e.name_str = str(e)
-        e.treeroot = self.tree.AppendItem(parent, e.name_str)
-        self.tree.SetPyData(e.treeroot, e)
-        self.setup_item(e.treeroot)
-        e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
-        self.tree.SetPyData(e.sensorroot, IPMITreeDummyItem())
-        self.setup_item(e.sensorroot, active=True)
-        e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
-        self.tree.SetPyData(e.controlroot, IPMITreeDummyItem())
-        self.setup_item(e.controlroot, active=True)
+        item = parent + '.' + str(self.itemval)
+        self.itemval += 1
+        e.treeroot = item
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=e.name_str)
+        self.tree.setmode(item, "open")
+        self.tree.close(item)
+        self.item_sethide(parent, item)
+        self.treedata[item] = e
+        self.setup_item(item)
+
+        lstr = item + ".S"
+        self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="Sensors")
+        self.tree.setmode(lstr, "none")
+        self.tree.close(lstr)
+        self.tree.hlist.hide_entry(lstr)
+        self.treedata[lstr] = IPMITreeDummyItem(lstr)
+        self.setup_item(lstr, active=True)
+
+        lstr = item + ".C"
+        self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="Controls")
+        self.tree.setmode(lstr, "none")
+        self.tree.close(lstr)
+        self.tree.hlist.hide_entry(lstr)
+        self.treedata[lstr] = IPMITreeDummyItem(lstr)
+        self.setup_item(lstr, active=True)
         return
 
     def reparent_entity(self, d, e, parent):
-        if (parent == None):
-            parent = d.entityroot
-        else:
-            parent = parent.treeroot
-            pass
-        ntreeroot = self.tree.AppendItem(parent, e.name_str)
-        self.tree.SetPyData(ntreeroot, self.tree.GetPyData(e.treeroot))
-        nsensorroot = self.tree.AppendItem(ntreeroot, "Sensors")
-        self.tree.SetPyData(nsensorroot, self.tree.GetPyData(e.sensorroot))
-        ncontrolroot = self.tree.AppendItem(ntreeroot, "Controls")
-        self.tree.SetPyData(ncontrolroot, self.tree.GetPyData(e.controlroot))
-
-        e.treeroot = ntreeroot
-        e.sensorroot = nsensorroot
-        e.controlroot = ncontrolroot
+        if (self.in_destroy):
+            return
+        self.add_entity(d, e, parent)
         return
     
     def remove_entity(self, e):
+        if (self.in_destroy):
+            return
         if (hasattr(e, "treeroot")):
             self.cleanup_item(e.treeroot)
-            self.tree.Delete(e.treeroot)
+            self.tree.hlist.delete("entry", e.treeroot)
+            del self.treedata[e.treeroot]
             pass
         return
 
     def add_mc(self, d, m):
+        if (self.in_destroy):
+            return
+        parent = d.treeroot + ".M"
         m.name_str = str(m)
-        m.treeroot = self.tree.AppendItem(d.mcroot, m.name_str)
-        self.tree.SetPyData(m.treeroot, m)
-        self.setup_item(m.treeroot)
+        item = parent + "." + str(self.itemval)
+        self.itemval += 1
+        m.treeroot = item
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=m.name_str)
+        self.tree.setmode(item, "none")
+        self.tree.close(item)
+        self.item_sethide(parent, item)
+        self.treedata[item] = m
+        self.setup_item(item)
         return
 
     def remove_mc(self, m):
+        if (self.in_destroy):
+            return
         if (hasattr(m, "treeroot")):
             self.cleanup_item(m.treeroot)
-            self.tree.Delete(m.treeroot)
+            self.tree.hlist.delete("entry", m.treeroot)
+            del self.treedata[m.treeroot]
             pass
         return
 
     def add_sensor(self, e, s):
+        if (self.in_destroy):
+            return
+        parent = e.treeroot + ".S"
         s.name_str = str(s)
-        s.treeroot = self.tree.AppendItem(e.sensorroot, s.name_str)
-        self.tree.SetPyData(s.treeroot, s)
-        self.setup_item(s.treeroot, active=True)
+        item = parent + "." + str(self.itemval)
+        self.itemval += 1
+        s.treeroot = item
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=s.name_str)
+        self.tree.setmode(item, "none")
+        self.tree.close(item)
+        self.item_sethide(parent, item)
+        self.treedata[item] = s
+        self.setup_item(item, active=True)
         return
 
     def remove_sensor(self, s):
+        if (self.in_destroy):
+            return
         if (hasattr(s, "treeroot")):
             self.cleanup_item(s.treeroot)
-            self.tree.Delete(s.treeroot)
+            self.tree.hlist.delete("entry", s.treeroot)
+            del self.treedata[s.treeroot]
             pass
         return
 
     def add_control(self, e, c):
+        if (self.in_destroy):
+            return
+        parent = e.treeroot + ".C"
         c.name_str = str(c)
-        c.treeroot = self.tree.AppendItem(e.controlroot, c.name_str)
-        self.tree.SetPyData(c.treeroot, c)
-        self.setup_item(c.treeroot, active=True)
+        item =  parent + "." + str(self.itemval)
+        self.itemval += 1
+        c.treeroot = item
+        self.tree.hlist.add(item, itemtype=Tix.TEXT, text=c.name_str)
+        self.tree.setmode(item, "none")
+        self.tree.close(item)
+        self.item_sethide(parent, item)
+        self.treedata[item] = c
+        self.setup_item(item, active=True)
         return
 
     def remove_control(self, c):
+        if (self.in_destroy):
+            return
         if (hasattr(c, "treeroot")):
             self.cleanup_item(c.treeroot)
-            self.tree.Delete(c.treeroot)
+            self.tree.hlist.delete("entry", c.treeroot)
+            del self.treedata[c.treeroot]
             pass
         return
 
@@ -684,14 +842,15 @@ class IPMIGUI(wx.Frame):
         return "guiparms"
 
     def SaveInfo(self, doc, elem):
-        (width, height) = self.GetSize()
-        elem.setAttribute("windowwidth", str(width))
-        elem.setAttribute("windowheight", str(height))
-        elem.setAttribute("sashposition", str(self.splitter.GetSashPosition()))
-        elem.setAttribute("bsashposition", str(self.bsplitter.GetSashPosition()))
-        elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
+        elem.setAttribute("windowwidth", str(self.vpane.winfo_width()))
+        elem.setAttribute("windowheight", str(self.vpane.winfo_height()))
+        elem.setAttribute("sashposition",
+                          str(self.vpane.panecget("objectsevents", "-size")))
+        elem.setAttribute("bsashposition",
+                          str(self.hpane.panecget("objects", "-size")))
+        #elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
         elem.setAttribute("logevents", str(self.logevents))
-        elem.setAttribute("fullevents", str(self.fullevents))
+        elem.setAttribute("fullevents", str(self.fulleventsv != 0))
         return
     pass
 

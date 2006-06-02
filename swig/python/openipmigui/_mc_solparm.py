@@ -129,7 +129,7 @@ class MCSolParm(gui_list.List):
         gui_list.List.__init__(self,
                                "SOLPARMS for " + m.name + " channel "
                                + str(channel),
-                               [ ("Name", 150), ("Value", 250) ])
+                               [ ("Name", 250), ("Value", 250) ])
         self.sol = sol
         self.solc = solc
         self.channel = channel
@@ -200,7 +200,7 @@ class MCSolParm(gui_list.List):
         self.AfterDone()
         return
 
-    def save(self, event):
+    def save(self):
         rv = self.sol.set_config(self.solc)
         if (rv != 0):
             self.errstr.SetError("Error setting config: "
@@ -213,7 +213,7 @@ class MCSolParm(gui_list.List):
         self.Close()
         return
 
-    def cancel(self, event):
+    def cancel(self):
         self.Close()
         return
 
@@ -222,7 +222,9 @@ class MCSolParm(gui_list.List):
         # clicking on "save" or "cancel"
         if (self.sol):
             self.sol.clear_lock(self.solc)
+            self.sol = None
             pass
+        self.solc = None
         return
     
     pass

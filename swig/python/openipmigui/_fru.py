@@ -52,7 +52,7 @@ class FruInfoDisplay(gui_treelist.TreeList):
         self.AfterDone()
         return
 
-    def ok(self, event):
+    def ok(self):
         self.Close()
         return
 

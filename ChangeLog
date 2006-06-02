@@ -6,6 +6,10 @@
 	the user, make sure the handler is not NULL before calling and
 	call the right free function.
 
+	* swig/python/openipmigui*: Rewrote the GUI using Tk.  The SOL
+	terminal is not done yet, but I think everything else works.
+	Still needs testing, but most stuff should work ok.
+
 2006-06-01 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix some problems with TCL not doing logs

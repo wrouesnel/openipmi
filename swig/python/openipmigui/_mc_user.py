@@ -348,13 +348,13 @@ class MCUsers(gui_treelist.TreeList):
         self.AfterDone()
         return
 
-    def cancel(self, event):
+    def cancel(self):
         if (self.in_save):
             return
         self.Close()
         return
     
-    def save(self, event):
+    def save(self):
         if (self.in_save):
             return
         self.mc_id.to_mc(self)
@@ -399,4 +399,8 @@ class MCUsers(gui_treelist.TreeList):
             pass
         return
     
+    def do_on_close(self):
+        self.users = None
+        return
+
     pass

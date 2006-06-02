@@ -30,7 +30,7 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
+#import wx
 import xml.dom
 import xml.dom.minidom
 import OpenIPMI
@@ -38,7 +38,7 @@ import _saveprefs
 
 init_history = [ ]
 
-class CommandWindow(wx.TextCtrl):
+class CommandWindow: #(wx.TextCtrl):
     def __init__(self, parent):
         global init_history
         wx.TextCtrl.__init__(self, parent, -1,

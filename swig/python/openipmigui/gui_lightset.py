@@ -30,107 +30,130 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import wx
-import wx.lib.scrolledpanel as scrolled
+import Tix
 
-class LightSet(wx.Dialog):
+class EnumHolder:
+    def __init__(self):
+        self.value = ""
+        return
+
+    def get(self):
+        return self.value
+
+    def set(self, val):
+        self.value = val
+
+    def SelectType(self, newbutton, selected):
+        if (selected == "0"):
+            return
+        self.value = newbutton
+        return
+    
+    pass
+
+class LightSet(Tix.DialogShell):
     def __init__(self, name, num_vals, light_list, vals, handler):
         self.handler = handler
         self.light_list = light_list
-        wx.Dialog.__init__(self, None, -1, name, size=wx.Size(300, 300))
+        Tix.DialogShell.__init__(self, title=name)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self.values = scrolled.ScrolledPanel(self, -1,
-                                             size=wx.Size(300, 200))
+        svalues = Tix.ScrolledWindow(self, height=300, width=300)
+        self.values = svalues.window
         self.lights = [ ]
-        box = wx.BoxSizer(wx.VERTICAL)
+
+        row = 0
         for i in range(0, num_vals):
             if (len(vals) <= i):
                 ivals = ("", "black", '0', '1')
             else:
                 ivals = vals[i]
                 pass
-            box2 = wx.BoxSizer(wx.HORIZONTAL)
-            label = wx.StaticText(self.values, -1, "Light " + str(i))
-            box2.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+            label = Tix.Label(self.values, text="Light " + str(i))
+            label.grid(row=row, column=0, sticky="e")
             if (light_list[i][0]):
-                lc = wx.CheckBox(self.values, -1, "Local Control")
-                lc.SetValue(ivals[0] == "lc")
-                box2.Add(lc, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+                lc = Tix.BooleanVar()
+                lcw = Tix.Checkbutton(self.values, text="Local Control",
+                                      variable=lc)
+                lc.set(ivals[0] == "lc")
+                lcw.grid(row=row, column=1, sticky="ew")
+                row += 1
             else:
                 lc = None
                 pass
-            box.Add(box2, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            color = wx.RadioBox(self.values, -1, "Color",
-                                wx.DefaultPosition, wx.DefaultSize,
-                                light_list[i][1], 2, wx.RA_SPECIFY_COLS)
-            color.SetSelection(light_list[i][1].index(ivals[1]))
-            box.Add(color, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            (b, ontime) = self.newField("On Time", self.values, ivals[2])
-            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            (b, offtime) = self.newField("Off Time", self.values, ivals[3])
-            box.Add(b, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-            self.lights.append((lc, color, ontime, offtime))
+
+            color = EnumHolder()
+            colorw = Tix.Select(self.values, label="Color", allowzero=0,
+                               radio=1, command=color.SelectType)
+            for v in light_list[i][1]:
+                colorw.add(v, text=v)
+                pass
+            colorw.configure(value=ivals[1])
+            colorw.grid(row=row, column=1, sticky="ew")
+            row += 1
+
+            ontime = Tix.LabelEntry(self.values, label="On Time")
+            ontime.entry.insert("0", ivals[2])
+            ontime.grid(row=row, column=1, sticky="ew")
+            row += 1
+            ontime = ontime.entry
+
+            offtime = Tix.LabelEntry(self.values, label="Off Time")
+            offtime.entry.insert("0", ivals[3])
+            offtime.grid(row=row, column=1, sticky="ew")
+            row += 1
+            offtime = offtime.entry
+
+            self.lights.append( (lc, color, ontime, offtime) )
             pass
             
-        self.values.SetSizer(box)
-        sizer.Add(self.values, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
-        
-        bbox = wx.BoxSizer(wx.HORIZONTAL)
-        cancel = wx.Button(self, -1, "Cancel")
-        wx.EVT_BUTTON(self, cancel.GetId(), self.cancel);
-        bbox.Add(cancel, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        ok = wx.Button(self, -1, "Ok")
-        wx.EVT_BUTTON(self, ok.GetId(), self.ok_press);
-        bbox.Add(ok, 0, wx.ALIGN_LEFT | wx.ALL, 5);
-        sizer.Add(bbox, 0, wx.ALIGN_CENTRE | wx.ALL, 2)
+        svalues.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        self.SetSizer(sizer)
-        wx.EVT_CLOSE(self, self.OnClose)
-        self.CenterOnScreen();
-        self.Show(True);
+        bbox = Tix.ButtonBox(self)
+        bbox.add("cancel", text="Cancel", command=lambda w=self: w.cancel())
+        bbox.add("ok", text="Ok", command=lambda w=self: w.ok_press())
+        bbox.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
+
+        self.bind("<Destroy>", self.OnDestroy)
+
+        self.popup();
         return
 
-    def newField(self, name, parent, initval="", style=0):
-        if parent == None:
-            parent = self
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(parent, -1, name + ":")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        field = wx.TextCtrl(parent, -1, initval, style=style);
-        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        return box, field;
-
-    def cancel(self, event):
-        self.Close()
+    def cancel(self):
+        self.destroy()
         return
 
-    def ok_press(self, event):
+    def ok_press(self):
         val = [ ]
         try:
             i = 0;
             for f in self.lights:
                 lc = ""
-                if (f[0] != None) and f[0].GetValue():
-                    lc = "lc"
-                color = self.light_list[i][1][f[1].GetSelection()]
-                ontime = str(f[2].GetValue())
-                offtime = str(f[3].GetValue())
+                if (f[0] != None) and f[0].get():
+                    lc = str("lc")
+                color = str(f[1].get())
+                ontime = str(f[2].get())
+                offtime = str(f[3].get())
                 val.append(' '.join([lc, color, ontime, offtime]))
                 i = i + 1
                 pass
 
+            print "A: " + str(val)
             self.handler.ok(val)
             pass
         except Exception, e:
             print str(e)
             return
-        self.Close()
+        self.destroy()
         return
 
-    def OnClose(self, event):
-        self.Destroy()
+    def OnDestroy(self, event):
+        if (hasattr(self, "do_on_close")):
+            self.do_on_close()
+            pass
+        self.handler = None
+        self.light_list = None
+        self.lights = None
         return
 
     pass
