@@ -671,7 +671,7 @@ class IPMIGUI(Tix.Frame):
             return
         if (hasattr(d, "treeroot")):
             self.cleanup_item(d.treeroot)
-            self.tree.hlist.delete("entry", d.treeroot)
+            self.tree.hlist.delete_entry(d.treeroot)
             pass
         return
 
@@ -754,7 +754,7 @@ class IPMIGUI(Tix.Frame):
             return
         if (hasattr(e, "treeroot")):
             self.cleanup_item(e.treeroot)
-            self.tree.hlist.delete("entry", e.treeroot)
+            self.tree.hlist.delete_entry(e.treeroot)
             del self.treedata[e.treeroot]
             pass
         return
@@ -780,7 +780,7 @@ class IPMIGUI(Tix.Frame):
             return
         if (hasattr(m, "treeroot")):
             self.cleanup_item(m.treeroot)
-            self.tree.hlist.delete("entry", m.treeroot)
+            self.tree.hlist.delete_entry(m.treeroot)
             del self.treedata[m.treeroot]
             pass
         return
@@ -806,7 +806,7 @@ class IPMIGUI(Tix.Frame):
             return
         if (hasattr(s, "treeroot")):
             self.cleanup_item(s.treeroot)
-            self.tree.hlist.delete("entry", s.treeroot)
+            self.tree.hlist.delete_entry(s.treeroot)
             del self.treedata[s.treeroot]
             pass
         return
@@ -832,7 +832,7 @@ class IPMIGUI(Tix.Frame):
             return
         if (hasattr(c, "treeroot")):
             self.cleanup_item(c.treeroot)
-            self.tree.hlist.delete("entry", c.treeroot)
+            self.tree.hlist.delete_entry(c.treeroot)
             del self.treedata[c.treeroot]
             pass
         return
