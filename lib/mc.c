@@ -4993,8 +4993,9 @@ ipmi_mc_set_user(ipmi_mc_t       *mc,
 	rv = set_enable(mc, user);
     else {
 	/* Nothing to do. */
-	handler(mc, 0, cb_data);
-	ipmi_mem_free(user);
+	if (handler)
+	    handler(mc, 0, cb_data);
+	ipmi_user_free(user);
     }
 
     if (rv)
