@@ -1,3 +1,7 @@
+2006-06-02 Corey Minyard <cminyard@mvista.com>
+
+	* lib/pefc.c: Only call the set_done() callback if it is non-NULL.
+
 2006-06-01 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Fix some problems with TCL not doing logs

@@ -1849,7 +1849,8 @@ set_clear(ipmi_pef_t *pef,
 
     if (pefc->err)
 	err = pefc->err;
-    pefc->set_done(pef, err, pefc->cb_data);
+    if (pefc->set_done)
+	pefc->set_done(pef, err, pefc->cb_data);
     ipmi_pef_free_config(pefc);
     pef_put(pef);
 }
