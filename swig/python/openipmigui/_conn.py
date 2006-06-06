@@ -32,7 +32,7 @@
 
 import OpenIPMI
 import gui_popup
-import _SoL
+import gui_SoL
 
 id_st = 1000
 
@@ -166,7 +166,7 @@ class Connection:
         return
 
     def OpenSOL(self, event):
-        _SoL.SoL(self.ui, self.domain_id, self.cnum)
+        gui_SoL.SoL(self.ui, self.domain_id, self.cnum)
         return
     
     def domain_cb(self, domain):

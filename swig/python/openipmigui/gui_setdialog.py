@@ -1,4 +1,4 @@
-# _domain.py
+# gui_setdialog.py
 #
 # openipmi GUI handling for a normal dialog
 #
