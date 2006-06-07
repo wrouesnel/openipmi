@@ -59,6 +59,7 @@ class SoL(Tix.Toplevel):
             return
         self.nack_count = 0
         self.take_input = True
+        self.in_destroy = False
         self.title("SoL for " + self.dname + " connection "
                    + str(self.cnum))
 
@@ -204,9 +205,12 @@ class SoL(Tix.Toplevel):
         ctrlb.pack(side=Tix.LEFT)
 
         self.term = SolTerm(self, self)
-        self.errstr = gui_errstr.ErrStr(self)
-        self.errstr.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
-        self.statestr = gui_errstr.ErrStr(self)
+        f = Tix.Frame(self)
+        f.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
+        self.errstr = gui_errstr.ErrStr(f)
+        self.errstr.pack(side=Tix.LEFT, fill=Tix.X, expand=1)
+        self.statestr = gui_errstr.ErrStr(f)
+        self.statestr.pack(side=Tix.LEFT, fill=Tix.X, expand=1)
 
         self.statestr.SetError(OpenIPMI.sol_state_string(
             OpenIPMI.sol_state_closed))
@@ -216,13 +220,18 @@ class SoL(Tix.Toplevel):
         return
 
     def OnDestroy(self, event):
-        self.sol.force_close()
+        self.in_destroy = True
+        if (self.sol != None):
+            self.sol.force_close()
+            self.sol = None
+            pass
         return
 
     def domain_cb(self, domain):
         self.sol = domain.create_sol(self.cnum, self)
         if (self.sol == None):
             self.ui.ReportError("Unable to open SoL connection")
+            self.destroy()
             return
         self.dname = domain.get_name()
         return
@@ -232,6 +241,8 @@ class SoL(Tix.Toplevel):
         return
 
     def sol_connection_state_change(self, conn, state, err):
+        if (self.in_destroy):
+            return
         if (err != 0):
             self.errstr.SetError("Connection change: "
                                  + OpenIPMI.sol_state_string(state)

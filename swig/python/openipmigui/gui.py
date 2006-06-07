@@ -34,6 +34,7 @@ import OpenIPMI
 import _saveprefs
 import _oi_logging
 import gui_domainDialog
+import gui_errstr
 
 init_treenamewidth = 150
 init_sashposition = 500
@@ -164,6 +165,9 @@ class IPMIGUI(Tix.Frame):
         self.logwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         self.logwindow.text.insert("end", "GUI Log Window")
 
+        self.errstr = gui_errstr.ErrStr(cmdpane)
+        self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
+
         self.cmdwindow = Tix.ScrolledText(cmdpane)
         self.cmdwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
@@ -190,7 +194,7 @@ class IPMIGUI(Tix.Frame):
     def ReportError(self, str):
         if (self.in_destroy):
             return
-        self.SetStatusText(str, 0)
+        self.errstr.SetError(str)
         return
     
     def Timeout(self):

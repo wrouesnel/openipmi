@@ -72,7 +72,7 @@ class Terminal(_term.TerminalEmulator):
         for f in range(0, len(self.fonts)):
             for fg in range(0, len(self.colors)):
                 for bg in range(0, len(self.colors)):
-                    idx = (f * 4 * 8) + (fg * 8) + bg;
+                    idx = (f * 8 * 8) + (fg * 8) + bg;
                     self.text.tag_configure(str(idx), font=self.fonts[f],
                                             foreground=self.colors[fg],
                                             background=self.colors[bg])
@@ -91,6 +91,8 @@ class Terminal(_term.TerminalEmulator):
 
         self.text.bind("<Key>", self.HandleChar)
         self.text.bind("<Control-Key>", self.HandleControlChar)
+
+        self.text.focus_set()
         return
 
     def DrawText(self, fg_color, bg_color, flags, x, y, val):
@@ -101,7 +103,7 @@ class Terminal(_term.TerminalEmulator):
             pass
         # FIXME - we don't handle blinking or concealed
         flags &= 3
-        tag = str((flags * 4 * 8) + (fg_color * 8) + bg_color);
+        tag = str((flags * 8 * 8) + (fg_color * 8) + bg_color);
         self.text.delete(gpos(x, y), gpos(x+len(val), y))
         self.text.insert(gpos(x, y), val, tag)
         return
@@ -163,10 +165,6 @@ class Terminal(_term.TerminalEmulator):
         return
     
     def HandleChar(self, event):
-        print "'" + str(event.keycode) + "'"
-        print "'" + event.keysym + "'"
-        print "'" + event.char + "'"
-        
         key = event.keysym
         if (len(key) == 1):
             s = key
