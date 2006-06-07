@@ -35,6 +35,7 @@ import _saveprefs
 import _oi_logging
 import gui_domainDialog
 import gui_errstr
+import gui_cmdwin
 
 init_treenamewidth = 150
 init_sashposition = 500
@@ -65,7 +66,7 @@ class IPMICloser:
     def domain_close_done_cb(self):
         self.count = self.count - 1
         if (self.count == 0):
-            #FIXME - _cmdwin.init_history = self.ui.cmdwindow.history
+            gui_cmdwin.init_history = self.ui.cmdwindow.history
             self.ui.mainhandler.top.destroy()
             pass
         return
@@ -79,15 +80,15 @@ class IPMIGUI(Tix.Frame):
 
         self.mainhandler = mainhandler
 
-        self.inactive_style = Tix.DisplayStyle(Tix.TEXT, fg="grey", bg='white',
+        self.inactive_style = Tix.DisplayStyle(Tix.TEXT, fg="dark grey",
                                                refwindow=top)
-        self.active_style = Tix.DisplayStyle(Tix.TEXT, fg="black", bg="white",
+        self.active_style = Tix.DisplayStyle(Tix.TEXT, fg="black",
                                              refwindow=top)
-        self.critical_style = Tix.DisplayStyle(Tix.TEXT, fg="blue", bg='white',
+        self.critical_style = Tix.DisplayStyle(Tix.TEXT, fg="blue",
                                                refwindow=top)
-        self.severe_style = Tix.DisplayStyle(Tix.TEXT, fg="red", bg='white',
+        self.severe_style = Tix.DisplayStyle(Tix.TEXT, fg="red",
                                              refwindow=top)
-        self.warn_style = Tix.DisplayStyle(Tix.TEXT, fg="yellow", bg='white',
+        self.warn_style = Tix.DisplayStyle(Tix.TEXT, fg="yellow",
                                            refwindow=top)
         
         self.logeventsv = Tix.IntVar()
@@ -168,7 +169,7 @@ class IPMIGUI(Tix.Frame):
         self.errstr = gui_errstr.ErrStr(cmdpane)
         self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
-        self.cmdwindow = Tix.ScrolledText(cmdpane)
+        self.cmdwindow = gui_cmdwin.CommandWindow(cmdpane)
         self.cmdwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
         hpane.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
@@ -238,8 +239,7 @@ class IPMIGUI(Tix.Frame):
         self.in_destroy = True
         self.closecount = len(self.mainhandler.domains)
         if (self.closecount == 0):
-            _cmdwin.init_history = self.cmdwindow.history
-            self.Destroy()
+            gui_cmdwin.init_history = self.cmdwindow.history
             return
         closer = IPMICloser(self, self.closecount)
         ds = self.mainhandler.domains.values()

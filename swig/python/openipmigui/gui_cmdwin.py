@@ -1,4 +1,4 @@
-# _cmdwin.py
+# gui_cmdwin.py
 #
 # openipmi GUI command window handling
 #
@@ -30,7 +30,7 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-#import wx
+import Tix
 import xml.dom
 import xml.dom.minidom
 import OpenIPMI
@@ -38,17 +38,16 @@ import _saveprefs
 
 init_history = [ ]
 
-class CommandWindow: #(wx.TextCtrl):
+class CommandWindow(Tix.ScrolledText):
     def __init__(self, parent):
         global init_history
-        wx.TextCtrl.__init__(self, parent, -1,
-                             style=(wx.TE_MULTILINE
-                                    | wx.HSCROLL))
+        Tix.ScrolledText.__init__(self, parent)
         self.currow = 0
         self.max_lines = 1000
         self.max_history = 100
-        wx.EVT_CHAR(self, self.HandleChar)
-        self.AppendText("> ")
+        self.text.bind("<Key>", self.HandleChar)
+        self.text.bind("<Control-Key>", self.HandleCtrlChar)
+        self.text.insert("end", "> ")
         self.history = [ ]
         self.lasthist = 0
         for cmd in init_history:
@@ -62,6 +61,12 @@ class CommandWindow: #(wx.TextCtrl):
         self.cmdlang = OpenIPMI.alloc_cmdlang(self)
         self.indent = 0;
         self.cmd_in_progress = False
+
+        self.bind("<Destroy>", self.OnDestroy)
+        return
+
+    def OnDestroy(self, event):
+        self.cmdlang = None
         return
 
     def cmdlang_down(self, cmdlang):
@@ -75,26 +80,19 @@ class CommandWindow: #(wx.TextCtrl):
         return
     
     def HandleNewLines(self):
-        while (self.GetNumberOfLines() > self.max_lines):
-            self.Remove(0, self.GetLineLength(0)+1)
-            self.currow -= 1
+        lastline = int(self.text.index("end").split(".")[0]) - 1
+        while (lastline > self.max_lines):
+            self.delete("1.0", "2.0")
+            lastline = int(self.text.index("end").split(".")[0]) - 1
             pass
         return
 
-    def InsertString(self, str):
-        (colpos, rowpos) = self.PositionToXY(self.GetInsertionPoint())
-        fixup = rowpos == self.currow
-        inspos = self.XYToPosition(0, self.currow)
-        self.Replace(inspos, inspos, str)
-        (dummy, self.currow) = self.PositionToXY(self.GetLastPosition())
-        if (fixup):
-            self.SetInsertionPoint(self.XYToPosition(colpos, self.currow))
-            pass
-        else:
-            self.SetInsertionPoint(self.XYToPosition(colpos, rowpos))
-            pass
+    def InsertString(self, string):
+        (lastrow, lastcol) = self.text.index("end").split(".")
+        lastrow = str(int(lastrow)-1)
+        self.text.insert(lastrow + ".0", string)
         self.HandleNewLines()
-        self.ShowPosition(self.GetInsertionPoint())
+        self.text.see("insert")
         return
     
     def cmdlang_done(self, cmdlang):
@@ -119,7 +117,7 @@ class CommandWindow: #(wx.TextCtrl):
             self.InsertString(str)
             pass
         self.cmd_in_progress = False
-        self.AppendText("> ")
+        self.text.insert("end", "> ")
         return
 
     def cmdlang_out(self, cmdlang, name, value):
@@ -149,79 +147,99 @@ class CommandWindow: #(wx.TextCtrl):
             pass
         return
     
+    def HandleCtrlChar(self, event):
+        # This is here to catch the control characters and pass them
+        # on so HandleChar() doesn't trap and throw them away.
+        return
+    
     def HandleChar(self, event):
-        key = event.GetKeyCode()
-        if ((key >= wx.WXK_SPACE) and (key < wx.WXK_DELETE)):
-            # A key that will result in text addition.  Make sure it
-            # only occurs on the last line and not in the prompt area.
-            if (self.cmd_in_progress):
-                return
-            (col, row) = self.PositionToXY(self.GetInsertionPoint())
-            if ((row != self.currow) or (col < 2)):
-                # Ignore the keypress
-                return
-            event.Skip()
-            pass
-        elif ((key == wx.WXK_BACK) or (key == wx.WXK_DELETE)):
+        key = event.keysym
+        if ((key == "Backspace") or (key == "Delete")):
             # A key that will result in a backspace.  Make sure it
             # only occurs on the last line and not in the prompt area.
             if (self.cmd_in_progress):
-                return
-            (col, row) = self.PositionToXY(self.GetInsertionPoint())
-            if ((row != self.currow) or (col <= 2)):
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
+            (currrow, currcol) = self.text.index("insert").split(".")
+            if ((lastrow != currrow) or (col <= 2)):
                 # Ignore the keypress
-                return
-            event.Skip()
+                return "break"
             pass
-        elif (key == wx.WXK_RETURN):
+        elif (key == "Return"):
             # Enter the command...
             if (self.cmd_in_progress):
-                return
-            self.SetInsertionPointEnd()
-            command = self.GetLineText(self.currow)[2:]
-            self.currow += 1;
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
+            (currrow, currcol) = self.text.index("insert").split(".")
+            if ((lastrow != currrow) or (int(currcol) <= 2)):
+                # Ignore the keypress
+                return "break"
+
+            command = self.text.get(lastrow + ".2", lastrow + ".end")
             self.HandleNewLines();
             if (command != ""):
-                self.AppendText("\n")
+                self.text.insert("end", "\n")
                 self.history[self.lasthist] = command
                 self.HandleNewHistory()
                 self.cmdlang.handle(str(command))
                 pass
             else:
-                self.AppendText("\n> ")
+                self.text.insert("end", "\n> ")
                 pass
+            self.text.mark_set("insert", "end")
             self.currhist = self.lasthist
-            self.ShowPosition(self.GetInsertionPoint())
-            pass
-        elif (key == wx.WXK_UP):
+            self.text.see("insert")
+            return "break"
+        elif (key == "Up"):
             # Previous history
             if (self.cmd_in_progress):
-                return
+                return "break"
             if (self.currhist == 0):
-                return
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
             if (self.currhist == self.lasthist):
-                command = self.GetLineText(self.currow)[2:]
+                command = self.text.get(lastrow + ".2", lastrow + ".end")
                 self.history[self.lasthist] = command
                 pass
-            pos = self.XYToPosition(2, self.currow)
-            self.Remove(pos, self.GetLastPosition())
+            self.text.delete(lastrow + ".2", lastrow + ".end")
             self.currhist -= 1
-            self.AppendText(self.history[self.currhist])
-            pass
-        elif (key == wx.WXK_DOWN):
+            self.text.insert(lastrow + ".2", self.history[self.currhist])
+            return "break"
+        elif (key == "Down"):
             if (self.cmd_in_progress):
-                return
+                return "break"
             # Next history
             if (self.currhist == self.lasthist):
-                return
-            pos = self.XYToPosition(2, self.currow)
-            self.Remove(pos, self.GetLastPosition())
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
+            self.text.delete(lastrow + ".2", lastrow + ".end")
             self.currhist += 1
-            self.AppendText(self.history[self.currhist])
+            self.text.insert(lastrow + ".2", self.history[self.currhist])
+            return "break"
+        elif (len(event.char) == 1) and (event.char < chr(255)):
+            # A key that will result in text addition.  Make sure it
+            # only occurs on the last line and not in the prompt area.
+            if (self.cmd_in_progress):
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
+            (currrow, currcol) = self.text.index("insert").split(".")
+            if ((lastrow != currrow) or (int(currcol) < 2)):
+                # Ignore the keypress
+                return "break"
             pass
+        elif ((key == "Left") or (key == "Right") or
+              (key == "Insert") or
+              (key == "End") or (key == "Home") or
+              (key == "Prior") or (key == "Next")):
+            # Pass these through
+            return
         else:
-            event.Skip()
-            pass
+            return "break"
         return
 
     pass
