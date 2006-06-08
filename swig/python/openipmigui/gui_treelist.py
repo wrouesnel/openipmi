@@ -33,9 +33,10 @@
 import Tix
 import gui_errstr
 
-class TreeList(Tix.DialogShell):
+class TreeList(Tix.Toplevel):
     def __init__(self, name, root, columns):
-        Tix.DialogShell.__init__(self, title=name)
+        Tix.Toplevel.__init__(self)
+        self.title(name)
 
         self.numcolumns = len(columns)
         
@@ -105,7 +106,6 @@ class TreeList(Tix.DialogShell):
         return
 
     def AfterDone(self):
-        self.popup()
         return
 
     def Append(self, node, name, values, data=None):

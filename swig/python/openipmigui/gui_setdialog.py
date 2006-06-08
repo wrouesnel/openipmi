@@ -36,10 +36,11 @@ import gui_errstr
 def isbool(v):
     return type(v) == type(True)
 
-class SetDialog(Tix.DialogShell):
+class SetDialog(Tix.Toplevel):
     def __init__(self, name, default, count, handler, labels=None):
         self.handler = handler
-        Tix.DialogShell.__init__(self, title=name)
+        Tix.Toplevel.__init__(self)
+        self.title(name)
 
         sw = Tix.ScrolledWindow(self)
         self.values = sw.window
@@ -101,8 +102,6 @@ class SetDialog(Tix.DialogShell):
         bbox.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
 
         self.bind("<Destroy>", self.OnDestroy)
-
-        self.popup()
         return
     
     def OnDestroy(self, event):

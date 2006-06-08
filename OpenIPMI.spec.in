@@ -48,7 +48,7 @@ A Python interface for OpenIPMI.
 %package gui
 Summary: GUI (in python) for OpenIPMI
 Group: Utilities
-Requires: OpenIPMI-python = %{version}, wxPython >= 2.4.2
+Requires: OpenIPMI-python = %{version}, tkinter
 
 %description gui
 A GUI interface for OpenIPMI.  Written in python an requiring wxWidgets.
@@ -114,22 +114,16 @@ fi
 %files
 ###################################################
 %defattr(-,root,root)
-%{_libdir}/libOpenIPMIcmdlang.so*
-%{_libdir}/libOpenIPMIcmdlang.la
-%{_libdir}/libOpenIPMIglib.so*
-%{_libdir}/libOpenIPMIglib.la
-%{_libdir}/libOpenIPMIglib12.so*
-%{_libdir}/libOpenIPMIglib12.la
-%{_libdir}/libOpenIPMIposix.so*
-%{_libdir}/libOpenIPMIposix.la
-%{_libdir}/libOpenIPMIpthread.so*
-%{_libdir}/libOpenIPMIpthread.la
-%{_libdir}/libOpenIPMI.so*
-%{_libdir}/libOpenIPMI.la
-%{_libdir}/libOpenIPMIutils.so*
-%{_libdir}/libOpenIPMIutils.la
+%{_libdir}/libOpenIPMIcmdlang.so.*
+%{_libdir}/libOpenIPMIglib.so.*
+%{_libdir}/libOpenIPMIglib12.so.*
+%{_libdir}/libOpenIPMItcl.so.*
+%{_libdir}/libOpenIPMIposix.so.*
+%{_libdir}/libOpenIPMIpthread.so.*
+%{_libdir}/libOpenIPMI.so.*
+%{_libdir}/libOpenIPMIutils.so.*
 %doc COPYING COPYING.LIB FAQ INSTALL README README.Force
-%doc README.MotorolaMXP
+%doc README.MotorolaMXP CONFIGURING_FOR_LAN COPYING.BSD
 /etc/init.d/ipmi
 /etc/sysconfig/ipmi
 
@@ -162,6 +156,8 @@ fi
 %defattr(-,root,root)
 %{_includedir}/OpenIPMI
 %{_libdir}/*.a
+%{_libdir}/*.la
+%{_libdir}/*.so
 %{_libdir}/pkgconfig
 %doc doc/IPMI.pdf
 

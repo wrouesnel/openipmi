@@ -452,6 +452,16 @@ fi
 
 echo "checking for tcl... $havetcl"
    
+if test "x$havetcl" == "xyes"; then
+   OLDLIBS="$LIBS"
+   LIBS="$LIBS $TCL_LIBS"
+   AC_LINK_IFELSE([AC_LANG_CALL(, Tcl_GetTime)], [echo "Have Tcl_GetTime"],
+		  [echo "Redefine Tcl_GetTime as TclpGetTime";
+		   AC_DEFINE([Tcl_GetTime], [TclpGetTime],
+                            [If no Tcl_GetTime, redefine as TclpGetTime])])
+   LIBS="$OLDLIBS"
+fi
+
 if test "x$havetcl" = "xyes"; then
    AC_DEFINE([HAVE_TCL], [], [Have TCL libraries])
    TCL_LIB='$(top_builddir)/tcl/libOpenIPMItcl.la'

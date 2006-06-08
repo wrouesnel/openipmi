@@ -1,6 +1,6 @@
-# _control.py
+# gui_lightset.py
 #
-# openipmi GUI handling for controls
+# openipmi GUI handling for light setting
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>
@@ -51,13 +51,14 @@ class EnumHolder:
     
     pass
 
-class LightSet(Tix.DialogShell):
+class LightSet(Tix.Toplevel):
     def __init__(self, name, num_vals, light_list, vals, handler):
         self.handler = handler
         self.light_list = light_list
-        Tix.DialogShell.__init__(self, title=name)
+        Tix.Toplevel.__init__(self)
+        self.title(name)
 
-        svalues = Tix.ScrolledWindow(self, height=300, width=300)
+        svalues = Tix.ScrolledWindow(self)
         self.values = svalues.window
         self.lights = [ ]
 
@@ -115,8 +116,6 @@ class LightSet(Tix.DialogShell):
         bbox.pack(side=Tix.BOTTOM, fill=Tix.X, expand=1)
 
         self.bind("<Destroy>", self.OnDestroy)
-
-        self.popup();
         return
 
     def cancel(self):
@@ -138,7 +137,6 @@ class LightSet(Tix.DialogShell):
                 i = i + 1
                 pass
 
-            print "A: " + str(val)
             self.handler.ok(val)
             pass
         except Exception, e:

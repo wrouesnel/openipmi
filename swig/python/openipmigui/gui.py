@@ -307,6 +307,10 @@ class IPMIGUI(Tix.Frame):
     def new_log(self, log):
         if (self.in_destroy):
             return
+        # If we are at the bottom, then scroll the window, otherwise
+        # don't do any scrolling
+        (top, bottom) = self.logwindow.text.yview()
+        doscroll = bottom == 1.0
         self.numloglines += log.count("\n") + 1
         self.logwindow.text.insert("end", "\n" + log)
         overrun = self.numloglines - self.maxloglines
@@ -314,6 +318,8 @@ class IPMIGUI(Tix.Frame):
             self.logwindow.text.delete("1.0", str(overrun+1)+".0")
             self.numloglines -= overrun
             pass
+        if (doscroll):
+            self.logwindow.text.see("end")
         return
 
     def setup_item(self, item, active=False):

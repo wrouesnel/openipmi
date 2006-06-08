@@ -33,9 +33,10 @@
 import Tix
 import gui_errstr
 
-class List(Tix.DialogShell):
+class List(Tix.Toplevel):
     def __init__(self, name, columns):
-        Tix.DialogShell.__init__(self, title=name)
+        Tix.Toplevel.__init__(self)
+        self.title(name)
 
         slist = Tix.ScrolledHList(self,
                                   options=("hlist.header 1"
@@ -84,7 +85,6 @@ class List(Tix.DialogShell):
         return
 
     def AfterDone(self):
-        self.popup()
         return
 
     def Close(self):

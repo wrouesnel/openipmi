@@ -2,6 +2,10 @@
 
 	* configure.in: Convert wxpython into Tkinter.
 
+	* configure.in: Older version of Tcl don't have Tcl_GetTime, they
+	have an equivalent TclpGetTime (that was private, but everyone
+	still used).
+
 	* README - Update some information, including adding all the
 	required and optional packages.
 
