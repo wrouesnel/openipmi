@@ -1,3 +1,11 @@
+2006-06-07 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/*: Get SoL and the command window working
+	with Tix, the GUI conversion is complete except for testing.
+
+	* doc/Makefile.am: Convert the export option for dia from
+	--export-to-format to --filter.
+
 2006-06-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/pefc.c: Only call the set_done() callback if it is non-NULL.
