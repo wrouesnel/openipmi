@@ -85,10 +85,6 @@ class ControlSet:
         self.c.control_id.to_control(self)
         return
 
-    def cancel(self, event):
-        self.dialog.Close()
-        return
-
     def ok(self, vals):
         self.ival = [ ]
         for val in vals:
@@ -104,6 +100,11 @@ class ControlSet:
             control.set_val(self.ival)
             pass
         return
+
+    def do_on_close(self):
+        self.c = None
+
+    pass
         
 class LightSet:
     def __init__(self, c):
@@ -298,6 +299,9 @@ class Control:
         self.e.controls.pop(self.name)
         self.ui.remove_control(self)
         self.destroyed = True
+        self.e = None
+        self.updater = None
+        self.ui = None
         return
 
     pass

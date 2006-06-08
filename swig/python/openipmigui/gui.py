@@ -169,7 +169,7 @@ class IPMIGUI(Tix.Frame):
         self.errstr = gui_errstr.ErrStr(cmdpane)
         self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
-        self.cmdwindow = gui_cmdwin.CommandWindow(cmdpane)
+        self.cmdwindow = gui_cmdwin.CommandWindow(cmdpane, self)
         self.cmdwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
         hpane.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
@@ -258,34 +258,28 @@ class IPMIGUI(Tix.Frame):
         return
 
     def ExpandItem(self, item):
-        (child, cookie) = self.tree.GetFirstChild(item)
-        while child.IsOk():
-            if self.tree.ItemHasChildren(child):
-                self.tree.Expand(child)
-                self.ExpandItem(child)
-                pass
-            (child, cookie) = self.tree.GetNextChild(item, cookie)
+        children = self.tree.hlist.info_children(item)
+        for child in children:
+            self.tree.open(child)
+            self.ExpandItem(child)
             pass
         return
         
     def ExpandAll(self, event=None):
-        self.tree.Expand(self.treeroot)
-        self.ExpandItem(self.treeroot)
+        self.tree.open("D")
+        self.ExpandItem("D")
         return
         
     def CollapseItem(self, item):
-        (child, cookie) = self.tree.GetFirstChild(item)
-        while child.IsOk():
-            if self.tree.ItemHasChildren(child):
-                self.tree.Collapse(child)
-                self.CollapseItem(child)
-                pass
-            (child, cookie) = self.tree.GetNextChild(item, cookie)
+        children = self.tree.hlist.info_children(item)
+        for child in children:
+            self.tree.close(child)
+            self.ExpandItem(child)
             pass
         return
         
     def CollapseAll(self, event=None):
-        self.CollapseItem(self.treeroot)
+        self.CollapseItem("D")
         return
         
     def EnableEvents(self, event=None):
@@ -655,7 +649,6 @@ class IPMIGUI(Tix.Frame):
             pass
         return
 
-    # FIXME - expand of parent doesn't affect children...
     def TreeExpanded(self, event):
         item = event.GetItem()
         data = self.tree.GetPyData(item)

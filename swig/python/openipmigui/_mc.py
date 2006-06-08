@@ -269,6 +269,11 @@ class MC:
     def remove(self):
         self.d.mcs.pop(self.name)
         self.ui.remove_mc(self)
+        self.d = None
+        self.ui = None
+        self.el_refr = None
+        self.el_item = None
+        self.ee_refr = None
         return
 
     def Changed(self, mc):
@@ -488,3 +493,7 @@ class MC:
             self.ui.set_item_active(self.treeroot)
         else:
             self.ui.set_item_inactive(self.treeroot)
+            pass
+        return
+
+    pass

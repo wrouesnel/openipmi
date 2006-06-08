@@ -39,9 +39,10 @@ import _saveprefs
 init_history = [ ]
 
 class CommandWindow(Tix.ScrolledText):
-    def __init__(self, parent):
+    def __init__(self, parent, ui):
         global init_history
         Tix.ScrolledText.__init__(self, parent)
+        self.ui = ui
         self.currow = 0
         self.max_lines = 1000
         self.max_history = 100
@@ -63,8 +64,19 @@ class CommandWindow(Tix.ScrolledText):
         self.cmd_in_progress = False
 
         self.bind("<Destroy>", self.OnDestroy)
+
+        OpenIPMI.set_cmdlang_global_err_handler(self)
         return
 
+    def global_cmdlang_err(self, objstr, location, errstr, errval):
+        log = "Global cmdlang err: " + errstr;
+        if (len(location) > 0) or (len(objstr) > 0):
+            log += " at " + objstr + "(" + location + ")"
+            pass
+        log += ": " + errstr + " (" + str(errval) + ")"
+        self.ui.new_log(log)
+        return
+    
     def OnDestroy(self, event):
         self.cmdlang = None
         return

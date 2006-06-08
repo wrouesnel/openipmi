@@ -119,7 +119,11 @@ class SetDialog(Tix.DialogShell):
     def ok(self):
         vals = [ ]
         for f in self.fields:
-            vals.append(f.get().strip())
+            v = f.get()
+            if (not isbool(v)):
+                v = v.strip()
+                pass
+            vals.append(v)
             pass
         try:
             err = self.handler.ok(vals)

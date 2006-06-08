@@ -441,6 +441,10 @@ class Domain:
             pass
         del self.mainhandler.domains[self.name]
         self.ui.remove_domain(self)
+        for c in self.connections.itervalues():
+            c.remove()
+            pass
+        self.ui = None
         return
 
 defaultDomains = [ ]

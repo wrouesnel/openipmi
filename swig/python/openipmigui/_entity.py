@@ -415,6 +415,8 @@ class Entity:
         self.d.entities.pop(self.name)
         self.ui.remove_entity(self)
         self.destroyed = True
+        self.d = None
+        self.ui = None
         return
 
     def entity_sensor_update_cb(self, op, entity, sensor):

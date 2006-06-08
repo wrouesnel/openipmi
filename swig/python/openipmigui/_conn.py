@@ -55,6 +55,11 @@ class Port:
             self.SetUp(v[0])
         return
 
+    def remove(self):
+        self.c = None
+        self.ui = None
+        return
+
     def __str__(self):
         return self.name
 
@@ -119,6 +124,14 @@ class Connection:
         self.ui.incr_item_severe(self.treeroot)
         return
 
+    def remove(self):
+        self.ui = None
+        for p in self.ports.itervalues():
+            p.remove()
+            pass
+        self.ports = None
+        return
+    
     def __str__(self):
         return self.name
 

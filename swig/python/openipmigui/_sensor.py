@@ -155,7 +155,6 @@ class SensorHysteresisSet:
         else:
             sensor.get_hysteresis(self.s)
             pass
-        self.Close()
         return
 
     pass
@@ -579,6 +578,9 @@ class Sensor:
         self.e.sensors.pop(self.name)
         self.ui.remove_sensor(self)
         self.destroyed = True
+        self.e = None
+        self.updater = None
+        self.ui = None
         return
 
     def handle_threshold_states(self, states):
