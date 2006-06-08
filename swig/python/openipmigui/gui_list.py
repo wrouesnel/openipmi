@@ -40,8 +40,10 @@ class List(Tix.DialogShell):
         slist = Tix.ScrolledHList(self,
                                   options=("hlist.header 1"
                                            + " hlist.itemtype text"
-                                           + " hlist.columns "
-                                           + str(len(columns))),
+                                           + (" hlist.columns "
+                                              + str(len(columns)))
+                                           + " hlist.selectForeground black"
+                                           + " hlist.selectBackground beige"),
                                   width=500, height=500)
         listc = slist.hlist
         self.listc = listc

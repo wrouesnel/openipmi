@@ -42,7 +42,9 @@ class TreeList(Tix.DialogShell):
         stree = Tix.Tree(self,
                          options=("hlist.columns " + str(self.numcolumns)
                                   + " hlist.itemtype text"
-                                  + " hlist.header 1"),
+                                  + " hlist.header 1"
+                                  + " hlist.selectForeground black"
+                                  + " hlist.selectBackground beige"),
                                   width=500, height=500)
         self.stree = stree
         tree = stree.hlist

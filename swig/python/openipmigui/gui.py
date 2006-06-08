@@ -81,14 +81,24 @@ class IPMIGUI(Tix.Frame):
         self.mainhandler = mainhandler
 
         self.inactive_style = Tix.DisplayStyle(Tix.TEXT, fg="dark grey",
+                                               selectforeground="dark grey",
+                                               selectbackground="beige",
                                                refwindow=top)
         self.active_style = Tix.DisplayStyle(Tix.TEXT, fg="black",
+                                             selectforeground="black",
+                                             selectbackground="beige",
                                              refwindow=top)
         self.critical_style = Tix.DisplayStyle(Tix.TEXT, fg="blue",
+                                               selectforeground="blue",
+                                               selectbackground="beige",
                                                refwindow=top)
         self.severe_style = Tix.DisplayStyle(Tix.TEXT, fg="red",
+                                             selectforeground="red",
+                                             selectbackground="beige",
                                              refwindow=top)
-        self.warn_style = Tix.DisplayStyle(Tix.TEXT, fg="yellow",
+        self.warn_style = Tix.DisplayStyle(Tix.TEXT, fg="burlywood4",
+                                           selectforeground="burlywood4",
+                                           selectbackground="beige",
                                            refwindow=top)
         
         self.logeventsv = Tix.IntVar()
@@ -152,6 +162,8 @@ class IPMIGUI(Tix.Frame):
         evpane = hpane.add("events")
 
         self.tree = Tix.Tree(objpane, options="hlist.columns 2")
+        # FIXME: This doesn't work, and I don't know why
+        self.tree.hlist.configure(selectbackground="beige")
         self.tree.hlist.add("D", itemtype=Tix.TEXT, text="Domains")
         self.tree.setmode("D", "none")
         self.treedata = { }
