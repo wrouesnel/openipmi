@@ -9,6 +9,10 @@
 	* README - Update some information, including adding all the
 	required and optional packages.
 
+	* OpenIPMI.spec.in: Added the Tcl stuff.
+
+	* Makefile.am: Added CONFIGURING_FOR_LAN
+
 	* configure.in: Move to version 2.0.7.
 
 2006-06-07 Corey Minyard <cminyard@mvista.com>
