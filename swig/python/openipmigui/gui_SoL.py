@@ -38,6 +38,46 @@ import gui_errstr
 # Note in this file SoL refers to the main SoL object and sol refers
 # to the connection.
 
+class AckTimeoutSet:
+    def __init__(self, SoL):
+        self.SoL = SoL
+        gui_setdialog.SetDialog("Set Ack Timeout for SoL",
+                                [ self.SoL.sol.get_ACK_timeout() ], 1, self,
+                                [ "Value (in microseconds)"] )
+        return
+
+    def do_on_close(self):
+        self.SoL = None
+        return
+    
+    def ok(self, vals):
+        if (self.SoL.sol):
+            self.SoL.sol.set_ACK_timeout(int(vals[0]))
+        return
+
+    pass
+
+
+class AckRetriesSet:
+    def __init__(self, SoL):
+        self.SoL = SoL
+        gui_setdialog.SetDialog("Set Ack Retries for SoL",
+                                [ self.SoL.sol.get_ACK_retries() ], 1, self,
+                                [ "Value (in microseconds)"] )
+        return
+
+    def do_on_close(self):
+        self.SoL = None
+        return
+    
+    def ok(self, vals):
+        if (self.SoL.sol):
+            self.SoL.sol.set_ACK_retries(int(vals[0]))
+        return
+
+    pass
+
+
 class SolTerm(gui_term.Terminal):
     def __init__(self, parent, SoL):
         self.SoL = SoL
@@ -342,44 +382,11 @@ class SoL(Tix.Toplevel):
         return
     
     def SetAckTimeout(self):
-        while (True):
-            dialog = wx.TextEntryDialog(self, "Ack Timeout",
-                                        "Specify the timeout in microseconds",
-                                        str(self.sol.get_ACK_timeout()),
-                                        wx.OK | wx.CANCEL)
-            if (dialog.ShowModal() == wx.ID_OK):
-                try:
-                    val = int(dialog.GetValue())
-                except:
-                    pass
-                else:
-                    self.sol.set_ACK_timeout(val)
-                    return
-                pass
-            else:
-                return
-            pass
+        AckTimeoutSet(self)
         return
 
     def SetAckRetries(self):
-        while (True):
-            dialog = wx.TextEntryDialog(
-                self, "Ack Retries",
-                "Specify the number of retries before failure",
-                str(self.sol.get_ACK_retries()),
-                wx.OK | wx.CANCEL)
-            if (dialog.ShowModal() == wx.ID_OK):
-                try:
-                    val = int(dialog.GetValue())
-                except:
-                    pass
-                else:
-                    self.sol.set_ACK_retries(val)
-                    return
-                pass
-            else:
-                return
-            pass
+        AckRetriesSet(self)
         return
 
     def SetRate(self):

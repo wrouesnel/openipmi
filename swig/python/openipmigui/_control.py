@@ -35,8 +35,6 @@ import gui_popup
 import gui_setdialog
 import gui_lightset
 
-id_st = 200
-
 class ControlRefreshData:
     def __init__(self, c):
         self.c = c

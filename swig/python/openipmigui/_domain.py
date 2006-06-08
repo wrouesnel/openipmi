@@ -40,8 +40,6 @@ import _sel
 import _conn
 import _oi_logging
 
-id_st = 300
-
 class InvalidDomainError(Exception):
     def __init__(self, value):
         self.value = value

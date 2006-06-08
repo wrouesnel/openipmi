@@ -37,8 +37,6 @@ import _sel
 import _mc_chan
 import _mc_pefparm
 
-id_st = 600
-
 class MCOpHandler:
     def __init__(self, m, func, handler=None, boolval=None):
         self.m = m

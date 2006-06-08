@@ -38,8 +38,6 @@ import _mc_lanparm
 import _mc_solparm
 import _mc_user
 
-id_st = 500
-
 # Collect all the info for the channels of an MC.  For each channel
 # all the info is requested using the types immediately below.  If the
 # fetch is a success then it is added to the "info" array of the main

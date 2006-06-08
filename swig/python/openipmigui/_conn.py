@@ -34,8 +34,6 @@ import OpenIPMI
 import gui_popup
 import gui_SoL
 
-id_st = 1000
-
 class Port:
     def __init__(self, domain, c, pnum):
         self.c = c

@@ -41,7 +41,7 @@ class SetDialog(Tix.DialogShell):
         self.handler = handler
         Tix.DialogShell.__init__(self, title=name)
 
-        sw = Tix.ScrolledWindow(self, height=150, width=100)
+        sw = Tix.ScrolledWindow(self)
         self.values = sw.window
         if (labels == None):
             if (count == 1):

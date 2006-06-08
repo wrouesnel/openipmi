@@ -34,8 +34,6 @@ import gui_popup
 import gui_setdialog
 import _oi_logging
 
-id_st = 700
-
 class SensorRefreshData:
     def __init__(self, s):
         self.s = s
@@ -146,8 +144,8 @@ class SensorHysteresisSet:
             self.Destroy()
         else:
             gui_setdialog.SetDialog("Set hysteresis for " + self.s.name,
-                                              [ positive, negative ], 2, self,
-                                              [ "Positive", "Negative" ])
+                                    [ positive, negative ], 2, self,
+                                    [ "Positive", "Negative" ])
             pass
         return
 

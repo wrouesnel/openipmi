@@ -1,6 +1,6 @@
 # gui_errstr.py
 #
-# Fixes for broken wxPython 2.4 StatusBars
+# Error display string
 #
 # Author: MontaVista Software, Inc.
 #         Corey Minyard <minyard@mvista.com>

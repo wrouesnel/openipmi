@@ -224,11 +224,12 @@ class IPMIGUI(Tix.Frame):
             
         if (next != ""):
             self.last_scan = next
+            self.top.after(self.timer_timeout_ms, self.Timeout)
         else:
             self.last_scan = None
+            self.top.after(refresh_timer_time, self.Timeout)
             pass
         
-        self.top.after(self.timer_timeout_ms, self.Timeout)
         return
         
     def quit(self, event=None):
@@ -645,13 +646,6 @@ class IPMIGUI(Tix.Frame):
         self.tree.hlist.item_configure(item, 0, style=self.active_style)
         return
         
-    def get_item_pos(self, item):
-        rect = self.tree.GetBoundingRect(item)
-        if (rect == None):
-            return None
-        # FIXME - why do I have to add 25?
-        return wx.Point(rect.GetLeft(), rect.GetBottom()+25)
-
     def TreeMenu(self, event):
         w = event.widget
         item = w.nearest(event.y)

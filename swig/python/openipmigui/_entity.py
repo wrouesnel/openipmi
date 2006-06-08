@@ -38,8 +38,6 @@ import _fru
 import gui_popup
 import gui_setdialog
 
-id_st = 400
-
 class EntityOp:
     def __init__(self, e, func):
         self.e = e

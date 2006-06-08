@@ -37,8 +37,6 @@ import gui_setdialog
 import _oi_logging
 import _mc_lanparm
 
-id_st = 900
-
 class BoolSetter:
     def __init__(self, mcusers, user, setter):
         self.mcusers = mcusers

@@ -305,16 +305,6 @@ class OpenDomainDialog(Tix.Toplevel):
 
         return
 
-    def newField(self, name, initval="", parent=None, style=0):
-        if parent == None:
-            parent = self
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        label = wx.StaticText(parent, -1, name + ":")
-        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        field = wx.TextCtrl(parent, -1, initval, style=style);
-        box.Add(field, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
-        return box, field;
-
     def OnDestroy(self, event):
         # This doesn't get cleaned up properly by Python til after
         # exit, but we need to make sure the args get freed now, or
