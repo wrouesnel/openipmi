@@ -1,5 +1,10 @@
 2006-06-08 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Convert wxpython into Tkinter.
+
+	* README - Update some information, including adding all the
+	required and optional packages.
+
 	* configure.in: Move to version 2.0.7.
 
 2006-06-07 Corey Minyard <cminyard@mvista.com>

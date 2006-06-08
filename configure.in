@@ -237,15 +237,15 @@ AC_ARG_WITH(pythonusepthreads,
    fi,
 )
 
-wxpython=
-AC_ARG_WITH(wxpython,
-[  --with-wxpython[[=yes|no]]       Use threads with python.],
+tkinter=
+AC_ARG_WITH(tkinter,
+[  --with-tkinter[[=yes|no]]       GUI package for python.],
    if test "x$withval" = "xyes"; then
-      wxpython="yes"
+      tkinter="yes"
    elif test "x$withval" = "xno"; then
-      wxpython="no"
+      tkinter="no"
    elif test "x$withval" = "x"; then
-      wxpython="yes"
+      tkinter="yes"
    fi,
 )
 
@@ -261,18 +261,6 @@ AC_ARG_WITH(swig,
       tryswig=no
     else
       swigprog=$withval
-    fi,
-)
-
-wxpython=
-AC_ARG_WITH(wxpython,
-[  --with-wxpython[=PATH]          Look for wxPython.],
-    if test "x$withval" = "xyes"; then
-      wxpython=yes
-    elif test "x$withval" = "xno"; then
-      wxpython=no
-    elif test -d "$withval"; then
-      wxpython=yes
     fi,
 )
 
@@ -542,6 +530,7 @@ if test "x$perlprog" != "x"; then
          perlusepthreads="yes"
       fi
    fi
+   echo "checking for perl threads... $perlusepthreads"
 fi
 if test "x$perlusepthreads" = "xyes"; then
    PERL_HAS_POSIX_THREADS=1
@@ -603,6 +592,7 @@ if test "x$pythonprog" != "x"; then
    if test "x$pythonusepthreads" = "x"; then
       pythonusepthreads=`echo -e "try:\n  import thread\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
    fi
+   echo "checking for python threads... $pythonusepthreads"
 fi
 if test "x$pythonusepthreads" = "xyes"; then
    PYTHON_HAS_POSIX_THREADS=1
@@ -617,13 +607,14 @@ AC_SUBST(PYTHON_INSTALL_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
 
-# Check for wxPython
-if test "x$wxpython" = "x"; then
+# Check for Tkinter/Tix
+if test "x$tkinter" = "x"; then
    if test "x$pythonprog" != "x"; then
-      wxpython=`echo -e "try:\n  import wx\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
+      tkinter=`echo -e "try:\n  import Tix\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
    fi
 fi
-if test "x$wxpython" = "xyes"; then
+echo "checking for tkinter... $tkinter"
+if test "x$tkinter" = "xyes"; then
    PYTHON_GUI_DIR=openipmigui
 else
    PYTHON_GUI_DIR=
