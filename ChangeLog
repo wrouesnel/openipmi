@@ -1,10 +1,14 @@
+2006-06-18 Corey Minyard <cminyard@mvista.com>
+
+	* FAQ, README: Add info about the encryption used by OpenIPMI.
+
 2006-06-08 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Convert wxpython into Tkinter.
 
 	* configure.in: Older version of Tcl don't have Tcl_GetTime, they
 	have an equivalent TclpGetTime (that was private, but everyone
-	still used).
+	still used it).
 
 	* README - Update some information, including adding all the
 	required and optional packages.

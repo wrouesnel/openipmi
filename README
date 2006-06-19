@@ -128,7 +128,7 @@ OpenIPMI can use, but does not require, the following packages:
     will not be able to receive SNMP traps, but there is no functional
     change to the library.
   * openssl - This is required for IPMI 2.0 RMCP+ encryption and
-    authentication support.
+    authentication support.  See FAQ item 2.22 for details.
   * glib (along with pkgconfig) - glib 2.0 is preferred, but glib 1.2
     will be used if 2.0 is not available.  This is simply an OS handler
     for glib and it not used for anything else in OpenIPMI itself, but

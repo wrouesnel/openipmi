@@ -270,7 +270,7 @@
      ui/basic_ui.c code has some example SNMP trap code using the
      netsmp and ucsdsnmp libraries.
 
- 2.21) Why does it take a long time to get events from OpenIPMI
+ 2.21) Why does it take a long time to get events from OpenIPMI?
 
     The standard interface to the event log is polled, and the polling
     time is 5 seconds by default.  You can change the polling time if
@@ -287,3 +287,19 @@
     easily, but you still have to know what you are doing.  See
     question 2.20 for how to handle these traps.
 
+ 2.22) What crypto does OpenIPMI implement/use?
+
+    OpenIPMI implements MD2 and MD5.  It's questionable whether those
+    are crypto algorithms or not, but I'm including them just to be
+    sure.
+
+    For the IPMI 2.0 RMCP+ algorithms, OpenIPMI requires the OpenSSL
+    package.  OpenIPMI will work without OpenSSL, but then it will not
+    be able to use the advanced encryption algorithms.  The algorithms
+    used by OpenIPMI are: HMAC-SHA1 (96 bit) and HMAC-MD5 (128 bit) for
+    authentication and integrity.  AES-CBC (128 bit) is the only option
+    for encryption. In the future, RC4 (40 bit and 128 bit) may be
+    implemented per the spec.
+
+    The OpenIPMI authentication/encryption framework is pluggable and
+    users could write their own algorithms if they wish.
