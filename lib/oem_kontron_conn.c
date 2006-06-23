@@ -250,6 +250,20 @@ ipmi_oem_kontron_conn_init(void)
 		 rv);
     }
 
+    /* The AM4002 card */
+    rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
+					0x0fa2,
+					kontron_oem_conn_handler_amc,
+					NULL);
+   if (rv)
+    {
+	retrv = rv;
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
+		 "Unable to initialize the Kontron AM4002 OEM handler: %x",
+		 rv);
+    }
+
     /* The CP604 card */
     rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
 					0x025c,
@@ -331,6 +345,20 @@ ipmi_oem_kontron_conn_init(void)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
 		 "Unable to initialize the Kontron CP6011 OEM handler: %x",
+		 rv);
+    }
+
+    /* The CP6012 card */
+    rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
+					0x177C,
+					kontron_oem_conn_handler,
+					NULL);
+    if (rv)
+    {
+	retrv = rv;
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
+		 "Unable to initialize the Kontron CP6012 OEM handler: %x",
 		 rv);
     }
 

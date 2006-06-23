@@ -1,3 +1,7 @@
+2006-06-23 Gerhard Obrecht <varnhalt2@users.sourceforge.net>
+
+	* lib/oem_kontron_conn.c: Add new board support.
+
 2006-06-18 Corey Minyard <cminyard@mvista.com>
 
 	* FAQ, README: Add info about the encryption used by OpenIPMI.
