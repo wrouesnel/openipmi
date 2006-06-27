@@ -1,3 +1,8 @@
+2006-06-27 Gerhard Obrecht <varnhalt2@users.sourceforge.net>
+
+	* swig/python/openipmigui/gui.py: Fix cleanup of items to clear
+	out parents properly.
+
 2006-06-23 Gerhard Obrecht <varnhalt2@users.sourceforge.net>
 
 	* lib/oem_kontron_conn.c: Add new board support.

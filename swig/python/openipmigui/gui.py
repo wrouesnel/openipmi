@@ -345,7 +345,7 @@ class IPMIGUI(Tix.Frame):
         if (data == None):
             return
         parent = self.parent_item(item)
-        if (parent != None):
+        if (parent == None):
             return
         while (data.num_warning > 0):
             data.num_warning = data.num_warning - 1;
@@ -532,13 +532,13 @@ class IPMIGUI(Tix.Frame):
     def incr_item_warning(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.incr_item_warning(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_warning = data.num_warning + 1
         if (not data.active):
             return
@@ -554,13 +554,13 @@ class IPMIGUI(Tix.Frame):
     def decr_item_warning(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.decr_item_warning(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_warning = data.num_warning - 1
         if (not data.active):
             return
@@ -576,13 +576,13 @@ class IPMIGUI(Tix.Frame):
     def incr_item_severe(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.incr_item_severe(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_severe = data.num_severe + 1
         if (not data.active):
             return
@@ -596,13 +596,13 @@ class IPMIGUI(Tix.Frame):
     def decr_item_severe(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.decr_item_severe(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_severe = data.num_severe - 1
         if (not data.active):
             return
@@ -619,13 +619,13 @@ class IPMIGUI(Tix.Frame):
     def incr_item_critical(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.incr_item_critical(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_critical = data.num_critical + 1
         if (not data.active):
             return
@@ -637,13 +637,13 @@ class IPMIGUI(Tix.Frame):
     def decr_item_critical(self, item):
         if (self.in_destroy):
             return
+        data = self.treedata[item]
+        if (data == None):
+            return
         parent = self.parent_item(item)
         if (parent != None):
            self.decr_item_critical(parent); 
            pass
-        data = self.treedata[item]
-        if (data == None):
-            return
         data.num_critical = data.num_critical - 1
         if (not data.active):
             return
