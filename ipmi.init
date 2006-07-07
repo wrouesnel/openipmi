@@ -6,14 +6,14 @@
 # Authors:	Matt Domsch <Matt_Domsch@dell.com>
 #               Chris Poblete <Chris_Poblete@dell.com>
 #
-# chkconfig: - 04 96
+# chkconfig: - 13 87
 # description: OpenIPMI Driver init script
 #
 ### BEGIN INIT INFO
 # Provides: ipmidrv
-# Required-Start: $localfs $remotefs $syslog
-# Required-Stop: $localfs $remotefs $syslog
-# Default-Start: 2 3 5
+# Required-Start: $local_fs $remote_fs $syslog
+# Required-Stop: $local_fs $remote_fs $syslog
+# Default-Start:
 # Default-Stop:
 # Short-Description: OpenIPMI Driver init script
 # Description: OpenIPMI Driver init script
