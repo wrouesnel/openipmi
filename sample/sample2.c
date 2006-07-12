@@ -48,20 +48,21 @@ static os_handler_t *os_hnd;
 
 static const char *progname;
 
+static void con_usage(const char *name, const char *help, void *cb_data)
+{
+    printf("\n%s%s", name, help);
+}
+
 static void
 usage(void)
 {
-    printf("Usage:\n"
-	   "  %s [options] <entity id> <entity instance> <name> smi <smi #>\n"
-	   "     Make a connection to a local system management interface.\n"
-	   "     smi # is generally 0.\n"
-	   "  %s [options] <entity id> <entity instance> <name> lan <host> <port> <authtype> <privilege> <username> <password>\n"
-	   "     Make a connection to a IPMI 1.5 LAN interface.\n"
-	   "     Host and port specify where to connect to (port is\n"
-	   "     generally 623).  authtype is none, md2, md5, or straight.\n"
-	   "     privilege is callback, user, operator, or admin.  The\n"
-	   "     username and password must be provided if the authtype is\n"
-	   "     not none.\n", progname, progname);
+    printf("Usage:\n");
+    printf(" %s <entity id> <entity instance> <control name> <con_parms>\n",
+	   progname);
+    printf(" Where the entity id, instance, and control name identify a\n");
+    printf(" control to monitor, and ");
+    printf(" where <con_parms> is one of:");
+    ipmi_parse_args_iter_help(con_usage, NULL);
 }
 
 int control_set = 0;
@@ -305,7 +306,7 @@ main(int argc, char *argv[])
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);
 
-    rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
+    rv = ipmi_parse_args2(&curr_arg, argc, argv, &args);
     if (rv) {
 	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
 		curr_arg, strerror(rv));

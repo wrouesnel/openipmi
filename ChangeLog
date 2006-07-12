@@ -1,4 +1,11 @@
-2006-06-27 Gerhard Obrecht <varnhalt2@users.sourceforge.net>
+2006-07-18 Corey Minyard <cminyard@mvista.com>
+
+	* sample/sample.c: Change over to use ipmi_parse_args2() so we
+	are setting a good example for the users.
+	* sample/sample2.c: ditto
+	* sample/sample3.c: ditto
+
+2006-06-27 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui.py: Fix cleanup of items to clear
 	out parents properly.
