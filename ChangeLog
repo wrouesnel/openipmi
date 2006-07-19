@@ -1,5 +1,11 @@
 2006-07-18 Corey Minyard <cminyard@mvista.com>
 
+	* swig/python/openipmigui.py, swig/python/openipmigui/gui.py: Fix
+	some problems with shutdown, gets rid of an annoying failure at
+	shutdown and fixes a lockup problem if there are no domains.
+
+2006-07-16 Corey Minyard <cminyard@mvista.com>
+
 	* sample/sample.c: Change over to use ipmi_parse_args2() so we
 	are setting a good example for the users.
 	* sample/sample2.c: ditto

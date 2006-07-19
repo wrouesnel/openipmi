@@ -68,8 +68,11 @@ from openipmigui import _saveprefs
 from openipmigui import gui_cmdwin
 
 
-class DomainHandler:
+class TopHandler(Tix.Tk):
     def __init__(self, preffile, log_file, histfile):
+
+        Tix.Tk.__init__(self)
+        
         self.domains = { };
         self.preffile = preffile
         self.log_file = log_file
@@ -211,12 +214,11 @@ def run(args):
         _saveprefs.restore(preffile)
     gui_cmdwin._HistoryRestore(histfile)
     
-    mainhandler = DomainHandler(preffile, log_file, histfile)
+    top = TopHandler(preffile, log_file, histfile)
+    mainhandler = top
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
 
-    top = Tix.Tk()
-    mainhandler.top = top
     mainhandler.debug_mem = debug_mem
     top.title('OpenIPMI GUI')
 

@@ -62,19 +62,26 @@ class IPMICloser:
 
     def domain_cb(self, domain):
         domain.close(self)
+        return
 
     def domain_close_done_cb(self):
         self.count = self.count - 1
-        if (self.count == 0):
-            gui_cmdwin.init_history = self.ui.cmdwindow.history
-            self.ui.mainhandler.top.destroy()
-            pass
         return
+
+    def wait_done(self):
+        while (self.count > 0):
+            OpenIPMI.wait_io(1000)
+            pass
+        gui_cmdwin.init_history = self.ui.cmdwindow.history
+        return
+    
     pass
 
 class IPMIGUI(Tix.Frame):
     def __init__(self, top, mainhandler):
         Tix.Frame.__init__(self, top, bd=2, relief=Tix.RAISED)
+
+        self.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
         self.top = top
 
@@ -191,8 +198,6 @@ class IPMIGUI(Tix.Frame):
         viewb.pack(side=Tix.LEFT)
         setb.pack(side=Tix.LEFT)
         
-        self.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
-
         self.itemval = 0
 
         self.in_destroy = False
@@ -245,20 +250,18 @@ class IPMIGUI(Tix.Frame):
         return
         
     def quit(self, event=None):
-        self.destroy()
+        self.mainhandler.destroy()
         return
 
     def OnDestroy(self, event):
         self.in_destroy = True
         self.closecount = len(self.mainhandler.domains)
-        if (self.closecount == 0):
-            gui_cmdwin.init_history = self.cmdwindow.history
-            return
         closer = IPMICloser(self, self.closecount)
         ds = self.mainhandler.domains.values()
         for v in ds:
             v.domain_id.to_domain(closer)
             pass
+        closer.wait_done()
         return
 
     def openDomain(self, event=None):
