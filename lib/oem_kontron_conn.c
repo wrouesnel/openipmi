@@ -8,6 +8,12 @@
   
   Modified by: T.Smolinski, M.Ptak, Gerhard Obrecht
   Kontron Modular Computers
+
+  v02 2006 Jun 22: translateAdrs_amc enhanced for uATCA (12 modules max.)
+                   Added AM4002, AM4010, CP6012
+  v03 2006 Jul 19: Added Corey's patch to avoid wrong ipmb addressing.
+  v04 2006 Jul 20: Reduced the number of IPMB channels for AMC modules to 1
+                   cPCI modules have 2 IPMB channels.
   
 */
 
@@ -61,7 +67,8 @@
 
 /* translate a AMC GA into an I2C IPMB address */
 static const unsigned char translateAdrs_amc [] =
-{0, 0x72, 0x74, 0x76, 0x78, 0x7a, 0x7c, 0x7e, 0x80, 0
+{0, 0x72, 0x74, 0x76, 0x78, 0x7a, 0x7c, 0x7e, 0x80,
+0x82, 0x84, 0x86, 0x88, 0
 };
 
 /* translate a CPCI GA into an I2C IPMB address */
@@ -90,15 +97,15 @@ ipmb_handler_amc(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	err = EINVAL;
     else
     {	/* BMC ? */
-	if ((msg->data[6] & 0x06) == 0x06)
+	if ((msg->data[6] & 0x06) == 0x06) {
 	    ipmb[0] = 0x20;
-	else
-	{
+	} else {
 	    geo_pos = msg->data[13];
-	    if (geo_pos < 1 || geo_pos > 8)
+	    if (geo_pos < 1 || geo_pos > 12)
 		err = EINVAL;
-	    else
+	    else {
 		ipmb[0] = translateAdrs_amc[geo_pos];
+	    }
 	}
     }
 
@@ -169,23 +176,25 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	err = EINVAL;
     else
     {	/* BMC ? */
-	if ((msg->data[6] & 0x06) == 0x06)
+	if ((msg->data[6] & 0x06) == 0x06) {
 	    ipmb[0] = 0x20;
-	else
-	{
+	    ipmb[1] = 0x20;
+	} else {
 	    geo_pos = msg->data[13];
 	    if (geo_pos < 1 || geo_pos > 31)
 		err = EINVAL;
-	    else
-		ipmb[0] = translateAdrs[geo_pos];
+	    else {
+ 		ipmb[0] = translateAdrs[geo_pos];
+		ipmb[1] = ipmb[0];
+	    }
 	}
     }
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 1, 0);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 2, 1, 0);
 
     if (handler)
-        handler(ipmi, err, ipmb, 1, err == 0, 0, cb_data);
+        handler(ipmi, err, ipmb, 2, err == 0, 0, cb_data);
 
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -255,12 +264,26 @@ ipmi_oem_kontron_conn_init(void)
 					0x0fa2,
 					kontron_oem_conn_handler_amc,
 					NULL);
-   if (rv)
+    if (rv)
     {
 	retrv = rv;
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
 		 "Unable to initialize the Kontron AM4002 OEM handler: %x",
+		 rv);
+    }
+
+    /* The AM4010 card */
+    rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
+					0x0faa,
+					kontron_oem_conn_handler_amc,
+					NULL);
+    if (rv)
+    {
+	retrv = rv;
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
+		 "Unable to initialize the Kontron AM4010 OEM handler: %x",
 		 rv);
     }
 
@@ -369,12 +392,15 @@ void
 ipmi_oem_kontron_conn_shutdown(void)
 {
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0fa1);
+    ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0fa2);/* AM4002 */
+    ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0faa);/* AM4010 */
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x025c);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x025d);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1770);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1776);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x177A);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x177B);
+    ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x177C);/* CP6012 */
 }
 
 
