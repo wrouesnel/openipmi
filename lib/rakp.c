@@ -226,6 +226,7 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     int           err = 0;
     unsigned char *p;
     unsigned int  plen;
+    int           rv2;
 
     rv = check_rakp_rsp(ipmi, info, msg, "handle_rakp2", 40, addr_num);
     if (rv) {
@@ -284,9 +285,11 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_USED;
 
  out:
-    rv = send_rakp3(ipmi, info, rspi, addr_num, err);
+    rv2 = EINVAL;
+    if (ipmi)
+	rv2 = send_rakp3(ipmi, info, rspi, addr_num, err);
     rakp_done(info, ipmi, addr_num, rv);
-    if (rv)
+    if (rv2)
 	return IPMI_MSG_ITEM_NOT_USED;
     else
 	/* Yes, we use it to send the error response. */

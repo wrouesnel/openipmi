@@ -1,3 +1,12 @@
+2006-07-22 Corey Minyard <cminyard@mvista.com>
+
+	* lib/rakp.c: Fix a problem that causes a crash in RMCP+ if the
+	IPMI interface is deleted between the RAKP1 and RAKP3 messages.
+
+	* swig/python/openipmigui/_mc_chan.py: Fix a shutdown problem that
+	could cause wierd things to happen if you delete the channel
+	window while it was being fetched.
+
 2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
 
 	* lib/oem_kontron_conn.c: Add more board support and fix

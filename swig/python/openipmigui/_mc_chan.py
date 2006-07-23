@@ -61,6 +61,8 @@ class MCChanUserAcc:
         return
 
     def mc_channel_got_access_cb(self, mc, err, access):
+        if (self.mcchan.info == None):
+            return
         if (not err):
             self.access = access
             self.mcchan.info[self.idx][self.t] = self
@@ -77,6 +79,8 @@ class MCChanInfo:
         return
 
     def mc_channel_got_info_cb(self, mc, err, info):
+        if (self.mcchan.info == None):
+            return
         if (not err):
             self.info = info;
             self.mcchan.info[self.idx]["info"] = self
@@ -120,6 +124,8 @@ class MCChanData:
         return
 
     def HandleMenu(self, event, eitem, point):
+        if (self.mcchan.info == None):
+            return
         l = [ ("User Info", self.users) ]
         if (self.medium == OpenIPMI.CHANNEL_MEDIUM_8023_LAN):
             l.append( ("LANPARMS", self.lanparms) )
@@ -387,7 +393,6 @@ class MCChan(gui_treelist.TreeList):
                 self.count += 1
                 pass
             pass
-
         return
 
     def add_info(self, ch, oinfo):
