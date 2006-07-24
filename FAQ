@@ -303,3 +303,29 @@
 
     The OpenIPMI authentication/encryption framework is pluggable and
     users could write their own algorithms if they wish.
+
+2.23) How do I interpret the OpenIPMI numeric error values?
+
+    Nothing should really be printing these values except for logs and
+    tracing.  However, a lot of these come out from sample
+    applications.  However, I'll go over a little to make tracing and the
+    like easier.
+
+    The top 8 bits of an error are the error type (basically where the
+    error came from).  The rest of the value is the error itself; make
+    sure to use the proper IPMI_xxx_ERR_VAL() to extract it.  The
+    error types are:
+
+    * 00 - An OS error or an error from OpenIPMI itself.  These are
+           standard errno values and can be decoded with strerror()
+           and friends.
+    * 01 - An error from the remote management controller (An IPMI error).
+           You can look these up in the IPMI manual.
+    * 02 - RMCP+ error.  These are in the IPMI LAN section of the IPMI
+           manual.
+    * 03 - SoL (Serial Over LAN) errors.  These are in the SoL section
+           of the IPMI manual.
+
+    You can convert any of these errors to a human-readable (currently
+    English only) string using ipmi_err_get_string().  See
+    include/OpenIPMI/ipmi_err.h for more details on these things.

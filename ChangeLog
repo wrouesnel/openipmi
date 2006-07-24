@@ -1,3 +1,7 @@
+2006-07-24 Corey Minyard <cminyard@mvista.com>
+
+	* FAQ - Added info on interpreting errors.
+
 2006-07-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/rakp.c: Fix a problem that causes a crash in RMCP+ if the
