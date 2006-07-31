@@ -113,6 +113,11 @@ RETVAL=0
 LOCKFILE=/var/lock/subsys/ipmi
 DEV_IPMI_TIMEOUT=15
 
+UDEV_EXISTS=0
+if [ -e /sbin/udev -o -e /sbin/udevd ]; then
+    UDEV_EXISTS=1
+fi
+
 #############################################################################
 # NOTES:
 # * /dev/ipmi0 is unconditionally deleted here on ipmi_devintf unload,
@@ -207,7 +212,7 @@ start_watchdog_common()
 		RETVAL=$((RETVAL | 2)) &&
 		log_failure_msg &&
 		return
-	if [ ! -x /sbin/udevd -a ! -e /dev/watchdog ]; then
+	if [ ${UDEV_EXISTS} -eq 0 -a ! -e /dev/watchdog ]; then
 		mknod -m 0600 /dev/watchdog c 10 130
 		[ $? -ne 0 ] &&
 			RETVAL=$((RETVAL | 8)) &&
@@ -245,7 +250,7 @@ stop_watchdog()
 	    log_failure_msg
 	else
 	    if [ "${IPMI_WATCHDOG}" = "yes" ]; then
-		[ ! -x /sbin/udevd ] && rm -f /dev/watchdog
+		[ ${UDEV_EXISTS} -eq 0 ] && rm -f /dev/watchdog
 	    fi
 	    log_success_msg
 	fi
@@ -259,7 +264,7 @@ stop_watchdog_quiet()
 	    RETVAL=$((RETVAL | 32))
 	else
 	    if [ "${IPMI_WATCHDOG}" = "yes" ]; then
-		[ ! -x /sbin/udevd ] && rm -f /dev/watchdog
+		[ ${UDEV_EXISTS} -eq 0 ] && rm -f /dev/watchdog
 	    fi
 	fi
 }
@@ -368,7 +373,7 @@ load_ipmi_modules ()
 		RETVAL=$((RETVAL & ~2))
 		[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
 		if [ ${OnePlusLoaded} -eq 1 ]; then
-			if [ ! -x /sbin/udevd ]; then
+			if [ ${UDEV_EXISTS} -eq 0 ]; then
 				DEVMAJOR=`cat /proc/devices | awk '/ipmidev/{print $1}'`
 				rm -f /dev/ipmi${INTF_NUM}
 				mknod -m 0600 /dev/ipmi${INTF_NUM} c ${DEVMAJOR} 0 || RETVAL=$((RETVAL | 4))
