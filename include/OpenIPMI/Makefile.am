@@ -10,3 +10,5 @@ pkginclude_HEADERS = \
 	ipmi_sol.h	ipmi_solparm.h	ipmi_tcl.h
 
 SUBDIRS = internal
+
+DISTCLEANFILES = ipmiif.h
