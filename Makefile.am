@@ -4,6 +4,9 @@ RPMFLAGS	= -ta
 SUBDIRS    = include utils lib unix $(GLIB_DIR) $(TCL_DIR) libedit cmdlang \
 	     ui lanserv sample doc man $(SWIG_DIR)
 
+DIST_SUBDIRS = include utils lib unix glib tcl libedit cmdlang \
+	     ui lanserv sample doc man swig
+
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec ipmi.init ipmi.sysconf COPYING.BSD \
 	     CONFIGURING_FOR_LAN
@@ -28,3 +31,7 @@ PYPATH=$(top_builddir)/swig/python
 PYLDPATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs:$(top_builddir)/tcl/.libs
 rungui:
 	LD_LIBRARY_PATH=$(PYLDPATH) PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+
+DISTCLEANFILES=OpenIPMI.spec OpenIPMIcmdlang.pc OpenIPMI.pc OpenIPMItcl.pc \
+	OpenIPMIglib12.pc OpenIPMIposix.pc OpenIPMIui.pc OpenIPMIglib.pc \
+	OpenIPMIpthread.pc OpenIPMIutils.pc

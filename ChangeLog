@@ -1,3 +1,14 @@
+2006-08-01 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in, doc/Makefile.am: Autodetect the dia version and use
+	the right command-line arguments depending on version.
+
+	* Makefile.am, swig/Makefile.am: Add DIST_SUBDIRS so "make dist"
+	will work even if you don't have all the tools present.
+
+	* Makefile.am, include/OpenIPMI/Makefile.am: Added proper files to
+	DISTCLEANFILES.
+
 2006-07-31 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed a problem with error handling for bad SDRs.

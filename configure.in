@@ -745,6 +745,48 @@ AC_SUBST(OPENSSLINCS)
 
 AC_HAVE_FUNCS(syslog)
 
+# Now check for dia and the dia version.  They changed the output format
+# specifier without leaving backwards-compatible handling, so lots of ugly
+# checks here.
+DIA=
+AC_PATH_PROG(diaprog, dia)
+if test "x$diaprog" != "x"; then
+   diaver=`$diaprog --version | sed 's/Dia version \([[0-9]]\+\.[[0-9]]\+\), .*$/\1/'`
+   tmp=`echo $diaver | sed 's/^[[0-9]]\+\.[[0-9]]\+$//'`
+   if test "x$diaver" == "x" -o "x$tmp" != 'x'; then
+      # Couldn't get the dia version, give up.
+      echo "Couldn't determine the dia version from '$diaver'"
+   else
+      DIA="$diaprog"
+      diaver_major=`echo $diaver | sed 's/\.[[0-9]]\+$//'`
+      diaver_minor=`echo $diaver | sed 's/^[[0-9]]\+\.//'`
+      echo "dia version is $diaver_major.$diaver_minor"
+      if test $diaver_major -lt 1 -a $diaver_minor -lt 95; then
+         # 0.94 and below use --export-to-format
+	 DIA_FILTER_NAME=--export-to-format
+      else
+	 DIA_FILTER_NAME=--filter
+      fi
+   fi
+fi
+
+LATEX=
+BIBTEX=
+DVIPDF=
+AC_PATH_PROG(LATEX, latex)
+AC_PATH_PROG(BIBTEX, bibtex)
+AC_PATH_PROG(DVIPDF, dvipdf)
+if test "x$DIA" == "x" -o "x$LATEX" == "x" -o "x$BIBTEX" == "x" -o "x$DVIPDF" == "x"; then
+   echo "dia, latex, bibtex, and/or dvipdf is not present or not valid, you cannot regenerate documentation"
+   echo "The documentation comes already generated, so this is generally not a problem"
+fi
+AC_SUBST(DIA)
+AC_SUBST(DIA_FILTER_NAME)
+AC_SUBST(LATEX)
+AC_SUBST(BIBTEX)
+AC_SUBST(DVIPDF)
+
+
 # Everything from here to AC_OUTPUT is for libedit
 
 # AC_PROG_LIBTOOL runs AC_CANONICAL_HOST
