@@ -33,29 +33,95 @@
 import Tix
 import gui_errstr
 
+# A list widget that can be embedded in something else
+class SubList(Tix.ScrolledHList):
+    def __init__(self, parent, columns, options, width, height):
+        Tix.ScrolledHList.__init__(self, parent,
+                                   options=options, width=width, height=height)
+        
+        i = 0
+        for c in columns:
+            self.hlist.header_create(i, text=c[0])
+            self.hlist.column_width(i, c[1])
+            i += 1
+            pass
+        
+        self.list_hash = { }
+        self.currkey = 0
+
+        self.hlist.bind("<Button-3>", self.ListMenu)
+
+        self.bind("<Destroy>", self.OnDestroy)
+
+        return
+
+    def OnDestroy(self, event):
+        self.list_hash = None
+        return
+
+    def ListMenu(self, event):
+        w = event.widget
+        key = w.nearest(event.y)
+        data = self.list_hash[key]
+        if (data and hasattr(data, "HandleMenu")):
+            data.HandleMenu(event, key, event)
+            pass
+        return
+
+    def DelItem(self, key):
+        self.hlist.delete_entry(key)
+        del self.list_hash[key]
+        return
+
+    def Append(self, name, values, data=None):
+        key = str(self.currkey)
+        self.currkey += 1
+        self.hlist.add(key, text=name)
+        self.list_hash[key] = data
+        i = 1
+        for v in values:
+            if (v != None):
+                self.hlist.item_create(key, i, text=str(v))
+            i += 1
+            pass
+        return key
+
+    def SetColumn(self, idx, colnum, value):
+        self.hlist.item_configure(idx, colnum, text=value)
+        return
+
+    def add_data(self, name, values, data=None):
+        idx = self.Append(name, values, data);
+        if (data != None):
+            data.SetItem(idx)
+            pass
+        return idx
+
+    def DeleteAllItems(self):
+        self.hlist.delete_all()
+        self.list_hash = { }
+        self.currkey = 0
+        return
+    
+    pass
+
+# A top-level list
 class List(Tix.Toplevel):
     def __init__(self, name, columns):
         Tix.Toplevel.__init__(self)
         self.title(name)
 
-        slist = Tix.ScrolledHList(self,
-                                  options=("hlist.header 1"
-                                           + " hlist.itemtype text"
-                                           + (" hlist.columns "
-                                              + str(len(columns)))
-                                           + " hlist.selectForeground black"
-                                           + " hlist.selectBackground beige"),
-                                  width=500, height=500)
-        listc = slist.hlist
-        self.listc = listc
+        slist = SubList(self,
+                        columns,
+                        options=("hlist.header 1"
+                                 + " hlist.itemtype text"
+                                 + (" hlist.columns "
+                                    + str(len(columns)))
+                                 + " hlist.selectForeground black"
+                                 + " hlist.selectBackground beige"),
+                        width=500, height=500)
         slist.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
-        
-        i = 0
-        for c in columns:
-            listc.header_create(i, text=c[0])
-            listc.column_width(i, c[1])
-            i += 1
-            pass
+        self.slist = slist
         
         self.errstr = gui_errstr.ErrStr(self)
         self.errstr.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
@@ -75,12 +141,7 @@ class List(Tix.Toplevel):
             pass
         bbox.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
 
-        listc.bind("<Button-3>", self.ListMenu)
-
         self.bind("<Destroy>", self.OnDestroy)
-
-        self.list_hash = { }
-        self.currkey = 0
 
         return
 
@@ -95,55 +156,47 @@ class List(Tix.Toplevel):
         if (hasattr(self, "do_on_close")):
             self.do_on_close()
             pass
-        self.list_hash = None
-        return
-
-    def ListMenu(self, event):
-        w = event.widget
-        key = w.nearest(event.y)
-        data = self.list_hash[key]
-        if (data and hasattr(data, "HandleMenu")):
-            data.HandleMenu(event, key, event)
-            pass
         return
 
     def DelItem(self, key):
-        self.listc.delete_entry(key)
-        del self.list_hash[key]
+        self.slist.DelItem(key)
         return
 
     def Append(self, name, values, data=None):
-        key = str(self.currkey)
-        self.currkey += 1
-        self.listc.add(key, text=name)
-        self.list_hash[key] = data
-        i = 1
-        for v in values:
-            if (v != None):
-                self.listc.item_create(key, i, text=str(v))
-            i += 1
-            pass
-        return key
+        return self.slist.Append(name, values, data)
 
     def SetColumn(self, idx, colnum, value):
-        self.listc.item_configure(idx, colnum, text=value)
+        self.slist.SetColumn(idx, colnum, value)
         return
 
+    def add_data(self, name, values, data=None):
+        return self.slist.add_data(name, values, data)
+
+    def DeleteAllItems(self):
+        return self.slist.DeleteAllItems()
+        return
+    
     def SetError(self, str):
         self.errstr.SetError(str)
         return
 
+    # Pass the rest of the functions on to the base list.
+    def DelItem(self, key):
+        self.slist.DelItem(key)
+        return
+
+    def Append(self, name, values, data=None):
+        return self.slist.Append(name, values, data)
+
+    def SetColumn(self, idx, colnum, value):
+        self.slist.SetColumn(idx, colnum, value)
+        return
+
     def add_data(self, name, values, data=None):
-        idx = self.Append(name, values, data);
-        if (data != None):
-            data.SetItem(idx)
-            pass
-        return idx
+        return self.slist.add_data(name, values, data)
 
     def DeleteAllItems(self):
-        self.listc.delete_all()
-        self.list_hash = { }
-        self.currkey = 0
+        return self.slist.DeleteAllItems()
         return
     
     pass

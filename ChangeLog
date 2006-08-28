@@ -1,3 +1,9 @@
+2006-08-24 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/gui_list.py: Split up the list processing
+	into two parts, one for a standalone toplevel list, and one for a
+	list that can be contained in something else.
+
 2006-08-01 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, doc/Makefile.am: Autodetect the dia version and use
