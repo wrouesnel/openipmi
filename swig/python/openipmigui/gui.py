@@ -326,7 +326,6 @@ class IPMIGUI(Tix.Frame):
         return
 
     def setup_item(self, item, active=False):
-        print "Setting up " + str(item)
         data = self.treedata[item]
         data.active = active
         data.num_warning = 0
