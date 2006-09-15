@@ -1,3 +1,7 @@
+2006-09-15 <nok at users.sourceforge.net>
+
+	* man/openipmicmd.1: Fix the man page number in the header.
+
 2006-08-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui_list.py: Split up the list processing
