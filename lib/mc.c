@@ -1774,7 +1774,9 @@ send_get_event_rcvr(ipmi_mc_t *mc)
 void
 _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc)
 {
-    if (mc && mc->devid.IPMB_event_generator_support) {
+    if (mc && mc->devid.IPMB_event_generator_support
+	&& ipmi_option_set_event_rcvr(mc->domain))
+    {
 	/* We have an MC that is live (or still live) and generates
 	   events, make sure the event receiver is set properly. */
 	unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);

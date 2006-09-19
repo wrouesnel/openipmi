@@ -154,8 +154,8 @@ class MCSolParm(gui_list.List):
                             pass
                         pass
                     
-                    data = MCLPData(self, solc, i, lastv,
-                                    vals[0], vals[1], vals[2])
+                    data = MCSOLData(self, solc, i, lastv,
+                                     vals[0], vals[1], vals[2])
                     
                     if (v[0] == 0):
                         title = vals[0]

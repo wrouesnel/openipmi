@@ -1,6 +1,16 @@
+2006-09-19 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/_mc_solparm.py: Use the proper data
+	object for a SOL parameter window.
+
 2006-09-15 <nok at users.sourceforge.net>
 
 	* man/openipmicmd.1: Fix the man page number in the header.
+
+2006-09-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Don't set the event receiver in the MC recheck if the
+	user has asked it to not be set.
 
 2006-08-24 Corey Minyard <cminyard@mvista.com>
 
