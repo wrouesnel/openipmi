@@ -1,7 +1,7 @@
 2006-09-21 Coly Li <colyli@gmail.com>
 	
-	* add the missed IPMI_SWIG_C_CB_EXIT to add_domain_change_handler
-	and remove_domain_change_handler.
+	* swig/OpenIPMI.i: add the missed IPMI_SWIG_C_CB_EXIT to
+	add_domain_change_handler and remove_domain_change_handler.
 
 2006-09-20 Corey Minyard <cminyard@mvista.com>
 	
