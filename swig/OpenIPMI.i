@@ -3596,13 +3596,16 @@ add_domain_change_handler(swig_cb handler)
     int rv;
     swig_cb_val handler_val;
     IPMI_SWIG_C_CB_ENTRY
-    if (! valid_swig_cb(handler, domain_change_cb))
-	return EINVAL;
+    if (! valid_swig_cb(handler, domain_change_cb)) {
+	rv = EINVAL;
+	goto out_err;
+    }
     handler_val = ref_swig_cb(handler, domain_change_cb);
     rv = ipmi_domain_add_domain_change_handler(domain_change_handler,
 					       handler_val);
     if (rv)
 	deref_swig_cb_val(handler_val);
+out_err:
     IPMI_SWIG_C_CB_EXIT
     return rv;
 }
@@ -3613,13 +3616,16 @@ remove_domain_change_handler(swig_cb handler)
     int rv;
     swig_cb_val handler_val;
     IPMI_SWIG_C_CB_ENTRY
-    if (! valid_swig_cb(handler, domain_change_cb))
-	return EINVAL;
+    if (! valid_swig_cb(handler, domain_change_cb)) {
+	rv = EINVAL;
+	goto out_err;
+    }
     handler_val = get_swig_cb(handler, domain_change_cb);
     rv = ipmi_domain_remove_domain_change_handler(domain_change_handler,
 						  handler_val);
     if (!rv)
 	deref_swig_cb_val(handler_val);
+out_err:
     IPMI_SWIG_C_CB_EXIT
     return rv;
 }
