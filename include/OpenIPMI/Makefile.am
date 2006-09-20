@@ -12,3 +12,6 @@ pkginclude_HEADERS = \
 SUBDIRS = internal
 
 DISTCLEANFILES = ipmiif.h
+
+uninstall-local:
+	-rmdir $(pkgincludedir)

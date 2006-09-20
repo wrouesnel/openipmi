@@ -43,9 +43,14 @@ OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
 
 install-exec-local: OpenIPMI.so OpenIPMI.pm
-	$(INSTALL) -d $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
-	$(INSTALL_PROGRAM) OpenIPMI.so $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
-	$(INSTALL_PROGRAM) OpenIPMI.pm $(DESTDIR)$(PERL_INSTALL_DIR)
+	$(INSTALL) -d "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
+	$(INSTALL_PROGRAM) OpenIPMI.so "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
+	$(INSTALL_PROGRAM) OpenIPMI.pm "$(DESTDIR)$(PERL_INSTALL_DIR)"
+
+uninstall-local:
+	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI/OpenIPMI.so"
+	rm -f "$(DESTDIR)$(PERL_INSTALL_DIR)/OpenIPMI.pm"
+	-rmdir "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
 
 TEST_LD_LIBRARY_PATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs:$(top_builddir)/tcl/.libs
 

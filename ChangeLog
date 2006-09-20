@@ -1,3 +1,16 @@
+2006-09-20 Corey Minyard <cminyard@mvista.com>
+	
+	* cmdlang/Makefile.am: Add proper uninstall handling
+	* include/OpenIPMI/Makefile.am: ditto
+	* include/OpenIPMI/internal/Makefile.am: ditto
+	* sample/Makefile.am: ditto
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+	* swig/python/openipmigui/Makefile.am: ditto
+
+	* swig/OpenIPMI.i: Fix a misnamed #ifdef that caused
+	cleanup_lang() to not be called.
+
 2006-09-19 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_mc_solparm.py: Use the proper data

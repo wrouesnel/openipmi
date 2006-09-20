@@ -3022,7 +3022,7 @@ shutdown_everything()
     ipmi_debug_malloc_cleanup();
     swig_os_hnd->free_os_handler(swig_os_hnd);
     swig_os_hnd = NULL;
-#ifdef OpenIPMI_HAVE_CLENAUP_LANG
+#ifdef OpenIPMI_HAVE_CLEANUP_LANG
     void cleanup_lang();
 #endif
     IPMI_SWIG_C_CB_EXIT
