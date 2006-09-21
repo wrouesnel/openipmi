@@ -1,4 +1,9 @@
 2006-09-21 Coly Li <colyli@gmail.com>
+
+	* swig/python/Makefile.am: Fix the path mistake for install 
+	handling.
+
+2006-09-21 Coly Li <colyli@gmail.com>
 	
 	* swig/OpenIPMI.i: add the missed IPMI_SWIG_C_CB_EXIT to
 	add_domain_change_handler and remove_domain_change_handler.
