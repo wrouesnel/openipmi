@@ -1,3 +1,9 @@
+2006-09-22 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui.py: Fixed a problem dealing with
+	different python/TCL thread models in the GUI.  Major ugliness.
+	See the code for details.
+	
 2006-09-21 Coly Li <colyli@gmail.com>
 
 	* swig/python/Makefile.am: Fix the path mistake for install 

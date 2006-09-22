@@ -67,6 +67,37 @@ from openipmigui import gui
 from openipmigui import _saveprefs
 from openipmigui import gui_cmdwin
 
+# Used to enable internal debug output
+verbosity = 0
+
+#
+# Nasty thread support stuff.
+#
+# If python is threaded but TCL is not, we have ugliness to deal with.
+# In this case, the _tkinter code has a tcl_lock that is claimed
+# whenever it enters TCL code, including the event loop.  If we run
+# OpenIPMI events inside the TCL event loop, it will call directly
+# into the OpenIPMI calls and bypass _tkinter, leaving the lock held.
+# Inside OpenIPMI, it might call back to the python code which can
+# then do a TCL call, which will try to claim tcl_lock and deadlock.
+#
+# We fix this in this case by having a separate thread
+# (openipmi_driver() below) run OpenIPMI events, and not in the TCL
+# event loop.
+#
+# If both python and TCL are threaded, the tcl_lock is not used and
+# everything is fine with a single thread.  If python is not threaded,
+# then threads don't matter.  In those cases we use the TCL event loop
+# for everything.
+#
+# See the _tkinter.c file in the python distribution for more details.
+#
+shutdown_thread = False
+def openipmi_driver():
+    while (not shutdown_thread):
+        OpenIPMI.wait_io(1000)
+        pass
+    return
 
 class TopHandler(Tix.Tk):
     def __init__(self, preffile, log_file, histfile):
@@ -104,6 +135,8 @@ class TopHandler(Tix.Tk):
         return
 
     def quit(self):
+        global shutdown_thread
+        shutdown_thread = True;
         gui_cmdwin._HistorySave(self.histfile)
 
         OpenIPMI.set_log_handler(DummyLogHandler())
@@ -153,6 +186,8 @@ def trace(frame, event, arg):
     return trace
 
 def run(args):
+    global verbosity
+
     preffile = os.path.join(os.environ['HOME'], '.openipmigui.startup')
     histfile = os.path.join(os.environ['HOME'], '.openipmigui.history')
 
@@ -175,6 +210,8 @@ def run(args):
             debug_msg = True
         elif (arg == "--dmem"):
             debug_mem = True
+        elif (arg == "--verbose"):
+            verbosity += 1
         elif (arg == "--trace"):
             do_trace = True
         elif (arg == "--logstderr"):
@@ -198,7 +235,40 @@ def run(args):
         OpenIPMI.enable_debug_malloc()
         pass
 
-    OpenIPMI.init_tcl()
+    top = TopHandler(preffile, log_file, histfile)
+
+    # Detect if we need a separate OpenIPMI driver thread.  See the
+    # openipmi_driver function above for the reason.
+    try:
+        import thread
+        try:
+            top.tk.getvar("tcl_platform", "threaded")
+            # Tcl is threaded, no need for another thread.
+            need_separate_openipmi_thread = False
+        except:
+            # Python is threaded, but Tcl is not.  Need to run the
+            # OpenIPMI event loop in another thread.
+            need_separate_openipmi_thread = True
+            pass
+        pass
+    except:
+        # No thread support, can't use another thread.
+        need_separate_openipmi_thread = False
+        pass
+
+    if (need_separate_openipmi_thread):
+        if (verbosity >= 1):
+            print "Creating separate OpenIPMI event driver thread"
+            pass
+        OpenIPMI.init()
+        thread.start_new_thread(openipmi_driver, ())
+        pass
+    else:
+        if (verbosity >= 1):
+            print "Using TCL event loop, no threads"
+            pass
+        OpenIPMI.init_tcl()
+        pass
 
     if (debug_rawmsg):
         OpenIPMI.enable_debug_rawmsg()
@@ -214,7 +284,6 @@ def run(args):
         _saveprefs.restore(preffile)
     gui_cmdwin._HistoryRestore(histfile)
     
-    top = TopHandler(preffile, log_file, histfile)
     mainhandler = top
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
