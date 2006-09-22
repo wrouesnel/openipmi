@@ -3,6 +3,8 @@
 	* swig/python/openipmigui.py: Fixed a problem dealing with
 	different python/TCL thread models in the GUI.  Major ugliness.
 	See the code for details.
+
+	* configure.in: Move to version 2.0.8
 	
 2006-09-21 Coly Li <colyli@gmail.com>
 
