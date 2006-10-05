@@ -79,25 +79,33 @@ struct codec {
     void (*handle_ipmb)(struct msg *emsg, struct msg_info *mi);
 };
 
+struct oem_handler {
+    char *name;
+    int (*handler)(const unsigned char *msg, unsigned int len,
+		   struct msg_info *mi,
+		   unsigned char *rsp, unsigned int *rsp_len);
+    void (*init)(struct msg_info *mi);
+};
+
 struct msg_info {
     /* General info, set by main code, not formatters. */
     void          *info;
     int           sock;
     struct codec  *codec;
+    struct oem_handler *oem;
 
     /* Queues for events and IPMB messages. */
     struct msg *ipmb_q, *ipmb_q_tail;
     struct msg *event_q, *event_q_tail;
 
-    int (*oem_handler)(const unsigned char *msg, unsigned int len,
-		       struct msg_info *mi,
-		       unsigned char *rsp, unsigned int *rsp_len);
     void *oem_info;
 
     /* Settings */
     int           echo;
     unsigned char my_ipmb;
     int           debug;
+    int           do_attn;
+    unsigned char attn_char;
 
     /* Info from the recv message. */
     unsigned char netfn;
@@ -202,6 +210,8 @@ queue_ipmb(struct msg *imsg, struct msg_info *mi)
     else
 	mi->ipmb_q = imsg;
     mi->ipmb_q_tail = imsg;
+    if (mi->do_attn)
+	socket_send(&mi->attn_char, 1, mi);
 }
 
 static void
@@ -213,6 +223,8 @@ queue_event(struct msg *emsg, struct msg_info *mi)
     else
 	mi->event_q = emsg;
     mi->event_q_tail = emsg;
+    if (mi->do_attn)
+	socket_send(&mi->attn_char, 1, mi);
 }
 
 /***********************************************************************
@@ -861,8 +873,8 @@ handle_msg(const unsigned char *msg, unsigned int len, struct msg_info *mi)
 	printf("\n");
     }
 
-    if (mi->oem_handler) {
-	rv = mi->oem_handler(msg, len, mi, rsp, &rsp_len);
+    if (mi->oem) {
+	rv = mi->oem->handler(msg, len, mi, rsp, &rsp_len);
 	if (!rv)
 	    goto send_rsp;
     }
@@ -1030,6 +1042,17 @@ ra_oem_handler(const unsigned char *msg, unsigned int len,
 	default:
 	    return -ENOSYS;
 	}
+    } else if (mi->netfn == IPMI_APP_NETFN) {
+	switch (mi->cmd) {
+	case IPMI_GET_MSG_FLAGS_CMD:
+	    /* No message flag support. */
+	    rsp[0] = 0xc1;
+	    *rsp_len = 1;
+	    break;
+
+	default:
+	    return -ENOSYS;
+	}
     } else
 	return -ENOSYS;
 
@@ -1041,13 +1064,7 @@ ra_oem_init(struct msg_info *mi)
 {
 }
 
-static struct {
-    char *name;
-    int (*handler)(const unsigned char *msg, unsigned int len,
-		   struct msg_info *mi,
-		   unsigned char *rsp, unsigned int *rsp_len);
-    void (*init)(struct msg_info *mi);
-} oem_handlers[] = {
+static struct oem_handler oem_handlers[] = {
     { "PigeonPoint",		pp_oem_handler,		pp_oem_init },
     { "Radisys",		ra_oem_handler,		ra_oem_init },
     { NULL }
@@ -1214,6 +1231,7 @@ struct option options[] = {
     { "ipmb_addr",	 1, NULL, 'a' },
     { "oem_setup",	 1, NULL, 'o' },
     { "debug",		 0, NULL, 'd' },
+    { "attn",		 2, NULL, 't' },
     { 0 }
 };
 
@@ -1222,18 +1240,25 @@ static char *usage_str =
 "  Emulate various IPMI serial port BMCs, primarily for testing the\n"
 "  IPMI driver.\n"
 "  Options are:\n"
-"  -c <codec>, --codec <codec> - Set the codec to use.  Valid codecs\n"
-"    are:\n"
-"       TerminalMode - Standard terminal mode\n"
-"       Direct - standard serial direct mode\n"
-"       RadisysAscii - Radisys defined ASCII\n"
-"  -a <addr>, --ipmb_addr <addr> - Set the IPMB address for the emulated\n"
-"    BMC.\n"
-"  -o <oem>, --oem_setup <oem> - Emulate certain OEM commands:\n"
-"    PigeonPoint - Emulate echo handling per the PigeonPoint IPMCs,\n"
-"        primarily for terminal mode.\n"
-"    Radisys - Emulate the Radisys method for fetching the IPMB address.\n"
-"  -d, --debug - Increment the debug setting\n";
+"   -c <codec>, --codec <codec> - Set the codec to use.  Valid codecs\n"
+"     are:\n"
+"        TerminalMode - Standard terminal mode\n"
+"        Direct - standard serial direct mode\n"
+"        RadisysAscii - Radisys defined ASCII\n"
+"   -a <addr>, --ipmb_addr <addr> - Set the IPMB address for the emulated\n"
+"     BMC.\n"
+"   -o <oem>, --oem_setup <oem> - Emulate certain OEM commands:\n"
+"     PigeonPoint - Emulate echo handling per the PigeonPoint IPMCs,\n"
+"         primarily for terminal mode.\n"
+"     Radisys - Emulate the Radisys method for fetching the IPMB address.\n"
+"   --attn[=attn char] - Set the attention character to\n"
+"     the given value.  This is sent whenever something is added to the\n"
+"     event or receive message queue.  It defaults to the BELL character,\n"
+"     which is 0x07.  The specified value is a number, like 0x07.\n"
+"   -d, --debug - Increment the debug setting\n"
+"  This program connects to a remote TCP port, so you need to have a\n"
+"  terminal server (in raw mode, not telnet mode) to use this program.\n"
+"  I use ser2net, get that if you need it.\n";
 char *cmdname;
 static void
 usage(void)
@@ -1285,14 +1310,22 @@ main(int argc, char *argv[])
 	    mi->my_ipmb = strtoul(optarg, NULL, 0);
 	    break;
 
+	case 't':
+	    mi->do_attn = 1;
+	    if (optarg)
+		mi->attn_char = strtoul(optarg, NULL, 0);
+	    else
+		mi->attn_char = 0x07;
+	    break;
+
 	case 'o':
 	    for (i=0; oem_handlers[i].name != NULL; i++) {
 		if (strcmp(optarg, oem_handlers[i].name) == 0)
 		    break;
 	    }
 	    if (oem_handlers[i].name) {
-		mi->oem_handler = oem_handlers[i].handler;
-		oem_handlers[i].init(mi);
+		mi->oem = &(oem_handlers[i]);
+		mi->oem->init(mi);
 	    } else {
 		fprintf(stderr, "Invalid OEM handler '%s'\n", optarg);
 		usage();
@@ -1340,6 +1373,11 @@ main(int argc, char *argv[])
 	usage();
     }
 
+    printf("Starting IPMI serial BMC emulator with:\n  %s codec"
+	   "\n  %s OEM emulation\n",
+	   mi->codec->name, mi->oem ? mi->oem->name : "no");
+    if (mi->do_attn)
+	printf("  0x%2.2x attention char\n", mi->attn_char);
     stifle_history(500);
     rl_callback_handler_install("> ", command_string_handler);
 
