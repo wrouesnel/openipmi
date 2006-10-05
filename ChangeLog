@@ -1,3 +1,8 @@
+2006-10-05 Corey Minyard <cminyard@mvista.com>
+
+	* sample/ipmi_serial_bmc_emu.c, sample/Makefile.am: Added a serial
+	BMC emulator.
+
 2006-09-22 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui.py: Fixed a problem dealing with
