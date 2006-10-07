@@ -1,3 +1,11 @@
+2006-10-06 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_smi.c: Fix the IPMB address setting code to only set
+	the channels that are reported to it.
+
+	* lib/oem_atca_conn.c: Properly initialize the ipmb array that is
+	passed to the other code.
+
 2006-10-05 Corey Minyard <cminyard@mvista.com>
 
 	* sample/ipmi_serial_bmc_emu.c, sample/Makefile.am: Added a serial

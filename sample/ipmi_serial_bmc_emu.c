@@ -105,7 +105,8 @@ struct msg_info {
     unsigned char my_ipmb;
     int           debug;
     int           do_attn;
-    unsigned char attn_char;
+    unsigned char attn_chars[8];
+    int           attn_chars_len;
 
     /* Info from the recv message. */
     unsigned char netfn;
@@ -211,7 +212,7 @@ queue_ipmb(struct msg *imsg, struct msg_info *mi)
 	mi->ipmb_q = imsg;
     mi->ipmb_q_tail = imsg;
     if (mi->do_attn)
-	socket_send(&mi->attn_char, 1, mi);
+	socket_send(mi->attn_chars, mi->attn_chars_len, mi);
 }
 
 static void
@@ -224,7 +225,7 @@ queue_event(struct msg *emsg, struct msg_info *mi)
 	mi->event_q = emsg;
     mi->event_q_tail = emsg;
     if (mi->do_attn)
-	socket_send(&mi->attn_char, 1, mi);
+	socket_send(mi->attn_chars, mi->attn_chars_len, mi);
 }
 
 /***********************************************************************
@@ -411,6 +412,7 @@ dm_handle_char(unsigned char ch, struct msg_info *mi)
 {
     struct dm_data *info = mi->info;
     unsigned int len = info->recv_msg_len;
+    unsigned char c;
 
     switch (ch) {
     case DM_START_CHAR:
@@ -436,6 +438,9 @@ dm_handle_char(unsigned char ch, struct msg_info *mi)
 	    info->in_recv_msg = 0;
 	}
 	info->in_escape = 0;
+
+	c = DM_PACKET_HANDSHAKE;
+	socket_send(&c, 1, mi);
 	break;
 
     case DM_PACKET_HANDSHAKE:
@@ -1025,15 +1030,16 @@ pp_oem_init(struct msg_info *mi)
     mi->echo = 1;
 }
 
-#define RA_GET_IPMB_CMD		0x12
+#define RA_CONTROLLER_OEM_NETFN	0x3e
+#define RA_GET_IPMB_ADDR_CMD	0x12
 static int
 ra_oem_handler(const unsigned char *msg, unsigned int len,
 	       struct msg_info *mi,
 	       unsigned char *rsp, unsigned int *rsp_len)
 {
-    if (mi->netfn == IPMI_OEM_NETFN) {
+    if (mi->netfn == RA_CONTROLLER_OEM_NETFN) {
 	switch (mi->cmd) {
-	case RA_GET_IPMB_CMD:
+	case RA_GET_IPMB_ADDR_CMD:
 	    rsp[0] = 0;
 	    rsp[1] = mi->my_ipmb;
 	    *rsp_len = 2;
@@ -1251,10 +1257,12 @@ static char *usage_str =
 "     PigeonPoint - Emulate echo handling per the PigeonPoint IPMCs,\n"
 "         primarily for terminal mode.\n"
 "     Radisys - Emulate the Radisys method for fetching the IPMB address.\n"
-"   --attn[=attn char] - Set the attention character to\n"
+"   --attn[=<char>[,<char>[,...]]] - Set the attention characters to\n"
 "     the given value.  This is sent whenever something is added to the\n"
-"     event or receive message queue.  It defaults to the BELL character,\n"
-"     which is 0x07.  The specified value is a number, like 0x07.\n"
+"     event or receive message queue.  It defaults to one BELL character,\n"
+"     which is 0x07.  The specified values are numbers, like 0x07.\n"
+"     For direct mode using the ASCII escape, this would be 0x1b.  For\n"
+"     direct mode on the Sun CPxxxx, this would be 0xAA,0x47.\n"
 "   -d, --debug - Increment the debug setting\n"
 "  This program connects to a remote TCP port, so you need to have a\n"
 "  terminal server (in raw mode, not telnet mode) to use this program.\n"
@@ -1275,6 +1283,7 @@ main(int argc, char *argv[])
     sockaddr_ip_t addr;
     struct msg_info *mi = &main_mi;
     int rv;
+    char *s, *e;
 
     cmdname = argv[0];
 
@@ -1312,10 +1321,28 @@ main(int argc, char *argv[])
 
 	case 't':
 	    mi->do_attn = 1;
-	    if (optarg)
-		mi->attn_char = strtoul(optarg, NULL, 0);
-	    else
-		mi->attn_char = 0x07;
+	    if (optarg) {
+		s = optarg;
+		for (i=0; ; i++) {
+		    if (i >= sizeof(mi->attn_chars)) {
+			fprintf(stderr, "Too many attention characters\n");
+			usage();
+		    }
+		    mi->attn_chars[i] = strtoul(s, &e, 0);
+		    mi->attn_chars_len++;
+		    if (*e == '\0')
+			break;
+		    else if (*e == ',')
+			s = e + 1;
+		    else {
+			fprintf(stderr, "Invalid attention characters\n");
+			usage();
+		    }
+		}
+	    } else {
+		mi->attn_chars[0] = 0x07;
+		mi->attn_chars_len = 1;
+	    }
 	    break;
 
 	case 'o':
@@ -1376,8 +1403,12 @@ main(int argc, char *argv[])
     printf("Starting IPMI serial BMC emulator with:\n  %s codec"
 	   "\n  %s OEM emulation\n",
 	   mi->codec->name, mi->oem ? mi->oem->name : "no");
-    if (mi->do_attn)
-	printf("  0x%2.2x attention char\n", mi->attn_char);
+    if (mi->do_attn) {
+	printf("  attention chars:");
+	for (i=0; i<mi->attn_chars_len; i++)
+	    printf(" %2.2x", mi->attn_chars[i]);
+	printf("\n");
+    }
     stifle_history(500);
     rl_callback_handler_install("> ", command_string_handler);
 

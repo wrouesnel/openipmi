@@ -64,7 +64,7 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     info = ipmi->oem_data;
 
-    memset(ipmb, 0, sizeof(*ipmb));
+    memset(ipmb, 0, sizeof(ipmb));
 
     if (msg->data[0] != 0) 
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
