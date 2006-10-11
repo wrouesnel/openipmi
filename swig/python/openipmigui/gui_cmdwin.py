@@ -35,6 +35,7 @@ import xml.dom
 import xml.dom.minidom
 import OpenIPMI
 import _saveprefs
+import _misc
 
 init_history = [ ]
 
@@ -142,11 +143,13 @@ class CommandWindow(Tix.ScrolledText):
         return
     
     def cmdlang_out_binary(self, cmdlang, name, value):
-        self.InsertString("%*s%s: %s\n" % (self.indent, "", name, str(value)))
+        self.InsertString("%*s%s: %s\n" % (self.indent, "", name,
+                                           _misc.HexArrayToStr(value)))
         return
     
     def cmdlang_out_unicode(self, cmdlang, name, value):
-        self.InsertString("%*s%s:U: %s\n" % (self.indent, "", name, str(value)))
+        self.InsertString("%*s%s:U: %s\n" % (self.indent, "", name,
+                                             _misc.HexArrayToStr(value)))
         return
     
     def HandleNewHistory(self):

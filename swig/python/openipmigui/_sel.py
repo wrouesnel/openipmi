@@ -34,6 +34,7 @@ import OpenIPMI
 import sys
 import gui_list
 import gui_popup
+import _misc
 
 class EventData:
     def __init__(self, slist, ev, has_second_data):
@@ -113,7 +114,7 @@ class SELDisplay(gui_list.List):
         self.events.append(data)
         data.key = self.Append(str(ev.get_record_id()),
                                [ str(ev.get_type()), str(ev.get_timestamp()),
-                                 str(ev.get_data()) ],
+                                 _misc.HexArrayToStr(ev.get_data()) ],
                                data)
         if (evinfo.sensor):
             # Can only delete the using the first item.
