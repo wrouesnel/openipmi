@@ -5,14 +5,14 @@ openipmigui \- GUI interface to an IPMI system
 
 .SH SYNOPSIS
 .B openipmigui
-.RB [--dmsg]
-.RB [--drawmsg]
-.RB [--glib12]
-.RB [--trace]
-.RB [--logstderr]
-.RB [-n]
-.RB [-p
-.IR preffile]
+.RB [ \-\-dmsg ]
+.RB [ \-\-drawmsg ]
+.RB [ \-\-glib12 ]
+.RB [ \-\-trace ]
+.RB [ \-\-logstderr ]
+.RB [ \-n ]
+.RB [ \-p
+.IR preffile ]
 
 .SH DESCRIPTION
 .B openipmigui
@@ -33,33 +33,33 @@ SEL window for a domain to view the events.
 
 .SH OPTIONS
 .TP
-.B "\--dmsg"
+.B \-\-dmsg
 Turn on message debugging, this will dump all messages to debug log output.
 .TP
-.B "\--drawmsg"
+.B \-\-drawmsg
 Turn on raw message debugging, this will dump all low-level messages to
 debug log output.  This differes from normal message debugging in that all
 protocol messages are also dumped, not just IPMI messages.
 .TP
-.B "\--dmem"
+.B \-\-dmem
 Turn on memory debugging, this will cause memory allocation and
 deallocations to be checked.  When the program terminates, it will
 dump all memory that was not properly freed (leaked), and overruns,
 writing of freed memory, or other types of memory errors.
 .TP
-.B "\--logstderr"
+.B \-\-logstderr
 Send all logs to standard error output as well as the GUI console.
 .TP
-.B "\--trace"
+.B \-\-trace
 Turn on python tracing so that all python procedure calls entered and
 exited will be printed out.
 .TP
-.B "\-n"
+.B \-n
 Turn off reading of the preferences file at startup.
 .TP
-.BI \-p\ preffile
-Use preffile as the name of the preferences file instead of
-$HOME/.openipmigui.startup
+.BI \-p\  preffile
+Use \fIpreffile\fP as the name of the preferences file instead of
+\fB$HOME/.openipmigui.startup\fP.
 
 .SH MENU BAR
 
@@ -271,76 +271,77 @@ settings for SOL.  These allow you to manipulate various value on the
 remote side of the connection.  These are:
 
 .TP
-Accept Input
+.B Accept Input
 If disabled, this will cause data from the BMC to be refused,
 effectively flow-controlling the data (assuming that the BMC actually
 supports this properly, some don't)
 
 .TP
-Use Encryption
+.B Use Encryption
 Encrypt the data on the LAN using RMCP+ encryption negotiated for the
 connection.  Only available when the connection is closed, this cannot
 be changed dynamically.
 
 .TP
-Use Authentication
+.B Use Authentication
 Authenticate the data on the LAN using RMCP+ authentication negotiated
 for the connection.  Only available when the connection is closed,
 this cannot be changed dynamically.
 
 .TP
-Deassert CTS/DCD/DSR on connect
+.B Deassert CTS/DCD/DSR on connect
 Don't raise the lines when a connection is made; this allows things
 like baud rate to be set before the device on the far end of the
 serial port knows there is a connection.
 
 .TP
-CTS Assertable
+.B CTS Assertable
 If set, the BMC has control over the CTS line.  Otherwise, the CTS
 line is deasserted.
 
 .TP
-DCD/DSR Asserted
+.B DCD/DSR Asserted
 Set the DCD and DSR lines.
 
 .TP
-RI Asserted
+.B RI Asserted
 Assert the Ring Indicator line, can be used for remote wakeup on some
 systems (though, with IPMI, you have to wonder why you wouldn't use
 IPMI for this).
 
 .TP
-Set Ack Timeout
+.B Set Ack Timeout
 Sets the timeout waiting for an ACK from the BMC.
 
 .TP
-Set Ack Retries
+.B Set Ack Retries
 Sets the number of times a packet is retried before the connection is
 closed.
 
 .TP
-Send Break
+.B Send Break
 Send a 300ms break signal to the remote serial port.
 
 .TP
-Serial Rate
+.B Serial Rate
 Sets the bitrate on the serial port.  Not all systems support this.
 Some, in fact, completely ignore this setting and use 19.2K.  Note
 that this is only the volatile rate.  The non-volatile rate setting is
 done with SOLPARM.
 
 .TP
-Serial Alert Behavior
+.B Serial Alert Behavior
 This sets what to do when an IPMI alert occurs and is going out the
 serial port somehow.  If set to "succeed", the SoL session will be
 disconnected when an alert comes out.
 
 .TP
-Queue Flush
+.B Queue Flush
 Allows various queues to be flushed.
 
 .SH "SEE ALSO"
-ipmish(1), IPMI document from OpenIPMI
+.BR ipmish (1),
+IPMI document from OpenIPMI
 
 .SH "KNOWN PROBLEMS"
 Some of missing functionality.  See the list in the

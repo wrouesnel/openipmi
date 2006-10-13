@@ -1,3 +1,12 @@
+
+2006-10-12 Philipp Hahn
+
+	* man/ipmi_cmdlang.7: Various cleanups
+	* man/openipmi_conparms.7: ditto
+	* man/openipmigui.1: ditto
+	* man/openipmish.1 ditto
+	* man/rmcp_ping.1 ditto
+
 2006-10-13 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_mc_lanparm.py: Fix a problem in a

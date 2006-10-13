@@ -42,115 +42,121 @@ types; others may be available from OEMs.
 
 .SH OPTIONS
 .TP
-.BI smi-num
+.I smi-num
 The SMI interface for the local connection.  There may be more than
 one BMC connection on a system and they are generally numbered, like
-/dev/ipmi0, /dev/ipmi1. etc.
+\fB/dev/ipmi0\fP, \fB/dev/ipmi1\fP, etc.
 
 .TP
-.BI \-U\ username
-Use the given username for the LAN connection.  If none is given, then
+.BI \-U\  username
+Use the given \fIusername\fP for the LAN connection.  If none is given, then
 no username is used.
 
 .TP
-.BI \-P\ password
-The password to use for the connection.  If none is given, the user is
+.BI \-P\  password
+The \fIpassword\fP to use for the connection.  If none is given, the user is
 assumed to have an empty password
 
 .TP
-.BI \-p[2]\ port
-The UCP port to connect to.  This defaults to the standard 623 port,
+\fB\-p\fP[\fB2\fP] \fIport\fP
+The UCP \fIport\fP to connect to.  This defaults to the standard 623 port,
 so it is not necessary unless a special port is required.  Note that
 since you can have two connections (hosts),
-.BI \-p
+.B \-p
 is for the first host and
-.BI \-p2
+.B \-p2
 is for the second host.
 
 .TP
-.BI \-A\ authtype
-The authentication type to use, one of rmcp+, md5, md2, straight, or
-none.  If you don't supply this, the most secure one available is
+.BI \-A\  authtype
+The \fIauthentication type\fP to use, one of \fBrmcp+\fP, \fBmd5\fP, \fBmd2\fP, \fBstraight\fP, or
+\fBnone\fP.  If you don't supply this, the most secure one available is
 chosen, in the order given in the previous list.
 
 .TP
-.BI \-L\ privilege
-The privilege to use for the connection.  Lower privileges cannot
-execute some commands.  Privileges are: callback, user, operator,
-admin, and oem.  The default is admin.
+.BI \-L\  privilege
+The \fIprivilege\fP to use for the connection.  Lower privileges cannot
+execute some commands.  Privileges are: \fBcallback\fP, \fBuser\fP, \fBoperator\fP,
+\fBadmin\fP, and \fBoem\fP.  The default is \fBadmin\fP.
 
 .TP
-.BI \-Ra\ authentication\ algorithm
-Set the RMCP+ authentication algorithm to use.  Options are: bmcpick,
-rakp_none, rakp_hmac_sha1, and rakp_hmac_md5.  The bmcpick option is
+.BI \-Ra\  authentication\ algorithm
+Set the \fIRMCP+ authentication algorithm\fP to use.  Options are: \fBbmcpick\fP,
+\fBrakp_none\fP, \fBrakp_hmac_sha1\fP, and \fBrakp_hmac_md5\fP.  The \fBbmcpick\fP option is
 used by default, which means the BMC picks the algorithm it wants to
 use.
 
 .TP
-.BI \-Ri\ integrity\ algorithm
-The RMCP+ integrity algorithm to use.  This ensures that the data has
+.BI \-Ri\  integrity\ algorithm
+The \fIRMCP+ integrity algorithm\fP to use.  This ensures that the data has
 not be altered between the sender and receiver.  Valid options are:
-bmcpick, none, hmac_sha1, hmac_md5, and md5.  The bmcpick option is
+\fBbmcpick\fP, \fBnone\fP, \fBhmac_sha1\fP, \fBhmac_md5\fP, and \fBmd5\fP.  The \fBbmcpick\fP option is
 used by default, which means the BMC picks the algorithm it wants to
 use.
 
 .TP
-.BI \-Rc\ confidentiality\ algorithm
-The RMCP+ confidentiality (encryption) algorithm to use.  This keeps
-evesdroppers from seeing the data.  Valid values are: bmcpick,
-aes_cbc_128, xrc4_128, and xrc_40.  The bmcpick option is used by
+.BI \-Rc\  confidentiality\ algorithm
+The \fIRMCP+ confidentiality (encryption) algorithm\fP to use.  This keeps
+evesdroppers from seeing the data.  Valid values are: \fBbmcpick\fP,
+\fBaes_cbc_128\fP, \fBxrc4_128\fP, and \fBxrc_40\fP.  The \fBbmcpick\fP option is used by
 default, which means the BMC picks the algorithm it wants to use.
 
 .TP
-.BI \-Rl
+.B \-Rl
 If this is specified, the username is looked up using the privilege
 level along with the username.  This allows the same name to have
 different passwords with different privilege levels.
 
 .TP
-.BI \-Rk\ BMC\ Key
-If the system requires two-key lookups, this specifies the second key
+.BI \-Rk\  BMC\ Key
+If the system requires two-key lookups, this specifies the \fIsecond key\fP
 (the BMC key) to use.  This is ignored if two-key lookups are not
 enabled by the BMC.
 
 .TP
-.BI \-H\ hackname
+.BI \-H\  hackname
 Well, it always happens.  Things in the field don't work quite like
 they are supposed to.  There was some vagueness in the first IPMI
 specs and different vendors interpreted RMCP+ in different ways.  This
 allows different options to be supported.  Try different hacks if your
 RMCP+ systems don't authenticate properly.  These are:
 
-.IP rakp3_wrong_rolem - Some systems use the incorrect Role(m) field
+.RS
+.TP
+.B rakp3_wrong_rolem
+Some systems use the incorrect Role(m) field
 in a specific authentication message (the RAKP3 message).  This is a
 common problem.
 
-.IP rmcpp_integ_sik - The original IPMI 2.0 spec specified the
+.TP
+.B rmcpp_integ_sik
+The original IPMI 2.0 spec specified the
 incorrect key to use for the integrity key.  This forces use of the
 Session Initiation Key.  The default is to use K(1)
+.RE
 
 .TP
-.BI \-s
+.B \-s
 Make two connections to the BMC.  This means the BMC has two different
 IP addresses/ports that are equivalent.  If this is specified, a
 second host must be supplied.  This is not the same as two connections
 to two different BMCs.  This must be a connection to the same BMC.
 
 .TP
-.BI host
+.I host
 The IP address (either by name lookup or specified directly) to
 connect to.  If the
-.BI \-s
+.B \-s
 is specified, two hosts must be supplied.
 
 .P
 The
-.BI \-Ra,
-.BI \-Ri,
-.BI \-Rc,
-.BI \-Rk
+.BR \-Ra ,
+.BR \-Ri ,
+.BR \-Rc ,
+.BR \-Rk
 and
-.BI \-Rl
+.B \-Rl
 options only apply to RMCP+ connections and will be ignored if the
 connection does not support RMCP+ or if a non-RMCP+ authentication
 type is specified.
@@ -159,7 +165,7 @@ type is specified.
 .SH "SEE ALSO"
 .BR ipmish (8),
 .BR openipmicmd (8),
-.BR solterm(1)
+.BR solterm (1)
 
 .SH "KNOWN PROBLEMS"
 This is excessively complicated, but the defaults should be good.
