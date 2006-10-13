@@ -1,3 +1,8 @@
+2006-10-13 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/_mc_lanparm.py: Fix a problem in a
+	pulldown.
+
 2006-10-11 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_misc.py: Added an int array to hex

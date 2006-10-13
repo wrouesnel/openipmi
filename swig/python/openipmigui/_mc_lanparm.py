@@ -103,7 +103,7 @@ class MCLPData:
         nval = [ 0 ]
         sval = [ "" ]
         OpenIPMI.lanconfig_enum_val(self.parm, val, nval, sval)
-        self.glib.SetColumn(self.idx, 1, sval[0])
+        self.glist.SetColumn(self.idx, 1, sval[0])
         return
     
     def togglevalue(self, event):
