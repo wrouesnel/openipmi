@@ -477,10 +477,9 @@ class IPMIGUI(Tix.Frame):
         if (self.in_destroy):
             return
         data = self.treedata[item]
-        name = data.name_str
         if (value == None):
-            self.tree.hlist.item_configure(item, 1, style=self.inactive_style,
-                                           text="")
+            self.tree.hlist.item_configure(item, 1, text="")
+            self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
             pass
         else:
             self.tree.hlist.item_configure(item, 1, text=value)
