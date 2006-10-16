@@ -1408,6 +1408,56 @@ Note that this will \emph{not} be called until the domain is fully up.
 If the domain never comes up, this will \emph{never} be called.  So
 don't rely on this.  The connection up callback will always be called.
 
+\subsection{Redundancy in Domain Connections}
+
+Since maintenance interfaces often need to be reliable in the face of
+network or hardware outages, they often have multiple connections.
+The IPMI standards do not address this, but many systems implement
+some form of redundancy.
+
+The OpenIPMI library manages two different forms of redundancy in
+connections:
+\begin{description}
+\item[Two IP addresses for the same BMC] - In this mode, the library
+talks to the same BMC over two different channels.  This is managed by
+the connection code itself.  The \acs{LAN} code does this; it allows
+you to specify more than one IP address and port.  It will make
+connections to both and make them look like they are one connection.
+It will report, through the connection interface, if the individual
+connections go up or down.  Note that some systems have multiple IP
+addresses but are unable to use both at the same time, so check with
+your hardware to see if this will work.
+\item[Connections to multiple BMCs] - This means you have connections
+to more than one BMC.  The domain code will round-robin messages on
+the active connections, handle and report failures, and switchover
+from failed to working connections.  A connection has the concept of
+being ``active'' or ``inactive''.  An inactive connection is one where
+the connection is up but the BMC in question is not fully operational;
+you don't want to use it.  This is an active/standby type
+configuration.  If all connections are always active (an active/active
+type configuration), no special handling is required.  If some
+connections can be inactive, special OEM code is required for that
+connection as the domain handling must have a way to activate an
+inactive connection if the active connection goes down.  See the
+Motorola MXP in appendix~\vref{app-motorola-mxp} for an example of an
+active/standby connection.
+\end{description}
+
+Note that the two redundancy modes can be used together.  You can have
+two \acs{LAN} connections each to two BMCs.  In the author's opinion,
+this, with an active/active configuration is the best redundancy and
+is simple to implement.
+
+Some systems like \acs{ATCA} have a ``floating'' address that is used.
+The system has more than one BMC, generally, but it has an address
+that will ``float'' between the BMCs depending on which one is active.
+If a BMC fails, another BMC transparently takes over the floating
+address.  So in this type of configuration the redundancy is managed
+by the BMCs.  This leaves the question open of how to monitor the
+inactive BMCs, though.  ATCA has addressed this in recent standards.
+See appendix~\vref{app-atca} for details on how this works in
+\acs{ATCA}.
+
 \subsection{Domain Options}
 
 When a domain is created, it may be passed options to control how the
@@ -8360,6 +8410,7 @@ The \texttt{val} returns is an array of integers, the length is the
 number of values the control supports.
 
 \subsection{Light}
+\label{controls-light}
 
 Lights come in two flavors.  Some lights have absolute control of the
 color, on time, and off time.  OpenIPMI call these ``setting'' lights.
@@ -8774,6 +8825,69 @@ here in the future.
 %---------------------------------------------------------------------
 \chapter{\acs{ATCA}}
 \label{app-atca}
+ATCA is a standard specified by PICMG for highly available hardware.
+These are bus systems where a number of cards are plugged into a
+backplane.  The backplane has redundant IPMB management busses and can
+have redundant BMCs.  In ATCA, the BMC is called the ``Shelf Manager''
+(this is not quite correct, but close enough for this discussion).
+The individual management controllers on a board are called ``IPMCs.''
+Something that connects to the Shelf Managers is called a ``System
+Manager.''
+
+The OpenIPMI library will auto-detect an ATCA system and configure
+itself properly.
+
+Unlike the IPMI spec, the \acs{ATCA} spec is fairly well written and
+easy to understand.
+
+\section{Management Redundancy in ATCA}
+In general the redundancy in ATCA is done by the ATCA system itself
+and is mostly invisible to the System Manager.  Though there are
+multiple IPMB busses, it looks like one except for reporting of
+errors.  And the Shelf Managers will make the system look like one IP
+address even if one Shelf Manager fails.
+
+\section{Hot Swap in ATCA}
+The full standard OpenIPMI hot-swap state machine is implemented for
+ATCA systems and is fully operation.
+
+\section{ATCA FRU Data}
+
+\section{Special ATCA Sensors}
+All hot-swappable ATCA entities have their own hot-swap sensor.
+OpenIPMI will detect this sensor automatically and set it up properly.
+It will report this sensor to the user, but the user \emph{must not}
+modify the configuration of the sensor or it may mess up the hot-swap
+state machine.  Use the hot-swap state machine instead of this sensor.
+
+ATCA specified other sensors, but the OpenIPMI ATCA code does not use
+these internally.
+
+\section{Special ATCA Controls}
+ATCA specifies a standard way to control LEDs on the board, and it has
+a defined reset operation.
+
+The LED controls appear as standard OpenIPMI light controls that use
+setting controls, see the section~\vref{controls-light} for more
+information on how to control these.  The first LED is always the blue
+hot-swap LED and is named ``blue led''.  The other LEDs are labeled
+``led 1'', led 2'', etc.
+
+The reset control is named ``cold reset'' and can be used to reset the
+main processor on the board.
+
+Note that even though you could directly control the power on an ATCA
+board, you should not.  Use the hot-swap state machine.
+
+\section{Chassis Controls and ATCA}
+The Shelf Manager is supposed to have the standard chassis controls
+specified by IPMI for power and reset.  \emph{Be very careful using
+these.}  They affect the entire shelf.  So if you turn off the power
+with the chassis power control, it will turn of \emph{every} board in
+the shelf.
+
+\section{AMC}
+FIXME - fill this in.
 
 %---------------------------------------------------------------------
 \chapter{Motorola MXP}
