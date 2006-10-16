@@ -1,3 +1,7 @@
+2006-10-16 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/gui.py: Fix a problem where sensor
+	settings would get greyed
 
 2006-10-12 Philipp Hahn
 
