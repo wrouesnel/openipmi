@@ -92,7 +92,9 @@ an easier to understand introduction to IPMI.
 \chapter{Acronyms}
 \begin{acronym}
 \acro{ATCA}{AdvancedTCA}
+\acro{AMC}{AdvancedMC}
 \acro{IPMI}{Intelligent Platform Mangement Interface}
+\acro{IPMC}{Intelligent Platform Mangement Controller (FIXME - wrong)}
 \acro{OEM}{Original Equipment Manufacturer}
 \acro{SDR}{Sensor Device Record}
 \acro{FRU}{Field Replacable Unit}
@@ -6429,6 +6431,7 @@ data.  The other is an \acs{IPMI}-specified FRU interface that only works
 with the FRU data format specified by \acs{IPMI}.
 
 \subsubsection{Generic \acs{FRU} Data Interface}
+\label{generic-fru-data-interface}
 
 The generic \acs{FRU} interface represents the \acs{FRU} data as a
 tree-structured hierarchy of data.  Each level of the tree has a
@@ -8825,69 +8828,120 @@ here in the future.
 %---------------------------------------------------------------------
 \chapter{\acs{ATCA}}
 \label{app-atca}
-ATCA is a standard specified by PICMG for highly available hardware.
-These are bus systems where a number of cards are plugged into a
-backplane.  The backplane has redundant IPMB management busses and can
-have redundant BMCs.  In ATCA, the BMC is called the ``Shelf Manager''
-(this is not quite correct, but close enough for this discussion).
-The individual management controllers on a board are called ``IPMCs.''
-Something that connects to the Shelf Managers is called a ``System
-Manager.''
+\acs{ATCA} is a standard specified by PICMG for highly available
+hardware.  These are bus systems where a number of cards are plugged
+into a backplane.  The backplane has redundant \acs{IPMB} management
+busses and can have redundant \acs{BMC}s.  In \acs{ATCA}, the
+\acs{BMC} is called the ``Shelf Manager'' (this is not quite correct,
+but close enough for this discussion).  The individual management
+controllers on a board are called ``\acs{IPMC}s.''  Something that connects
+to the Shelf Managers is called a ``System Manager.''
 
-The OpenIPMI library will auto-detect an ATCA system and configure
+The OpenIPMI library will auto-detect an \acs{ATCA} system and configure
 itself properly.
 
-Unlike the IPMI spec, the \acs{ATCA} spec is fairly well written and
-easy to understand.
+Unlike the \acs{IPMI} spec, the \acs{ATCA} spec is fairly well written and
+easy to understand.  Reading it is highly recommended if you are
+programming on an \acs{ATCA} system.
 
-\section{Management Redundancy in ATCA}
-In general the redundancy in ATCA is done by the ATCA system itself
-and is mostly invisible to the System Manager.  Though there are
-multiple IPMB busses, it looks like one except for reporting of
-errors.  And the Shelf Managers will make the system look like one IP
-address even if one Shelf Manager fails.
+OpenIPMI maps the \acs{ATCA} system into a fairly standard \acs{IPMI}
+configuration.  This is relatively transparent because \acs{ATCA} was
+designed to work with the \acs{IPMI} spec and \acs{IPMI}-specified
+operations are used when possible.  The entire shelf is represented as
+entity 23.1.  Each of the boards will appear as contained inside
+entity 23.1.
 
-\section{Hot Swap in ATCA}
+\section{Management Redundancy in \acs{ATCA}}
+In general the redundancy in \acs{ATCA} is done by the \acs{ATCA}
+system itself and is mostly invisible to the System Manager.  Though
+there are multiple \acs{IPMB} busses, it looks like one except for
+reporting of errors.  And the Shelf Managers will make the system look
+like one IP address even if one Shelf Manager fails.
+
+\section{Hot Swap in \acs{ATCA}}
 The full standard OpenIPMI hot-swap state machine is implemented for
-ATCA systems and is fully operation.
+\acs{ATCA} systems and is fully operation.
 
-\section{ATCA FRU Data}
+\section{\acs{ATCA} \acs{FRU} Data}
+OpenIPMI has decoders to decode all the standard \acs{ATCA} \acs{FRU}
+data.  It uses the standard interface as defined in
+section~\vref{generic-fru-data-interface}.  OpenIPMI will fetch the
+\acs{ATCA} \acs{FRU} data for its own internal use, but the \acs{ATCA}
+\acs{FRU} data is not fetched in a way that is visible to the user
+because it does not appear in the standard locations for \acs{IPMI}
+\acs{FRU}s.  The \acs{ATCA} spec defines how the user can find the
+\acs{FRU} data; once the location is found the data can be fetched
+using \verb=ipmi_fru_alloc()=.
 
-\section{Special ATCA Sensors}
-All hot-swappable ATCA entities have their own hot-swap sensor.
+\section{Special \acs{ATCA} Sensors}
+All hot-swappable \acs{ATCA} entities have their own hot-swap sensor.
 OpenIPMI will detect this sensor automatically and set it up properly.
 It will report this sensor to the user, but the user \emph{must not}
 modify the configuration of the sensor or it may mess up the hot-swap
 state machine.  Use the hot-swap state machine instead of this sensor.
 
-ATCA specified other sensors, but the OpenIPMI ATCA code does not use
-these internally.
+\acs{ATCA} specified other sensors, but the OpenIPMI \acs{ATCA} code
+does not use these internally.
 
-\section{Special ATCA Controls}
-ATCA specifies a standard way to control LEDs on the board, and it has
-a defined reset operation.
+\section{Special \acs{ATCA} Controls}
+\acs{ATCA} specifies a standard way to control LEDs on the board, and
+it has a defined reset operation.
 
 The LED controls appear as standard OpenIPMI light controls that use
 setting controls, see the section~\vref{controls-light} for more
 information on how to control these.  The first LED is always the blue
 hot-swap LED and is named ``blue led''.  The other LEDs are labeled
-``led 1'', led 2'', etc.
+``led 1'', ``led 2'', etc.
 
 The reset control is named ``cold reset'' and can be used to reset the
 main processor on the board.
 
-Note that even though you could directly control the power on an ATCA
-board, you should not.  Use the hot-swap state machine.
+Note that even though you could directly control the power on an
+\acs{ATCA} board, you should not.  Use the hot-swap state machine.
 
-\section{Chassis Controls and ATCA}
+\section{Chassis Controls and \acs{ATCA}}
 The Shelf Manager is supposed to have the standard chassis controls
-specified by IPMI for power and reset.  \emph{Be very careful using
+specified by \acs{IPMI} for power and reset.  \emph{Be very careful using
 these.}  They affect the entire shelf.  So if you turn off the power
 with the chassis power control, it will turn of \emph{every} board in
 the shelf.
 
-\section{AMC}
-FIXME - fill this in.
+\section{\acs{AMC}}
+\acs{AMC} was designed to work transparently with the \acs{ATCA} spec.
+The \acs{IPMC} that manages the \acs{AMC} modules will represent the
+\acs{AMC} modules to the shelf and system manager transparently, so in
+general the user doesn't have to do anything special.  The \acs{AMC}s
+will appear as entities contained within the board that are hot-swap
+capable.
+
+It may be necessary to directly communicate with the \acs{AMC}
+modules.  From an OpenIPMI driver connection, you must send the
+message using an \verb=ipmi_ipmb_addr= with channel 7 and the slave
+address set to the \acs{IPMB} address of the \acs{AMC} module.  This
+works transparently in the driver.\footnote{Note that some systems do
+not correctly implement this due to a misunderstanding in the
+\acs{AMC} spec.  The \acs{AMC} spec talks about using message tracking
+to route messages from the \acs{IPMB} to the \acs{AMC}s.  It does
+\emph{not} talk about using message tracking going from the system
+interfaces to the \acs{AMC}s.  The \acs{IPMI} spec is quite clear that
+\emph{only} untracked messages are used from the system interface.  If
+you cannot talk to your \acs{AMC} board from the \acs{IPMI} driver, it may
+be that the board does not properly handle untracked messages.}
+
+Communicating directly to the \acs{AMC} over a LAN interface is more
+complex.  You must format a send message command yourself, but only
+the last level of the send message.  You would format a complete send
+message command to channel 7 and the \acs{IPMB} address of the
+\acs{AMC} module.  You then send this message using an
+\verb=ipmi_ipmb_addr=, with the channel set to 0 and using the
+\acs{IPMB} address of the \acs{IPMC} as the slave address.  You must
+use message tracking.  Then the OpenIPMI library will format the
+message properly to get it to the \acs{IPMC}.  Your send message
+command will then be processed by the \acs{IPMC} and the message will
+be routed to the \acs{AMC}.  The \acs{IPMC} takes care of handling the
+response and returning it to you through the shelf manager.  This is
+rather complex, but should be a seldom-used operation.  And if anyone
+wants to make it simpler, patches are always appreciated.
 
 %---------------------------------------------------------------------
 \chapter{Motorola MXP}
@@ -8898,7 +8952,7 @@ FIXME - fill this in.
 \label{app-intel-servers}
 
 Many Intel server systems have an alarm panel and a relay output that
-can be monitored and controlled through IPMI.  This will appear under
+can be monitored and controlled through \acs{IPMI}.  This will appear under
 entity 12.1 (Alarm Panel) and will be named ``alarm''.  It takes an
 8-bit setting.  The meanings of the bits are:
 
