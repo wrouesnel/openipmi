@@ -1,5 +1,11 @@
 2006-10-16 Corey Minyard <cminyard@mvista.com>
 
+	* doc/IPMI.ltx: Added some docs on redundant connections and on
+	ATCA.
+
+	* man/openipmicmd.1: Added information about the proper handling
+	of response messages.
+
 	* swig/python/openipmigui/gui.py: Fix a problem where sensor
 	settings would get greyed
 

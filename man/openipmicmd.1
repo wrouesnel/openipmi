@@ -40,8 +40,11 @@ it will wait for the response or a timeout before returning.
 Send a command to the BMC you are connected to.
 
 .TP
-\fIchannel\fP [\fBipmb\fP] \fIIPMB-addr\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
-Send a command to a device on the IPMB bus.  The "\fBipmb\fP" string is optional.
+\fIchannel\fP [\fBipmb\fP] \fIIPMB-addr\fP \fIlun\fP \fInetfn\fP [\fBseq\fP] \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
+Send a command to a device on the IPMB bus.  The "\fBipmb\fP" string is
+optional.  The \fBseq\fP must be provided if the netfn is a response (an
+odd number).  It must be the same sequence number that came in on the command
+in the "Command Sequence = seq" part of the command.
 
 .TP
 \fIchannel\fP \fB00\fP \fIIPMB-addr\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
