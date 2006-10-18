@@ -792,6 +792,7 @@ socket_send(const unsigned char *data, unsigned int len, struct msg_info *mi)
 
 #define IPMI_APP_NETFN	6
 #define IPMI_GET_DEV_ID_CMD	0x01
+#define IPMI_GET_DEVICE_GUID_CMD 0x08
 #define IPMI_GET_MSG_FLAGS_CMD	0x31
 #define IPMI_GET_MSG_CMD	0x33
 #define IPMI_SEND_MSG_CMD	0x34
@@ -853,8 +854,13 @@ handle_ipmb_msg(const unsigned char *msg, unsigned int len,
 }
 
 static unsigned char devid_data[] = {
-    0x21, 0x01, 0x00, 0x48, 0x02, 0x9f, 0x22, 0x03, 0x00, 0x11, 0x43,
+    0x20, 0x01, 0x00, 0x48, 0x02, 0x9f, 0x22, 0x03, 0x00, 0x11, 0x43,
     0x00, 0x11, 0x00, 0x04
+};
+
+static unsigned char guid_data[] = {
+    0x00, 0x01, 0x00, 0x48, 0x02, 0x9f, 0xaa, 0x01,
+    0x00, 0x23, 0x00, 0x00, 0x11, 0x00, 0x04, 0x99
 };
 
 static void
@@ -890,6 +896,12 @@ handle_msg(const unsigned char *msg, unsigned int len, struct msg_info *mi)
 	    rsp[0] = 0;
 	    memcpy(rsp+1, devid_data, sizeof(devid_data));
 	    rsp_len = sizeof(devid_data) + 1;
+	    break;
+
+	case IPMI_GET_DEVICE_GUID_CMD:
+	    rsp[0] = 0;
+	    memcpy(rsp+1, guid_data, sizeof(guid_data));
+	    rsp_len = sizeof(guid_data) + 1;
 	    break;
 
 	case IPMI_GET_MSG_FLAGS_CMD:
