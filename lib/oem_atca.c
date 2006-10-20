@@ -63,8 +63,11 @@
 
 /* Allow LED controls to go from 0 to 7fh. */
 #define IPMC_FIRST_LED_CONTROL_NUM 0x00
-#define IPMC_RESET_CONTROL_NUM     0x80
-#define IPMC_POWER_CONTROL_NUM     0x81
+#define IPMC_RESET_CONTROL_NUM			0x80
+#define IPMC_POWER_CONTROL_NUM			0x81
+#define IPMC_WARM_RESET_CONTROL_NUM		0x82
+#define IPMC_GRACEFUL_REBOOT_CONTROL_NUM	0x83
+#define IPMC_DIAGNOSTIC_INTERRUPT_CONTROL_NUM	0x84
 
 /* This is a control attached to the system interface used to handle
    the address control, one for each possible IPMB.  These range from
@@ -130,7 +133,11 @@ struct atca_fru_s
     unsigned char             hs_sensor_lun;
     unsigned char             hs_sensor_num;
     ipmi_control_t            *cold_reset;
+    ipmi_control_t            *warm_reset;
+    ipmi_control_t            *graceful_reboot;
+    ipmi_control_t            *diagnostic_interrupt;
     ipmi_control_t            *power;
+    unsigned int              fru_capabilities;
 };
 
 struct atca_ipmc_s
@@ -1694,26 +1701,27 @@ destroy_fru_leds(atca_fru_t *finfo)
  *
  **********************************************************************/
 
-typedef struct atca_cold_reset_s
+typedef struct atca_fru_control_s
 {
+    unsigned char          option;
     ipmi_control_op_cb     handler;
     void                   *cb_data;
     ipmi_control_op_info_t sdata;
-} atca_cold_reset_t;
+} atca_fru_control_t;
 
 static void
-set_cold_reset_done(ipmi_control_t *control,
+set_fru_control_done(ipmi_control_t *control,
 		    int            err,
 		    ipmi_msg_t     *rsp,
 		    void           *cb_data)
 {
-    atca_cold_reset_t *info = cb_data;
-    ipmi_mc_t         *mc = NULL;
+    atca_fru_control_t *info = cb_data;
+    ipmi_mc_t          *mc = NULL;
 
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, &err, rsp, 2, "set_cold_reset_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 2, "set_fru_control_done")) {
 	if (info->handler)
 	    info->handler(control, err, info->cb_data);
 	goto out;
@@ -1727,13 +1735,13 @@ set_cold_reset_done(ipmi_control_t *control,
 }
 
 static void
-set_cold_reset_start(ipmi_control_t *control, int err, void *cb_data)
+set_fru_control_start(ipmi_control_t *control, int err, void *cb_data)
 {
-    atca_cold_reset_t *info = cb_data;
-    atca_fru_t        *finfo = ipmi_control_get_oem_info(control);
-    ipmi_msg_t        msg;
-    unsigned char     data[3];
-    int               rv;
+    atca_fru_control_t *info = cb_data;
+    atca_fru_t         *finfo = ipmi_control_get_oem_info(control);
+    ipmi_msg_t         msg;
+    unsigned char      data[3];
+    int                rv;
 
     if (err) {
 	if (info->handler)
@@ -1749,9 +1757,9 @@ set_cold_reset_start(ipmi_control_t *control, int err, void *cb_data)
     msg.data_len = 3;
     data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
-    data[2] = 0; /* Cold reset */
+    data[2] = info->option;
     rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, set_cold_reset_done,
+				   &msg, set_fru_control_done,
 				   &info->sdata, info);
     if (err) {
 	if (info->handler)
@@ -1763,76 +1771,188 @@ set_cold_reset_start(ipmi_control_t *control, int err, void *cb_data)
 }
 
 static int
-set_cold_reset(ipmi_control_t     *control,
-	       int                *val,
-	       ipmi_control_op_cb handler,
-	       void               *cb_data)
+set_fru_control(ipmi_control_t     *control,
+		unsigned int       option,
+		ipmi_control_op_cb handler,
+		void               *cb_data)
 {
-    atca_cold_reset_t *info;
-    int               rv;
+    atca_fru_control_t *info;
+    int                rv;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
+    info->option = option;
     info->handler = handler;
     info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, set_cold_reset_start,
+    rv = ipmi_control_add_opq(control, set_fru_control_start,
 			      &info->sdata, info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
 }
 
-static void
-add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
+static int
+set_cold_reset(ipmi_control_t     *control,
+	       int                *val,
+	       ipmi_control_op_cb handler,
+	       void               *cb_data)
 {
-    atca_fru_t *finfo = cb_info;
-    int        rv;
+    return set_fru_control(control, 0, handler, cb_data);
+}
+
+static int
+set_warm_reset(ipmi_control_t     *control,
+	       int                *val,
+	       ipmi_control_op_cb handler,
+	       void               *cb_data)
+{
+    return set_fru_control(control, 1, handler, cb_data);
+}
+
+static int
+set_graceful_reboot(ipmi_control_t     *control,
+		    int                *val,
+		    ipmi_control_op_cb handler,
+		    void               *cb_data)
+{
+    return set_fru_control(control, 2, handler, cb_data);
+}
+
+static int
+set_diagnostic_interrupt(ipmi_control_t     *control,
+			 int                *val,
+			 ipmi_control_op_cb handler,
+			 void               *cb_data)
+{
+    return set_fru_control(control, 3, handler, cb_data);
+}
+
+static void
+add_atca_fru_control(ipmi_mc_t               *mc,
+		     atca_fru_t              *finfo,
+		     char                    *name,
+		     unsigned int            control_type,
+		     unsigned int            control_num,
+		     ipmi_control_set_val_cb set_val,
+		     ipmi_control_t          **control)
+{
+    int rv;
 
     rv = atca_alloc_control(mc, finfo, NULL,
-			    IPMI_CONTROL_ONE_SHOT_RESET,
-			    "cold reset",
-			    set_cold_reset,
+			    control_type,
+			    name,
+			    set_val,
 			    NULL,
 			    NULL,
 			    NULL,
 			    NULL,
 			    NULL,
 			    1,
-			    &finfo->cold_reset);
+			    control);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(add_fru_control_mc_cb): "
-		 "Could allocate the reset control: 0x%x",
-		 ENTITY_NAME(finfo->entity), rv);
+		 "%soem_atca.c(add_atca_fru_control): "
+		 "Could allocate the '%s' control: 0x%x",
+		 ENTITY_NAME(finfo->entity), name, rv);
+	return;
     }
 
     rv = atca_add_control(mc, 
-			  &finfo->cold_reset,
-			  IPMC_RESET_CONTROL_NUM,
+			  control,
+			  control_num,
 			  finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(add_fru_control_mc_cb): "
-		 "Could not add reset control: 0x%x",
-		 MC_NAME(mc), rv);
-	return;
+		 "%soem_atca.c(add_atca_fru_control): "
+		 "Could not add '%s' control: 0x%x",
+		 MC_NAME(mc), name, rv);
     }
 }
 
 static void
-add_fru_control_handling(atca_fru_t *finfo)
+fru_control_capabilities_rsp(ipmi_mc_t  *mc,
+			     ipmi_msg_t *rsp,
+			     void       *rsp_data)
+{
+    atca_fru_t *finfo = rsp_data;
+
+    if (!check_for_msg_err(mc, NULL, rsp, 3, "fru_control_capabilities_rsp"))
+	finfo->fru_capabilities = rsp->data[2];
+
+    /* If the command fails, we just go on, as the system doesn't
+       support the query, but still must support at least cold
+       reset. */
+
+    if (!finfo->entity)
+	/* The entity was destroyed while the message was in progress. */
+	goto out;
+
+    /* Always support cold reset. */
+    add_atca_fru_control(mc, finfo, "cold reset", IPMI_CONTROL_ONE_SHOT_RESET,
+			 IPMC_RESET_CONTROL_NUM, set_cold_reset,
+			 &finfo->cold_reset);
+    if (finfo->fru_capabilities & 0x02)
+	add_atca_fru_control(mc, finfo, "warm reset",
+			     IPMI_CONTROL_ONE_SHOT_RESET,
+			     IPMC_WARM_RESET_CONTROL_NUM, set_warm_reset,
+			     &finfo->warm_reset);
+    if (finfo->fru_capabilities & 0x04)
+	add_atca_fru_control(mc, finfo, "graceful reboot",
+			     IPMI_CONTROL_ONE_SHOT_RESET,
+			     IPMC_GRACEFUL_REBOOT_CONTROL_NUM,
+			     set_graceful_reboot,
+			     &finfo->graceful_reboot);
+    if (finfo->fru_capabilities & 0x08)
+	add_atca_fru_control(mc, finfo, "diagnostic interrupt",
+			     IPMI_CONTROL_ONE_SHOT_RESET,
+			     IPMC_DIAGNOSTIC_INTERRUPT_CONTROL_NUM,
+			     set_diagnostic_interrupt,
+			     &finfo->diagnostic_interrupt);
+
+ out:
+    return;
+
+}
+
+static void
+fetch_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
+{
+    atca_fru_t    *finfo = cb_info;
+    ipmi_msg_t    msg;
+    unsigned char data[2];
+    int           rv;
+
+    /* Now fetch the LED information. */
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_CONTROL_CAPABILITIES;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = finfo->fru_id;
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_control_capabilities_rsp, finfo);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fetch_fru_leds_mc_cb): "
+		 "Could not send FRU LED properties command: 0x%x",
+		 MC_NAME(mc), rv);
+	/* Just go on, don't shut down the info. */
+    }
+}
+
+static void
+fetch_fru_control_handling(atca_fru_t *finfo)
 {
     int rv;
 
     if (finfo->cold_reset)
 	return;
     
-    rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, add_fru_control_mc_cb, finfo);
+    rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, fetch_fru_control_mc_cb, finfo);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(add_fru_control_handling): "
+		 "%soem_atca.c(fetch_fru_control_handling): "
 		 "Could not convert an mcid to a pointer: 0x%x",
 		 ENTITY_NAME(finfo->entity), rv);
     }
@@ -2431,7 +2551,7 @@ static void
 add_fru_controls(atca_fru_t *finfo)
 {
     fetch_fru_leds(finfo);
-    add_fru_control_handling(finfo);
+    fetch_fru_control_handling(finfo);
 #ifdef POWER_CONTROL_AVAILABLE
     add_power_handling(finfo);
 #endif

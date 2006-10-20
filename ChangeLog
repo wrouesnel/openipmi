@@ -1,3 +1,25 @@
+2006-10-20 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: Added a function to
+	get port information.
+	* include/OpenIPMI/ipmi_conn.h, lib/ipmi_lan.c: ditto
+
+	* cmdlang/cmd_conn.c, man/ipmi_cmdlang.7: Added support for the
+	new port information.
+	* swig/OpenIPMI.i: ditto
+	* swig/python/openipmi/_conn.py: ditto
+
+	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Exposed some
+	internals for use by the OEM ATCA handler dealing with RMCP ping
+	sockets.
+
+	* include/OpenIPMI/ipmi_picmg.h: Added the new PICMG messages from
+	the new ATCA spec.
+	
+	* lib/oem_atca_conn.c: Added support for ATCA RMCP ping sockets so
+	that the auxiliary IP connections on ATCA chassis can be
+	monitored.
+
 2006-10-16 Corey Minyard <cminyard@mvista.com>
 
 	* doc/IPMI.ltx: Added some docs on redundant connections and on

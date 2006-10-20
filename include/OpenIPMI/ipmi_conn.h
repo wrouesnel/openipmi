@@ -400,6 +400,14 @@ struct ipmi_con_s
 				 ipmi_ll_stat_info_t *info);
     int (*unregister_stat_handler)(ipmi_con_t          *ipmi,
 				   ipmi_ll_stat_info_t *info);
+
+    /* Get a string about the port.  This may be NULL, and the format
+       varies with the particular interface.  The length if the "info"
+       string is passed in info_len, the number of characters that
+       would have been used is returned in info_len, even if it was
+       not long enough to hold it. */
+    int (*get_port_info)(ipmi_con_t *ipmi, unsigned int port,
+			 char *info, int *info_len);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

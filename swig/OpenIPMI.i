@@ -3992,6 +3992,18 @@ char *get_error_string(unsigned int val);
 	return ipmi_domain_is_connection_port_up(self, connection, port, up);
     }
 
+    %newobject get_port_info;
+    char *get_port_info(int connection, int port)
+    {
+	int rv;
+	char buf[256];
+	int  len = sizeof(buf);
+	rv = ipmi_domain_get_port_info(self, connection, port, buf, &len);
+	if (rv)
+	    return NULL;
+	return strdup(buf);
+    }
+			
     %newobject get_connection_args;
     ipmi_args_t *get_connection_args(int connection)
     {

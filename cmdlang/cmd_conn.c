@@ -82,6 +82,8 @@ con_info(ipmi_domain_t *domain, int conn, void *cb_data)
     unsigned int    val;
     unsigned int    num;
     unsigned int    port;
+    char            buf[256];
+    int             len;
 
     rv = ipmi_domain_is_connection_active(domain, conn, &val);
     if (rv)
@@ -108,6 +110,10 @@ con_info(ipmi_domain_t *domain, int conn, void *cb_data)
 		ipmi_cmdlang_out(cmd_info, "Port", NULL);
 		ipmi_cmdlang_down(cmd_info);
 		ipmi_cmdlang_out_int(cmd_info, "Number", port);
+		len = sizeof(buf);
+		rv = ipmi_domain_get_port_info(domain, conn, port, buf, &len);
+		if (!rv)
+		    ipmi_cmdlang_out(cmd_info, "Info", buf);
 		ipmi_cmdlang_out_bool(cmd_info, "Up", val);
 		ipmi_cmdlang_up(cmd_info);
 	    }

@@ -49,6 +49,11 @@ class Port:
         self.up = False
         self.ui.incr_item_warning(self.treeroot)
 
+        pi = domain.get_port_info(c.cnum, pnum);
+        if (pi != None):
+            self.ui.set_item_text(self.treeroot, pi)
+            pass
+
         v = [ 0 ]
         rv = domain.is_connection_port_up(c.cnum, pnum, v)
         if (rv == 0):

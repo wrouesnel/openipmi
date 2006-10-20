@@ -45,6 +45,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -2164,7 +2165,7 @@ call_con_change_handler(void *cb_data, void *item1, void *item2)
 
 static void
 call_con_change_handlers(lan_data_t *lan, int err, unsigned int port,
-			  int any_port_up)
+			 int any_port_up)
 {
     call_con_change_handler_t info;
 
@@ -2174,6 +2175,32 @@ call_con_change_handlers(lan_data_t *lan, int err, unsigned int port,
     info.any_port_up = any_port_up;
     locked_list_iterate(lan->con_change_handlers, call_con_change_handler,
 			&info);
+}
+
+void
+_ipmi_lan_con_change_lock(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    ipmi_lock(lan->ip_lock);
+    ipmi_lock(lan->con_change_lock);
+    ipmi_unlock(lan->ip_lock);
+}
+
+void
+_ipmi_lan_con_change_unlock(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    ipmi_unlock(lan->con_change_lock);
+}
+
+void
+_ipmi_lan_call_con_change_handlers(ipmi_con_t   *ipmi,
+				   int          err,
+				   unsigned int port)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    call_con_change_handlers(lan, err, port, lan->connected);
 }
 
 static int
@@ -3724,6 +3751,58 @@ lan_get_num_ports(ipmi_con_t *ipmi)
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
     return lan->cparm.num_ip_addr;
+}
+
+static int
+lan_get_port_info(ipmi_con_t *ipmi, unsigned int port,
+		  char *info, int *info_len)
+{
+    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
+    sockaddr_ip_t *a;
+    int           count = 0;
+    int           len = *info_len;
+
+    if (port > lan->cparm.num_ip_addr)
+	return EINVAL;
+
+    a = &(lan->cparm.ip_addr[port]);
+
+    if (lan->ip[port].working_authtype == IPMI_AUTHTYPE_RMCP_PLUS)
+	count = snprintf(info, len, "rmcp+: ");
+    else
+	count = snprintf(info, len, "rmcp: ");
+    
+    switch (a->s_ipsock.s_addr.sa_family) {
+    case PF_INET:
+	{
+	    struct sockaddr_in *ip = &a->s_ipsock.s_addr4;
+	    char buf[INET_ADDRSTRLEN];
+
+	    inet_ntop(AF_INET, &ip->sin_addr, buf, sizeof(buf));
+	    count += snprintf(info+count, len-count, "inet:%s:%d",
+			      buf, ntohs(ip->sin_port));
+	}
+	break;
+
+#ifdef PF_INET6
+    case PF_INET6:
+	{
+	    struct sockaddr_in6 *ip = &a->s_ipsock.s_addr6;
+	    char buf[INET6_ADDRSTRLEN];
+
+	    inet_ntop(AF_INET6, &ip->sin6_addr, buf, sizeof(buf));
+	    count += snprintf(info+count, len-count, "inet6:%s:%d",
+			      buf, ntohs(ip->sin6_port));
+	}
+	break;
+#endif
+    default:
+	count += snprintf(info+count, len-count, "invalid");
+	break;
+    }
+
+    *info_len = count;
+    return 0;
 }
 
 static void *
@@ -5576,6 +5655,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->use_connection = lan_use_connection;
     ipmi->send_command_option = lan_send_command_option;
     ipmi->get_num_ports = lan_get_num_ports;
+    ipmi->get_port_info = lan_get_port_info;
     ipmi->register_stat_handler = lan_register_stat_handler;
     ipmi->unregister_stat_handler = lan_unregister_stat_handler;
 

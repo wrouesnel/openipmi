@@ -466,6 +466,16 @@ int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
 				      unsigned int  port,
 				      unsigned int  *up);
 
+/* Get information about a port.  This is a string that is
+   interface-type dependent.  The length of "info" is passed in
+   info_len, that returns the number of chars that would have been
+   used, even if "info" was not long enough to hold it. */
+int ipmi_domain_get_port_info(ipmi_domain_t *domain,
+			      unsigned int  connection,
+			      unsigned int  port,
+			      char          *info,
+			      int           *info_len);
+
 /* Get the args for a domain's connection. */
 ipmi_args_t *ipmi_domain_get_connection_args(ipmi_domain_t *domain,
 					     unsigned int  connection);

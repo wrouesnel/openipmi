@@ -240,7 +240,7 @@ struct ipmi_domain_s
     /* Are we in the process of connecting? */
     int connecting;
 
-#define MAX_PORTS_PER_CON 4
+#define MAX_PORTS_PER_CON 16
     /* -1 if not valid, 0 if not up, 1 if up. */
     int           port_up[MAX_PORTS_PER_CON][MAX_CONS];
 
@@ -4468,6 +4468,28 @@ ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
     *up = domain->port_up[port][connection];
 
     return 0;
+}
+
+int
+ipmi_domain_get_port_info(ipmi_domain_t *domain,
+			  unsigned int  connection,
+			  unsigned int  port,
+			  char          *info,
+			  int           *info_len)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    if (port >= MAX_PORTS_PER_CON)
+	return EINVAL;
+
+    if (!domain->conn[connection]->get_port_info)
+	return ENOSYS;
+
+    return domain->conn[connection]->get_port_info(domain->conn[connection],
+						   port, info, info_len);
 }
 
 int
