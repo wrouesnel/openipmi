@@ -236,6 +236,16 @@ typedef struct atca_site_s
     unsigned char site_number;
 } atca_site_t;
 
+#define MAX_EMU_ADDR		16
+#define MAX_EMU_ADDR_DATA	64
+typedef struct emu_addr_s
+{
+    unsigned char valid;
+    unsigned char addr_type;
+    unsigned char addr_data[MAX_EMU_ADDR_DATA];
+    unsigned int  addr_len;
+} emu_addr_t;
+
 struct emu_data_s
 {
     int        bmc_mc;
@@ -247,6 +257,9 @@ struct emu_data_s
     void *user_data;
 
     ipmi_emu_sleep_cb sleeper;
+
+    struct timeval last_addr_change_time;
+    emu_addr_t addr[MAX_EMU_ADDR];
 };
 
 static void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
@@ -2969,7 +2982,7 @@ handle_picmg_cmd_fru_control(lmc_data_t    *mc,
 	return;
     }
 
-    if (msg->data[2] != 0) {
+    if (msg->data[2] >= 4) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
@@ -3420,6 +3433,72 @@ handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
 
+static void
+handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
+					  ipmi_msg_t    *msg,
+					  unsigned char *rdata,
+					  unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 2, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = 0x0e;
+    *rdata_len = 3;
+}
+
+static void
+handle_picmg_cmd_get_shelf_manager_ip_addresses(lmc_data_t    *mc,
+						ipmi_msg_t    *msg,
+						unsigned char *rdata,
+						unsigned int  *rdata_len)
+{
+    emu_data_t   *emu = mc->emu;
+    unsigned int addr;
+    unsigned int count;
+    emu_addr_t   *ap = NULL;
+    int          i;
+
+    if (check_msg_length(msg, 2, rdata, rdata_len))
+	return;
+
+    addr = msg->data[1];
+    
+    for (count=0, i=0; i<MAX_EMU_ADDR; i++) {
+	if (emu->addr[i].valid) {
+	    if (count == addr)
+		ap = &(emu->addr[i]);
+	    count++;
+	}
+    }
+
+    if (addr >= count) {
+	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    ipmi_set_uint32(rdata+1, emu->last_addr_change_time.tv_sec);
+    rdata[5] = count;
+    rdata[6] = 0x03;
+    rdata[7] = addr - 1;
+    rdata[8] = 20;
+
+    rdata[9] = ap->addr_type;
+    if (addr == 0)
+	rdata[9] |= 0x80;
+    memcpy(rdata+10, ap->addr_data, ap->addr_len);
+    *rdata_len = 10 + ap->addr_len;
+}
+
 int
 ipmi_emu_atca_enable(emu_data_t *emu)
 {
@@ -3545,6 +3624,15 @@ handle_picmg_msg(lmc_data_t    *mc,
 
     case IPMI_PICMG_CMD_BUSED_RESOURCE:
 	handle_picmg_cmd_bused_resource(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_FRU_CONTROL_CAPABILITIES:
+	handle_picmg_cmd_fru_control_capabilities(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_GET_SHELF_MANAGER_IP_ADDRESSES:
+	handle_picmg_cmd_get_shelf_manager_ip_addresses(mc, msg, rdata,
+							rdata_len);
 	break;
 
     default:
@@ -3706,6 +3794,41 @@ ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper)
     }
 	
     return data;
+}
+
+int
+ipmi_emu_set_addr(emu_data_t *emu, unsigned int addr_num,
+		  unsigned char addr_type,
+		  void *addr_data, unsigned int addr_len)
+{
+    emu_addr_t *addr;
+
+    if (addr_num >= MAX_EMU_ADDR)
+	return EINVAL;
+
+    addr = &(emu->addr[addr_num]);
+    if (addr_len > sizeof(addr->addr_data))
+	return EINVAL;
+
+    gettimeofday(&emu->last_addr_change_time, NULL);
+    addr->addr_type = addr_type;
+    memcpy(addr->addr_data, addr_data, addr_len);
+    addr->addr_len = addr_len;
+    addr->valid = 1;
+    return 0;
+}
+
+int
+ipmi_emu_clear_addr(emu_data_t *emu, unsigned int addr_num)
+{
+    emu_addr_t *addr;
+
+    if (addr_num >= MAX_EMU_ADDR)
+	return EINVAL;
+
+    addr = &(emu->addr[addr_num]);
+    addr->valid = 0;
+    return 0;
 }
 
 void

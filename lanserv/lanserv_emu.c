@@ -383,7 +383,7 @@ write_config(lan_data_t *lan)
 //    misc_data_t *info = lan->user_info;
 }
 
-struct sockaddr addr[MAX_ADDR];
+sockaddr_ip_t addr[MAX_ADDR];
 socklen_t addr_len[MAX_ADDR];
 int num_addr = 0;
 
@@ -576,14 +576,20 @@ main(int argc, const char *argv[])
     }
 
     for (i=0; i<num_addr; i++) {
+	unsigned char addr_data[6];
+
 	if (addr_len[i] == 0)
 	    break;
 
-	data.lan_fd[i] = open_lan_fd(&addr[i], addr_len[i]);
+	data.lan_fd[i] = open_lan_fd(&addr[i].s_ipsock.s_addr, addr_len[i]);
 	if (data.lan_fd[i] == -1) {
 	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
 	    exit(1);
 	}
+
+	memcpy(addr_data, &addr[i].s_ipsock.s_addr4.sin_addr.s_addr, 4);
+	memcpy(addr_data+4, &addr[i].s_ipsock.s_addr4.sin_port, 2);
+	ipmi_emu_set_addr(emu, i, 0, addr_data, 6);
     }
 
     rv = ipmi_lan_init(&lan);

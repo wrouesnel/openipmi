@@ -1,3 +1,27 @@
+2006-10-21 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/lanserv_emu.c: Added
+	support for the PICMG get IP addresses and get FRU control
+	capabilities commands.
+
+	* lib/domain.c: Interpret ENOENT from a low-level connection
+	change to mean the connection no longer exists.
+
+	* lib/oem_atca.c: Free the new FRU control capabilities controls.
+
+	* lib/oem_atca_conn.c: Clean up the ATCA IP address pinging stuff
+	to work properly.
+
+	* sample/rmcp_ping.c: Fix a problem with specifying the port.
+
+	* swig/python/openipmigui/gui.py: Add a port removal function.
+
+	* swig/python/openipmigui/_domain.py: Pass some more parameters
+	to the port up function.
+
+	* swig/python/openipmigui/_conn.py: Allow dynamic changes to the
+	ports.
+
 2006-10-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: Added a function to

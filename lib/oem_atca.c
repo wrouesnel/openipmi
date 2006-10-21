@@ -1971,6 +1971,21 @@ destroy_fru_control_handling(atca_fru_t *finfo)
 	finfo->cold_reset = NULL;
 	ipmi_control_destroy(control);
     }
+    if (finfo->warm_reset) {
+	ipmi_control_t *control = finfo->warm_reset;
+	finfo->warm_reset = NULL;
+	ipmi_control_destroy(control);
+    }
+    if (finfo->graceful_reboot) {
+	ipmi_control_t *control = finfo->graceful_reboot;
+	finfo->graceful_reboot = NULL;
+	ipmi_control_destroy(control);
+    }
+    if (finfo->diagnostic_interrupt) {
+	ipmi_control_t *control = finfo->diagnostic_interrupt;
+	finfo->diagnostic_interrupt = NULL;
+	ipmi_control_destroy(control);
+    }
 }
 
 #ifdef POWER_CONTROL_AVAILABLE

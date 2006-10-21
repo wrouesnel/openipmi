@@ -159,6 +159,11 @@ int ipmi_emu_atca_set_site(emu_data_t    *emu,
 			   unsigned char site_type,
 			   unsigned char site_number);
 
+int ipmi_emu_set_addr(emu_data_t *emu, unsigned int addr_num,
+		      unsigned char addr_type,
+		      void *addr_data, unsigned int addr_len);
+int ipmi_emu_clear_addr(emu_data_t *emu, unsigned int addr_num);
+
 /* In emu_cmd.c */
 void ipmi_emu_shutdown(void);
 int ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);

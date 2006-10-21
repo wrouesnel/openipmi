@@ -185,11 +185,13 @@ main(int argc, char *argv[])
     
     if (i < argc) {
 	struct addrinfo hints, *res0;
+	char ports[16];
 
+	snprintf(ports, sizeof(ports), "%d", port);
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_DGRAM;
-	rv = getaddrinfo(argv[i], "623", &hints, &res0);
+	rv = getaddrinfo(argv[i], ports, &hints, &res0);
 	if (rv != 0) {
 	    fprintf(stderr, "Unable to handle given address: %s\n\n",
 		    gai_strerror(rv));

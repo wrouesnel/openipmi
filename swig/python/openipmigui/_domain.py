@@ -350,7 +350,7 @@ class Domain:
         if (connum not in self.connections):
             self.ui.new_log("Got connection for invalid connection number")
             return
-        self.connections[connum].SetPortUp(portnum, err == 0)
+        self.connections[connum].SetPortUp(domain, portnum, err)
         any_con_up = False
         for c in self.connections.itervalues():
             any_con_up = c.IsUp() or any_con_up

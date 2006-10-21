@@ -4,6 +4,7 @@ atca_enable
 # Add the BMC at 0x20
 # Entity id 0xf0 1
 mc_add 20 0 1 23 9 8 1f 1291 f02
+atca_set_site 0x10 3 1
 mc_setbmc 20
 mc_setchan 20 0 1 1 0
 mc_setchan 20 1 4 1 2

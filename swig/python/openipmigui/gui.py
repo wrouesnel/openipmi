@@ -717,6 +717,16 @@ class IPMIGUI(Tix.Frame):
         self.setup_item(item, active=True)
         return
         
+    def remove_port(self, p):
+        if (self.in_destroy):
+            return
+        if (hasattr(p, "treeroot")):
+            self.cleanup_item(p.treeroot)
+            self.tree.hlist.delete_entry(p.treeroot)
+            del self.treedata[p.treeroot]
+            pass
+        return
+
     def add_entity(self, d, e, parent=None):
         if (self.in_destroy):
             return

@@ -395,8 +395,8 @@ lanserv_read_config(lan_data_t    *lan,
 		fprintf(stderr, "Too many addresses specified\n");
 		err = EINVAL;
 	    }
-	    err = get_sock_addr(&tokptr, &addr[*num_addr],
-				&addr_len[*num_addr],
+	    err = get_sock_addr(&tokptr, &(addr[*num_addr]),
+				&(addr_len[*num_addr]),
 				&errstr);
 	    (*num_addr)++;
 	} else if (strcmp(tok, "user") == 0) {

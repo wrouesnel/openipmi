@@ -122,10 +122,11 @@ typedef struct atca_ip_addr_info_s
     unsigned char is_shm;
     unsigned char addr_type;
 
-    unsigned int connected : 1;
-    unsigned int found : 1;
-    unsigned int changed : 1;
+    unsigned char connected;
+    unsigned char found;
+    unsigned char changed;
     struct timeval last_pong_time;
+    unsigned int  dropped_pings;
 
     sockaddr_ip_t addr;
     socklen_t     addr_len;
@@ -150,7 +151,7 @@ typedef struct atca_conn_info_s
     unsigned int        working_ip_addr;
 
     int (*orig_get_port_info)(ipmi_con_t *ipmi, unsigned int port,
-			      char *info, int info_len);
+			      char *info, int *info_len);
 
     unsigned int hash;
     struct atca_conn_info_s *fd_next;
@@ -207,6 +208,7 @@ fd_sock_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
 		    ainfo->changed = 1;
 		}
 		gettimeofday(&ainfo->last_pong_time, NULL);
+		ainfo->dropped_pings = 0;
 	    }
 	}
 
@@ -217,7 +219,7 @@ fd_sock_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
 
 	for (i=1; i<count; i++) {
 	    atca_ip_addr_info_t *ainfo = &(addrs[i]);
-	    if (!ainfo->changed) {
+	    if (ainfo->changed) {
 		ainfo->changed = 0;
 		_ipmi_lan_call_con_change_handlers(tinfo->ipmi, 0, i);
 	    }
@@ -335,7 +337,7 @@ atca_check_and_ping(ipmi_con_t *ipmi, atca_conn_info_t *info)
 	if (ainfo->connected) {
 	    struct timeval t = ainfo->last_pong_time;
 	    t.tv_sec += ainfo->max_unavailable_time;
-	    if (t.tv_sec > now.tv_sec) {
+	    if ((t.tv_sec < now.tv_sec) && (ainfo->dropped_pings > 2)) {
 		_ipmi_lan_call_con_change_handlers(ipmi, EAGAIN, i);
 		ainfo->connected = 0;
 	    }
@@ -344,6 +346,7 @@ atca_check_and_ping(ipmi_con_t *ipmi, atca_conn_info_t *info)
 	/* Send a ping. */
 	sendto(fd_sock, data, sizeof(data), 0,
 	       (struct sockaddr *) &ainfo->addr, ainfo->addr_len);
+	ainfo->dropped_pings++;
     }
     ipmi_unlock(info->lock);
 }
@@ -363,7 +366,10 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
 
     ipmi_lock(info->lock);
     c = info->ip_addrs;
-    cc = info->num_ip_addr;
+    if (c)
+	cc = info->num_ip_addr;
+    else
+	cc = 0;
     w = info->working_ip_addrs;
     wc = info->num_working_ip_addr;
     for (i=1; i<cc; i++)
@@ -376,6 +382,7 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
 	    /* This address is unchanged, so ignore it. */
 	    w[i].connected = c[i].connected;
 	    w[i].last_pong_time = c[i].last_pong_time;
+	    w[i].dropped_pings = c[i].dropped_pings;
 	    continue;
 	}
 
@@ -388,20 +395,24 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
 		c[j].found = 1;
 		w[i].connected = c[j].connected;
 		w[i].last_pong_time = c[j].last_pong_time;
+		w[i].dropped_pings = c[j].dropped_pings;
 	    }
 	}
     }
 
     /* Switch over and report everything that changed. */
-    (info->ip_addrs[0].usecount)--;
-    if (info->ip_addrs[0].usecount == 0)
-	ipmi_mem_free(info->ip_addrs);
+    if (info->ip_addrs) {
+	(info->ip_addrs[0].usecount)--;
+	if (info->ip_addrs[0].usecount == 0)
+	    ipmi_mem_free(info->ip_addrs);
+    }
     info->ip_addrs = info->working_ip_addrs;
     info->num_ip_addr = info->num_working_ip_addr;
     info->working_ip_addrs = NULL;
+    info->last_ip_change_time = info->working_ip_change_time;
 
     _ipmi_lan_con_change_lock(info->ipmi);
-    w[i].usecount++;
+    w[0].usecount++;
     ipmi_unlock(info->lock);
 
     for (i=1; i<wc; i++) {
@@ -446,7 +457,7 @@ atca_oem_ip_next(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     }
 
     if (msg->data_len < 10) {
-	ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_ip_start):"
+	ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_ip_next):"
 		 "Response is too short: %d", msg->data_len);
 	rv = EINVAL;
 	goto out_err;
@@ -528,7 +539,7 @@ atca_update_ip_addr(atca_conn_info_t *info, ipmi_con_t *ipmi, ipmi_msg_t *msg)
 	goto out;
     }
 
-    info->working_ip_addrs = ipmi_mem_alloc(sizeof(*info->ip_addrs)
+    info->working_ip_addrs = ipmi_mem_alloc(sizeof(atca_ip_addr_info_t)
 					    * msg->data[5]);
     if (!info->working_ip_addrs) {
 	ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_update_ip_addr):"
@@ -536,7 +547,7 @@ atca_update_ip_addr(atca_conn_info_t *info, ipmi_con_t *ipmi, ipmi_msg_t *msg)
 	goto out;
     }
     memset(info->working_ip_addrs, 0,
-	   sizeof(*info->working_ip_addrs) * msg->data[5]);
+	   sizeof(atca_ip_addr_info_t) * msg->data[5]);
     info->working_ip_addrs[0].usecount = 1;
 
     info->num_working_ip_addr = msg->data[5];
@@ -650,14 +661,16 @@ atca_oem_ip_start(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    info->supports_ip_addr_checking = 1;
+    if (!info->supports_ip_addr_checking) {
+	info->supports_ip_addr_checking = 1;
 
-    /* Override the port count. */
-    info->num_ip_addr = 1;
-    ipmi->get_num_ports = atca_get_num_ports;
-    info->orig_get_port_info = ipmi->get_port_info;
-    ipmi->get_port_info = atca_get_port_info;
-    info->ipmi = ipmi;
+	/* Override the port count. */
+	info->num_ip_addr = 1;
+	ipmi->get_num_ports = atca_get_num_ports;
+	info->orig_get_port_info = ipmi->get_port_info;
+	ipmi->get_port_info = atca_get_port_info;
+	info->ipmi = ipmi;
+    }
 
     atca_update_ip_addr(info, ipmi, msg);
 

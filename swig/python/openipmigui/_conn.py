@@ -57,7 +57,7 @@ class Port:
         v = [ 0 ]
         rv = domain.is_connection_port_up(c.cnum, pnum, v)
         if (rv == 0):
-            self.SetUp(v[0])
+            self.SetUp(domain, v[0])
         return
 
     def remove(self):
@@ -68,7 +68,12 @@ class Port:
     def __str__(self):
         return self.name
 
-    def SetUp(self, up):
+    def SetUp(self, domain, up):
+        pi = domain.get_port_info(self.c.cnum, self.pnum);
+        if (pi != None):
+            self.ui.set_item_text(self.treeroot, pi)
+            pass
+
         if (up):
             if (not self.up):
                 self.ui.decr_item_warning(self.treeroot)
@@ -145,8 +150,16 @@ class Connection:
         self.domain_id.to_domain(self)
         return
     
-    def SetPortUp(self, port, up):
-        self.ports[port].SetUp(up)
+    def SetPortUp(self, domain, port, err):
+        if (port not in self.ports):
+            Port(domain, self, port)
+            pass
+        if (err == OpenIPMI.enoent):
+            self.ui.remove_port(self.ports[port])
+            del self.ports[port];
+            return
+        
+        self.ports[port].SetUp(domain, err == 0)
         conup = False
         for p in self.ports.itervalues():
             conup = p.IsUp() or conup

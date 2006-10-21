@@ -4741,7 +4741,9 @@ ll_con_changed(ipmi_con_t   *ipmi,
     if (u == -1)
 	goto out_unlock;
 
-    if (err)
+    if (err == ENOENT)
+	domain->port_up[port_num][u] = -1;
+    else if (err)
 	domain->port_up[port_num][u] = 0;
     else
 	domain->port_up[port_num][u] = 1;
