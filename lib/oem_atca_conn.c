@@ -419,6 +419,9 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
 
     for (i=1; i<wc; i++) {
 	int err = 0;
+	if (! w[i].changed)
+	    continue;
+	w[i].changed = 0;
 	if (! w[i].connected)
 	    err = EAGAIN;
 	_ipmi_lan_call_con_change_handlers(ipmi, err, i);
@@ -660,16 +663,16 @@ atca_oem_ip_start(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    rv = register_atca_conn(info);
-    if (rv) {
-	/* Unable to register, give up. */
-	ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_ip_start):"
-		 "Could not register ATCA connection: %x", rv);
-	goto out;
-    }
-
     if (!info->supports_ip_addr_checking) {
 	info->supports_ip_addr_checking = 1;
+
+	rv = register_atca_conn(info);
+	if (rv) {
+	    /* Unable to register, give up. */
+	    ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_ip_start):"
+		     "Could not register ATCA connection: %x", rv);
+	    goto out;
+	}
 
 	/* Override the port count. */
 	info->num_ip_addr = 1;
