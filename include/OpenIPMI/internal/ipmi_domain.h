@@ -37,6 +37,7 @@
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/ipmi_fru.h>
 
 #include <OpenIPMI/internal/ipmi_entity.h>
 #include <OpenIPMI/internal/ipmi_sensor.h>
@@ -206,6 +207,29 @@ void *ipmi_domain_get_oem_data(ipmi_domain_t *domain);
 typedef void (*ipmi_domain_shutdown_cb)(ipmi_domain_t *domain);
 void ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
 					  ipmi_domain_shutdown_cb handler);
+
+/* Used to implement special handling of FRU data for locking,
+   timestamps, etc. */
+typedef int (*_ipmi_domain_fru_setup_cb)(ipmi_domain_t *domain,
+					 unsigned char is_logical,
+					 unsigned char device_address,
+					 unsigned char device_id,
+					 unsigned char lun,
+					 unsigned char private_bus,
+					 unsigned char channel,
+					 ipmi_fru_t    *fru,
+					 void          *cb_data);
+int _ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
+				       _ipmi_domain_fru_setup_cb setup,
+				       void                      *cb_data);
+int _ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
+					unsigned char is_logical,
+					unsigned char device_address,
+					unsigned char device_id,
+					unsigned char lun,
+					unsigned char private_bus,
+					unsigned char channel,
+					ipmi_fru_t    *fru);
 
 /* Set the domain type for a domain. */
 void ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype);

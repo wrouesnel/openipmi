@@ -509,6 +509,13 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 
     fru->deleted = 0;
 
+    err = _ipmi_domain_fru_call_special_setup(domain, is_logical,
+					      device_address, device_id,
+					      lun, private_bus, channel,
+					      fru);
+    if (err)
+	goto out_err;
+
     _ipmi_fru_lock(fru);
     if (fru->is_logical)
 	err = start_logical_fru_fetch(domain, fru);
@@ -516,13 +523,16 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 	err = start_physical_fru_fetch(domain, fru);
     if (err) {
 	_ipmi_fru_unlock(fru);
-	ipmi_destroy_lock(fru->lock);
-	ipmi_mem_free(fru);
-	return err;
+	goto out_err;
     }
 
     *new_fru = fru;
     return 0;
+
+ out_err:
+    ipmi_destroy_lock(fru->lock);
+    ipmi_mem_free(fru);
+    return err;
 }
 
 int

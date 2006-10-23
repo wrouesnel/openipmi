@@ -300,6 +300,9 @@ struct ipmi_domain_s
     ipmi_domain_close_done_cb close_done;
     void                      *close_done_cb_data;
 
+    _ipmi_domain_fru_setup_cb fru_setup_cb;
+    void                      *fru_setup_cb_data;
+
     /* Anonymous attributes for the domain. */
     locked_list_t *attr;
 
@@ -1425,6 +1428,36 @@ cancel_domain_oem_check(ipmi_domain_t *domain)
 {
     if (domain->check)
 	domain->check->cancelled = 1;
+}
+
+/***********************************************************************
+ *
+ * FRU data handling
+ *
+ **********************************************************************/
+int _ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
+				       _ipmi_domain_fru_setup_cb setup,
+				       void                      *cb_data)
+{
+    domain->fru_setup_cb = setup;
+    domain->fru_setup_cb_data = cb_data;
+    return 0;
+}
+
+int _ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
+					unsigned char is_logical,
+					unsigned char device_address,
+					unsigned char device_id,
+					unsigned char lun,
+					unsigned char private_bus,
+					unsigned char channel,
+					ipmi_fru_t    *fru)
+{
+    if (!domain->fru_setup_cb)
+	return 0;
+    return domain->fru_setup_cb(domain, is_logical, device_address,
+				device_id, lun, private_bus, channel,
+				fru, domain->fru_setup_cb_data);
 }
 
 /***********************************************************************

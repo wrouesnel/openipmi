@@ -6,6 +6,10 @@
 	* lib/oem_atca.c: Added support for detecting version changes with
 	a version change sensor event.
 
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c, lib/fru.c: Added
+	infrastructure for handling special FRU characteristics for a
+	domain.
+
 2006-10-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Fixed a few glitches with the new ATCA
