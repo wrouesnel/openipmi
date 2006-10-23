@@ -8858,6 +8858,16 @@ there are multiple \acs{IPMB} busses, it looks like one except for
 reporting of errors.  And the Shelf Managers will make the system look
 like one IP address even if one Shelf Manager fails.
 
+ECN002 of the \acs{ATCA} spec added the capability to supply all the
+management IP addresses on an ATCA system.  OpenIPMI will
+automatically detect this capability and create a port for each IP
+address.  This port's info will show ATCA\_aux as the interface type.
+The port cannot be activated, but reporting of the port's state tells
+you if the port is up or down.  Note that ports can change
+dynamically; if a port change comes in with an ENOENT error, that port
+has been deleted.  You should check the port information each time the
+port changes, as the ports may be reordered or reconfigured.
+
 \section{Hot Swap in \acs{ATCA}}
 The full standard OpenIPMI hot-swap state machine is implemented for
 \acs{ATCA} systems and is fully operation.
@@ -8894,7 +8904,14 @@ hot-swap LED and is named ``blue led''.  The other LEDs are labeled
 ``led 1'', ``led 2'', etc.
 
 The reset control is named ``cold reset'' and can be used to reset the
-main processor on the board.
+main processor on the board.  If your board is \acs{ATCA} ECN002
+compliant, it will have a way to detect additional controls:
+\begin{description}
+\item[warm reset]
+\item[graceful reboot]
+\item[diagnostic interrupt]
+\end{description}
+The operation of these is board-dependent.
 
 Note that even though you could directly control the power on an
 \acs{ATCA} board, you should not.  Use the hot-swap state machine.

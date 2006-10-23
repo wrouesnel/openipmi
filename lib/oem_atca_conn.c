@@ -153,6 +153,8 @@ typedef struct atca_conn_info_s
     int (*orig_get_port_info)(ipmi_con_t *ipmi, unsigned int port,
 			      char *info, int *info_len);
 
+    unsigned int ipmb_call_count;
+
     unsigned int hash;
     struct atca_conn_info_s *fd_next;
     struct atca_conn_info_s **fd_list;
@@ -591,7 +593,7 @@ atca_get_port_info(ipmi_con_t *ipmi, unsigned int port,
 
     a = &(info->ip_addrs[port].addr);
 
-    count = snprintf(str, len, "ATCA_ping: ");
+    count = snprintf(str, len, "ATCA_aux: ");
 
     switch (a->s_ipsock.s_addr.sa_family) {
     case PF_INET:
@@ -643,9 +645,14 @@ atca_oem_ip_start(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     if (!info)
 	goto out;
 
-    if (msg->data[0] != 0)
-	/* No support for this, just ignore it. */
+    if (msg->data[0] != 0) {
+	/* Error checking the IP.  It may have timed out, and we want
+	   to go ahead and ping everything even if we have previously
+	   determined that address checking works. */
+	if (info->supports_ip_addr_checking)
+	    atca_check_and_ping(ipmi, info);
 	goto out;
+    }
 
     if (msg->data_len < 10) {
 	ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_ip_start):"
@@ -791,8 +798,12 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
 	ipmi_free_msg_item(rspi);
 
     /* Do an IP address check as part of the audit. */
-    if (info->supports_ip_addr_checking)
+    info->ipmb_call_count++;
+    if (info->supports_ip_addr_checking
+	|| ((info->ipmb_call_count % 128) == 0))
+    {
 	start_ip_addr_check(conn);
+    }
 
     return rv;
 }
