@@ -3489,9 +3489,13 @@ atca_event_handler(ipmi_domain_t *domain,
     unsigned char data[13];
     unsigned char old_state;
     unsigned char new_state;
+    unsigned char sensor_type;
+    ipmi_mc_t     *mc;
 
     /* Here we look for hot-swap events so we know to start the
-       process of scanning for an IPMC when it is installed. */
+       process of scanning for an IPMC when it is installed.  We also
+       look for version change events and re-read data for the MC
+       involved.*/
     if (ipmi_event_get_type(event) != 2)
 	/* Not a system event */
 	return;
@@ -3501,43 +3505,56 @@ atca_event_handler(ipmi_domain_t *domain,
 	/* Not IPMI 1.5 */
 	return;
 
-    if (data[7] != 0xf0)
-	/* Not a hot-swap event. */
-	return;
-
     if (ipmi_event_is_old(event))
 	/* It's an old event, ignore it. */
 	return;
 
-    old_state = data[10] & 0xf;
-    new_state = data[11] & 0xf;
-    if ((old_state == 0) || (new_state == 0)) {
-	if (data[13] != 0) {
-	    /* FRU id is not 0, it's an AMC module (or something else the
-	       IPMC manages).  If the device has gone away or is newly
-	       inserted, rescan the SDRs on the IPMC. */
-	    ipmi_ipmb_addr_t addr;
-	    ipmi_mc_t        *mc;
+    sensor_type = data[7];
 
-	    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-	    addr.channel = data[5] >> 4;
-	    addr.slave_addr = data[4];
-	    addr.lun = 0;
+    switch(sensor_type) {
+    case 0xf0:
+	old_state = data[10] & 0xf;
+	new_state = data[11] & 0xf;
+	if ((old_state == 0) || (new_state == 0)) {
+	    if (data[13] != 0) {
+		/* FRU id is not 0, it's an AMC module (or something else the
+		   IPMC manages).  If the device has gone away or is newly
+		   inserted, rescan the SDRs on the IPMC. */
+		ipmi_ipmb_addr_t addr;
+		ipmi_mc_t        *mc;
+		
+		addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+		addr.channel = data[5] >> 4;
+		addr.slave_addr = data[4];
+		addr.lun = 0;
 
-	    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr,
-				       sizeof(addr));
-	    if (mc) {
-		ipmi_mc_reread_sensors(mc, NULL, NULL);
-		_ipmi_mc_put(mc);
+		mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr,
+					   sizeof(addr));
+		if (mc) {
+		    ipmi_mc_reread_sensors(mc, NULL, NULL);
+		    _ipmi_mc_put(mc);
+		}
 	    }
+	} else {
+	    /* We have a hot-swap event on the main where the previous
+	       state was not installed.  Scan the MC to make it appear.
+	       Note that we always do this, in case we missed a hot-swap
+	       removal and this is a changed MC. */
+	    ipmi_start_ipmb_mc_scan(domain, (data[5] >> 4) & 0xf,
+				    data[4], data[4], NULL, NULL);
 	}
-    } else {
-	/* We have a hot-swap event on the main where the previous
-	   state was not installed.  Scan the MC to make it appear.
-	   Note that we always do this, in case we missed a hot-swap
-	   removal and this is a changed MC. */
-	ipmi_start_ipmb_mc_scan(domain, (data[5] >> 4) & 0xf,
-				data[4], data[4], NULL, NULL);
+	break;
+
+    case IPMI_SENSOR_TYPE_VERSION_CHANGE:
+	if ((data[10] != 1) && (data[10] != 7))
+	    break;
+	mc = _ipmi_event_get_generating_mc(domain, NULL, event);
+	if (!mc)
+	    break;
+	ipmi_mc_reread_sensors(mc, NULL, NULL);
+	_ipmi_mc_put(mc);
+	/* FIXME - what about FRU data? */
+	break;
     }
 }
 
@@ -3827,7 +3844,7 @@ set_up_atca_blade(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 
     ipmi_domain_add_new_sensor_handler(domain, atca_new_sensor_handler, NULL);
 
-    /* Send the ATCA Get Address Info command to get the blad info. */
+    /* Send the ATCA Get Address Info command to get the blade info. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;

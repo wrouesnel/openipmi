@@ -145,6 +145,9 @@ static char *sensor_types[] =
     "lan",
     "management_subsystem_health",
     "battery",
+    "session_audit",
+    "version_change",
+    "fru_state",
 };
 #define NUM_SENSOR_TYPES (sizeof(sensor_types)/sizeof(char *))
 const char *

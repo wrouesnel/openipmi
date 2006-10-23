@@ -148,6 +148,9 @@ const char *ipmi_get_event_support_string(unsigned int val);
 #define IPMI_SENSOR_TYPE_LAN				0x27
 #define IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH	0x28
 #define IPMI_SENSOR_TYPE_BATTERY			0x29
+#define IPMI_SENSOR_TYPE_SESSION_AUDIT			0x2a
+#define IPMI_SENSOR_TYPE_VERSION_CHANGE			0x2b
+#define IPMI_SENSOR_TYPE_FRU_STATE			0x2c
 const char *ipmi_get_sensor_type_string(unsigned int val);
 
 #define IPMI_EVENT_READING_TYPE_THRESHOLD			0x01

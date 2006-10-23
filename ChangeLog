@@ -1,3 +1,11 @@
+2006-10-23 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_bits.h, lib/strings.c: Add some new sensor
+	types from IPMI 2.0.
+
+	* lib/oem_atca.c: Added support for detecting version changes with
+	a version change sensor event.
+
 2006-10-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Fixed a few glitches with the new ATCA
