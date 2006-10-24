@@ -149,6 +149,7 @@ typedef int (*_ipmi_fru_write_cb)(ipmi_fru_t      *fru,
 				  _ipmi_fru_op_cb done);
 typedef int (*_ipmi_fru_complete_write_cb)(ipmi_fru_t      *fru,
 					   ipmi_domain_t   *domain,
+					   int             abort,
 					   uint32_t        timestamp,
 					   _ipmi_fru_op_cb done);
 
@@ -158,7 +159,7 @@ int _ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
 					_ipmi_fru_prepare_write_cb handler);
 int _ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
 				_ipmi_fru_write_cb handler);
-int _ipmi_fru_set_write_complete_handler(ipmi_fru_t                  *fru,
+int _ipmi_fru_set_complete_write_handler(ipmi_fru_t                  *fru,
 					 _ipmi_fru_complete_write_cb handler);
 
 typedef void (*_ipmi_fru_setup_data_clean_cb)(ipmi_fru_t *fru, void *data);

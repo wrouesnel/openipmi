@@ -6,7 +6,8 @@
 	* lanserv/emu.c, lanserv/emu.h, lanserv/lanserv_emu.c: Added
 	support for ATCA FRU locking.
 
-	* lib/oem_atca.c: Added FRU timestamp handling.
+	* lib/oem_atca.c: Added FRU data handling for reading/writing FRU
+	inventory device 254 on the shelf manager.
 
 	* swig/python/openipmigui/_fru.py: Make sure FRU data gets freed.
 

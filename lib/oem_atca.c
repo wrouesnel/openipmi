@@ -2937,6 +2937,372 @@ atca_fix_sel_handler(enum ipmi_update_e op,
 
 /***********************************************************************
  *
+ * Special FRU handling for FRU device 254 on the shelf manager.
+ *
+ **********************************************************************/
+
+typedef struct atca_fru_254_info_s
+{
+    uint16_t lock_id;
+} atca_fru_254_info_t;
+
+static void
+atca_fru_254_info_cleanup(ipmi_fru_t *fru, void *data)
+{
+    ipmi_mem_free(data);
+}
+
+static int
+atca_fru_254_get_timestamp_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_fru_t             *fru = rspi->data1;
+    _ipmi_fru_timestamp_cb handler = rspi->data2;
+    ipmi_msg_t             *msg = &rspi->msg;
+    unsigned char          *data = msg->data;
+
+    if (!domain) {
+	handler(fru, domain, ECANCELED, 0);
+	goto out;
+    }
+
+    if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_get_timestamp_done): "
+		 "Error fetching the FRU timestamp: 0x%x",
+		 DOMAIN_NAME(domain), data[0]);
+	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]), 0);
+	goto out;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_get_timestamp_done): "
+		 "FRU timestamp fetch too small: %d",
+		 DOMAIN_NAME(domain), msg->data_len);
+	handler(fru, domain, EINVAL, 0);
+    }
+
+    handler(fru, domain, 0, ipmi_get_uint32(data+4));
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+atca_fru_254_get_timestamp(ipmi_fru_t             *fru,
+			   ipmi_domain_t          *domain,
+			   _ipmi_fru_timestamp_cb handler)
+{
+    ipmi_addr_t   addr;
+    unsigned int  addr_len;
+    ipmi_msg_t    msg;
+    unsigned char data[5];
+
+    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = 254;
+    data[2] = 0; /* Fetch timestamp */
+    data[3] = 0;
+    data[4] = 0;
+    msg.data = data;
+    msg.data_len = 5;
+
+    return ipmi_send_command_addr(domain,
+				  &addr, addr_len,
+				  &msg,
+				  atca_fru_254_get_timestamp_done,
+				  fru,
+				  handler);
+}
+
+static int
+atca_fru_254_prepare_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_fru_t          *fru = rspi->data1;
+    _ipmi_fru_op_cb     handler = rspi->data2;
+    ipmi_msg_t          *msg = &rspi->msg;
+    unsigned char       *data = msg->data;
+    atca_fru_254_info_t *info;
+
+    if (!domain) {
+	handler(fru, domain, ECANCELED);
+	goto out;
+    }
+
+    if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_prepare_write_done): "
+		 "Error getting the lock: 0x%x",
+		 DOMAIN_NAME(domain), data[0]);
+	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]));
+	goto out;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_prepare_write_done): "
+		 "lock fetch response too small: %d",
+		 DOMAIN_NAME(domain), msg->data_len);
+	handler(fru, domain, EINVAL);
+    }
+
+    info = _ipmi_fru_get_setup_data(fru);
+    info->lock_id = ipmi_get_uint16(data+2);
+
+    handler(fru, domain, 0);
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+atca_fru_254_prepare_write(ipmi_fru_t      *fru,
+			   ipmi_domain_t   *domain,
+			   uint32_t        timestamp,
+			   _ipmi_fru_op_cb done)
+{
+    ipmi_addr_t   addr;
+    unsigned int  addr_len;
+    ipmi_msg_t    msg;
+    unsigned char data[5];
+
+    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = 254;
+    data[2] = 1; /* get lock */
+    data[3] = 0;
+    data[4] = 0;
+    msg.data = data;
+    msg.data_len = 5;
+
+    return ipmi_send_command_addr(domain,
+				  &addr, addr_len,
+				  &msg,
+				  atca_fru_254_prepare_write_done,
+				  fru,
+				  done);
+}
+
+static int
+atca_fru_254_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_fru_t      *fru = rspi->data1;
+    _ipmi_fru_op_cb handler = rspi->data2;
+    ipmi_msg_t      *msg = &rspi->msg;
+    unsigned char   *data = msg->data;
+
+    if (!domain) {
+	handler(fru, domain, ECANCELED);
+	goto out;
+    }
+
+    if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_write_done): "
+		 "Error writing FRU data: 0x%x",
+		 DOMAIN_NAME(domain), data[0]);
+	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]));
+	goto out;
+    }
+
+    if (msg->data_len < 3) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_write_done): "
+		 "Write response too small: %d",
+		 DOMAIN_NAME(domain), msg->data_len);
+	handler(fru, domain, EINVAL);
+    }
+
+    handler(fru, domain, 0);
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+atca_fru_254_write(ipmi_fru_t      *fru,
+		   ipmi_domain_t   *domain,
+		   unsigned char   *idata,
+		   unsigned int    idata_len,
+		   _ipmi_fru_op_cb done)
+{
+    ipmi_addr_t         addr;
+    unsigned int        addr_len;
+    ipmi_msg_t          msg;
+    unsigned char       data[MAX_IPMI_DATA_SIZE];
+    atca_fru_254_info_t *info;
+
+    if (idata_len < 3)
+	return EINVAL;
+    if ((idata_len + 3) > sizeof(data))
+	return E2BIG;
+
+    info = _ipmi_fru_get_setup_data(fru);
+
+    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_WRITE;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = idata[0];
+    ipmi_set_uint16(data+2, info->lock_id);
+    memcpy(data+4, idata+1, idata_len-1);
+    msg.data = data;
+    msg.data_len = idata_len + 3;
+
+    return ipmi_send_command_addr(domain,
+				  &addr, addr_len,
+				  &msg,
+				  atca_fru_254_write_done,
+				  fru,
+				  done);
+}
+
+static int
+atca_fru_254_complete_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_fru_t      *fru = rspi->data1;
+    _ipmi_fru_op_cb handler = rspi->data2;
+    ipmi_msg_t      *msg = &rspi->msg;
+    unsigned char   *data = msg->data;
+
+
+    if (!domain) {
+	handler(fru, domain, ECANCELED);
+	goto out;
+    }
+
+    if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_complete_write_done): "
+		 "Error releasing the FRU data lock: 0x%x",
+		 DOMAIN_NAME(domain), data[0]);
+	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]));
+	goto out;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_complete_write_done): "
+		 "FRU lock release too small: %d",
+		 DOMAIN_NAME(domain), msg->data_len);
+	handler(fru, domain, EINVAL);
+    }
+
+    handler(fru, domain, 0);
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+atca_fru_254_complete_write(ipmi_fru_t      *fru,
+			    ipmi_domain_t   *domain,
+			    int             err,
+			    uint32_t        timestamp,
+			    _ipmi_fru_op_cb done)
+{
+    ipmi_addr_t         addr;
+    unsigned int        addr_len;
+    ipmi_msg_t          msg;
+    unsigned char       data[5];
+    atca_fru_254_info_t *info;
+
+
+    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+
+    info = _ipmi_fru_get_setup_data(fru);
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = 254;
+    if (err)
+	data[2] = 2; /* unlock and discard */
+    else
+	data[2] = 3; /* unlock and commit */
+    ipmi_set_uint16(data+3, info->lock_id);
+    msg.data = data;
+    msg.data_len = 5;
+
+    return ipmi_send_command_addr(domain,
+				  &addr, addr_len,
+				  &msg,
+				  atca_fru_254_complete_write_done,
+				  fru,
+				  done);
+}
+
+static int
+atca_fru_254_setup(ipmi_domain_t *domain,
+		   unsigned char is_logical,
+		   unsigned char device_address,
+		   unsigned char device_id,
+		   unsigned char lun,
+		   unsigned char private_bus,
+		   unsigned char channel,
+		   ipmi_fru_t    *fru,
+		   void          *cb_data)
+{
+    int                 rv;
+    atca_fru_254_info_t *info;
+
+    if (!is_logical || (device_address != 0x20) || (device_id != 254))
+	return 0;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    _ipmi_fru_set_setup_data(fru, info, atca_fru_254_info_cleanup);
+
+    rv = _ipmi_fru_set_get_timestamp_handler(fru, atca_fru_254_get_timestamp);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Unable to register timestamp handler",
+		 DOMAIN_NAME(domain));
+	return rv;
+    }
+
+    rv = _ipmi_fru_set_prepare_write_handler(fru, atca_fru_254_prepare_write);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Unable to register prepare write handler",
+		 DOMAIN_NAME(domain));
+	return rv;
+    }
+
+    rv = _ipmi_fru_set_write_handler(fru, atca_fru_254_write);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Unable to register write handler",
+		 DOMAIN_NAME(domain));
+	return rv;
+    }
+
+    rv = _ipmi_fru_set_complete_write_handler(fru,
+					      atca_fru_254_complete_write);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Unable to register write complete handler",
+		 DOMAIN_NAME(domain));
+	return rv;
+    }
+
+    return 0;
+}
+
+/***********************************************************************
+ *
  * Shelf handling
  *
  **********************************************************************/
@@ -3569,100 +3935,6 @@ atca_new_sensor_handler(ipmi_domain_t *domain,
     } else if (sensor_type == 0xf1) {
         ipmi_sensor_set_sensor_type_string(sensor, "ATCA IPMB Stat");
     }
-}
-
-static int
-atca_fru_254_get_timestamp_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
-{
-    ipmi_fru_t             *fru = rspi->data1;
-    _ipmi_fru_timestamp_cb handler = rspi->data2;
-    ipmi_msg_t             *msg = &rspi->msg;
-    unsigned char          *data = msg->data;
-
-    if (!domain) {
-	handler(fru, domain, ECANCELED, 0);
-	goto out;
-    }
-
-    if (data[0] != 0) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_fru_254_setup): "
-		 "Error fetching the FRU timestamp: 0x%x",
-		 DOMAIN_NAME(domain), data[0]);
-	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]), 0);
-	goto out;
-    }
-
-    if (msg->data_len < 8) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_fru_254_setup): "
-		 "FRU timestamp fetch too small: %d",
-		 DOMAIN_NAME(domain), msg->data_len);
-	handler(fru, domain, EINVAL, 0);
-    }
-
-    handler(fru, domain, 0, ipmi_get_uint32(data+4));
-
- out:
-    return IPMI_MSG_ITEM_NOT_USED;
-}
-
-static int
-atca_fru_254_get_timestamp(ipmi_fru_t             *fru,
-			   ipmi_domain_t          *domain,
-			   _ipmi_fru_timestamp_cb handler)
-{
-    ipmi_addr_t   addr;
-    unsigned int  addr_len;
-    ipmi_msg_t    msg;
-    unsigned char data[5];
-
-    _ipmi_fru_get_addr(fru, &addr, &addr_len);
-
-    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
-    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
-    data[0] = IPMI_PICMG_GRP_EXT;
-    data[1] = 254;
-    data[2] = 0;
-    data[3] = 0;
-    data[4] = 0;
-    msg.data = data;
-    msg.data_len = 5;
-
-    return ipmi_send_command_addr(domain,
-				  &addr, addr_len,
-				  &msg,
-				  atca_fru_254_get_timestamp_done,
-				  fru,
-				  handler);
-}
-
-static int
-atca_fru_254_setup(ipmi_domain_t *domain,
-		   unsigned char is_logical,
-		   unsigned char device_address,
-		   unsigned char device_id,
-		   unsigned char lun,
-		   unsigned char private_bus,
-		   unsigned char channel,
-		   ipmi_fru_t    *fru,
-		   void          *cb_data)
-{
-    int rv;
-
-    if (!is_logical || (device_address != 0x20) || (device_id != 254))
-	return 0;
-
-    rv = _ipmi_fru_set_get_timestamp_handler(fru, atca_fru_254_get_timestamp);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_fru_254_setup): "
-		 "Unable to register timestamp handler",
-		 DOMAIN_NAME(domain));
-	return rv;
-    }
-
-    return 0;
 }
 
 static void

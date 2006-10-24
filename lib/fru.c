@@ -1274,7 +1274,7 @@ write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
     if (domain && fru->write_prepared) {
 	fru->saved_err = err;
 	fru->write_prepared = 0;
-	err = fru->complete_write_cb(fru, domain, fru->last_timestamp,
+	err = fru->complete_write_cb(fru, domain, err, fru->last_timestamp,
 				     write_complete2);
 	if (!err) {
 	    _ipmi_fru_unlock(fru);

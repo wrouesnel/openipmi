@@ -3538,7 +3538,7 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 	break;
 
     case 2:
-	lock_id = ipmi_get_uint16(rdata+3);
+	lock_id = ipmi_get_uint16(msg->data+3);
 	if (!emu->atca_fru_inv_locked
 	    || (lock_id != emu->atca_fru_inv_curr_lock_id))
 	{
@@ -3556,7 +3556,7 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 	break;
 
     case 3:
-	lock_id = ipmi_get_uint16(rdata+3);
+	lock_id = ipmi_get_uint16(msg->data+3);
 	if (!emu->atca_fru_inv_locked
 	    || (lock_id != emu->atca_fru_inv_curr_lock_id))
 	{
@@ -3609,7 +3609,7 @@ handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
 	return;
     }
 
-    lock_id = ipmi_get_uint16(rdata+3);
+    lock_id = ipmi_get_uint16(msg->data+2);
     if (!emu->atca_fru_inv_locked
 	|| (lock_id != emu->atca_fru_inv_curr_lock_id))
     {
@@ -3617,6 +3617,9 @@ handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
 	*rdata_len = 1;
 	return;
     }
+
+    /* Reset the timer. */
+    emu->atca_fru_inv_lock_timeout = 20;
 
     offset = ipmi_get_uint16(msg->data+4);
     count = msg->data_len - 6;
