@@ -609,8 +609,10 @@ start_fru_fetch(ipmi_fru_t    *fru,
 	err = start_logical_fru_fetch(domain, fru);
     else
 	err = start_physical_fru_fetch(domain, fru);
-    if (err)
+    if (err) {
 	fetch_complete(domain, fru, err);
+	goto out;
+    }
     _ipmi_fru_unlock(fru);
 
  out:
@@ -646,12 +648,6 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 	return err;
     }
 
-    ipmb = (ipmi_ipmb_addr_t *) &fru->addr;
-    ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
-    ipmb->channel = fru->channel;
-    ipmb->slave_addr = fru->device_address;
-    ipmb->lun = fru->lun;
-
     /* Refcount starts at 2 because we start a fetch immediately. */
     fru->refcount = 2;
     fru->in_use = 1;
@@ -681,6 +677,13 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->fetched_cb_data = fetched_cb_data;
 
     fru->deleted = 0;
+
+    ipmb = (ipmi_ipmb_addr_t *) &fru->addr;
+    ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
+    ipmb->channel = fru->channel;
+    ipmb->slave_addr = fru->device_address;
+    ipmb->lun = fru->lun;
+    fru->addr_len = sizeof(*ipmb);
 
     err = _ipmi_domain_fru_call_special_setup(domain, is_logical,
 					      device_address, device_id,
