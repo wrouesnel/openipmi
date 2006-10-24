@@ -1,3 +1,15 @@
+2006-10-24 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_domain.h, lib/fru.c: More work on the
+	special FRU handling.
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/lanserv_emu.c: Added
+	support for ATCA FRU locking.
+
+	* lib/oem_atca.c: Added FRU timestamp handling.
+
+	* swig/python/openipmigui/_fru.py: Make sure FRU data gets freed.
+
 2006-10-23 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_bits.h, lib/strings.c: Add some new sensor

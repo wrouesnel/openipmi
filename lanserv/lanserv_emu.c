@@ -510,9 +510,10 @@ sleeper(emu_data_t *emu, struct timeval *time)
 	if (rv == 0) {
 	    if (done_on_timeout)
 		return;
-	    ipmi_lan_tick(data->lan, 10);
+	    ipmi_lan_tick(data->lan, 1);
+	    ipmi_emu_tick(emu, 1);
 	    gettimeofday(&data->next_tick_time, NULL);
-	    data->next_tick_time.tv_sec += 10;
+	    data->next_tick_time.tv_sec += 1;
 	} else {
 	    for (i=0; i<num_addr; i++) {
 		if (FD_ISSET(data->lan_fd[i], &readfds))
@@ -616,7 +617,7 @@ main(int argc, const char *argv[])
 	read_command_file(emu, command_file);
 
     gettimeofday(&data.next_tick_time, NULL);
-    data.next_tick_time.tv_sec += 10;
+    data.next_tick_time.tv_sec += 1;
     for (;;) {
 	fd_set readfds;
 
@@ -635,9 +636,10 @@ main(int argc, const char *argv[])
 	    continue;
 
 	if (rv == 0) {
-	    ipmi_lan_tick(&lan, 10);
+	    ipmi_lan_tick(&lan, 1);
+	    ipmi_emu_tick(emu, 1);
 	    gettimeofday(&data.next_tick_time, NULL);
-	    data.next_tick_time.tv_sec += 10;
+	    data.next_tick_time.tv_sec += 1;
 	} else {
 	    if (FD_ISSET(0, &readfds))
 		handle_user_data_ready();

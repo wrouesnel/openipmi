@@ -3571,6 +3571,100 @@ atca_new_sensor_handler(ipmi_domain_t *domain,
     }
 }
 
+static int
+atca_fru_254_get_timestamp_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_fru_t             *fru = rspi->data1;
+    _ipmi_fru_timestamp_cb handler = rspi->data2;
+    ipmi_msg_t             *msg = &rspi->msg;
+    unsigned char          *data = msg->data;
+
+    if (!domain) {
+	handler(fru, domain, ECANCELED, 0);
+	goto out;
+    }
+
+    if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Error fetching the FRU timestamp: 0x%x",
+		 DOMAIN_NAME(domain), data[0]);
+	handler(fru, domain, IPMI_IPMI_ERR_VAL(data[0]), 0);
+	goto out;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "FRU timestamp fetch too small: %d",
+		 DOMAIN_NAME(domain), msg->data_len);
+	handler(fru, domain, EINVAL, 0);
+    }
+
+    handler(fru, domain, 0, ipmi_get_uint32(data+4));
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+atca_fru_254_get_timestamp(ipmi_fru_t             *fru,
+			   ipmi_domain_t          *domain,
+			   _ipmi_fru_timestamp_cb handler)
+{
+    ipmi_addr_t   addr;
+    unsigned int  addr_len;
+    ipmi_msg_t    msg;
+    unsigned char data[5];
+
+    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = 254;
+    data[2] = 0;
+    data[3] = 0;
+    data[4] = 0;
+    msg.data = data;
+    msg.data_len = 5;
+
+    return ipmi_send_command_addr(domain,
+				  &addr, addr_len,
+				  &msg,
+				  atca_fru_254_get_timestamp_done,
+				  fru,
+				  handler);
+}
+
+static int
+atca_fru_254_setup(ipmi_domain_t *domain,
+		   unsigned char is_logical,
+		   unsigned char device_address,
+		   unsigned char device_id,
+		   unsigned char lun,
+		   unsigned char private_bus,
+		   unsigned char channel,
+		   ipmi_fru_t    *fru,
+		   void          *cb_data)
+{
+    int rv;
+
+    if (!is_logical || (device_address != 0x20) || (device_id != 254))
+	return 0;
+
+    rv = _ipmi_fru_set_get_timestamp_handler(fru, atca_fru_254_get_timestamp);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_fru_254_setup): "
+		 "Unable to register timestamp handler",
+		 DOMAIN_NAME(domain));
+	return rv;
+    }
+
+    return 0;
+}
+
 static void
 set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 		   ipmi_domain_oem_check_done done, void *done_cb_data)
@@ -3643,6 +3737,16 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
 		 "Could not register for events: 0x%x", rv);
+	ipmi_mem_free(info);
+	done(domain, rv, done_cb_data);
+	goto out;
+    }
+
+    rv = _ipmi_domain_fru_set_special_setup(domain, atca_fru_254_setup, NULL);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_atca.c(set_up_atca_domain): "
+		 "Could not register special FRU locking handler: 0x%x", rv);
 	ipmi_mem_free(info);
 	done(domain, rv, done_cb_data);
 	goto out;

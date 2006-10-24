@@ -251,8 +251,15 @@ struct emu_data_s
     int        bmc_mc;
     lmc_data_t *ipmb[128];
 
-    int         atca_mode;
-    atca_site_t atca_sites[128]; /* Indexed by HW address. */
+    int          atca_mode;
+    atca_site_t  atca_sites[128]; /* Indexed by HW address. */
+    uint32_t     atca_fru_inv_curr_timestamp;
+    uint16_t     atca_fru_inv_curr_lock_id;
+    int          atca_fru_inv_locked;
+    int          atca_fru_inv_lock_timeout;
+
+    unsigned char *temp_fru_inv_data;
+    unsigned int  temp_fru_inv_data_len;
 
     void *user_data;
 
@@ -273,6 +280,19 @@ static void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
 #define IPMI_DEVID_SEL_DEVICE		(1 << 2)
 #define IPMI_DEVID_SDR_REPOSITORY_DEV	(1 << 1)
 #define IPMI_DEVID_SENSOR_DEV		(1 << 0)
+
+void
+ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
+{
+    if (emu->atca_fru_inv_locked) {
+	emu->atca_fru_inv_lock_timeout -= seconds;
+	if (emu->atca_fru_inv_lock_timeout < 0) {
+	    emu->atca_fru_inv_locked = 0;
+	    free(emu->temp_fru_inv_data);
+	    emu->temp_fru_inv_data = NULL;
+	}
+    }
+}
 
 /*
  * SEL handling commands.
@@ -3455,6 +3475,174 @@ handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
 }
 
 static void
+handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
+						   ipmi_msg_t    *msg,
+						   unsigned char *rdata,
+						   unsigned int  *rdata_len)
+{
+    emu_data_t *emu = mc->emu;
+    uint16_t   lock_id;
+
+    if (mc->ipmb != 0x20) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 5, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 254) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+
+    switch (msg->data[2]) {
+    case 0:
+	rdata[2] = 0;
+	rdata[3] = 0;
+	ipmi_set_uint32(rdata+4, emu->atca_fru_inv_curr_timestamp);
+	*rdata_len = 8;
+	break;
+
+    case 1:
+	if (emu->atca_fru_inv_locked) {
+	    rdata[0] = 0x81;
+	    *rdata_len = 1;
+	    break;
+	}
+	if (mc->frus[254].length == 0) {
+	    rdata[0] = IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC;
+	    *rdata_len = 1;
+	    break;
+	}
+	emu->temp_fru_inv_data = malloc(mc->frus[254].length);
+	if (!emu->temp_fru_inv_data) {
+	    rdata[0] = IPMI_OUT_OF_SPACE_CC;
+	    *rdata_len = 1;
+	    break;
+	}
+	emu->temp_fru_inv_data_len = mc->frus[254].length;
+	memcpy(emu->temp_fru_inv_data, mc->frus[254].data, 
+	       emu->temp_fru_inv_data_len);
+
+	emu->atca_fru_inv_locked = 1;
+	emu->atca_fru_inv_curr_lock_id++;
+	ipmi_set_uint16(rdata+2, emu->atca_fru_inv_curr_lock_id);
+	ipmi_set_uint32(rdata+4, emu->atca_fru_inv_curr_timestamp);
+	*rdata_len = 8;
+	emu->atca_fru_inv_lock_timeout = 20;
+	break;
+
+    case 2:
+	lock_id = ipmi_get_uint16(rdata+3);
+	if (!emu->atca_fru_inv_locked
+	    || (lock_id != emu->atca_fru_inv_curr_lock_id))
+	{
+	    rdata[0] = 0x81;
+	    *rdata_len = 1;
+	    break;
+	}
+	emu->atca_fru_inv_locked = 0;
+	rdata[2] = 0;
+	rdata[3] = 0;
+	ipmi_set_uint32(rdata+4, emu->atca_fru_inv_curr_timestamp);
+	*rdata_len = 8;
+	free(emu->temp_fru_inv_data);
+	emu->temp_fru_inv_data = NULL;
+	break;
+
+    case 3:
+	lock_id = ipmi_get_uint16(rdata+3);
+	if (!emu->atca_fru_inv_locked
+	    || (lock_id != emu->atca_fru_inv_curr_lock_id))
+	{
+	    rdata[0] = 0x81;
+	    *rdata_len = 1;
+	    break;
+	}
+	emu->atca_fru_inv_locked = 0;
+	rdata[2] = 0;
+	rdata[3] = 0;
+	ipmi_set_uint32(rdata+4, emu->atca_fru_inv_curr_timestamp);
+	*rdata_len = 8;
+	emu->atca_fru_inv_curr_timestamp++;
+	/* FIXME - validate data. */
+	memcpy(mc->frus[254].data, emu->temp_fru_inv_data,
+	       emu->temp_fru_inv_data_len);
+	free(emu->temp_fru_inv_data);
+	emu->temp_fru_inv_data = NULL;
+	break;
+
+    default:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	break;
+    }
+}
+
+static void
+handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
+					    ipmi_msg_t    *msg,
+					    unsigned char *rdata,
+					    unsigned int  *rdata_len)
+{
+    emu_data_t   *emu = mc->emu;
+    uint16_t     lock_id;
+    unsigned int offset;
+    unsigned int count;
+
+    if (mc->ipmb != 0x20) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 6, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 254) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lock_id = ipmi_get_uint16(rdata+3);
+    if (!emu->atca_fru_inv_locked
+	|| (lock_id != emu->atca_fru_inv_curr_lock_id))
+    {
+	rdata[0] = 0x80;
+	*rdata_len = 1;
+	return;
+    }
+
+    offset = ipmi_get_uint16(msg->data+4);
+    count = msg->data_len - 6;
+
+    if (offset >= emu->temp_fru_inv_data_len) {
+	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((offset+count) > emu->temp_fru_inv_data_len) {
+	/* Too much data to put into FRU. */
+	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    memcpy(emu->temp_fru_inv_data+offset, msg->data+6, count);
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = count;
+    *rdata_len = 3;
+}
+
+static void
 handle_picmg_cmd_get_shelf_manager_ip_addresses(lmc_data_t    *mc,
 						ipmi_msg_t    *msg,
 						unsigned char *rdata,
@@ -3628,6 +3816,15 @@ handle_picmg_msg(lmc_data_t    *mc,
 
     case IPMI_PICMG_CMD_FRU_CONTROL_CAPABILITIES:
 	handle_picmg_cmd_fru_control_capabilities(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL:
+	handle_picmg_cmd_fru_inventory_device_lock_control(mc, msg, rdata,
+							   rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_WRITE:
+	handle_picmg_cmd_fru_inventory_device_write(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_PICMG_CMD_GET_SHELF_MANAGER_IP_ADDRESSES:

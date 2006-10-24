@@ -86,6 +86,31 @@ mc_add_fru_data 20 9 200 \
        0xff    0xff    0xff    0xff    0xff    0xff    0xff    0xff \
        0xff    0xff    0xff    0xff    0xff    0xff    0xff    0xff \
        0xff    0xff    0xff    0xff    0xff    0xff    0xff    0xff
+# Shelf FRU information
+mc_add_fru_data 20 fe 400 \
+		01 00 01 03 00 08 00 f3 \
+# Chassis info
+		01 02 01 c4 'A 'T 'C 'A \
+		c4 'T 'e 's 't c1 00 fa \
+# Board info
+		01 05 00 00 00 00 c4 'T \
+		'e 's 't c4 'T 'e 's 't \
+		c4 'T 'e 's 't c4 'T 'e \
+		's 't c4 'T 'e 's 't c1 \
+		00 00 00 00 00 00 00 45 \
+# The multi-records
+# record 1, the address table
+		c0 02 2b 1f f4 5a 31 00 \
+		10 00 c6 'S 'h 'e 'l 'f \
+		'1 00 00 00 00 00 00 00 \
+		00 00 00 00 00 00 00 03 \
+		08 01 02 09 02 02 41 01 \
+		00 00 00 00 00 00 00 00 \
+# record 2, the backplane point-to-point connectivity record
+	        c0 82 17 51 56 5a 31 00 \
+		04 00 09 40 02 42 21 00 \
+		44 32 02 08 42 01 40 21 \
+		00 0a 44 00
 mc_enable 20
 
 ## Add a shelf FRU device at 0x10

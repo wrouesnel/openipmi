@@ -130,46 +130,43 @@ void _ipmi_fru_unlock(ipmi_fru_t *fru);
 typedef void (*_ipmi_fru_timestamp_cb)(ipmi_fru_t    *fru,
 				       ipmi_domain_t *domain,
 				       int           err,
-				       uint32_t      timestamp,
-				       void          *cb_data);
+				       uint32_t      timestamp);
 typedef void (*_ipmi_fru_op_cb)(ipmi_fru_t    *fru,
 				ipmi_domain_t *domain,
-				int           err,
-				void          *cb_data);
+				int           err);
 
 typedef int (*_ipmi_fru_get_timestamp_cb)(ipmi_fru_t             *fru,
 					  ipmi_domain_t          *domain,
-					  _ipmi_fru_timestamp_cb handler,
-					  void                   *cb_data);
+					  _ipmi_fru_timestamp_cb handler);
 typedef int (*_ipmi_fru_prepare_write_cb)(ipmi_fru_t      *fru,
 					  ipmi_domain_t   *domain,
 					  uint32_t        timestamp,
-					  _ipmi_fru_op_cb done,
-					  void            *cb_data);
+					  _ipmi_fru_op_cb done);
 typedef int (*_ipmi_fru_write_cb)(ipmi_fru_t      *fru,
 				  ipmi_domain_t   *domain,
 				  unsigned char   *data,
 				  unsigned int    data_len,
-				  _ipmi_fru_op_cb done,
-				  void            *cb_data);
+				  _ipmi_fru_op_cb done);
 typedef int (*_ipmi_fru_complete_write_cb)(ipmi_fru_t      *fru,
 					   ipmi_domain_t   *domain,
 					   uint32_t        timestamp,
-					   _ipmi_fru_op_cb done,
-					   void            *cb_data);
+					   _ipmi_fru_op_cb done);
 
 int _ipmi_fru_set_get_timestamp_handler(ipmi_fru_t                 *fru,
-					_ipmi_fru_get_timestamp_cb handler,
-					void                       *cb_data);
+					_ipmi_fru_get_timestamp_cb handler);
 int _ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
-					_ipmi_fru_prepare_write_cb handler,
-					void                       *cb_data);
+					_ipmi_fru_prepare_write_cb handler);
 int _ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
-				_ipmi_fru_write_cb handler,
-				void               *cb_data);
+				_ipmi_fru_write_cb handler);
 int _ipmi_fru_set_write_complete_handler(ipmi_fru_t                  *fru,
-					 _ipmi_fru_complete_write_cb handler,
-					 void                        *cb_data);
+					 _ipmi_fru_complete_write_cb handler);
+
+typedef void (*_ipmi_fru_setup_data_clean_cb)(ipmi_fru_t *fru, void *data);
+void _ipmi_fru_set_setup_data(ipmi_fru_t                    *fru,
+			      void                          *data,
+			      _ipmi_fru_setup_data_clean_cb cleanup);
+void *_ipmi_fru_get_setup_data(ipmi_fru_t *fru);
+
 void _ipmi_fru_get_addr(ipmi_fru_t   *fru,
 			ipmi_addr_t  *addr,
 			unsigned int *addr_len);

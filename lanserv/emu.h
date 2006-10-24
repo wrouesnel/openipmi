@@ -7,6 +7,8 @@
 typedef struct emu_data_s emu_data_t;
 typedef struct lmc_data_s lmc_data_t;
 
+void ipmi_emu_tick(emu_data_t *emu, unsigned int seconds);
+
 typedef void (*ipmi_emu_sleep_cb)(emu_data_t *emu, struct timeval *time);
 
 emu_data_t *ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper);
