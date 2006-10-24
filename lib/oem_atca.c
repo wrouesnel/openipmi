@@ -174,6 +174,12 @@ struct atca_shelf_s
     unsigned int mfg_id;
     unsigned int prod_id;
 
+    /* ATCA version from the get properties message to the shelf
+       manager.  Note that this is nibble-swapped so it compares and
+       works nicely, eg version 2.1 will be 0x21.  This is backwards
+       from what comes in on the message. */
+    unsigned char atca_version;
+
     char                 shelf_address[40];
     enum ipmi_str_type_e shelf_address_type;
     unsigned int         shelf_address_len;
@@ -3973,6 +3979,9 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     }
     memset(info, 0, sizeof(*info));
 
+    info->atca_version = ((get_properties->data[2] >> 4)
+			  | (get_properties->data[2] << 4));
+
     info->next_address_control_num = FIRST_IPMC_ADDRESS_NUM;
 
     saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -4014,17 +4023,21 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 	goto out;
     }
 
-    rv = _ipmi_domain_fru_set_special_setup(domain, atca_fru_254_setup, NULL);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "oem_atca.c(set_up_atca_domain): "
-		 "Could not register special FRU locking handler: 0x%x", rv);
-	ipmi_mem_free(info);
-	done(domain, rv, done_cb_data);
-	goto out;
+    if (info->atca_version >= 0x22) {
+	rv = _ipmi_domain_fru_set_special_setup(domain, atca_fru_254_setup,
+						NULL);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "oem_atca.c(set_up_atca_domain): "
+		     "Could not register special FRU locking handler: 0x%x",
+		     rv);
+	    ipmi_mem_free(info);
+	    done(domain, rv, done_cb_data);
+	    goto out;
+	}
     }
 
-    /* Per ECN, FRU data is on a shelf manager FRU id 254 */
+    /* Per ECN001, FRU data is on a shelf manager FRU id 254 */
     info->shelf_fru_ipmb = 0x20;
     info->shelf_fru_device_id = 254;
     rv = ipmi_fru_alloc_notrack(domain,

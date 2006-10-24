@@ -2905,7 +2905,7 @@ handle_picmg_get_properties(lmc_data_t    *mc,
 {
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
-    rdata[2] = 0x02; /* Version 2.0 */
+    rdata[2] = 0x22; /* Version 2.2 */
     rdata[3] = 0; /* Only have one FRU. */
     rdata[4] = 0; /* As defined by spec. */
     *rdata_len = 5;
