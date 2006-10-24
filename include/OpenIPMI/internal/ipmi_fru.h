@@ -110,6 +110,71 @@ int _ipmi_fru_deregister_multi_record_oem_handler
 void _ipmi_fru_lock(ipmi_fru_t *fru);
 void _ipmi_fru_unlock(ipmi_fru_t *fru);
 
+/*
+ * Some specialized FRU data repositories have protection against
+ * multiple readers/writers to keep them from colliding.  The model
+ * here is similar to the other parts of IPMI.  You have a timestamp
+ * that tells the last time the repository changed.  On reading, the
+ * code will check the timestamp before and after to make sure the
+ * data hasn't changed while being written.  There is a lock for
+ * writers.  The code will lock (prepare to write), check the
+ * timestamp to make sure another writer has not modified, then write,
+ * then unlock and commit (write complete).  Note that you can have
+ * the reader timestamp without the lock, or the lock without the
+ * timestamp.
+ *
+ * You can also override the function that sends the write message.
+ * this function will get the data as formatted for a normal FRU
+ * write.
+ */
+typedef void (*_ipmi_fru_timestamp_cb)(ipmi_fru_t    *fru,
+				       ipmi_domain_t *domain,
+				       int           err,
+				       uint32_t      timestamp,
+				       void          *cb_data);
+typedef void (*_ipmi_fru_op_cb)(ipmi_fru_t    *fru,
+				ipmi_domain_t *domain,
+				int           err,
+				void          *cb_data);
+
+typedef int (*_ipmi_fru_get_timestamp_cb)(ipmi_fru_t             *fru,
+					  ipmi_domain_t          *domain,
+					  _ipmi_fru_timestamp_cb handler,
+					  void                   *cb_data);
+typedef int (*_ipmi_fru_prepare_write_cb)(ipmi_fru_t      *fru,
+					  ipmi_domain_t   *domain,
+					  uint32_t        timestamp,
+					  _ipmi_fru_op_cb done,
+					  void            *cb_data);
+typedef int (*_ipmi_fru_write_cb)(ipmi_fru_t      *fru,
+				  ipmi_domain_t   *domain,
+				  unsigned char   *data,
+				  unsigned int    data_len,
+				  _ipmi_fru_op_cb done,
+				  void            *cb_data);
+typedef int (*_ipmi_fru_complete_write_cb)(ipmi_fru_t      *fru,
+					   ipmi_domain_t   *domain,
+					   uint32_t        timestamp,
+					   _ipmi_fru_op_cb done,
+					   void            *cb_data);
+
+int _ipmi_fru_set_get_timestamp_handler(ipmi_fru_t                 *fru,
+					_ipmi_fru_get_timestamp_cb handler,
+					void                       *cb_data);
+int _ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
+					_ipmi_fru_prepare_write_cb handler,
+					void                       *cb_data);
+int _ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
+				_ipmi_fru_write_cb handler,
+				void               *cb_data);
+int _ipmi_fru_set_write_complete_handler(ipmi_fru_t                  *fru,
+					 _ipmi_fru_complete_write_cb handler,
+					 void                        *cb_data);
+void _ipmi_fru_get_addr(ipmi_fru_t   *fru,
+			ipmi_addr_t  *addr,
+			unsigned int *addr_len);
+
+
 /* Add a record telling that a specific area of the FRU data needs to
    be written.  Called from the write handler. */
 int _ipmi_fru_new_update_record(ipmi_fru_t   *fru,

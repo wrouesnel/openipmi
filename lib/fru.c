@@ -60,6 +60,8 @@
 #define MAX_FRU_DATA_WRITE 16
 #define MAX_FRU_WRITE_RETRIES 30
 
+#define MAX_FRU_FETCH_RETRIES 5
+
 #define IPMI_FRU_ATTR_NAME "ipmi_fru"
 
 /*
@@ -115,6 +117,9 @@ struct ipmi_fru_s
 
     ipmi_lock_t *lock;
 
+    ipmi_addr_t  addr;
+    unsigned int addr_len;
+
     ipmi_domain_id_t     domain_id;
     unsigned char        is_logical;
     unsigned char        device_address;
@@ -124,6 +129,9 @@ struct ipmi_fru_s
     unsigned char        channel;
 
     unsigned int        fetch_mask;
+
+    uint32_t last_timestamp;
+    int      fetch_retries;
 
     ipmi_fru_fetched_cb fetched_handler;
     ipmi_fru_cb         domain_fetched_handler;
@@ -161,6 +169,15 @@ struct ipmi_fru_s
     void *rec_data;
     ipmi_fru_op_t ops;
 
+    /* FRU locking handling */
+    _ipmi_fru_get_timestamp_cb  timestamp_cb;
+    void                        *timestamp_cb_data;
+    _ipmi_fru_prepare_write_cb  prepare_write_cb;
+    void                        *prepare_write_cb_data;
+    _ipmi_fru_write_cb          write_cb;
+    void                        *write_cb_data;
+    _ipmi_fru_complete_write_cb complete_write_cb;
+    void                        *complete_write_cb_data;
 
     char iname[IPMI_FRU_NAME_LEN+1];
 };
@@ -168,6 +185,7 @@ struct ipmi_fru_s
 #define FRU_DOMAIN_NAME(fru) (fru ? fru->iname : "")
 
 static void final_fru_destroy(ipmi_fru_t *fru);
+static void fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err);
 
 /***********************************************************************
  *
@@ -302,6 +320,121 @@ _ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
     fru->ops.get_root_node = op;
 }
 
+
+/***********************************************************************
+ *
+ * FRU configuration
+ *
+ **********************************************************************/
+int
+_ipmi_fru_set_get_timestamp_handler(ipmi_fru_t                 *fru,
+				    _ipmi_fru_get_timestamp_cb handler,
+				    void                       *cb_data)
+{
+    fru->timestamp_cb = handler;
+    fru->timestamp_cb_data = cb_data;
+    return 0;
+}
+
+int
+_ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
+				    _ipmi_fru_prepare_write_cb handler,
+				    void                       *cb_data)
+{
+    fru->prepare_write_cb = handler;
+    fru->prepare_write_cb_data = cb_data;
+    return 0;
+}
+
+int
+_ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
+			    _ipmi_fru_write_cb handler,
+			    void               *cb_data)
+{
+    fru->write_cb = handler;
+    fru->write_cb_data = cb_data;
+    return 0;
+}
+
+int
+_ipmi_fru_set_complete_write_handler(ipmi_fru_t                  *fru,
+				     _ipmi_fru_complete_write_cb handler,
+				     void                        *cb_data)
+{
+    fru->complete_write_cb = handler;
+    fru->complete_write_cb_data = cb_data;
+    return 0;
+}
+
+void
+_ipmi_fru_get_addr(ipmi_fru_t *fru, ipmi_addr_t *addr, unsigned int *addr_len)
+{
+    *addr = fru->addr;
+    *addr_len = fru->addr_len;
+}
+
+static int
+fru_normal_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_msg_t      *msg = &rspi->msg;
+    ipmi_fru_t      *fru = rspi->data1;
+    unsigned char   *data = msg->data;
+    _ipmi_fru_op_cb cb = rspi->data2;
+    int             err = 0;
+
+    if (data[0]) {
+	err = IPMI_IPMI_ERR_VAL(data[0]);
+	goto out;
+    }
+
+    if (msg->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_normal_write_done): "
+		 "FRU write response too small",
+		 FRU_DOMAIN_NAME(fru));
+	err = EINVAL;
+	goto out;
+    }
+
+    if ((unsigned int) (data[1] << fru->access_by_words)
+	!= (fru->last_cmd_len - 3))
+    {
+	/* Write was incomplete for some reason.  Just go on but issue
+	   a warning. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sfru.c(fru_normal_write_done): "
+		 "Incomplete writing FRU data, write %d, expected %d",
+		 FRU_DOMAIN_NAME(fru),
+		 data[1] << fru->access_by_words, fru->last_cmd_len-3);
+    }
+
+ out:
+    cb(fru, domain, err, NULL);
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+fru_normal_write(ipmi_fru_t      *fru,
+		 ipmi_domain_t   *domain,
+		 unsigned char   *data,
+		 unsigned int    data_len,
+		 _ipmi_fru_op_cb done,
+		 void            *cb_data)
+{
+    ipmi_msg_t msg;
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
+    msg.data = data;
+    msg.data_len = data_len;
+
+    return ipmi_send_command_addr(domain,
+				  &fru->addr, fru->addr_len,
+				  &msg,
+				  fru_normal_write_done,
+				  fru,
+				  done);
+}
 
 /***********************************************************************
  *
@@ -452,6 +585,38 @@ fru_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
     return 0;
 }
 
+static void
+start_fru_fetch(ipmi_fru_t    *fru,
+		ipmi_domain_t *domain,
+		int           err,
+		uint32_t      timestamp,
+		void          *cb_data)
+{
+    _ipmi_fru_lock(fru);
+    if (fru->deleted) {
+	fetch_complete(domain, fru, ECANCELED);
+	goto out;
+    }
+
+    if (err) {
+	fetch_complete(domain, fru, err);
+	goto out;
+    }
+
+    fru->last_timestamp = timestamp;
+
+    if (fru->is_logical)
+	err = start_logical_fru_fetch(domain, fru);
+    else
+	err = start_physical_fru_fetch(domain, fru);
+    if (err)
+	fetch_complete(domain, fru, err);
+    _ipmi_fru_unlock(fru);
+
+ out:
+    return;
+}
+
 static int
 ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 			unsigned char       is_logical,
@@ -465,9 +630,10 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 			void                *fetched_cb_data,
 			ipmi_fru_t          **new_fru)
 {
-    ipmi_fru_t    *fru;
-    int           err;
-    int           len, p;
+    ipmi_fru_t       *fru;
+    int              err;
+    int              len, p;
+    ipmi_ipmb_addr_t *ipmb;
 
     fru = ipmi_mem_alloc(sizeof(*fru));
     if (!fru)
@@ -479,6 +645,12 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 	ipmi_mem_free(fru);
 	return err;
     }
+
+    ipmb = (ipmi_ipmb_addr_t *) &fru->addr;
+    ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
+    ipmb->channel = fru->channel;
+    ipmb->slave_addr = fru->device_address;
+    ipmb->lun = fru->lun;
 
     /* Refcount starts at 2 because we start a fetch immediately. */
     fru->refcount = 2;
@@ -494,6 +666,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->fetch_mask = fetch_mask;
     fru->fetch_size = MAX_FRU_DATA_FETCH;
     fru->os_hnd = ipmi_domain_get_os_hnd(domain);
+    fru->write_cb = fru_normal_write;
 
     len = sizeof(fru->name);
     p = ipmi_domain_get_name(domain, fru->name, len);
@@ -516,15 +689,12 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     if (err)
 	goto out_err;
 
-    _ipmi_fru_lock(fru);
-    if (fru->is_logical)
-	err = start_logical_fru_fetch(domain, fru);
-    else
-	err = start_physical_fru_fetch(domain, fru);
-    if (err) {
-	_ipmi_fru_unlock(fru);
-	goto out_err;
-    }
+    if (fru->timestamp_cb) {
+	err = fru->timestamp_cb(fru, domain, start_fru_fetch, NULL);
+	if (err)
+	    goto out_err;
+    } else
+	start_fru_fetch(fru, domain, 0, 0, NULL);
 
     *new_fru = fru;
     return 0;
@@ -686,7 +856,7 @@ ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
  *
  **********************************************************************/
 
-void
+static void
 fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
     if (!err) {
@@ -719,6 +889,39 @@ static int request_next_data(ipmi_domain_t *domain,
 			     ipmi_fru_t    *fru,
 			     ipmi_addr_t   *addr,
 			     unsigned int  addr_len);
+
+static void
+end_fru_fetch(ipmi_fru_t    *fru,
+	      ipmi_domain_t *domain,
+	      int           err,
+	      uint32_t      timestamp,
+	      void          *cb_data)
+{
+    _ipmi_fru_lock(fru);
+    if (fru->deleted) {
+	fetch_complete(domain, fru, ECANCELED);
+	goto out;
+    }
+
+    if (err) {
+	fetch_complete(domain, fru, err);
+	goto out;
+    }
+
+    if (fru->last_timestamp != timestamp) {
+	fru->fetch_retries++;
+	if (fru->fetch_retries > MAX_FRU_FETCH_RETRIES)
+	    fetch_complete(domain, fru, EAGAIN);
+	else {
+	    _ipmi_fru_lock(fru);
+	    start_fru_fetch(fru, domain, 0, timestamp, NULL);
+	}
+    } else
+	fetch_complete(domain, fru, 0);
+
+ out:
+    return;
+}
 
 static int
 fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
@@ -772,7 +975,13 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		     "IPMI error getting FRU data: %x",
 		     FRU_DOMAIN_NAME(fru), data[0]);
 	    fru->data_len = fru->curr_pos;
-	    fetch_complete(domain, fru, 0);
+	    if (fru->timestamp_cb) {
+		err = fru->timestamp_cb(fru, domain, end_fru_fetch, NULL);
+		if (err)
+		    fetch_complete(domain, fru, err);
+	    } else {
+		fetch_complete(domain, fru, 0);
+	    }
 	} else {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sfru.c(fru_data_handler): "
@@ -942,16 +1151,10 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-start_logical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru)
+fru_get_inventory(ipmi_domain_t *domain, ipmi_fru_t *fru)
 {
     unsigned char    cmd_data[1];
-    ipmi_ipmb_addr_t ipmb;
     ipmi_msg_t       msg;
-
-    ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
-    ipmb.channel = fru->channel;
-    ipmb.slave_addr = fru->device_address;
-    ipmb.lun = fru->lun;
 
     cmd_data[0] = fru->device_id;
     msg.netfn = IPMI_STORAGE_NETFN;
@@ -960,12 +1163,92 @@ start_logical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru)
     msg.data_len = 1;
 
     return ipmi_send_command_addr(domain,
-				  (ipmi_addr_t *) &ipmb,
-				  sizeof(ipmb),
+				  &fru->addr, fru->addr_len,
 				  &msg,
 				  fru_inventory_area_handler,
 				  fru,
 				  NULL);
+}
+
+static void
+fru_write_timestamp_done(ipmi_fru_t    *fru,
+			 ipmi_domain_t *domain,
+			 int           err,
+			 uint32_t      timestamp,
+			 void          *cb_data)
+{
+    int rv;
+
+    _ipmi_fru_lock(fru);
+
+    if (fru->deleted) {
+	fetch_complete(domain, fru, ECANCELED);
+	goto out;
+    }
+
+    if (err) {
+	fetch_complete(domain, fru, err);
+	goto out;
+    }
+
+    rv = fru_get_inventory(domain, fru);
+    if (rv) {
+	fetch_complete(domain, fru, rv);
+	goto out;
+    }
+    _ipmi_fru_unlock(fru);
+
+ out:
+    return;
+}
+
+static void
+fru_write_start_timestamp_check(ipmi_fru_t    *fru,
+				ipmi_domain_t *domain,
+				int           err,
+				void          *cb_data)
+{
+    int rv;
+
+    _ipmi_fru_lock(fru);
+
+    if (fru->deleted) {
+	fetch_complete(domain, fru, ECANCELED);
+	goto out;
+    }
+
+    if (err) {
+	fetch_complete(domain, fru, err);
+	goto out;
+    }
+
+    if (fru->timestamp_cb)
+	rv = fru->timestamp_cb(fru, domain, fru_write_timestamp_done, NULL);
+    else
+	rv = fru_get_inventory(domain, fru);
+    if (rv) {
+	fetch_complete(domain, fru, rv);
+	goto out;
+    }
+    _ipmi_fru_unlock(fru);
+
+ out:
+    return;
+}
+
+static int
+start_logical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru)
+{
+    int rv;
+
+    if (fru->prepare_write_cb)
+	rv = fru->prepare_write_cb(fru, domain, fru->last_timestamp,
+				   fru_write_start_timestamp_check, NULL);
+    else if (fru->timestamp_cb)
+	rv = fru->timestamp_cb(fru, domain, fru_write_timestamp_done, NULL);
+    else
+	rv = fru_get_inventory(domain, fru);
+    return rv;
 }
 
 static int
@@ -1017,8 +1300,7 @@ _ipmi_fru_new_update_record(ipmi_fru_t   *fru,
     return 0;
 }
 
-static int next_fru_write(ipmi_domain_t *domain, ipmi_fru_t *fru,
-			  ipmi_addr_t *addr, unsigned int addr_len);
+static int next_fru_write(ipmi_domain_t *domain, ipmi_fru_t *fru);
 
 void
 write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
@@ -1041,77 +1323,45 @@ write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
     fru_put(fru);
 }
 
-static int
-fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+static void
+fru_write_handler(ipmi_fru_t    *fru,
+		  ipmi_domain_t *domain,
+		  int           err,
+		  void          *cb_data)
 {
-    ipmi_addr_t   *addr = &rspi->addr;
-    unsigned int  addr_len = rspi->addr_len;
-    ipmi_msg_t    *msg = &rspi->msg;
-    ipmi_fru_t    *fru = rspi->data1;
-    unsigned char *data = msg->data;
-    int           rv;
+    int rv;
 
     _ipmi_fru_lock(fru);
 
     /* Note that for safety, we do not stop a fru write on deletion. */
 
-    if (data[0] == 0x81) {
-	ipmi_msg_t msg;
+    if (err == IPMI_IPMI_ERR_VAL(0x81)) {
 	/* Got a busy response.  Try again if we haven't run out of
 	   retries. */
 	if (fru->retry_count >= MAX_FRU_WRITE_RETRIES) {
-	    write_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
+	    write_complete(domain, fru, err);
 	    goto out;
 	}
 	fru->retry_count++;
-	msg.netfn = IPMI_STORAGE_NETFN;
-	msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
-	msg.data = fru->last_cmd;
-	msg.data_len = fru->last_cmd_len;
-	rv = ipmi_send_command_addr(domain,
-				    addr, addr_len,
-				    &msg,
-				    fru_write_handler,
-				    fru,
-				    NULL);
+	rv = fru->write_cb(fru, domain, fru->last_cmd, fru->last_cmd_len,
+			   fru_write_handler, NULL);
 	if (rv) {
 	    write_complete(domain, fru, rv);
 	    goto out;
 	}
 	goto out_cmd;
-    } else if (data[0] != 0) {
+    } else if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%sfru.c(fru_write_handler): "
 		 "IPMI error writing FRU data: %x",
-		 FRU_DOMAIN_NAME(fru), data[0]);
-	write_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
+		 FRU_DOMAIN_NAME(fru), err);
+	write_complete(domain, fru, err);
 	goto out;
-    }
-
-    if (msg->data_len < 2) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_write_handler): "
-		 "FRU write response too small",
-		 FRU_DOMAIN_NAME(fru));
-	write_complete(domain, fru, EINVAL);
-	goto out;
-    }
-
-    if ((unsigned int) (data[1] << fru->access_by_words)
-	!= (fru->last_cmd_len - 3))
-    {
-	/* Write was incomplete for some reason.  Just go on but issue
-	   a warning. */
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%sfru.c(fru_write_handler): "
-		 "Incomplete writing FRU data, write %d, expected %d",
-		 FRU_DOMAIN_NAME(fru),
-		 data[1] << fru->access_by_words, fru->last_cmd_len-3);
     }
 
     if (fru->update_recs) {
 	/* More to do. */
-	rv = next_fru_write(domain, fru, addr, addr_len);
+	rv = next_fru_write(domain, fru);
 	if (rv) {
 	    write_complete(domain, fru, rv);
 	    goto out;
@@ -1124,18 +1374,14 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
  out_cmd:
     _ipmi_fru_unlock(fru);
  out:
-    return IPMI_MSG_ITEM_NOT_USED;
+    return;
 }
 
 static int
-next_fru_write(ipmi_domain_t *domain,
-	       ipmi_fru_t    *fru,
-	       ipmi_addr_t   *addr,
-	       unsigned int  addr_len)
+next_fru_write(ipmi_domain_t *domain, ipmi_fru_t *fru)
 {
     unsigned char *data = fru->last_cmd;
     int           offset, length = 0, left, noff, tlen;
-    ipmi_msg_t    msg;
 
     noff = fru->update_recs->offset;
     offset = noff;
@@ -1166,18 +1412,8 @@ next_fru_write(ipmi_domain_t *domain,
     data[0] = fru->device_id;
     ipmi_set_uint16(data+1, offset >> fru->access_by_words);
     memcpy(data+3, fru->data+offset, length);
-    msg.netfn = IPMI_STORAGE_NETFN;
-    msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
-    msg.data = data;
-    msg.data_len = length + 3;
-    fru->last_cmd_len = msg.data_len;
-
-    return ipmi_send_command_addr(domain,
-				  addr, addr_len,
-				  &msg,
-				  fru_write_handler,
-				  fru,
-				  NULL);
+    fru->last_cmd_len = length+3;
+    return fru->write_cb(fru, domain, data, length+3, fru_write_handler, NULL);
 }
 
 typedef struct start_domain_fru_write_s
@@ -1190,7 +1426,6 @@ static void
 start_domain_fru_write(ipmi_domain_t *domain, void *cb_data)
 {
     start_domain_fru_write_t *info = cb_data;
-    ipmi_ipmb_addr_t         ipmb;
     int                      rv;
     ipmi_fru_t               *fru = info->fru;
 
@@ -1222,15 +1457,9 @@ start_domain_fru_write(ipmi_domain_t *domain, void *cb_data)
 	return;
     }
 
-    ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
-    ipmb.channel = info->fru->channel;
-    ipmb.slave_addr = info->fru->device_address;
-    ipmb.lun = info->fru->lun;
-
     /* Data is fully encoded and the update records are in place.
        Start the write process. */
-    rv = next_fru_write(domain, fru,
-			(ipmi_addr_t *) &ipmb, sizeof(ipmb));
+    rv = next_fru_write(domain, fru);
     if (rv)
 	goto out_err;
 
