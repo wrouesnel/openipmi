@@ -3076,7 +3076,7 @@ fru_mr_array_get_field(ipmi_fru_node_t           *pnode,
     ipmi_fru_node_t    *node;
     ipmi_fru_node_t    *snode;
     const char         *sname;
-    int                rv = 0;
+    int                rv;
 
     if (index >= ipmi_fru_get_num_multi_records(fru))
 	return EINVAL;
@@ -3116,7 +3116,10 @@ fru_mr_array_get_field(ipmi_fru_node_t           *pnode,
 
 	*sub_node = node;
     }
-    return rv;
+
+    /* We always succeed if we can get the memeory, even if we don't
+       have a decoder. */
+    return 0;
 }
 
 typedef struct fru_array_s

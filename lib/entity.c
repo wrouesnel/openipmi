@@ -1426,8 +1426,9 @@ presence_parent_handler(ipmi_entity_t *ent,
 static void
 presence_changed(ipmi_entity_t *ent, int present)
 {
-    ipmi_fru_t              *fru;
-    ipmi_domain_t           *domain = ent->domain;
+    ipmi_fru_t    *fru;
+    ipmi_domain_t *domain = ent->domain;
+    int           entity_fru_fetch = 0;
 
     ent->presence_event_count++;
 
@@ -1446,7 +1447,7 @@ presence_changed(ipmi_entity_t *ent, int present)
 	   its FRU info. */
 	if (ipmi_entity_get_is_fru(ent)) {
 	    if (present) {
-		ipmi_entity_fetch_frus(ent);
+		entity_fru_fetch = 1;
 	    } else if (ent->fru != NULL) {
 		fru = ent->fru;
 		ent->fru = NULL;
@@ -1476,6 +1477,10 @@ presence_changed(ipmi_entity_t *ent, int present)
 	} else {
 	    ent->present_change_count++;
 	}
+	/* Wait till here to start fetching FRUs, as we want to report
+	   the entity first before we start the fetch. */
+	if (entity_fru_fetch)
+	    ipmi_entity_fetch_frus(ent);
 	_ipmi_domain_entity_unlock(domain);
 
 	/* If our presence changes, that can affect parents, too.  So we

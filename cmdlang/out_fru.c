@@ -121,7 +121,7 @@ traverse_fru_node_tree(ipmi_cmd_info_t *cmd_info,
 		ipmi_cmdlang_out_int(cmd_info, "Element Count", intval);
 	    else
 		intval = MAXINT;
-	    traverse_fru_node_tree(cmd_info, sub_node, MAXINT);
+	    traverse_fru_node_tree(cmd_info, sub_node, intval);
 	    ipmi_cmdlang_up(cmd_info);
 	    break;
 	    

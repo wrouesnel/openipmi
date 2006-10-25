@@ -1,3 +1,18 @@
+2006-10-25 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca_fru.c: Added all the current ATCA-defined FRU
+	information multirecord descriptors.
+
+	* cmdlang/out_fru.c: Only parse the given number of array
+	elements, don't rely an an error return to finish the array.
+
+	* lib/entity.c: Fix a small problem where there was a remote
+	chance that a FRU fetch would occur before the entity was reported
+	present.
+
+	* lib/normal_fru.c: Fix a memory leak with multirecords that don't
+	have decoders.
+
 2006-10-24 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h, lib/fru.c: More work on the

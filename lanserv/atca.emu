@@ -112,10 +112,45 @@ mc_add_fru_data 20 fe 400 \
 		44 32 02 08 42 01 40 21 \
 		00 0a 44 00 \
 # record 3, the shelf power distribution record
-	        c0 82 1a 89 1b 5a 31 00 \
+	        c0 02 1a 89 9b 5a 31 00 \
 		11 00 02 00 01 e0 00 40 \
 		02 30 20 40 21 00 02 d0 \
-		01 3a 01 50 23 60 24
+		01 3a 01 50 23 60 24 \
+# record 4, the shelf activation and power management record
+	        c0 02 1b de 45 5a 31 00 \
+		12 00 27 04 10 24 00 04 \
+		47 20 25 03 07 49 30 26 \
+		01 10 48 40 27 09 1b 09 \
+# record 5, the shelf manager ip connection record, version 0
+	        c0 02 09 bd 78 5a 31 00 \
+		13 00 c0 a8 19 24       \
+# record 6, the shelf manager ip connection record, version 1
+	        c0 02 11 3d f0 5a 31 00 \
+		13 01 c0 a8 19 24 c0 a8 \
+		19 01 ff ff ff 00	\
+# record 7, the board point-to-point connectivity record
+	        c0 02 2e f6 1a 5a 31 00 \
+		14 00 02 11 22 33 44 55 \
+		66 77 88 99 aa bb cc dd \
+		ee ff fe 12 23 34 45 56 \
+		67 78 89 9a ab bc cd de \
+		ef f0 01 01 0f 11 02 42 \
+		13 00 03		\
+# record 8, the radial IPMB-0 link mapping record
+	        c0 02 19 fb 2a 5a 31 00 \
+		15 00 11 22 33 44 55 02 \
+		20 01 01 30 10 30 03 03 \
+		11 31 12 32 13 33	\
+# record 9, the shelf fan geography record
+	        c0 02 16 72 b6 5a 31 00 \
+		1b 00 04 20 10 01 02 21 \
+		11 02 03 22 12 03 04 23 \
+		13 04 05		\
+# record 10, Bogus end record
+	        c1 82 1b 3d 65 5a 31 00 \
+		13 00 27 04 10 24 00 04 \
+		27 20 25 03 07 29 30 26 \
+		01 10 28 40 27 09 1b 09
 mc_enable 20
 
 ## Add a shelf FRU device at 0x10
