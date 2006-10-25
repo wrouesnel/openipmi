@@ -19,6 +19,9 @@
 	* swig/python/openipmigui/gui_treelist.py: Added a way to expand
 	the entire tree.
 
+	* swig/python/openipmigui/_fru.py: Expand the entire tree when
+	displaying FRU information.
+
 2006-10-24 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h, lib/fru.c: More work on the
