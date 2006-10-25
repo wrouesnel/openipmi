@@ -54,6 +54,23 @@ convert_int_to_fru_int(const char                *name,
 }
 
 static int
+convert_int_to_fru_float(const char                *name,
+			 int                       val,
+			 float                     multiplier,
+			 const char                **rname,
+			 enum ipmi_fru_data_type_e *dtype,
+			 double                    *floatval)
+{
+    if (rname)
+	*rname = name;
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_FLOAT;
+    if (floatval)
+	*floatval = ((double) val) * multiplier;
+    return 0;
+}
+
+static int
 convert_str_to_fru_str(const char                *name,
 		       enum ipmi_str_type_e      type,
 		       unsigned int              len,
@@ -738,6 +755,398 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
     return rv;
 }
 
+typedef struct atca_feed_to_frus
+{
+    uint8_t hw_address;
+    uint8_t fru_device_id;
+} atca_feed_to_fru_t;
+
+typedef struct atca_power_dist_map_s
+{
+    uint16_t           max_extern_avail_current;
+    uint16_t           max_internal_current;
+    uint16_t           min_operating_voltage;
+    uint16_t           feed_to_fru_count;
+    atca_feed_to_fru_t *feed_to_frus;
+} atca_power_dist_map_t;
+
+typedef struct atca_shelf_power_dist_s
+{
+    unsigned char         version;
+    unsigned int          nr_power_feeds;
+    atca_power_dist_map_t *power_feeds;
+    ipmi_fru_t            *fru;
+} atca_shelf_power_dist_t;
+
+static void
+atca_shelf_power_dist_cleanup_rec(atca_shelf_power_dist_t *rec)
+{
+    unsigned int i;
+
+    if (!rec)
+	return;
+
+    if (rec->power_feeds) {
+	for (i=0; i<rec->nr_power_feeds; i++) {
+	    atca_power_dist_map_t *f = &(rec->power_feeds[i]);
+
+	    if (f->feed_to_frus)
+		ipmi_mem_free(f->feed_to_frus);
+	}
+	ipmi_mem_free(rec->power_feeds);
+    }
+
+    ipmi_mem_free(rec);
+}
+
+static void
+atca_shelf_power_dist_root_destroy(ipmi_fru_node_t *node)
+{
+    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_deref(rec->fru);
+    atca_shelf_power_dist_cleanup_rec(rec);
+}
+
+static void
+atca_shelf_power_dist_sub_destroy(ipmi_fru_node_t *node)
+{
+    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
+    ipmi_fru_put_node(root_node);
+}
+
+static int
+atca_feed_to_fru_get_field(ipmi_fru_node_t           *rnode,
+			   unsigned int              index,
+			   const char                **name,
+			   enum ipmi_fru_data_type_e *dtype,
+			   int                       *intval,
+			   time_t                    *time,
+			   double                    *floatval,
+			   char                      **data,
+			   unsigned int              *data_len,
+			   ipmi_fru_node_t           **sub_node)
+{
+    atca_feed_to_fru_t *rec = _ipmi_fru_node_get_data(rnode);
+    int                rv = 0;
+
+    switch(index) {
+    case 0:
+	rv = convert_int_to_fru_int("hardware_address", rec->hw_address,
+				    name, dtype, intval);
+	break;
+
+    case 1:
+	rv = convert_int_to_fru_int("fru_device_id", rec->fru_device_id,
+				    name, dtype, intval);
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+atca_feed_to_fru_array_get_field(ipmi_fru_node_t           *pnode,
+				 unsigned int              index,
+				 const char                **name,
+				 enum ipmi_fru_data_type_e *dtype,
+				 int                       *intval,
+				 time_t                    *time,
+				 double                    *floatval,
+				 char                      **data,
+				 unsigned int              *data_len,
+				 ipmi_fru_node_t           **sub_node)
+{
+    atca_power_dist_map_t   *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
+    ipmi_fru_node_t         *node;
+
+    if (index >= rec->feed_to_fru_count)
+	return EINVAL;
+
+    if (name)
+	*name = NULL; /* We are an array */
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = -1; /* Sub element is not an array */
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(rrec->fru);
+	if (!node)
+	    return ENOMEM;
+
+	ipmi_fru_get_node(rnode);
+	_ipmi_fru_node_set_data(node, rec->feed_to_frus + index);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, atca_feed_to_fru_get_field);
+	_ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_sub_destroy);
+	*sub_node = node;
+    }
+    return 0;
+}
+
+static int
+atca_power_feed_get_field(ipmi_fru_node_t           *pnode,
+			  unsigned int              index,
+			  const char                **name,
+			  enum ipmi_fru_data_type_e *dtype,
+			  int                       *intval,
+			  time_t                    *time,
+			  double                    *floatval,
+			  char                      **data,
+			  unsigned int              *data_len,
+			  ipmi_fru_node_t           **sub_node)
+{
+    atca_power_dist_map_t   *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
+    ipmi_fru_node_t         *node;
+    int                     rv = 0;
+
+    switch(index) {
+    case 0:
+	rv = convert_int_to_fru_float("max_extern_avail_current",
+				      rec->max_extern_avail_current, 0.1,
+				      name, dtype, floatval);
+	break;
+
+    case 1:
+	rv = convert_int_to_fru_float("max_internal_current",
+				      rec->max_internal_current, 0.1,
+				      name, dtype, floatval);
+	break;
+
+    case 2:
+	rv = convert_int_to_fru_float("min_operating_voltage",
+				      rec->min_operating_voltage, 0.5,
+				      name, dtype, floatval);
+	break;
+
+    case 3:
+	if (name)
+	    *name = "feed_to_frus";
+	if (dtype)
+	    *dtype = IPMI_FRU_DATA_SUB_NODE;
+	if (intval)
+	    *intval = rec->feed_to_fru_count;
+	if (sub_node) {
+	    node = _ipmi_fru_node_alloc(rrec->fru);
+	    if (!node)
+		return ENOMEM;
+	    ipmi_fru_get_node(rnode);
+	    _ipmi_fru_node_set_data(node, rec);
+	    _ipmi_fru_node_set_data2(node, rnode);
+	    _ipmi_fru_node_set_get_field(node,
+					 atca_feed_to_fru_array_get_field);
+	    _ipmi_fru_node_set_destructor(node,
+					  atca_shelf_power_dist_sub_destroy);
+	    *sub_node = node;
+	}
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+atca_power_feed_array_get_field(ipmi_fru_node_t           *pnode,
+				unsigned int              index,
+				const char                **name,
+				enum ipmi_fru_data_type_e *dtype,
+				int                       *intval,
+				time_t                    *time,
+				double                    *floatval,
+				char                      **data,
+				unsigned int              *data_len,
+				ipmi_fru_node_t           **sub_node)
+{
+    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
+    ipmi_fru_node_t         *node;
+
+    if (index >= rec->nr_power_feeds)
+	return EINVAL;
+
+    if (name)
+	*name = NULL; /* We are an array */
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = -1; /* Sub element is not an array */
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(rrec->fru);
+	if (!node)
+	    return ENOMEM;
+
+	ipmi_fru_get_node(rnode);
+	_ipmi_fru_node_set_data(node, rec->power_feeds + index);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, atca_power_feed_get_field);
+	_ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_sub_destroy);
+	*sub_node = node;
+    }
+    return 0;
+}
+
+static int
+atca_shelf_power_dist_root_get_field(ipmi_fru_node_t           *rnode,
+				     unsigned int              index,
+				     const char                **name,
+				     enum ipmi_fru_data_type_e *dtype,
+				     int                       *intval,
+				     time_t                    *time,
+				     double                    *floatval,
+				     char                      **data,
+				     unsigned int              *data_len,
+				     ipmi_fru_node_t           **sub_node)
+{
+    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(rnode);
+    ipmi_fru_node_t         *node;
+    int                     rv = 0;
+
+    switch(index) {
+    case 0:
+	rv = convert_int_to_fru_int("version", rec->version,
+				    name, dtype, intval);
+	break;
+
+    case 1:
+	if (name)
+	    *name = "power_feeds";
+	if (dtype)
+	    *dtype = IPMI_FRU_DATA_SUB_NODE;
+	if (intval)
+	    *intval = rec->nr_power_feeds;
+	if (sub_node) {
+	    node = _ipmi_fru_node_alloc(rec->fru);
+	    if (!node)
+		return ENOMEM;
+	    ipmi_fru_get_node(rnode);
+	    _ipmi_fru_node_set_data(node, rec);
+	    _ipmi_fru_node_set_data2(node, rnode);
+	    _ipmi_fru_node_set_get_field(node,
+					 atca_power_feed_array_get_field);
+	    _ipmi_fru_node_set_destructor(node,
+					  atca_shelf_power_dist_sub_destroy);
+	    *sub_node = node;
+	}
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+atca_root_mr_shelf_power_dist(ipmi_fru_t          *fru,
+			      unsigned char       *mr_data,
+			      unsigned int        mr_data_len,
+			      const char          **name,
+			      ipmi_fru_node_t     **rnode)
+{
+    atca_shelf_power_dist_t *rec;
+    unsigned int            i, j;
+    ipmi_fru_node_t         *node;
+    int                     rv;
+
+    mr_data += 4;
+    mr_data_len -= 4;
+
+    if (mr_data_len < 11)
+	return EINVAL;
+    
+    if (mr_data[0] != 0) /* Only support version 0 */
+	return ENOSYS;
+
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memset(rec, 0, sizeof(*rec));
+
+    rec->version = mr_data[0];
+    mr_data++;
+    mr_data_len--;
+
+    rec->nr_power_feeds = mr_data[0];
+    mr_data++;
+    mr_data_len--;
+
+    rec->power_feeds = ipmi_mem_alloc(rec->nr_power_feeds
+				      * sizeof(atca_shelf_power_dist_t));
+    if (!rec->power_feeds) {
+	rv = ENOMEM;
+	goto out_cleanup;
+    }
+
+    for (i=0; i<rec->nr_power_feeds; i++) {
+	atca_power_dist_map_t *f;
+
+	if (mr_data_len < 6) {
+	    rv = EINVAL;
+	    goto out_cleanup;
+	}
+
+	f = &(rec->power_feeds[i]);
+	f->max_extern_avail_current = ipmi_get_uint16(mr_data);
+	f->max_internal_current = ipmi_get_uint16(mr_data+2);
+	f->min_operating_voltage = mr_data[4];
+	f->feed_to_fru_count = mr_data[5];
+	mr_data += 6;
+	mr_data_len -= 6;
+
+	if (mr_data_len < (unsigned int) (2 * f->feed_to_fru_count)) {
+	    rv = EINVAL;
+	    goto out_cleanup;
+	}
+	f->feed_to_frus = ipmi_mem_alloc(f->feed_to_fru_count
+					 * sizeof(atca_feed_to_fru_t));
+	if (!f->feed_to_frus) {
+	    rv = ENOMEM;
+	    goto out_cleanup;
+	}
+	for (j=0; j<f->feed_to_fru_count; j++) {
+	    f->feed_to_frus[j].hw_address = mr_data[0];
+	    f->feed_to_frus[j].fru_device_id = mr_data[1];
+	    mr_data += 2;
+	    mr_data_len -= 2;
+	}
+    }
+
+    node = _ipmi_fru_node_alloc(fru);
+    if (!node)
+	goto out_no_mem;
+
+    rec->fru = fru;
+    ipmi_fru_ref(fru);
+
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, atca_shelf_power_dist_root_get_field);
+    _ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_root_destroy);
+    *rnode = node;
+
+    if (name)
+	*name = "Shelf Power Distribution";
+
+    return 0;
+
+ out_no_mem:
+    rv = ENOMEM;
+    goto out_cleanup;
+
+ out_cleanup:
+    atca_shelf_power_dist_cleanup_rec(rec);
+    return rv;
+}
+
 int
 _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
 			   unsigned int        manufacturer_id,
@@ -759,6 +1168,15 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
     case 0x10: /* shelf address table */
 	return atca_root_mr_addr_tab(fru, mr_data, mr_data_len, name, node);
 
+    case 0x11: /* Shelf power distribution */
+	return atca_root_mr_shelf_power_dist(fru, mr_data, mr_data_len,
+					     name, node);
+
+    case 0x12: /* Shelf activation and power mgmt */
+    case 0x13: /* Shelf Manager IP Connection Record */
+    case 0x14: /* Board ptp connectivity record */
+    case 0x15: /* radial ipmb0 link mapping */
+    case 0x1b: /* Shelf fan geography record */
     default:
 	return ENOSYS;
     }

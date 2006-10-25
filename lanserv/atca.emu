@@ -107,10 +107,15 @@ mc_add_fru_data 20 fe 400 \
 		08 01 02 09 02 02 41 01 \
 		00 00 00 00 00 00 00 00 \
 # record 2, the backplane point-to-point connectivity record
-	        c0 82 17 51 56 5a 31 00 \
+	        c0 02 17 51 d6 5a 31 00 \
 		04 00 09 40 02 42 21 00 \
 		44 32 02 08 42 01 40 21 \
-		00 0a 44 00
+		00 0a 44 00 \
+# record 3, the shelf power distribution record
+	        c0 82 1a 89 1b 5a 31 00 \
+		11 00 02 00 01 e0 00 40 \
+		02 30 20 40 21 00 02 d0 \
+		01 3a 01 50 23 60 24
 mc_enable 20
 
 ## Add a shelf FRU device at 0x10
