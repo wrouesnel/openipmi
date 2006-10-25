@@ -46,10 +46,11 @@ class FruInfoDisplay(gui_treelist.TreeList):
 
         gui_treelist.TreeList.__init__(self, "FRU info for " + name,
                                        name_s[0],
-                                       [("Name", 300), ("Value", 100)]);
+                                       [("Name", 300), ("Value", 300)]);
 
         self.add_fru_data(self.treeroot, node_s[0])
         self.AfterDone()
+        self.ExpandItem("")
         return
 
     def ok(self):

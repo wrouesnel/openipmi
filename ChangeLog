@@ -13,6 +13,12 @@
 	* lib/normal_fru.c: Fix a memory leak with multirecords that don't
 	have decoders.
 
+	* swig/python/openipmigui/_domain.py: Added a way to dump
+	arbitrary FRU info in a domain.
+
+	* swig/python/openipmigui/gui_treelist.py: Added a way to expand
+	the entire tree.
+
 2006-10-24 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h, lib/fru.c: More work on the

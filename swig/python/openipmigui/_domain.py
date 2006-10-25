@@ -37,6 +37,7 @@ import _entity
 import _mc
 import _saveprefs
 import _sel
+import _fru
 import _conn
 import _oi_logging
 
@@ -93,6 +94,66 @@ class DomainRefreshData:
     def domain_cb(self, domain):
         val = getattr(domain, self.func)()
         self.d.ui.set_item_text(self.item, str(val))
+        return
+
+    pass
+
+class DomainFRUDevidGet:
+    def __init__(self, d):
+        self.d = d;
+        gui_setdialog.SetDialog("FRU Information Device ID for" + str(d),
+                                [ True, str(0x20), str(0), str(0), str(0),
+                                  str(0) ],
+                                6, self,
+                                [ "Is Logical", "IPMB Address", "Device ID",
+                                  "LUN", "Private Bus", "Channel" ])
+        return
+
+    def do_on_close(self):
+        del(self.d)
+        del(self.fru)
+        return
+
+    def ok(self, vals):
+        self.is_logical = vals[0]
+        self.ipmb = int(vals[1])
+        self.devid = int(vals[2])
+        self.lun = int(vals[3])
+        self.private_bus = int(vals[4])
+        self.channel = int(vals[5])
+        rv = self.d.domain_id.to_domain(self)
+        if (rv == 0):
+            rv = self.err
+            pass
+        if (rv != 0):
+            return ("Error in FRU device information: "
+                    + OpenIPMI.get_error_string(rv))
+        return
+
+    def domain_cb(self, domain):
+        self.fru = domain.fru_alloc(int(self.is_logical), self.ipmb,
+                                    self.devid, self.lun, self.private_bus,
+                                    self.channel, self)
+        if (self.fru == None):
+            self.err = OpenIPMI.einval
+            pass
+        else:
+            self.err = 0
+            pass
+        return
+
+    def fru_fetched(self, domain, fru, err):
+        s = str(self.d) + "(" + str(self.is_logical) + ", "
+        s += str(self.ipmb) + ", "
+        s += str(self.devid) + ", "
+        s += str(self.lun) + ", "
+        s += str(self.private_bus) + ", "
+        s += str(self.channel) + ")"
+        if (err):
+            self.d.ui.new_log("Error fetching FRU iformation for " + s +
+                              ": " + OpenIPMI.get_error_string(err))
+            return
+        _fru.FruInfoDisplay(fru, s)
         return
 
     pass
@@ -305,7 +366,12 @@ class Domain:
                         [ [ "Close",        self.CloseMenuHandler ],
                           [ "Reread SELs",  self.RereadSelsHandler ],
                           [ "Display SELs", self.DisplaySelsHandler ],
-                          [ "Rescan IPMB",  self.RescanIPMBHandler ] ])
+                          [ "Rescan IPMB",  self.RescanIPMBHandler ],
+                          [ "Fetch FRU Info", self.FetchFruInfoHandler ] ])
+        return
+
+    def FetchFruInfoHandler(self, event):
+        DomainFRUDevidGet(self);
         return
 
     def CloseMenuHandler(self, event):

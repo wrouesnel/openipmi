@@ -85,6 +85,14 @@ class TreeList(Tix.Toplevel):
         self.currkey = 0
         return
 
+    def ExpandItem(self, item):
+        children = self.stree.hlist.info_children(item)
+        for child in children:
+            self.stree.open(child)
+            self.ExpandItem(child)
+            pass
+        return
+        
     def Close(self):
         self.destroy()
         return
