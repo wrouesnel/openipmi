@@ -3454,6 +3454,71 @@ handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
 }
 
 static void
+handle_picmg_cmd_ipmb_link_info(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_shelf_power_allocation(lmc_data_t    *mc,
+					ipmi_msg_t    *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 2, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] > 1) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    ipmi_set_uint16(rdata+2, 0);
+    if (msg->data[1] == 0) {
+	ipmi_set_uint16(rdata+4, 105);
+	ipmi_set_uint16(rdata+6, 227);
+	*rdata_len = 8;
+    } else {
+	ipmi_set_uint16(rdata+4, 227);
+	*rdata_len = 6;
+    }
+}
+
+static void
+handle_picmg_cmd_shelf_manager_ipmb_address(lmc_data_t    *mc,
+					    ipmi_msg_t    *msg,
+					    unsigned char *rdata,
+					    unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_fan_policy(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_fan_policy(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+
+static void
 handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
 					  ipmi_msg_t    *msg,
 					  unsigned char *rdata,
@@ -3815,6 +3880,26 @@ handle_picmg_msg(lmc_data_t    *mc,
 
     case IPMI_PICMG_CMD_BUSED_RESOURCE:
 	handle_picmg_cmd_bused_resource(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_IPMB_LINK_INFO:
+	handle_picmg_cmd_ipmb_link_info(mc, msg, rdata, rdata_len);
+	break;
+      
+    case IPMI_PICMG_CMD_SHELF_POWER_ALLOCATION:
+	handle_picmg_cmd_shelf_power_allocation(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_SHELF_MANAGER_IPMB_ADDRESS:
+	handle_picmg_cmd_shelf_manager_ipmb_address(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_SET_FAN_POLICY:
+	handle_picmg_cmd_set_fan_policy(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_GET_FAN_POLICY:
+	handle_picmg_cmd_get_fan_policy(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_PICMG_CMD_FRU_CONTROL_CAPABILITIES:

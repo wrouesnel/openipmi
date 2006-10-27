@@ -8893,7 +8893,14 @@ state machine.  Use the hot-swap state machine instead of this sensor.
 \acs{ATCA} specified other sensors, but the OpenIPMI \acs{ATCA} code
 does not use these internally.
 
-\section{Special \acs{ATCA} Controls}
+\section{Special \acs{ATCA} Shelf Controls}
+
+OpenIPMI will create one control for ECN002 and later versions.  It is
+a single control with all the power feeds defined in the power map.
+The current value of each feed is in the control.  It is named
+``power\_feeds'' and is attached to the shelf entity (23.1).
+
+\section{Special \acs{ATCA} IPMC Controls}
 \acs{ATCA} specifies a standard way to control LEDs on the board, and
 it has a defined reset operation.
 
@@ -8915,6 +8922,10 @@ The operation of these is board-dependent.
 
 Note that even though you could directly control the power on an
 \acs{ATCA} board, you should not.  Use the hot-swap state machine.
+
+In addition, an address control named ``address' is created for each
+IPMC that has the address info: site type, site number, hardware
+address, ipmb address, in that order.
 
 \section{Chassis Controls and \acs{ATCA}}
 The Shelf Manager is supposed to have the standard chassis controls

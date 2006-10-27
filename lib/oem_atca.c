@@ -69,6 +69,9 @@
 #define IPMC_GRACEFUL_REBOOT_CONTROL_NUM	0x83
 #define IPMC_DIAGNOSTIC_INTERRUPT_CONTROL_NUM	0x84
 
+/* A control attached to the system interface used to fetch the power
+   feed information. */
+#define POWER_FEED_CONTROL_NUM	0x00
 /* This is a control attached to the system interface used to handle
    the address control, one for each possible IPMB.  These range from
    0x80 to 0xff on the SI MC. */
@@ -183,6 +186,9 @@ struct atca_shelf_s
     char                 shelf_address[40];
     enum ipmi_str_type_e shelf_address_type;
     unsigned int         shelf_address_len;
+
+    unsigned int nr_power_feeds;
+    ipmi_control_t *power_feed_control;
 
     ipmi_entity_t *shelf_entity;
 
@@ -2259,6 +2265,227 @@ destroy_power_handling(atca_fru_t *finfo)
 
 /***********************************************************************
  *
+ * Control for the power feeds
+ *
+ **********************************************************************/
+
+typedef struct atca_power_feed_s
+{
+    ipmi_control_val_cb    get_handler;
+    void                   *cb_data;
+    ipmi_control_op_info_t sdata;
+    unsigned int           curr_feed;
+    int                    *vals;
+} atca_power_feed_t;
+
+static void get_power_feed_start(ipmi_control_t *control, int err,
+				 void *cb_data);
+
+static void
+get_power_feed_done(ipmi_control_t *control,
+		    int            err,
+		    ipmi_msg_t     *rsp,
+		    void           *cb_data)
+{
+    atca_power_feed_t *info = cb_data;
+    atca_shelf_t      *sinfo = ipmi_control_get_oem_info(control);
+    ipmi_mc_t         *mc = NULL;
+    unsigned int      expected_feeds;
+    unsigned int      i;
+
+    if (control)
+	mc = ipmi_control_get_mc(control);
+
+    expected_feeds = sinfo->nr_power_feeds - info->curr_feed;
+    if (expected_feeds > 10)
+	expected_feeds = 10;
+
+    if (check_for_msg_err(mc, &err, rsp, 4 + (expected_feeds * 2),
+			  "get_power_feed_done"))
+    {
+	if (info->get_handler)
+	    info->get_handler(control, err, info->vals, info->cb_data);
+	goto out;
+    }
+
+    for (i=0; i<expected_feeds; i++) {
+	info->vals[info->curr_feed] = ipmi_get_uint16(rsp->data+4+(i*2));
+	info->curr_feed++;
+    }
+
+    if (info->curr_feed < sinfo->nr_power_feeds) {
+	/* Not done, continue fetching. */
+	get_power_feed_start(control, 0, info);
+	return;
+    }
+
+    if (info->get_handler)
+	info->get_handler(control, 0, info->vals, info->cb_data);
+
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(info->vals);
+    ipmi_mem_free(info);
+}
+
+
+static void
+get_power_feed_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    atca_power_feed_t *info = cb_data;
+    ipmi_msg_t        msg;
+    unsigned char     data[2];
+    int               rv;
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_SHELF_POWER_ALLOCATION;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = info->curr_feed;
+
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, get_power_feed_done,
+				   &(info->sdata), info);
+    if (rv) {
+	if (info->get_handler)
+	    info->get_handler(control, rv, info->vals, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info->vals);
+	ipmi_mem_free(info);
+    }
+}
+
+static int
+get_power_feed(ipmi_control_t      *control,
+	       ipmi_control_val_cb handler,
+	       void                *cb_data)
+{
+    atca_power_feed_t *info;
+    atca_shelf_t      *sinfo = ipmi_control_get_oem_info(control);
+    int               rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    info->vals = ipmi_mem_alloc(sizeof(unsigned int) * sinfo->nr_power_feeds);
+    if (!info->vals) {
+	ipmi_mem_free(info);
+	return ENOMEM;
+    }
+
+    info->curr_feed = 0;
+    info->get_handler = handler;
+    info->cb_data = cb_data;
+
+    rv = ipmi_control_add_opq(control, get_power_feed_start,
+			      &info->sdata, info);
+    if (rv) {
+	ipmi_mem_free(info->vals);
+	ipmi_mem_free(info);
+    }
+    return rv;
+}
+
+static void
+add_power_feed_control(atca_shelf_t *info)
+{
+    int                          rv;
+    ipmi_system_interface_addr_t si;
+    ipmi_mc_t                    *si_mc;
+
+    if (info->power_feed_control)
+	return;
+
+    if ((info->atca_version < 0x22) || (info->nr_power_feeds == 0))
+	return;
+    
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+
+    si_mc = _ipmi_find_mc_by_addr(info->domain,
+				  (ipmi_addr_t *) &si,
+				  sizeof(si));
+    if (!si_mc) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_feed_control): "
+		 "Could not find system interface mc",
+		 DOMAIN_NAME(info->domain));
+	return;
+    }
+
+    rv = atca_alloc_control(si_mc, info, NULL,
+			    IPMI_CONTROL_POWER,
+			    "power_feeds",
+			    NULL,
+			    get_power_feed,
+			    NULL,
+			    NULL,
+			    NULL,
+			    NULL,
+			    info->nr_power_feeds,
+			    &info->power_feed_control);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_feed_control): "
+		 "Could not alloc control: 0x%x",
+		 DOMAIN_NAME(info->domain), rv);
+	goto out;
+    }
+
+    rv = atca_add_control(si_mc,
+			  &info->power_feed_control,
+			  POWER_FEED_CONTROL_NUM,
+			  info->shelf_entity);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_feed_control): "
+		 "Could not add power feed control: 0x%x",
+		 DOMAIN_NAME(info->domain), rv);
+	goto out;
+    }
+
+ out:
+    _ipmi_mc_put(si_mc);
+}
+
+static void
+destroy_power_feed_control(atca_shelf_t *info)
+{
+    ipmi_system_interface_addr_t si;
+    ipmi_mc_t                    *si_mc;
+
+    if (info->power_feed_control) {
+	ipmi_control_t *control = info->power_feed_control;
+
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+
+	si_mc = _ipmi_find_mc_by_addr(info->domain,
+				      (ipmi_addr_t *) &si,
+				      sizeof(si));
+	if (!si_mc) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(destroy_power_feed_control): "
+		     "Could not find system interface mc",
+		     DOMAIN_NAME(info->domain));
+	    return;
+	}
+
+	/* We *HAVE* to clear the value first, destroying this can
+	   cause something else to be destroyed and end up in the
+	   function again before we return from
+	   ipmi_control_destroy(). */
+	info->power_feed_control = NULL;
+	ipmi_control_destroy(control);
+	_ipmi_mc_put(si_mc);
+    }
+}
+
+/***********************************************************************
+ *
  * Control for the address
  *
  **********************************************************************/
@@ -2373,7 +2600,7 @@ destroy_address_control(atca_ipmc_t *ipmc)
 				      sizeof(si));
 	if (!si_mc) {
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(add_address_control): "
+		     "%soem_atca.c(destroy_address_control): "
 		     "Could not find system interface mc",
 		     ENTITY_NAME(ipmc->frus[0]->entity));
 	    return;
@@ -3379,6 +3606,8 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED);
     }
 
+    add_power_feed_control(info);
+
     info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
     if (!info->ipmcs) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -3561,15 +3790,147 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
+static int
+handle_power_map(ipmi_domain_t *domain,
+		 atca_shelf_t  *info,
+		 ipmi_fru_t    *fru,
+		 unsigned char *data,
+		 unsigned int  len)
+{
+    if (data[4] != 0) { /* We only know version 0 */
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(handle_power_map): "
+		 "powermap table was version %d but I only know version 0",
+		 DOMAIN_NAME(domain), data[4]);
+	return 0;
+    }
+
+    if (len < 6) {
+	/* length does not meet the minimum possible length. */
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(handle_power_map): "
+		 "power map was %d bytes long, but must be at least 6 bytes.",
+		 DOMAIN_NAME(domain), len);
+	return 0;
+    }
+
+    info->nr_power_feeds = data[5];
+    return 0;
+}
+
+static int
+handle_address_table(ipmi_domain_t *domain,
+		     atca_shelf_t  *info,
+		     ipmi_fru_t    *fru,
+		     unsigned char *data,
+		     unsigned int  len)
+{
+    unsigned char *str;
+    unsigned char *p;
+    int           j, k, l;
+    int           has_ipmb_32 = 0;
+    int           rv;
+
+    if (data[4] != 0) { /* We only know version 0 */
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(handle_address_table): "
+		 "Address table was version %d but I only know version 0",
+		 DOMAIN_NAME(domain), data[4]);
+	return 0;
+    }
+
+    if (len < (unsigned int) (27 + (3 * data[26]))) {
+	/* length does not meet the minimum possible length. */
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(handle_address_table): "
+		 "Address table was %d bytes long, but the number"
+		 " of entries (%d) requires %d bytes.  Error in the"
+		 " address table.",
+		 DOMAIN_NAME(domain), len - 27, data[26], data[26] * 3);
+	return 0;
+    }
+
+    str = data + 5;
+	
+    rv = ipmi_get_device_string(&str, 21,
+				info->shelf_address,
+				IPMI_STR_FRU_SEMANTICS, 0,
+				&info->shelf_address_type,
+				sizeof(info->shelf_address),
+				&info->shelf_address_len);
+    if (rv)
+	return rv;
+
+    /* We add 1 for adding 0x20 */
+    info->num_addresses = data[26] + 1;
+    info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * (data[26]+1));
+    if (!info->addresses) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(handle_address_table): "
+		 "could not allocate memory for shelf addresses",
+		 DOMAIN_NAME(domain));
+	ipmi_mem_free(data);
+	return ENOMEM;
+    }
+    memset(info->addresses, 0, sizeof(atca_address_t) * (data[26]+1));
+
+    p = data+27;
+    for (j=0, l=0; l<data[26]; l++, p += 3) {
+	int skip = 0;
+
+	/* O(n^2), sigh. */
+	for (k=0; k<j; k++) {
+	    if ((info->addresses[k].hw_address == p[0])
+		&& (info->addresses[k].site_num == p[1])
+		&& (info->addresses[k].site_type == p[2]))
+	    {
+		/* Duplicate entries are bad because they will
+		   have the same entity, and that can cause a
+		   crash at shutdown because the entity will be
+		   destroyed and then the child removal will
+		   happen again. */
+		ipmi_log(IPMI_LOG_WARNING,
+			 "%soem_atca.c(handle_address_table): "
+			 "Shelf address entry %d is the same as shelf"
+			 " address entry %d, ignoring second entry",
+			 DOMAIN_NAME(domain), k, j);
+		skip = 1;
+	    }
+	}
+	if (skip) {
+	    info->num_addresses--;
+	} else {
+	    info->addresses[j].hw_address = p[0];
+	    info->addresses[j].site_num = p[1];
+	    info->addresses[j].site_type = p[2];
+	    if ((p[0]*2) == 32)
+		has_ipmb_32 = 1;
+	    j++;
+	}
+    }
+
+    if (has_ipmb_32)
+	info->num_addresses--;
+    else {
+	/* If we don't find the "main" address, add it. */
+	info->addresses[j].hw_address = 32 >> 1;
+	info->addresses[j].site_num = 0;
+	info->addresses[j].site_type = PICMG_SITE_TYPE_DEDICATED_SHMC;
+	j++;
+    }
+
+    return 0;
+}
+
 static void
 shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 		  void *cb_data)
 {
-    atca_shelf_t       *info = cb_data;
-    int                count;
-    int                found;
-    int                i, j, k, l;
-    int                rv;
+    atca_shelf_t *info = cb_data;
+    int          count;
+    int          found;
+    int          i;
+    int          rv = 0;
 
     if (err) {
 	ipmi_system_interface_addr_t si;
@@ -3629,9 +3990,6 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	unsigned int  len;
 	unsigned char *data;
 	unsigned int  mfg_id;
-	unsigned char *p;
-	unsigned char *str;
-	int           has_ipmb_32 = 0;
 
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
@@ -3639,7 +3997,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	    || (ipmi_fru_get_multi_record_data_len(fru, i, &len) != 0))
 	    continue;
 
-	if ((type != 0xc0) || (ver != 2) || (len < 27))
+	if ((type != 0xc0) || (ver != 2) || (len < 4))
 	    continue;
 
 	data = ipmi_mem_alloc(len);
@@ -3663,100 +4021,16 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	if (mfg_id != PICMG_MFG_ID)
 	    goto next_data_item;
 
-	if (data[3] != 0x10) /* Address table record id */
-	    goto next_data_item;
-
-	if (data[4] != 0) { /* We only know version 0 */
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     "Address table was version %d but I only know version 0",
-		     DOMAIN_NAME(domain), data[4]);
-	    goto next_data_item;
-	}
-
-	if (len < (unsigned int) (27 + (3 * data[26]))) {
-	    /* length does not meet the minimum possible length. */
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     "Address table was %d bytes long, but the number"
-		     " of entries (%d) requires %d bytes.  Error in the"
-		     " address table.",
-		     DOMAIN_NAME(domain), len - 27, data[26], data[26] * 3);
-	    goto next_data_item;
-	}
-
-	str = data + 5;
-	
-	rv = ipmi_get_device_string(&str, 21,
-				    info->shelf_address,
-				    IPMI_STR_FRU_SEMANTICS, 0,
-				    &info->shelf_address_type,
-				    sizeof(info->shelf_address),
-				    &info->shelf_address_len);
-	if (rv)
-	    goto out;
-
-	/* We add 1 for adding 0x20 */
-	info->num_addresses = data[26] + 1;
-	info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * (data[26]+1));
-	if (!info->addresses) {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     "could not allocate memory for shelf addresses",
-		     DOMAIN_NAME(domain));
-	    ipmi_mem_free(data);
-	    rv = ENOMEM;
-	    goto out;
-	}
-	memset(info->addresses, 0, sizeof(atca_address_t) * (data[26]+1));
-
-	p = data+27;
-	for (j=0, l=0; l<data[26]; l++, p += 3) {
-	    int skip = 0;
-
-	    /* O(n^2), sigh. */
-	    for (k=0; k<j; k++) {
-		if ((info->addresses[k].hw_address == p[0])
-		    && (info->addresses[k].site_num == p[1])
-		    && (info->addresses[k].site_type == p[2]))
-		{
-		    /* Duplicate entries are bad because they will
-		       have the same entity, and that can cause a
-		       crash at shutdown because the entity will be
-		       destroyed and then the child removal will
-		       happen again. */
-		    ipmi_log(IPMI_LOG_WARNING,
-			     "%soem_atca.c(shelf_fru_fetched): "
-			     "Shelf address entry %d is the same as shelf"
-			     " address entry %d, ignoring second entry",
-			     DOMAIN_NAME(domain), k, j);
-		    skip = 1;
-		}
-	    }
-	    if (skip) {
-		info->num_addresses--;
-	    } else {
-		info->addresses[j].hw_address = p[0];
-		info->addresses[j].site_num = p[1];
-		info->addresses[j].site_type = p[2];
-                if ((p[0]*2) == 32)
-                    has_ipmb_32 = 1;
-		j++;
-	    }
-	}
-
-        if (has_ipmb_32)
-                info->num_addresses--;
-        else {
-	    /* If we don't find the "main" address, add it. */
-            info->addresses[j].hw_address = 32 >> 1;
-            info->addresses[j].site_num = 0;
-            info->addresses[j].site_type = PICMG_SITE_TYPE_DEDICATED_SHMC;
-            j++;
-        }
+	if (data[3] == 0x10) /* Address table record id */
+	    rv = handle_address_table(domain, info, fru, data, len);
+	else if (data[3] == 0x11) /* Power distribution record */
+	    rv = handle_power_map(domain, info, fru, data, len);
 
     next_data_item:
 	ipmi_mem_free(data);
+
+	if (rv)
+	    goto out;
     }
 
     /* Add a handler for when MCs are added to the domain, so we can
@@ -3824,6 +4098,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 	    }
 	}
     }
+    destroy_power_feed_control(info);
     if (info->shelf_entity) {
 	_ipmi_entity_remove_ref(info->shelf_entity);
 	_ipmi_entity_put(info->shelf_entity);
