@@ -255,6 +255,7 @@ struct ipmi_entity_s
     locked_list_t *sensor_handlers;
     locked_list_t *control_handlers;
     locked_list_t *presence_handlers;
+    locked_list_t *fully_up_handlers;
 
     /* Used for SDR output (not currently supported). */
     entity_sdr_add_cb  sdr_gen_output;
@@ -306,6 +307,7 @@ struct ipmi_entity_info_s
 
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
 static void call_presence_handlers(ipmi_entity_t *ent, int present);
+static void call_fully_up_handlers(ipmi_entity_t *ent);
 
 /***********************************************************************
  *
@@ -546,6 +548,7 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     locked_list_destroy(ent->controls);
     locked_list_destroy(ent->hot_swap_handlers);
     locked_list_destroy(ent->presence_handlers);
+    locked_list_destroy(ent->fully_up_handlers);
     locked_list_destroy(ent->fru_handlers);
     locked_list_destroy(ent->control_handlers);
     locked_list_destroy(ent->sensor_handlers);
@@ -741,6 +744,11 @@ ipmi_entity_get_name(ipmi_entity_t *ent, char *name, int length)
  * children.
  *
  **********************************************************************/
+static void
+entity_report_fully_up(ipmi_entity_t *ent, void *cb_data)
+{
+    call_fully_up_handlers(ent);
+}
 
 /* Must be called with the _ipmi_domain_entity_lock() held. */
 int
@@ -753,8 +761,9 @@ _ipmi_entity_get(ipmi_entity_t *ent)
 void
 _ipmi_entity_put(ipmi_entity_t *ent)
 {
-    ipmi_domain_t *domain = ent->domain;
-    int           entity_fru_fetch = 0;
+    ipmi_domain_t      *domain = ent->domain;
+    int                entity_fru_fetch = 0;
+    ipmi_entity_ptr_cb report_present = NULL;
     _ipmi_domain_entity_lock(domain);
  retry:
     if (ent->usecount == 1) {
@@ -812,6 +821,11 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    call_presence_handlers(ent, present);
 	    _ipmi_domain_entity_lock(domain);
 
+            if (ipmi_entity_get_is_fru(ent) && ent->present)
+		entity_fru_fetch = 1;
+
+	    report_present = entity_report_fully_up;
+
 	    /* Something grabbed the entity while the lock wasn't
 	       held, don't attempt the cleanup. */
 	    if (ent->usecount != 1)
@@ -821,6 +835,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	if (cleanup_entity(ent))
 	    goto out2;
 
+    repend:
 	if ((ent->add_pending)
 	    || (ent->changed)
 	    || (ent->present_change_count))
@@ -835,10 +850,21 @@ _ipmi_entity_put(ipmi_entity_t *ent)
  out2:
     /* Wait till here to start fetching FRUs, as we want to report the
        entity first before we start the fetch. */
-    if (entity_fru_fetch) {
+    if (ent->present && entity_fru_fetch) {
+	entity_fru_fetch = 0;
 	ent->usecount++;
-	ipmi_entity_fetch_frus(ent);
-	ent->usecount--;
+	_ipmi_domain_entity_unlock(domain);
+	ipmi_entity_fetch_frus_cb(ent, report_present, NULL);
+	_ipmi_domain_entity_lock(domain);
+	report_present = NULL;
+	goto repend;
+    } else if (report_present) {
+	ent->usecount++;
+	_ipmi_domain_entity_unlock(domain);
+	report_present(ent, NULL);
+	_ipmi_domain_entity_lock(domain);
+	report_present = NULL;
+	goto repend;
     }
     _ipmi_domain_entity_unlock(domain);
 }
@@ -1038,6 +1064,10 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent->presence_handlers)
 	goto out_err;
 
+    ent->fully_up_handlers = locked_list_alloc(ent->os_hnd);
+    if (!ent->fully_up_handlers)
+	goto out_err;
+
     ent->waitq = opq_alloc(os_hnd);
     if (! ent->waitq)
 	return ENOMEM;
@@ -1111,6 +1141,8 @@ entity_add(ipmi_entity_info_t *ents,
 	ipmi_destroy_lock(ent->elock);
     if (ent->presence_handlers)
 	locked_list_destroy(ent->presence_handlers);
+    if (ent->fully_up_handlers)
+	locked_list_destroy(ent->fully_up_handlers);
     if (ent->waitq)
 	opq_destroy(ent->waitq);
     if (ent->fru_handlers)
@@ -1429,6 +1461,7 @@ presence_changed(ipmi_entity_t *ent, int present)
     ipmi_fru_t    *fru;
     ipmi_domain_t *domain = ent->domain;
     int           entity_fru_fetch = 0;
+    int           was_present;
 
     ent->presence_event_count++;
 
@@ -1477,11 +1510,14 @@ presence_changed(ipmi_entity_t *ent, int present)
 	} else {
 	    ent->present_change_count++;
 	}
+	was_present = ent->present;
+	_ipmi_domain_entity_unlock(domain);
 	/* Wait till here to start fetching FRUs, as we want to report
 	   the entity first before we start the fetch. */
-	if (entity_fru_fetch)
-	    ipmi_entity_fetch_frus(ent);
-	_ipmi_domain_entity_unlock(domain);
+	if (was_present && entity_fru_fetch)
+	    ipmi_entity_fetch_frus_cb(ent, entity_report_fully_up, NULL);
+	else if (was_present)
+	    entity_report_fully_up(ent, NULL);
 
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
@@ -2279,6 +2315,46 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
 	ipmi_entity_set_hot_swappable(ent, 1);
 	ent->hs_cb = internal_hs_cb;
     }
+}
+
+int
+ipmi_entity_add_fully_up_handler(ipmi_entity_t      *ent,
+				 ipmi_entity_ptr_cb handler,
+				 void               *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->fully_up_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_fully_up_handler(ipmi_entity_t      *ent,
+				    ipmi_entity_ptr_cb handler,
+				    void               *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->fully_up_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+static int
+call_fully_up_handler(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t      *entity = cb_data;
+    ipmi_entity_ptr_cb handler = item1;
+
+    handler(entity, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_fully_up_handlers(ipmi_entity_t *ent)
+{
+    locked_list_iterate(ent->fully_up_handlers, call_fully_up_handler, ent);
 }
 
 /***********************************************************************
@@ -5040,7 +5116,9 @@ _ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op)
 
 typedef struct fru_ent_info_s
 {
-    ipmi_entity_t      *entity;
+    ipmi_entity_id_t   ent_id;
+    ipmi_entity_ptr_cb done;
+    void               *cb_data;
     ipmi_fru_t         *fru;
     int                err;
 } fru_ent_info_t;
@@ -5052,13 +5130,15 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 
     if (!info->err) {
 	enum ipmi_update_e op;
-	if (ent->fru) {
+	ipmi_fru_t         *ofru = ent->fru;
+
+	ent->fru = info->fru;
+	if (ofru) {
 	    op = IPMI_CHANGED;
-	    ipmi_fru_destroy_internal(ent->fru, NULL, NULL);
+	    ipmi_fru_destroy_internal(ofru, NULL, NULL);
 	} else {
 	    op = IPMI_ADDED;
 	}
-	ent->fru = info->fru;
 
 	_ipmi_entity_call_fru_handlers(ent, op);
     } else {
@@ -5076,43 +5156,53 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    ent->fru = info->fru;
 	_ipmi_entity_call_fru_handlers(ent, IPMI_CHANGED);
     }
+
+    if (info->done)
+	info->done(ent, info->cb_data);
 }
 
 static void
 fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
 		    int err, void *cb_data)
 {
-    ipmi_entity_id_t *ent_id = cb_data;
-    fru_ent_info_t   info;
-    int              rv;
+    fru_ent_info_t *info = cb_data;
+    int            rv;
 
-    info.fru = fru;
-    info.err = err;
+    info->fru = fru;
+    info->err = err;
 
-    rv = ipmi_entity_pointer_cb(*ent_id, fru_fetched_ent_cb, &info);
+    rv = ipmi_entity_pointer_cb(info->ent_id, fru_fetched_ent_cb, info);
     if (rv)
 	/* If we can't put the fru someplace, just destroy it. */
 	ipmi_fru_destroy_internal(fru, NULL, NULL);
 
-    ipmi_mem_free(ent_id);
+    ipmi_mem_free(info);
     if (domain)
 	_ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
 }
 
 int
-ipmi_entity_fetch_frus(ipmi_entity_t *ent)
+ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
+			  ipmi_entity_ptr_cb done,
+			  void               *cb_data)
 {
-    ipmi_entity_id_t *ent_id;
+    fru_ent_info_t   *info;
     int              rv;
 
-    if (! ipmi_option_FRUs(ent->domain))
+    if (! ipmi_option_FRUs(ent->domain)) {
+	done(ent, cb_data);
 	return 0;
+    }
 
-    ent_id = ipmi_mem_alloc(sizeof(*ent_id));
-    if (!ent_id)
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	done(ent, cb_data);
 	return ENOMEM;
+    }
 
-    *ent_id = ipmi_entity_convert_to_id(ent);
+    info->ent_id = ipmi_entity_convert_to_id(ent);
+    info->done = done;
+    info->cb_data = cb_data;
 
     /* fetch the FRU information. */
     rv = ipmi_fru_alloc_notrack(ent->domain,
@@ -5124,18 +5214,25 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
 				ent->info.channel,
 				IPMI_FRU_ALL_AREA_MASK, 
 				fru_fetched_handler,
-				ent_id,
+				info,
 				NULL);
     if (rv) {
-	ipmi_mem_free(ent_id);
+	ipmi_mem_free(info);
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%sentity.c(ipmi_entity_fetch_frus):"
+		 "%sentity.c(ipmi_entity_fetch_frus_cb):"
 		 " Unable to allocate the FRU: %x",
 		 ENTITY_NAME(ent), rv);
+	done(ent, cb_data);
     } else
-	_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus");
+	_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
 
     return rv;
+}
+
+int
+ipmi_entity_fetch_frus(ipmi_entity_t *ent)
+{
+    return ipmi_entity_fetch_frus_cb(ent, NULL, NULL);
 }
 
 ipmi_fru_t *

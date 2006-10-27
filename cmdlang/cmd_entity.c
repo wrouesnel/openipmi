@@ -799,9 +799,9 @@ entity_hs_check(ipmi_entity_t *entity, void *cb_data)
 }
 
 
-void fru_change(enum ipmi_update_e op,
-		ipmi_entity_t      *entity,
-		void               *cb_data)
+static void fru_change(enum ipmi_update_e op,
+		       ipmi_entity_t      *entity,
+		       void               *cb_data)
 {
     char            *errstr;
     int             rv;
@@ -905,6 +905,37 @@ presence_change(ipmi_entity_t *entity,
     return IPMI_EVENT_NOT_HANDLED;
 }
 
+static void fully_up(ipmi_entity_t      *entity,
+		     void               *cb_data)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Entity");
+    ipmi_cmdlang_out(evi, "Name", entity_name);
+    ipmi_cmdlang_out(evi, "Operation", "Fully Up");
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmd_entity.c(fully_up)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
 static int
 entity_hot_swap(ipmi_entity_t             *entity,
 		enum ipmi_hot_swap_states last_state,
@@ -998,6 +1029,13 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	}
 	rv = ipmi_entity_add_presence_handler(entity,
 					      presence_change,
+					      NULL);
+	if (rv) {
+	    errstr = "ipmi_entity_add_presence_handler";
+	    goto out_err;
+	}
+	rv = ipmi_entity_add_fully_up_handler(entity,
+					      fully_up,
 					      NULL);
 	if (rv) {
 	    errstr = "ipmi_entity_add_presence_handler";

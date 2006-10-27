@@ -1,3 +1,16 @@
+2006-10-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c, include/OpenIPMI/internal/ipmi_entity.h: Added a
+	function to refetch entity FRU information and report when it is
+	done.
+
+	* lib/entity.c, include/OpenIPMI/ipmiif.h.in: Added a way to know
+	when an entity that is reported present has all its data (FRU
+	information) fetched.
+
+	* cmdlang/cmd_entity.c: Added reporting of entities being fully
+	up.
+
 2006-10-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_fru.c: Added all the current ATCA-defined FRU
