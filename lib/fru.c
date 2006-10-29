@@ -1679,6 +1679,8 @@ struct ipmi_fru_node_s
     void                           *data;
     void                           *data2;
     ipmi_fru_oem_node_get_field_cb get_field;
+    ipmi_fru_oem_node_set_field_cb set_field;
+    ipmi_fru_oem_node_settable_cb  settable;
     ipmi_fru_oem_node_cb           destroy;
 };
 
@@ -1743,6 +1745,34 @@ ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			   floatval, data, data_len, sub_node);
 }
 
+int
+ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
+			unsigned int              index,
+			enum ipmi_fru_data_type_e dtype,
+			int                       intval,
+			time_t                    time,
+			double                    floatval,
+			char                      *data,
+			unsigned int              data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    if (!node->set_field)
+	return ENOSYS;
+    return node->set_field(node, index, dtype, intval, time,
+			   floatval, data, data_len, sub_node);
+}
+
+int
+ipmi_fru_node_settable(ipmi_fru_node_t           *node,
+		       unsigned int              index)
+{
+    if (!node->set_field)
+	return ENOSYS;
+    if (!node->settable)
+	return 0;
+    return node->settable(node, index);
+}
+
 void *
 _ipmi_fru_node_get_data(ipmi_fru_node_t *node)
 {
@@ -1779,6 +1809,20 @@ _ipmi_fru_node_set_get_field(ipmi_fru_node_t                *node,
 			     ipmi_fru_oem_node_get_field_cb get_field)
 {
     node->get_field = get_field;
+}
+
+void
+_ipmi_fru_node_set_set_field(ipmi_fru_node_t                *node,
+			     ipmi_fru_oem_node_set_field_cb set_field)
+{
+    node->set_field = set_field;
+}
+
+void
+_ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
+			    ipmi_fru_oem_node_settable_cb settable)
+{
+    node->settable = settable;
 }
 
 

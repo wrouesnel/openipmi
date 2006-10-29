@@ -9428,6 +9428,99 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 
 	return 0;
     }
+
+    int set_field(unsigned        index,
+		  const char      *type,
+		  char            *value,
+		  ipmi_fru_node_t **sub_node)
+    {
+	int                       rv;
+	enum ipmi_fru_data_type_e dtype;
+	int                       intval = 0;
+	double                    floatval = 0.0;
+	time_t                    time = 0;
+	char                      *data = NULL;
+	unsigned int              data_len = 0;
+	char                      *s;
+
+	if (!type)
+	    return EINVAL;
+
+	if (strcmp(type, "subnode") == 0) {
+	    dtype = IPMI_FRU_DATA_SUB_NODE;
+	    goto ready_to_set;
+	} else if (strcmp(type, "binary") == 0) {
+	    dtype = IPMI_FRU_DATA_BINARY;
+	    if (value) {
+		data = (char *) parse_raw_str_data(value, &data_len);
+		if (!data)
+		    return ENOMEM;
+	    }
+	    goto ready_to_set;
+	} else if (strcmp(type, "unicode") == 0) {
+	    dtype = IPMI_FRU_DATA_UNICODE;
+	    if (value) {
+		data = (char *) parse_raw_str_data(value, &data_len);
+		if (!data)
+		    return ENOMEM;
+	    }
+	    goto ready_to_set;
+	} else if (strcmp(type, "ascii") == 0) {
+	    dtype = IPMI_FRU_DATA_ASCII;
+	    if (value) {
+		data = strdup(value);
+		if (!data)
+		    return ENOMEM;
+		data_len = strlen(value);
+	    }
+	    goto ready_to_set;
+	}
+
+	if (!value || !(*value))
+	    return EINVAL;
+
+	if (strcmp(type, "integer") == 0) {
+	    dtype = IPMI_FRU_DATA_INT;
+	    intval = strtol(value, &s, 0);
+	    if (*s != '\0')
+		return EINVAL;
+	} else if (strcmp(type, "boolean") == 0) {
+	    dtype = IPMI_FRU_DATA_BOOLEAN;
+	    intval = strtol(value, &s, 0);
+	    if (*s == '\0')
+		intval = !!intval;
+	    else if (strcasecmp(value, "true") == 0)
+		intval = 1;
+	    else if (strcasecmp(value, "false") == 0)
+		intval = 0;
+	    else
+		return EINVAL;
+	} else if (strcmp(type, "time") == 0) {
+	    dtype = IPMI_FRU_DATA_TIME;
+	    time = strtol(value, &s, 0);
+	    if (*s != '\0')
+		return EINVAL;
+	} else if (strcmp(type, "float") == 0) {
+	    dtype = IPMI_FRU_DATA_FLOAT;
+	    floatval = strtod(value, &s);
+	    if (*s != '\0')
+		return EINVAL;
+	} else
+	    return EINVAL;
+
+    ready_to_set:
+	rv = ipmi_fru_node_set_field(self, index, dtype, intval, time,
+				     floatval, data, data_len, sub_node);
+
+	if (data)
+	    free(data);
+	return rv;
+    }
+
+    int settable(unsigned index)
+    {
+	return ipmi_fru_node_settable(self, index);
+    }
 }
 
 /*

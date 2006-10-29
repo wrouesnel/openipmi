@@ -4895,6 +4895,7 @@ check_if_atca(ipmi_domain_t              *domain,
 }
 
 int _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
+			       unsigned int        mr_rec_num,
 			       unsigned int        manufacturer_id,
 			       unsigned char       record_type_id,
 			       unsigned char       *mr_data,

@@ -154,6 +154,7 @@ typedef struct atca_p2p_cr_desc_s
 
 typedef struct atca_p2p_cr_s
 {
+    unsigned int       mr_rec_num;
     uint8_t            version;
     unsigned int       desc_count;
     atca_p2p_cr_desc_t *descs;
@@ -420,6 +421,7 @@ atca_p2p_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
+		    unsigned int        mr_rec_num,
 		    unsigned char       *mr_data,
 		    unsigned int        mr_data_len,
 		    const char          **name,
@@ -447,6 +449,7 @@ atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     mr_data++;
     mr_data_len--;
@@ -536,6 +539,7 @@ typedef struct atca_addr_tab_desc_s
 
 typedef struct atca_addr_tab_s
 {
+    unsigned int         mr_rec_num;
     uint8_t              version;
     unsigned int         shelf_addr_len;
     enum ipmi_str_type_e shelf_addr_type;
@@ -705,6 +709,7 @@ atca_addr_tab_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_addr_tab(ipmi_fru_t          *fru,
+		      unsigned int        mr_rec_num,
 		      unsigned char       *mr_data,
 		      unsigned int        mr_data_len,
 		      const char          **name,
@@ -731,6 +736,7 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     mr_data++;
     mr_data_len--;
@@ -822,6 +828,7 @@ typedef struct atca_power_dist_map_s
 
 typedef struct atca_shelf_power_dist_s
 {
+    unsigned int          mr_rec_num;
     uint8_t               version;
     uint8_t               nr_power_feeds;
     atca_power_dist_map_t *power_feeds;
@@ -1098,6 +1105,7 @@ atca_shelf_power_dist_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_shelf_power_dist(ipmi_fru_t          *fru,
+			      unsigned int        mr_rec_num,
 			      unsigned char       *mr_data,
 			      unsigned int        mr_data_len,
 			      const char          **name,
@@ -1122,6 +1130,7 @@ atca_root_mr_shelf_power_dist(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     rec->nr_power_feeds = mr_data[1];
 
@@ -1213,6 +1222,7 @@ typedef struct atca_act_power_desc_s
 
 typedef struct atca_shelf_act_power_s
 {
+    unsigned int          mr_rec_num;
     uint8_t               version;
     uint8_t               allowance_for_activation_readiness;
     unsigned int          nr_recs;
@@ -1397,6 +1407,7 @@ atca_shelf_act_power_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_shelf_act_power(ipmi_fru_t          *fru,
+			     unsigned int        mr_rec_num,
 			     unsigned char       *mr_data,
 			     unsigned int        mr_data_len,
 			     const char          **name,
@@ -1421,6 +1432,7 @@ atca_root_mr_shelf_act_power(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     rec->allowance_for_activation_readiness = mr_data[1];
     rec->nr_recs = mr_data[2];
@@ -1488,6 +1500,7 @@ atca_root_mr_shelf_act_power(ipmi_fru_t          *fru,
 
 typedef struct atca_shelf_mgr_ip_conn_s
 {
+    unsigned int          mr_rec_num;
     uint8_t               version;
     uint32_t              ip_address;
     uint32_t              gateway_address;
@@ -1562,6 +1575,7 @@ atca_shelf_mgr_ip_conn_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
+			       unsigned int        mr_rec_num,
 			       unsigned char       *mr_data,
 			       unsigned int        mr_data_len,
 			       const char          **name,
@@ -1588,6 +1602,7 @@ atca_root_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     memcpy(&rec->ip_address, mr_data+1, 4);
 
@@ -1649,6 +1664,7 @@ typedef struct atca_link_desc_s
 
 typedef struct atca_board_p2p_conn_s
 {
+    unsigned int     mr_rec_num;
     uint8_t          version;
     unsigned int     nr_guids;
     atca_guid_t      *guids;
@@ -1917,10 +1933,11 @@ atca_board_p2p_conn_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_board_p2p_conn(ipmi_fru_t          *fru,
-			     unsigned char       *mr_data,
-			     unsigned int        mr_data_len,
-			     const char          **name,
-			     ipmi_fru_node_t     **rnode)
+			    unsigned int        mr_rec_num,
+			    unsigned char       *mr_data,
+			    unsigned int        mr_data_len,
+			    const char          **name,
+			    ipmi_fru_node_t     **rnode)
 {
     atca_board_p2p_conn_t *rec;
     unsigned int           i;
@@ -1941,6 +1958,7 @@ atca_root_mr_board_p2p_conn(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     rec->nr_guids = mr_data[1];
     mr_data += 2;
@@ -2047,6 +2065,7 @@ typedef struct atca_ipmb0_hub_desc_s
 
 typedef struct atca_radial_ipmb0_link_map_s
 {
+    unsigned int          mr_rec_num;
     uint8_t               version;
     uint32_t              connector_definer;
     uint16_t              connector_version;
@@ -2347,6 +2366,7 @@ atca_radial_ipmb0_link_map_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_radial_ipmb0_link_map(ipmi_fru_t          *fru,
+				   unsigned int        mr_rec_num,
 				   unsigned char       *mr_data,
 				   unsigned int        mr_data_len,
 				   const char          **name,
@@ -2371,6 +2391,7 @@ atca_root_mr_radial_ipmb0_link_map(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     rec->connector_definer = (mr_data[1] | (mr_data[2] << 8)
 			      | (mr_data[3] << 16));
@@ -2464,6 +2485,7 @@ typedef struct atca_fan_to_fru_s
 
 typedef struct atca_shelf_fan_geog_s
 {
+    unsigned int      mr_rec_num;
     uint8_t           version;
     uint8_t           nr_fan_to_frus;
     atca_fan_to_fru_t *fan_to_frus;
@@ -2629,6 +2651,7 @@ atca_shelf_fan_geog_root_get_field(ipmi_fru_node_t           *rnode,
 
 static int
 atca_root_mr_shelf_fan_geog(ipmi_fru_t          *fru,
+			    unsigned int        mr_rec_num,
 			    unsigned char       *mr_data,
 			    unsigned int        mr_data_len,
 			    const char          **name,
@@ -2654,6 +2677,7 @@ atca_root_mr_shelf_fan_geog(ipmi_fru_t          *fru,
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
 
+    rec->mr_rec_num = mr_rec_num;
     rec->version = mr_data[0];
     rec->nr_fan_to_frus = mr_data[1];
     mr_data += 2;
@@ -2708,6 +2732,7 @@ atca_root_mr_shelf_fan_geog(ipmi_fru_t          *fru,
 
 int
 _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
+			   unsigned int        mr_rec_num,
 			   unsigned int        manufacturer_id,
 			   unsigned char       record_type_id,
 			   unsigned char       *mr_data,
@@ -2722,33 +2747,41 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
 
     switch (mr_data[3]) {
     case 4: /* backplane point-to-point connectivity record */
-	return atca_root_mr_p2p_cr(fru, mr_data, mr_data_len, name, node);
+	return atca_root_mr_p2p_cr(fru, mr_rec_num,
+				   mr_data, mr_data_len, name, node);
 
     case 0x10: /* shelf address table */
-	return atca_root_mr_addr_tab(fru, mr_data, mr_data_len, name, node);
+	return atca_root_mr_addr_tab(fru, mr_rec_num,
+				   mr_data, mr_data_len, name, node);
 
     case 0x11: /* Shelf power distribution */
-	return atca_root_mr_shelf_power_dist(fru, mr_data, mr_data_len,
+	return atca_root_mr_shelf_power_dist(fru, mr_rec_num,
+					     mr_data, mr_data_len,
 					     name, node);
 
     case 0x12: /* Shelf activation and power mgmt */
-	return atca_root_mr_shelf_act_power(fru, mr_data, mr_data_len,
+	return atca_root_mr_shelf_act_power(fru, mr_rec_num,
+					    mr_data, mr_data_len,
 					    name, node);
 
     case 0x13: /* Shelf Manager IP Connection Record */
-	return atca_root_mr_shelf_mgr_ip_conn(fru, mr_data, mr_data_len,
+	return atca_root_mr_shelf_mgr_ip_conn(fru, mr_rec_num,
+					      mr_data, mr_data_len,
 					      name, node);
 
     case 0x14: /* Board p2p connectivity record */
-	return atca_root_mr_board_p2p_conn(fru, mr_data, mr_data_len,
-					    name, node);
+	return atca_root_mr_board_p2p_conn(fru, mr_rec_num,
+					   mr_data, mr_data_len,
+					   name, node);
 
     case 0x15: /* radial ipmb0 link mapping */
-	return atca_root_mr_radial_ipmb0_link_map(fru, mr_data, mr_data_len,
+	return atca_root_mr_radial_ipmb0_link_map(fru, mr_rec_num,
+						  mr_data, mr_data_len,
 						  name, node);
 
     case 0x1b: /* Shelf fan geography record */
-	return atca_root_mr_shelf_fan_geog(fru, mr_data, mr_data_len,
+	return atca_root_mr_shelf_fan_geog(fru, mr_rec_num,
+					   mr_data, mr_data_len,
 					   name, node);
 
     default:

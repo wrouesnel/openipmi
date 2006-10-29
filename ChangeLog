@@ -1,3 +1,22 @@
+2006-10-28 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_fru.h:
+	Added basic function interfaces for setting values in FRU nodes.
+
+	* lib/fru.c: Added infrastructure for setting FRU nodes.
+
+	* lib/normal_fru.c: Added support for setting the basic FRU item
+	through the FRU nodes.
+
+	* lib/oem_atca.c, lib/oem_atca_fru.c: Modified for new multirecord
+	handling for setting, though no set support yet.
+
+	* swig/OpenIPMI.i: Added support for the new FRU node set field
+	and settable functions.
+
+	* swig/python/openipmigui/_fru.py: Added support for setting FRU
+	items.
+	
 2006-10-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c, doc/IPMI.ltx: Created a power feed control for

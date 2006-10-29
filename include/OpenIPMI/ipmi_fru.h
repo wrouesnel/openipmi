@@ -211,6 +211,32 @@ int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			    unsigned int              *data_len,
 			    ipmi_fru_node_t           **sub_node);
 
+/*
+ * Set an index in a node.  See the information for ipmi_fru_node_get_field
+ * above for information on the types and data values.
+ *
+ * This function returns EPERM if the field is not writable or EINVAL if
+ * something is invalid about the data or index or data type.
+ *
+ * To extend an array, write to an index beyond the current length and
+ * it will be automatically extended.  Make sure to fill the values
+ * inbetween if necessary.
+ */
+int ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
+			    unsigned int              index,
+			    enum ipmi_fru_data_type_e dtype,
+			    int                       intval,
+			    time_t                    time,
+			    double                    floatval,
+			    char                      *data,
+			    unsigned int              data_len,
+			    ipmi_fru_node_t           **sub_node);
+
+/*
+ * Can an index in a node be set?  Returns 0 if so, an error if not.
+ */
+int ipmi_fru_node_settable(ipmi_fru_node_t *node,
+			   unsigned int    index);
 
 /* Free data that comes from ipmi_fru_node_get_field if the data return is
    non-NULL. */

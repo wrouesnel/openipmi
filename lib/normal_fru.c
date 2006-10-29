@@ -2498,7 +2498,8 @@ typedef struct fru_data_rep_s
 {
     char                      *name;
     enum ipmi_fru_data_type_e type;
-    int                       hasnum;
+    unsigned int              hasnum : 1;
+    unsigned int              settable : 1;
 
     union {
 	struct {
@@ -2575,69 +2576,77 @@ typedef struct fru_data_rep_s
     } u;
 } fru_data_rep_t;
 
-#define F_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 0, \
-		     .u = { .inttype = { .fetch_uchar = ipmi_fru_get_ ## x, \
-					 .set_uchar = ipmi_fru_set_ ## x }}}
-#define F_NUM_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
-		         .u = { .intnumtype = {				     \
-				 .fetch_uchar = ipmi_fru_get_ ## x,	     \
-				 .set_uchar = ipmi_fru_set_ ## x }}}
-#define F_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 0, \
-		    .u = { .timetype = { .fetch = ipmi_fru_get_ ## x,    \
+#define F_UCHAR(x,s) { .name = #x, .type = IPMI_FRU_DATA_INT,		     \
+		       .hasnum = 0, .settable = s,			     \
+		       .u = { .inttype = { .fetch_uchar = ipmi_fru_get_ ## x,\
+					   .set_uchar = ipmi_fru_set_ ## x }}}
+#define F_NUM_UCHAR(x,s) { .name = #x, .type = IPMI_FRU_DATA_INT,	     \
+			   .hasnum = 1, .settable = s,			     \
+			   .u = { .intnumtype = {			     \
+				  .fetch_uchar = ipmi_fru_get_ ## x,	     \
+				  .set_uchar = ipmi_fru_set_ ## x }}}
+#define F_TIME(x,s) { .name = #x, .type = IPMI_FRU_DATA_TIME,		     \
+		      .hasnum = 0, .settable = s,			     \
+		      .u = { .timetype = { .fetch = ipmi_fru_get_ ## x,      \
 					 .set = ipmi_fru_set_ ## x }}}
-#define F_NUM_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 1, \
-		        .u = { .timenumtype = { .fetch = ipmi_fru_get_ ## x, \
-					        .set = ipmi_fru_set_ ## x }}}
-#define F_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 0, \
-		   .u = { .strtype = {					     \
-			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		          .fetch_type = ipmi_fru_get_ ## x ## _type, \
-		          .fetch_data = ipmi_fru_get_ ## x, \
-			  .set = ipmi_fru_set_ ## x }}}
-#define F_NUM_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 1, \
-		       .u = { .strnumtype = {                                \
-			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		              .fetch_type = ipmi_fru_get_ ## x ## _type,\
-		              .fetch_data = ipmi_fru_get_ ## x, \
-			      .set = ipmi_fru_set_ ## x }}}
-#define F_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 0, \
-		   .u = { .bintype = {					     \
-			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		   	  .fetch_data = ipmi_fru_get_ ## x, \
-			  .set = ipmi_fru_set_ ## x }}}
-#define F_NUM_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 1, \
-		       .u = { .binnumtype = {				      \
-			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		       	      .fetch_data = ipmi_fru_get_ ## x, \
-			      .set = ipmi_fru_set_ ## x }}}
+#define F_NUM_TIME(x,s) { .name = #x, .type = IPMI_FRU_DATA_TIME,	     \
+			  .hasnum = 1, .settable = s,			     \
+		          .u = { .timenumtype = { .fetch = ipmi_fru_get_ ## x,\
+					          .set = ipmi_fru_set_ ## x }}}
+#define F_STR(x,s) { .name = #x, .type = IPMI_FRU_DATA_ASCII,		     \
+		     .hasnum = 0, .settable = s,			     \
+		     .u = { .strtype = {				     \
+			    .fetch_len = ipmi_fru_get_ ## x ## _len,	     \
+		            .fetch_type = ipmi_fru_get_ ## x ## _type,	     \
+		            .fetch_data = ipmi_fru_get_ ## x,		     \
+			    .set = ipmi_fru_set_ ## x }}}
+#define F_NUM_STR(x,s) { .name = #x, .type = IPMI_FRU_DATA_ASCII,	     \
+			 .hasnum = 1, .settable = s,			     \
+		         .u = { .strnumtype = {                              \
+			        .fetch_len = ipmi_fru_get_ ## x ## _len,     \
+		                .fetch_type = ipmi_fru_get_ ## x ## _type,   \
+		                .fetch_data = ipmi_fru_get_ ## x,            \
+			        .set = ipmi_fru_set_ ## x }}}
+#define F_BIN(x,s) { .name = #x, .type = IPMI_FRU_DATA_BINARY,		     \
+		     .hasnum = 0, .settable = s,			     \
+		     .u = { .bintype = {				     \
+			    .fetch_len = ipmi_fru_get_ ## x ## _len,	     \
+		   	    .fetch_data = ipmi_fru_get_ ## x,		     \
+			    .set = ipmi_fru_set_ ## x }}}
+#define F_NUM_BIN(x,s) { .name = #x, .type = IPMI_FRU_DATA_BINARY,	     \
+			 .hasnum = 1, .settable = s,			     \
+		         .u = { .binnumtype = {				     \
+			        .fetch_len = ipmi_fru_get_ ## x ## _len,     \
+		       	        .fetch_data = ipmi_fru_get_ ## x,	     \
+			        .set = ipmi_fru_set_ ## x }}}
 static fru_data_rep_t frul[] =
 {
-    F_UCHAR(internal_use_version),
-    F_BIN(internal_use),
-    F_UCHAR(chassis_info_version),
-    F_UCHAR(chassis_info_type),
-    F_STR(chassis_info_part_number),
-    F_STR(chassis_info_serial_number),
-    F_NUM_STR(chassis_info_custom),
-    F_UCHAR(board_info_version),
-    F_UCHAR(board_info_lang_code),
-    F_TIME(board_info_mfg_time),
-    F_STR(board_info_board_manufacturer),
-    F_STR(board_info_board_product_name),
-    F_STR(board_info_board_serial_number),
-    F_STR(board_info_board_part_number),
-    F_STR(board_info_fru_file_id),
-    F_NUM_STR(board_info_custom),
-    F_UCHAR(product_info_version),
-    F_UCHAR(product_info_lang_code),
-    F_STR(product_info_manufacturer_name),
-    F_STR(product_info_product_name),
-    F_STR(product_info_product_part_model_number),
-    F_STR(product_info_product_version),
-    F_STR(product_info_product_serial_number),
-    F_STR(product_info_asset_tag),
-    F_STR(product_info_fru_file_id),
-    F_NUM_STR(product_info_custom),
+    F_UCHAR(internal_use_version, 0),
+    F_BIN(internal_use, 1),
+    F_UCHAR(chassis_info_version, 0),
+    F_UCHAR(chassis_info_type, 1),
+    F_STR(chassis_info_part_number, 1),
+    F_STR(chassis_info_serial_number, 1),
+    F_NUM_STR(chassis_info_custom, 1),
+    F_UCHAR(board_info_version, 0),
+    F_UCHAR(board_info_lang_code, 1),
+    F_TIME(board_info_mfg_time, 1),
+    F_STR(board_info_board_manufacturer, 1),
+    F_STR(board_info_board_product_name, 1),
+    F_STR(board_info_board_serial_number, 1),
+    F_STR(board_info_board_part_number, 1),
+    F_STR(board_info_fru_file_id, 1),
+    F_NUM_STR(board_info_custom, 1),
+    F_UCHAR(product_info_version, 0),
+    F_UCHAR(product_info_lang_code, 1),
+    F_STR(product_info_manufacturer_name, 1),
+    F_STR(product_info_product_name, 1),
+    F_STR(product_info_product_part_model_number, 1),
+    F_STR(product_info_product_version, 1),
+    F_STR(product_info_product_serial_number, 1),
+    F_STR(product_info_asset_tag, 1),
+    F_STR(product_info_fru_file_id, 1),
+    F_NUM_STR(product_info_custom, 1),
 };
 #define NUM_FRUL_ENTRIES (sizeof(frul) / sizeof(fru_data_rep_t))
 
@@ -3117,7 +3126,7 @@ fru_mr_array_get_field(ipmi_fru_node_t           *pnode,
 	*sub_node = node;
     }
 
-    /* We always succeed if we can get the memeory, even if we don't
+    /* We always succeed if we can get the memory, even if we don't
        have a decoder. */
     return 0;
 }
@@ -3162,6 +3171,23 @@ fru_array_idx_get_field(ipmi_fru_node_t           *pnode,
     if ((rv == E2BIG) || (rv == ENOSYS))
 	rv = EINVAL;
     return rv;
+}
+
+static int
+fru_array_idx_set_field(ipmi_fru_node_t           *pnode,
+			unsigned int              index,
+			enum ipmi_fru_data_type_e dtype,
+			int                       intval,
+			time_t                    time,
+			double                    floatval,
+			char                      *data,
+			unsigned int              data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    fru_array_t *info = _ipmi_fru_node_get_data(pnode);
+
+    return ipmi_fru_set_data_val(info->fru, info->index, index,
+				 dtype, data, data_len);
 }
 
 static int
@@ -3225,6 +3251,7 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 		info->fru = fru;
 		_ipmi_fru_node_set_data(node, info);
 		_ipmi_fru_node_set_get_field(node, fru_array_idx_get_field);
+		_ipmi_fru_node_set_set_field(node, fru_array_idx_set_field);
 		_ipmi_fru_node_set_destructor(node, fru_array_idx_destroy);
 		ipmi_fru_ref(fru);
 
@@ -3267,6 +3294,68 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 	}
 	return 0;
     } else
+	return EINVAL;
+}
+
+static int
+fru_node_set_field(ipmi_fru_node_t           *pnode,
+		   unsigned int              index,
+		   enum ipmi_fru_data_type_e dtype,
+		   int                       intval,
+		   time_t                    time,
+		   double                    floatval,
+		   char                      *data,
+		   unsigned int              data_len,
+		   ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_t     *fru = _ipmi_fru_node_get_data(pnode);
+    fru_data_rep_t *p;
+
+    if ((index < 0) || (index > (int) NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+    if ((index >= 0) && (index < NUM_FRUL_ENTRIES)) {
+	if (p->hasnum)
+	    /* Can't directly set the arrayed entries, need to use the
+	       array node. */
+	    return EPERM;
+
+	switch (dtype) {
+	case IPMI_FRU_DATA_INT:
+	    return ipmi_fru_set_int_val(fru, index, 0, intval);
+	case IPMI_FRU_DATA_FLOAT:
+	    return ipmi_fru_set_float_val(fru, index, 0, floatval);
+	case IPMI_FRU_DATA_TIME:
+	    return ipmi_fru_set_time_val(fru, index, 0, time);
+	default:
+	    return ipmi_fru_set_data_val(fru, index, 0, dtype, data, data_len);
+	}
+    } else if (index == (int) NUM_FRUL_ENTRIES)
+	return EPERM;
+    else
+	return EINVAL;
+}
+
+static int
+fru_node_settable(ipmi_fru_node_t           *node,
+		  unsigned int              index)
+{
+    fru_data_rep_t *p;
+
+    if ((index >= 0) || (index < (int) NUM_FRUL_ENTRIES)) {
+	p = frul + index;
+	if (p->hasnum)
+	    /* Cannot directly set the array nodes. */
+	    return EPERM;
+	else if (p->settable)
+	    return 0;
+	else
+	    return EPERM;
+    } else if (index == (int) NUM_FRUL_ENTRIES)
+	/* Can't directly set multirecords. */
+	return EPERM;
+    else
 	return EINVAL;
 }
 
@@ -3385,6 +3474,8 @@ fru_get_root_node(ipmi_fru_t *fru, const char **name, ipmi_fru_node_t **rnode)
 	    return ENOMEM;
 	_ipmi_fru_node_set_data(node, fru);
 	_ipmi_fru_node_set_get_field(node, fru_node_get_field);
+	_ipmi_fru_node_set_set_field(node, fru_node_set_field);
+	_ipmi_fru_node_set_settable(node, fru_node_settable);
 	_ipmi_fru_node_set_destructor(node, fru_node_destroy);
 	ipmi_fru_ref(fru);
 	*rnode = node;
@@ -3469,6 +3560,7 @@ _ipmi_fru_deregister_multi_record_oem_handler(unsigned int manufacturer_id,
 
 typedef struct oem_search_node_s
 {
+    unsigned int    mr_rec_num;
     unsigned int    manufacturer_id;
     unsigned char   record_type_id;
     ipmi_fru_t      *fru;
@@ -3489,7 +3581,8 @@ get_root_node(void *cb_data, void *item1, void *item2)
 	&& ((hndlr->record_type_id < 0xc0)
 	    || (hndlr->manufacturer_id == cmp->manufacturer_id)))
     {
-	cmp->rv = hndlr->get_root(cmp->fru, cmp->manufacturer_id,
+	cmp->rv = hndlr->get_root(cmp->fru, cmp->mr_rec_num,
+				  cmp->manufacturer_id,
 				  cmp->record_type_id,
 				  cmp->mr_data, cmp->mr_data_len,
 				  hndlr->cb_data, &cmp->name, &cmp->node);
@@ -3537,6 +3630,7 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
     }
 
     memcpy(d, u->records[record_num].data, u->records[record_num].length);
+    cmp.mr_rec_num = record_num;
     cmp.manufacturer_id = d[0] | (d[1] << 8) | (d[2] << 16);
     cmp.record_type_id = u->records[record_num].type;
     cmp.fru = fru;
@@ -3616,6 +3710,7 @@ convert_int_to_fru_boolean(const char                *name,
 
 typedef struct std_power_supply_info_s
 {
+    unsigned int  mr_rec_num;
     unsigned char data[24];
 } std_power_supply_info_t;
 
@@ -3812,6 +3907,7 @@ std_power_supply_info_get_field(ipmi_fru_node_t           *pnode,
 
 static int
 std_get_power_supply_info_root(ipmi_fru_t          *fru,
+			       unsigned int        mr_rec_num,
 			       unsigned char       *mr_data,
 			       unsigned int        mr_data_len,
 			       const char          **name,
@@ -3828,6 +3924,7 @@ std_get_power_supply_info_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 24);
+    rec->mr_rec_num = mr_rec_num;
 
     node = _ipmi_fru_node_alloc(fru);
     if (!node)
@@ -3854,6 +3951,7 @@ std_get_power_supply_info_root(ipmi_fru_t          *fru,
 
 typedef struct std_dc_output_s
 {
+    unsigned int  mr_rec_num;
     unsigned char data[13];
 } std_dc_output_t;
 
@@ -3949,6 +4047,7 @@ std_dc_output_get_field(ipmi_fru_node_t           *pnode,
 
 static int
 std_get_dc_output_root(ipmi_fru_t          *fru,
+		       unsigned int        mr_rec_num,
 		       unsigned char       *mr_data,
 		       unsigned int        mr_data_len,
 		       const char          **name,
@@ -3965,6 +4064,7 @@ std_get_dc_output_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 13);
+    rec->mr_rec_num = mr_rec_num;
 
     node = _ipmi_fru_node_alloc(fru);
     if (!node)
@@ -3991,6 +4091,7 @@ std_get_dc_output_root(ipmi_fru_t          *fru,
 
 typedef struct std_dc_load_s
 {
+    unsigned int  mr_rec_num;
     unsigned char data[13];
 } std_dc_load_t;
 
@@ -4081,6 +4182,7 @@ std_dc_load_get_field(ipmi_fru_node_t           *pnode,
 
 static int
 std_get_dc_load_root(ipmi_fru_t          *fru,
+		     unsigned int        mr_rec_num,
 		     unsigned char       *mr_data,
 		     unsigned int        mr_data_len,
 		     const char          **name,
@@ -4097,6 +4199,7 @@ std_get_dc_load_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 13);
+    rec->mr_rec_num = mr_rec_num;
 
     node = _ipmi_fru_node_alloc(fru);
     if (!node)
@@ -4123,6 +4226,7 @@ std_get_dc_load_root(ipmi_fru_t          *fru,
 
 static int
 std_get_mr_root(ipmi_fru_t          *fru,
+		unsigned int	    mr_rec_num,
 		unsigned int        manufacturer_id,
 		unsigned char       record_type_id,
 		unsigned char       *mr_data,
@@ -4133,13 +4237,14 @@ std_get_mr_root(ipmi_fru_t          *fru,
 {
     switch (record_type_id) {
     case 0x00:
-	return std_get_power_supply_info_root(fru, mr_data, mr_data_len,
+	return std_get_power_supply_info_root(fru, mr_rec_num,
+					      mr_data, mr_data_len,
 					      name, node);
     case 0x01:
-	return std_get_dc_output_root(fru, mr_data, mr_data_len,
+	return std_get_dc_output_root(fru, mr_rec_num, mr_data, mr_data_len,
 				      name, node);
     case 0x02:
-	return std_get_dc_load_root(fru, mr_data, mr_data_len,
+	return std_get_dc_load_root(fru, mr_rec_num, mr_data, mr_data_len,
 				    name, node);
     default:
 	return EINVAL;

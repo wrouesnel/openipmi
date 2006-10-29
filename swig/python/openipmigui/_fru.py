@@ -33,6 +33,66 @@
 import OpenIPMI
 import _oi_logging
 import gui_treelist
+import gui_popup
+import gui_setdialog
+
+class FRUData:
+    def __init__(self, glist, node, index, pname, ptype, origval):
+        self.glist = glist
+        self.node = node
+        self.aidx = index
+        self.pname = pname
+        self.ptype = ptype
+        self.origval = origval
+        self.currval = origval
+        return
+
+    def SetItem(self, item):
+        self.item = item;
+        return
+
+    def HandleMenu(self, event, idx, point):
+        if (self.ptype == "boolean"):
+            menul = [ ("Toggle Value", self.togglevalue) ]
+        else:
+            menul = [ ("Set Value", self.setvalue) ]
+            pass
+        gui_popup.popup(self.glist, event, menul, point)
+        return
+
+    def ok(self, vals):
+        node_s = [ None ]
+        rv = self.node.set_field(self.aidx, self.ptype, str(vals[0]), node_s)
+        if (rv != 0):
+            self.glist.SetError("Invalid data value: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+        self.currval = vals[0]
+        self.glist.SetColumn(self.item, self.currval, 1)
+        return
+    
+    def setvalue(self, event):
+        gui_setdialog.SetDialog("Set value for " + self.pname,
+                                [ self.currval ], 1, self)
+        return
+
+    def togglevalue(self, event):
+        if (self.currval == "true"):
+            newval = "false"
+        else:
+            newval = "true"
+            pass
+        node_s = [ None ]
+        rv = self.node.set_field(self.aidx, self.ptype, newval, node_s)
+        if (rv != 0):
+            self.glist.SetError("Could not toggle value: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+        self.currval = newval
+        self.glist.SetColumn(self.idx, 1, newval)
+        return
+
+    pass
 
 class FruInfoDisplay(gui_treelist.TreeList):
     def __init__(self, fru, name):
@@ -53,8 +113,23 @@ class FruInfoDisplay(gui_treelist.TreeList):
         self.ExpandItem("")
         return
 
-    def ok(self):
-        self.fru = None;
+    def cancel(self):
+        self.fru = None
+        self.Close()
+        return
+
+    def fru_written(self, domain, fru, err):
+        if (err):
+            self.glist.SetError("Could not write FRU: "
+                                + OpenIPMI.get_error_string(err))
+            return
+        self.fru = None
+        self.Close()
+        return
+    
+    def save(self):
+        self.fru.write(self)
+        self.fru = None
         self.Close()
         return
 
@@ -77,7 +152,14 @@ class FruInfoDisplay(gui_treelist.TreeList):
                     sub = self.Append(item, name_s[0], [])
                     self.add_fru_data(sub, node_s[0])
                 else:
-                    self.Append(item, name_s[0], [value_s[0]])
+                    if (node.settable(i) == 0):
+                        data = FRUData(self, node, i, name_s[0], type_s[0],
+                                       value_s[0])
+                        pass
+                    else:
+                        data = None
+                        pass
+                    self.add_data(item, name_s[0], [value_s[0]], data=data)
                     pass
                 pass
             i = i + 1
