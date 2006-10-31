@@ -1229,6 +1229,12 @@ _ipmi_fru_new_update_record(ipmi_fru_t   *fru,
 {
     fru_update_t *urec;
 
+    if (length == 0) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "fru.c(_ipmi_fru_new_update_record): "
+		 "zero-length update record written");
+	return 0;
+    }
     urec = ipmi_mem_alloc(sizeof(*urec));
     if (!urec)
 	return ENOMEM;

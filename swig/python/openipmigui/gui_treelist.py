@@ -106,7 +106,6 @@ class TreeList(Tix.Toplevel):
                 i.do_on_close()
                 pass
             pass
-        pass
         self.treehash = { }
         return
 
@@ -160,6 +159,16 @@ class TreeList(Tix.Toplevel):
     def Remove(self, key):
         self.stree.hlist.delete_entry(key)
         del self.treehash[key]
+        pass
+
+    def RemoveAll(self):
+        self.stree.hlist.delete_all()
+        for i in self.treehash.values():
+            if (hasattr(i, "do_on_close")):
+                i.do_on_close()
+                pass
+            pass
+        self.treehash = { }
         pass
 
     def SetColumn(self, node, value, colnum):

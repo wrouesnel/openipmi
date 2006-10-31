@@ -1,3 +1,20 @@
+2006-10-31 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_fru.h, lib/normal_fru.c: Added some better
+	handling of multirecord modification.
+
+	* lib/fru.c: Warn and recover on zero-length FRU writes.
+
+	* lib/normal_fru.c: Added better setup handling for new FRU areas.
+
+	* lib/normal_fru.c: Added FRU area data to the FRU information.
+
+	* swig/python/openipmigui/_fru.py: Added support for re-displaying
+	the FRU data if FRU area offset data changes.
+
+	* swig/python/openipmigui/gui_treelist.py: Added support for
+	clearing all the data in the list.
+
 2006-10-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_fru.h:

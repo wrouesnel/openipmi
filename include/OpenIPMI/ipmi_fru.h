@@ -535,6 +535,8 @@ int ipmi_fru_str_to_index(char *name);
 /* Note that the length for adding multi-records is ignored, it will
    calculate it to the end of the data. */
 
+/* If you set the length to zero when adding an area, you will get a
+   minimally sized area. */
 int ipmi_fru_add_area(ipmi_fru_t   *fru,
 		      unsigned int area,
 		      unsigned int offset,
@@ -659,6 +661,13 @@ int ipmi_fru_set_product_info_custom(ipmi_fru_t   *fru,
 				     char         *str,
 				     unsigned int len);
 
+int ipmi_fru_set_multi_record_type(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char type);
+int ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char *data,
+				   unsigned int  length);
 int ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
 			      unsigned int  num,
 			      unsigned char type,

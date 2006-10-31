@@ -406,7 +406,8 @@ sub dup_fru {
     while (defined $str) {
 	my ($name, $type, $val) = split /\s+/, $str, 3;
 	
-	if (defined $type) {
+	# Make sure to ignore the FRU area things when setting values.
+	if (!($name =~ /.*_length/) && !($name =~ /.*_offset/) && defined $type) {
 	    $rv = $newfru->set($i, $oldnum, $type, $val);
 
 	    # Check if we didn't have write permissions, that's ok just go on.

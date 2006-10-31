@@ -37,7 +37,8 @@ import gui_popup
 import gui_setdialog
 
 class FRUData:
-    def __init__(self, glist, node, index, pname, ptype, origval, parent):
+    def __init__(self, glist, node, index, pname, ptype, origval, parent,
+                 reinit_on_zero):
         self.glist = glist
         self.node = node
         self.aidx = index
@@ -49,6 +50,7 @@ class FRUData:
         if (parent != None):
             parent.children.append(self)
             pass
+        self.reinit_on_zero = reinit_on_zero
         return
 
     def do_on_close(self):
@@ -56,7 +58,7 @@ class FRUData:
         return
         
     def SetItem(self, item):
-        self.item = item;
+        self.item = item
         return
 
     def HandleMenu(self, event, idx, point):
@@ -66,7 +68,7 @@ class FRUData:
             menul = [ ("Set Value", self.setvalue) ]
             pass
         if (self.parent != None):
-            menul.append( ("Delete", self.delete_item) );
+            menul.append( ("Delete", self.delete_item) )
             pass
         gui_popup.popup(self.glist, event, menul, point)
         return
@@ -78,6 +80,17 @@ class FRUData:
             self.glist.SetError("Invalid data value: "
                                 + OpenIPMI.get_error_string(rv))
             return
+        try:
+            oldval = int(self.currval)
+            newval = int(vals[0])
+            if (self.reinit_on_zero and (oldval != newval)
+                and ((oldval == 0) or (newval == 0))):
+                # We need to re-initialize the whole display.
+                self.glist.refresh_data()
+                return
+            pass
+        except:
+            pass
         self.currval = vals[0]
         self.glist.SetColumn(self.item, self.currval, 1)
         return
@@ -144,13 +157,13 @@ class FRUArrayData:
         return
         
     def SetItem(self, item):
-        self.item = item;
+        self.item = item
         return
 
     def HandleMenu(self, event, idx, point):
         menul = [ ("Add an array element", self.add_element) ]
         if (self.parent != None):
-            menul.append( ("Delete", self.delete_item) );
+            menul.append( ("Delete", self.delete_item) )
             pass
         gui_popup.popup(self.glist, event, menul, point)
         return
@@ -185,7 +198,7 @@ class FRUArrayData:
         else:
             value = "0"
             pass
-        rv = self.node.set_field(self.length, self.ptype, value, node_s);
+        rv = self.node.set_field(self.length, self.ptype, value, node_s)
         if (rv != 0):
             self.glist.SetError("Could not set field: "
                                 + OpenIPMI.get_error_string(rv))
@@ -200,7 +213,7 @@ class FRUArrayData:
                                 + OpenIPMI.get_error_string(rv))
             return
         self.glist.add_fru_data(self.myitem, self.node, self.length,
-                                self.parent)
+                                self.parent, False)
         
         self.length += 1
         return
@@ -209,7 +222,7 @@ class FRUArrayData:
 
 class FruInfoDisplay(gui_treelist.TreeList):
     def __init__(self, fru, name):
-        self.fru = fru;
+        self.fru = fru
         name_s = [ "" ]
         node_s = [ None ]
         rv = fru.get_root_node(name_s, node_s)
@@ -217,11 +230,14 @@ class FruInfoDisplay(gui_treelist.TreeList):
             _oi_logging.error("unable to get FRU node: " + str(rv))
             return
 
+        self.fru_type = name_s[0]
+        
         gui_treelist.TreeList.__init__(self, "FRU info for " + name,
-                                       name_s[0],
-                                       [("Name", 300), ("Value", 300)]);
+                                       ".",
+                                       [("Name", 300), ("Value", 300)])
 
-        self.add_fru_data(self.treeroot, node_s[0], 0, None)
+        self.add_fru_data(self.treeroot, node_s[0], 0, None,
+                          self.fru_type == "standard FRU")
         self.AfterDone()
         self.ExpandItem("")
         return
@@ -247,7 +263,23 @@ class FruInfoDisplay(gui_treelist.TreeList):
         self.Close()
         return
 
-    def add_fru_data(self, item, node, startidx, parent):
+    def refresh_data(self):
+        name_s = [ "" ]
+        node_s = [ None ]
+        rv = self.fru.get_root_node(name_s, node_s)
+        if (rv != 0):
+            _oi_logging.error("unable to get FRU node: " + str(rv))
+            return
+
+        self.fru_type = name_s[0]
+        self.RemoveAll()
+        self.add_fru_data(self.treeroot, node_s[0], 0, None,
+                          self.fru_type == "standard FRU")
+        self.AfterDone()
+        self.ExpandItem("")
+        return
+    
+    def add_fru_data(self, item, node, startidx, parent, normal_top):
         i = startidx
         while True:
             name_s = [ "" ]
@@ -265,7 +297,7 @@ class FruInfoDisplay(gui_treelist.TreeList):
                 if (type_s[0] == "subnode"):
                     data = None
                     np = None
-                    if (value_s[0] != -1) and node.settable(i):
+                    if (value_s[0] != "-1") and node.settable(i):
                         # A settable array
                         data = FRUArrayData(self, node_s[0], i, name_s[0],
                                             node_s[0].get_subtype(),
@@ -273,12 +305,16 @@ class FruInfoDisplay(gui_treelist.TreeList):
                         np = data
                         pass
                     sub = self.add_data(item, name_s[0], [], data)
-                    data.myitem = sub
-                    self.add_fru_data(sub, node_s[0], 0, np)
+                    if (data != None):
+                        data.myitem = sub
+                        pass
+                    self.add_fru_data(sub, node_s[0], 0, np, False)
                 else:
                     if (node.settable(i) == 0):
                         data = FRUData(self, node, i, name_s[0], type_s[0],
-                                       value_s[0], parent)
+                                       value_s[0], parent,
+                                       (normal_top and
+                                        name_s[0].endswith("_offset")))
                         pass
                     else:
                         data = None
@@ -289,3 +325,5 @@ class FruInfoDisplay(gui_treelist.TreeList):
             i = i + 1
             pass
         return
+    
+    pass
