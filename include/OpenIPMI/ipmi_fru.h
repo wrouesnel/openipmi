@@ -238,6 +238,10 @@ int ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
 int ipmi_fru_node_settable(ipmi_fru_node_t *node,
 			   unsigned int    index);
 
+/* Only for arrays, get's the array's subtype. */
+int ipmi_fru_node_get_subtype(ipmi_fru_node_t           *node,
+			      enum ipmi_fru_data_type_e *subtype);
+
 /* Free data that comes from ipmi_fru_node_get_field if the data return is
    non-NULL. */
 void ipmi_fru_data_free(char *data);

@@ -101,7 +101,13 @@ class TreeList(Tix.Toplevel):
         if (hasattr(self, "do_on_close")):
             self.do_on_close()
             pass
-        self.treehash = None
+        for i in self.treehash.values():
+            if (hasattr(i, "do_on_close")):
+                i.do_on_close()
+                pass
+            pass
+        pass
+        self.treehash = { }
         return
 
     def TreeMenu(self, event):
@@ -150,6 +156,11 @@ class TreeList(Tix.Toplevel):
             pass
         self.treehash[key] = data
         return key
+
+    def Remove(self, key):
+        self.stree.hlist.delete_entry(key)
+        del self.treehash[key]
+        pass
 
     def SetColumn(self, node, value, colnum):
         self.tree.item_configure(node, colnum, text=value)

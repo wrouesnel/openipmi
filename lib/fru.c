@@ -1681,6 +1681,7 @@ struct ipmi_fru_node_s
     ipmi_fru_oem_node_get_field_cb get_field;
     ipmi_fru_oem_node_set_field_cb set_field;
     ipmi_fru_oem_node_settable_cb  settable;
+    ipmi_fru_oem_node_subtype_cb   get_subtype;
     ipmi_fru_oem_node_cb           destroy;
 };
 
@@ -1773,6 +1774,15 @@ ipmi_fru_node_settable(ipmi_fru_node_t           *node,
     return node->settable(node, index);
 }
 
+int
+ipmi_fru_node_get_subtype(ipmi_fru_node_t           *node,
+			  enum ipmi_fru_data_type_e *dtype)
+{
+    if (!node->get_subtype)
+	return ENOSYS;
+    return node->get_subtype(node, dtype);
+}
+
 void *
 _ipmi_fru_node_get_data(ipmi_fru_node_t *node)
 {
@@ -1823,6 +1833,13 @@ _ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
 			    ipmi_fru_oem_node_settable_cb settable)
 {
     node->settable = settable;
+}
+
+void
+_ipmi_fru_node_set_get_subtype(ipmi_fru_node_t              *node,
+			       ipmi_fru_oem_node_subtype_cb get_subtype)
+{
+    node->get_subtype = get_subtype;
 }
 
 

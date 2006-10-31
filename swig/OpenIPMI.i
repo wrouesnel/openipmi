@@ -9415,6 +9415,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	case IPMI_FRU_DATA_SUB_NODE:
 	    str = NULL;
 	    *type = "subnode";
+
+	    /* Put the array length (or the -1) in the value */
+	    len = snprintf(dummy, 1, "%d", intval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%d", intval);
 	    break;
 
 	default:
@@ -9520,6 +9525,55 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     int settable(unsigned index)
     {
 	return ipmi_fru_node_settable(self, index);
+    }
+
+    char *get_subtype()
+    {
+	enum ipmi_fru_data_type_e dtype;        
+	char                      *type;
+	int                       rv;
+
+	rv = ipmi_fru_node_get_subtype(self, &dtype);
+	if (rv)
+	    return NULL;
+	switch (dtype) {
+	case IPMI_FRU_DATA_INT:
+	    type = "integer";
+	    break;
+
+	case IPMI_FRU_DATA_BOOLEAN:
+	    type = "boolean";
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    type = "time";
+	    break;
+
+	case IPMI_FRU_DATA_FLOAT:
+	    type = "float";
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    type = "binary";
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    type = "unicode";
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    type = "ascii";
+	    break;
+
+	case IPMI_FRU_DATA_SUB_NODE:
+	    type = "subnode";
+	    break;
+
+	default:
+	    return NULL;
+	}
+
+	return type;
     }
 }
 

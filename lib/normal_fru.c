@@ -3191,6 +3191,14 @@ fru_array_idx_set_field(ipmi_fru_node_t           *pnode,
 }
 
 static int
+fru_array_get_subtype(ipmi_fru_node_t           *pnode,
+		      enum ipmi_fru_data_type_e *dtype)
+{
+    *dtype = IPMI_FRU_DATA_ASCII;
+    return 0;
+}
+
+static int
 fru_node_get_field(ipmi_fru_node_t           *pnode,
 		   unsigned int              index,
 		   const char                **name,
@@ -3217,18 +3225,30 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 	if (rv)
 	    return rv;
 
-	if (num == -1)
-	    /* No elements in the array. */
-	    return E2BIG;
-
 	if (num != 0) {
-	    fru_array_t *info;
+	    fru_array_t               *info;
+	    enum ipmi_fru_data_type_e ldtype;
+	    int                       num2 = 0;
+
+	    /* Determine if the value exists or if the array is empty. */
+	    num2 = 0;
+	    rv = ipmi_fru_get(fru, index, name, &num2, &ldtype, NULL, NULL,
+			      NULL, NULL);
+	    if (rv) {
+		if (rv != E2BIG)
+		    /* No support for this field. */
+		    return rv;
+		else if (rv == E2BIG)
+		    len = 0;
+	    }
+	    else
+		len = 1;
+
 	    /* name is set by the previous call */
 	    if (dtype)
 		*dtype = IPMI_FRU_DATA_SUB_NODE;
 	    if (intval) {
 		/* Get the length of the array by searching. */
-		len = 1;
 		while (num != -1) {
 		    len++;
 		    rv = ipmi_fru_get(fru, index, NULL, &num, NULL, NULL,
@@ -3252,6 +3272,7 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 		_ipmi_fru_node_set_data(node, info);
 		_ipmi_fru_node_set_get_field(node, fru_array_idx_get_field);
 		_ipmi_fru_node_set_set_field(node, fru_array_idx_set_field);
+		_ipmi_fru_node_set_get_subtype(node, fru_array_get_subtype);
 		_ipmi_fru_node_set_destructor(node, fru_array_idx_destroy);
 		ipmi_fru_ref(fru);
 

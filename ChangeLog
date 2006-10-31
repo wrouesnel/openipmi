@@ -1,3 +1,27 @@
+2006-10-30 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_fru.h:
+	Added functions for getting a FRU array's subtype.
+	* lib/fru.c: ditto
+	* swig/OpenIPMI.i: ditto
+
+	* swig/OpenIPMI.i: Modify fetching a subtype to return the array
+	length (or -1 for non-arays) in the value of get_field() on sub
+	nodes.
+
+	* lib/normal_fru.c: Added subtype handling for custom string
+	arrays.
+
+	* lib/normal_fru.c: Fixed reporting of arrays in custom strings so
+	that it is possible to tell an empty array from a non-existent
+	field.
+
+	* swig/python/openipmigui/gui_treelist.py: Added the ability to
+	remove items from the tree and added better cleanup facilities.
+	
+	* swig/python/openipmigui/_fru.py: Added the ability to remove
+	array items.
+
 2006-10-28 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_fru.h:

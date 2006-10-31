@@ -83,6 +83,10 @@ typedef int (*ipmi_fru_oem_node_settable_cb)
      (ipmi_fru_node_t           *node,
       unsigned int              index);
 
+typedef int (*ipmi_fru_oem_node_subtype_cb)
+     (ipmi_fru_node_t           *node,
+      enum ipmi_fru_data_type_e *dtype);
+
 ipmi_fru_node_t *_ipmi_fru_node_alloc(ipmi_fru_t *fru);
 
 void *_ipmi_fru_node_get_data(ipmi_fru_node_t *node);
@@ -98,6 +102,8 @@ void _ipmi_fru_node_set_set_field(ipmi_fru_node_t                *node,
 				  ipmi_fru_oem_node_set_field_cb set_field);
 void _ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
 				 ipmi_fru_oem_node_settable_cb settable);
+void _ipmi_fru_node_set_get_subtype(ipmi_fru_node_t              *node,
+				    ipmi_fru_oem_node_subtype_cb get_subtype);
 
 /* Get the root node of a multi-record.  Note that the root record
    must not be an array.  Note that you cannot keep a copy of the fru
