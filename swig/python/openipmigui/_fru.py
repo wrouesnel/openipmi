@@ -38,7 +38,7 @@ import gui_setdialog
 
 class FRUData:
     def __init__(self, glist, node, index, pname, ptype, origval, parent,
-                 reinit_on_zero):
+                 reinit_on_zero, settable):
         self.glist = glist
         self.node = node
         self.aidx = index
@@ -51,6 +51,7 @@ class FRUData:
             parent.children.append(self)
             pass
         self.reinit_on_zero = reinit_on_zero
+        self.settable = settable
         return
 
     def do_on_close(self):
@@ -62,20 +63,25 @@ class FRUData:
         return
 
     def HandleMenu(self, event, idx, point):
-        if (self.ptype == "boolean"):
-            menul = [ ("Toggle Value", self.togglevalue) ]
-        else:
-            menul = [ ("Set Value", self.setvalue) ]
+        menul = [ ]
+        if (self.settable):
+            if (self.ptype == "boolean"):
+                menul.append( ("Toggle Value", self.togglevalue) )
+                pass
+            else:
+                menul.append( ("Set Value", self.setvalue) )
+                pass
             pass
         if (self.parent != None):
             menul.append( ("Delete", self.delete_item) )
             pass
-        gui_popup.popup(self.glist, event, menul, point)
+        if (len(menul) > 0):
+            gui_popup.popup(self.glist, event, menul, point)
+            pass
         return
 
     def ok(self, vals):
-        node_s = [ None ]
-        rv = self.node.set_field(self.aidx, self.ptype, str(vals[0]), node_s)
+        rv = self.node.set_field(self.aidx, self.ptype, str(vals[0]))
         if (rv != 0):
             self.glist.SetError("Invalid data value: "
                                 + OpenIPMI.get_error_string(rv))
@@ -96,8 +102,7 @@ class FRUData:
         return
     
     def delete_item(self, event):
-        node_s = [ None ]
-        rv = self.parent.node.set_field(self.aidx, self.ptype, None, node_s)
+        rv = self.parent.node.set_field(self.aidx, self.ptype, None)
         if (rv != 0):
             self.glist.SetError("Could not delete item: "
                                 + OpenIPMI.get_error_string(rv))
@@ -107,7 +112,7 @@ class FRUData:
         i = 0
         for l in self.parent.children:
             l.aidx = i
-            self.glist.SetColumn(l.item, 0, str(i))
+            self.glist.SetColumn(l.item, str(i), 0)
             i += 1
             pass
         self.parent.length -= 1
@@ -124,20 +129,20 @@ class FRUData:
         else:
             newval = "true"
             pass
-        node_s = [ None ]
-        rv = self.node.set_field(self.aidx, self.ptype, newval, node_s)
+        rv = self.node.set_field(self.aidx, self.ptype, newval)
         if (rv != 0):
             self.glist.SetError("Could not toggle value: "
                                 + OpenIPMI.get_error_string(rv))
             return
         self.currval = newval
-        self.glist.SetColumn(self.item, 1, newval)
+        self.glist.SetColumn(self.item, newval, 1)
         return
 
     pass
 
 class FRUArrayData:
-    def __init__(self, glist, node, index, pname, ptype, length, parent):
+    def __init__(self, glist, node, index, pname, ptype, length, parent,
+                 settable):
         self.glist = glist
         self.node = node
         self.aidx = index
@@ -149,6 +154,7 @@ class FRUArrayData:
         if (parent != None):
             parent.children.append(self)
             pass
+        self.settable = settable
         return
 
     def do_on_close(self):
@@ -161,16 +167,19 @@ class FRUArrayData:
         return
 
     def HandleMenu(self, event, idx, point):
-        menul = [ ("Add an array element", self.add_element) ]
+        menul = [ ]
+        if (self.settable):
+            menul.append( ("Add an array element", self.add_element) )
+            pass
         if (self.parent != None):
             menul.append( ("Delete", self.delete_item) )
             pass
-        gui_popup.popup(self.glist, event, menul, point)
+        if (len(menul) > 0):
+            gui_popup.popup(self.glist, event, menul, point)
         return
 
     def delete_item(self, event):
-        node_s = [ None ]
-        rv = self.parent.node.set_field(self.aidx, self.ptype, None, node_s)
+        rv = self.parent.node.set_field(self.aidx, self.ptype, None)
         if (rv != 0):
             self.glist.SetError("Could not delete item: "
                                 + OpenIPMI.get_error_string(rv))
@@ -180,14 +189,13 @@ class FRUArrayData:
         i = 0
         for l in self.parent.children:
             l.aidx = i
-            self.glist.SetColumn(l.item, 0, str(i))
+            self.glist.SetColumn(l.item, str(i), 0)
             i += 1
             pass
         self.parent.length -= 1
         return
     
     def add_element(self, event):
-        node_s = [ None ]
         if ((self.ptype == "binary") or (self.ptype == "unicode")
             or (self.ptype == "ascii")):
             value = " "
@@ -198,7 +206,7 @@ class FRUArrayData:
         else:
             value = "0"
             pass
-        rv = self.node.set_field(self.length, self.ptype, value, node_s)
+        rv = self.node.set_field(self.length, self.ptype, value)
         if (rv != 0):
             self.glist.SetError("Could not set field: "
                                 + OpenIPMI.get_error_string(rv))
@@ -295,18 +303,18 @@ class FruInfoDisplay(gui_treelist.TreeList):
                     name_s[0] = str(i)
                     pass
                 if (type_s[0] == "subnode"):
-                    data = None
                     np = None
-                    if (value_s[0] != "-1") and node.settable(i):
+                    if (node.settable(i) == 0) and (value_s[0] != "-1"):
                         # A settable array
                         data = FRUArrayData(self, node_s[0], i, name_s[0],
                                             node_s[0].get_subtype(),
-                                            int(value_s[0]), parent)
+                                            int(value_s[0]), parent, True)
                         np = data
                         pass
-                    elif (value_s[0] == "-1"):
+                    else:
                         data = FRUData(self, node, i, name_s[0], type_s[0],
-                                       None, parent, False)
+                                       None, parent, False,
+                                       node.settable(i) == 0)
                         pass
                     sub = self.add_data(item, name_s[0], [], data)
                     if (data != None):
@@ -314,15 +322,11 @@ class FruInfoDisplay(gui_treelist.TreeList):
                         pass
                     self.add_fru_data(sub, node_s[0], 0, np, False)
                 else:
-                    if (node.settable(i) == 0):
-                        data = FRUData(self, node, i, name_s[0], type_s[0],
-                                       value_s[0], parent,
-                                       (normal_top and
-                                        name_s[0].endswith("_offset")))
-                        pass
-                    else:
-                        data = None
-                        pass
+                    data = FRUData(self, node, i, name_s[0], type_s[0],
+                                   value_s[0], parent,
+                                   (normal_top and
+                                    name_s[0].endswith("_offset")),
+                                   node.settable(i) == 0)
                     self.add_data(item, name_s[0], [value_s[0]], data=data)
                     pass
                 pass

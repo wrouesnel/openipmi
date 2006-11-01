@@ -1760,13 +1760,12 @@ ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
 			time_t                    time,
 			double                    floatval,
 			char                      *data,
-			unsigned int              data_len,
-			ipmi_fru_node_t           **sub_node)
+			unsigned int              data_len)
 {
     if (!node->set_field)
 	return ENOSYS;
     return node->set_field(node, index, dtype, intval, time,
-			   floatval, data, data_len, sub_node);
+			   floatval, data, data_len);
 }
 
 int

@@ -3,6 +3,18 @@
 	* lib/entity.c: Fixed a problem with scanning entity association
 	records.
 
+	* include/OpenIPMI/ipmi_fru.h, lib/normal_fru.c: Added
+	multi-record helper functions for modifying multirecord data.
+
+	* lib/normal_fru.c: Fixed some problems dealing with multirecord
+	lengths.
+
+	* lib/oem_atca_fru.c: Added writing FRU data for the address
+	table.
+
+	* swig/python/openipmigui/_fru.py: Adjustment to improve the way
+	this works.
+
 2006-10-31 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h, lib/normal_fru.c: Added some better
@@ -28,7 +40,7 @@
 	* swig/OpenIPMI.i: ditto
 
 	* swig/OpenIPMI.i: Modify fetching a subtype to return the array
-	length (or -1 for non-arays) in the value of get_field() on sub
+	length (or -1 for non-arrays) in the value of get_field() on sub
 	nodes.
 
 	* lib/normal_fru.c: Added subtype handling for custom string

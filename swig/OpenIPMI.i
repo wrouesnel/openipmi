@@ -9436,8 +9436,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 
     int set_field(unsigned        index,
 		  const char      *type,
-		  char            *value,
-		  ipmi_fru_node_t **sub_node)
+		  char            *value)
     {
 	int                       rv;
 	enum ipmi_fru_data_type_e dtype;
@@ -9520,7 +9519,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 
     ready_to_set:
 	rv = ipmi_fru_node_set_field(self, index, dtype, intval, time,
-				     floatval, data, data_len, sub_node);
+				     floatval, data, data_len);
 
 	if (data)
 	    free(data);

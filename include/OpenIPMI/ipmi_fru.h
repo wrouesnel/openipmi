@@ -229,8 +229,7 @@ int ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
 			    time_t                    time,
 			    double                    floatval,
 			    char                      *data,
-			    unsigned int              data_len,
-			    ipmi_fru_node_t           **sub_node);
+			    unsigned int              data_len);
 
 /*
  * Can an index in a node be set?  Returns 0 if so, an error if not.
@@ -661,19 +660,48 @@ int ipmi_fru_set_product_info_custom(ipmi_fru_t   *fru,
 				     char         *str,
 				     unsigned int len);
 
+/* Set the type field for a multi-record. */
 int ipmi_fru_set_multi_record_type(ipmi_fru_t    *fru,
 				   unsigned int  num,
 				   unsigned char type);
+/* Replace the data in a multi-record.  "data" may not be NULL. */
 int ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 				   unsigned int  num,
 				   unsigned char *data,
 				   unsigned int  length);
+/* If "data" is non-NULL, overwrite an existing multirecord with new
+   information, or insert a new record at the end if "num" is the same
+   or larger then the current number of multirecords.  If "data" is
+   NULL, then delete the given multirecord.  For deletion, type and
+   version are ignored. */
 int ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
 			      unsigned int  num,
 			      unsigned char type,
 			      unsigned char version,
 			      unsigned char *data,
 			      unsigned int  length);
+/* Overwrite data in the given multirecord's data with new
+   information.  Overwrite data at the given offset to the given
+   length.  The length must be within the multirecord's current
+   length. */
+int ipmi_fru_ovw_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char *data,
+				   unsigned int  offset,
+				   unsigned int  length);
+/* Insert new data in the given multirecord.  The total length may not
+   exceed the maximum length of a multirecord. */
+int ipmi_fru_ins_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char *data,
+				   unsigned int  offset,
+				   unsigned int  length);
+/* Delete data in the given multirecord.  The total length may not
+   go below zero. */
+int ipmi_fru_del_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned int  offset,
+				   unsigned int  length);
 
 /*
  * A generic interface for setting values by index.  The function to use

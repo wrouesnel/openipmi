@@ -1810,7 +1810,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	    break;
     }
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA, 0, length);
+    rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA, 0, data_len);
     if (!rec)
 	return ENOMEM;
 
@@ -2041,6 +2041,9 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
     if (!_ipmi_fru_is_normal_fru(fru))
 	return ENOSYS;
 
+    if (length > 255)
+	return EINVAL;
+
     _ipmi_fru_lock(fru);
     recs = normal_fru_get_recs(fru);
     rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
@@ -2069,6 +2072,7 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 	_ipmi_fru_unlock(fru);
 	return ENOMEM;
     }
+    memcpy(new_data, data, length);
     if (u->records[num].data)
 	ipmi_mem_free(u->records[num].data);
     u->records[num].data = new_data;
@@ -2103,6 +2107,9 @@ ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
     unsigned int                 i;
 
     if (data && version != 2)
+	return EINVAL;
+
+    if (length > 255)
 	return EINVAL;
 
     if (!_ipmi_fru_is_normal_fru(fru))
@@ -2202,6 +2209,193 @@ ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
     }
 
     rec->used_length += raw_diff;
+    rec->changed |= 1;
+    _ipmi_fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_ovw_multi_record_data(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char *data,
+			       unsigned int  offset,
+			       unsigned int  length)
+{
+    ipmi_fru_record_t            **recs;
+    ipmi_fru_multi_record_area_t *u;
+    ipmi_fru_record_t            *rec;
+
+    if (!_ipmi_fru_is_normal_fru(fru))
+	return ENOSYS;
+
+    _ipmi_fru_lock(fru);
+    recs = normal_fru_get_recs(fru);
+    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    if (!rec) {
+	_ipmi_fru_unlock(fru);
+	return ENOSYS;
+    }
+    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	_ipmi_fru_unlock(fru);
+	return E2BIG;
+    }
+
+    if ((offset + length) > u->records[num].length) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    memcpy(u->records[num].data+offset, data, length);
+    rec->changed |= 1;
+    _ipmi_fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_ins_multi_record_data(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char *data,
+			       unsigned int  offset,
+			       unsigned int  length)
+{
+    ipmi_fru_record_t            **recs;
+    ipmi_fru_multi_record_area_t *u;
+    ipmi_fru_record_t            *rec;
+    int                          new_length;
+    unsigned int                 i;
+    unsigned char                *new_data;
+
+    if (!_ipmi_fru_is_normal_fru(fru))
+	return ENOSYS;
+
+    _ipmi_fru_lock(fru);
+    recs = normal_fru_get_recs(fru);
+    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    if (!rec) {
+	_ipmi_fru_unlock(fru);
+	return ENOSYS;
+    }
+    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	_ipmi_fru_unlock(fru);
+	return E2BIG;
+    }
+
+    if (offset > u->records[num].length) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    new_length = length + u->records[num].length;
+    if (new_length > 255) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    /* Is there enough space? */
+    if ((rec->used_length + length) > rec->length) {
+	_ipmi_fru_unlock(fru);
+	return ENOSPC;
+    }
+
+    /* Modifying the record. */
+    if (length == 0)
+	new_data = ipmi_mem_alloc(1);
+    else
+	new_data = ipmi_mem_alloc(new_length);
+    if (!new_data) {
+	_ipmi_fru_unlock(fru);
+	return ENOMEM;
+    }
+    if (u->records[num].data) {
+	memcpy(new_data, u->records[num].data, offset);
+	memcpy(new_data+offset+length, u->records[num].data+offset,
+	       u->records[num].length-offset);
+	ipmi_mem_free(u->records[num].data);
+    }
+    memcpy(new_data+offset, data, length);
+    u->records[num].data = new_data;
+    u->records[num].length = new_length;
+    if (length) {
+	for (i=num+1; i<u->num_records; i++) {
+	    u->records[i].offset += length;
+	    u->records[i].changed = 1;
+	}
+    }
+
+    rec->used_length += length;
+    rec->changed |= 1;
+    _ipmi_fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_del_multi_record_data(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned int  offset,
+			       unsigned int  length)
+{
+    ipmi_fru_record_t            **recs;
+    ipmi_fru_multi_record_area_t *u;
+    ipmi_fru_record_t            *rec;
+    int                          new_length;
+    unsigned int                 i;
+    unsigned char                *new_data;
+
+    if (!_ipmi_fru_is_normal_fru(fru))
+	return ENOSYS;
+
+    _ipmi_fru_lock(fru);
+    recs = normal_fru_get_recs(fru);
+    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    if (!rec) {
+	_ipmi_fru_unlock(fru);
+	return ENOSYS;
+    }
+    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	_ipmi_fru_unlock(fru);
+	return E2BIG;
+    }
+
+    if ((offset + length) > u->records[num].length) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    new_length = u->records[num].length - length;
+    if (new_length < 0) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    /* Modifying the record. */
+    if (length == 0)
+	new_data = ipmi_mem_alloc(1);
+    else
+	new_data = ipmi_mem_alloc(new_length);
+    if (!new_data) {
+	_ipmi_fru_unlock(fru);
+	return ENOMEM;
+    }
+    if (u->records[num].data) {
+	memcpy(new_data, u->records[num].data, offset);
+	memcpy(new_data+offset, u->records[num].data+offset+length,
+	       u->records[num].length-offset-length);
+	ipmi_mem_free(u->records[num].data);
+    }
+
+    u->records[num].data = new_data;
+    u->records[num].length = new_length;
+    if (length) {
+	for (i=num+1; i<u->num_records; i++) {
+	    u->records[i].offset -= length;
+	    u->records[i].changed = 1;
+	}
+    }
+
+    rec->used_length -= length;
     rec->changed |= 1;
     _ipmi_fru_unlock(fru);
     return 0;
@@ -3224,8 +3418,7 @@ fru_mr_array_idx_set_field(ipmi_fru_node_t           *pnode,
 			   time_t                    time,
 			   double                    floatval,
 			   char                      *data,
-			   unsigned int              data_len,
-			   ipmi_fru_node_t           **sub_node)
+			   unsigned int              data_len)
 {
     fru_mr_array_idx_t *info = _ipmi_fru_node_get_data(pnode);
 
@@ -3443,8 +3636,7 @@ fru_mr_array_set_field(ipmi_fru_node_t           *pnode,
 		       time_t                    time,
 		       double                    floatval,
 		       char                      *data,
-		       unsigned int              data_len,
-		       ipmi_fru_node_t           **sub_node)
+		       unsigned int              data_len)
 {
     ipmi_fru_t    *fru = _ipmi_fru_node_get_data(pnode);
     unsigned char type = 0, version = 2;
@@ -3468,6 +3660,14 @@ fru_mr_array_set_field(ipmi_fru_node_t           *pnode,
 					 (unsigned char *) data, data_len);
     } else
 	return ipmi_fru_set_multi_record(fru, index, 0, 0, NULL, 0);
+}
+
+static int
+fru_mr_array_settable(ipmi_fru_node_t           *node,
+		      unsigned int              index)
+{
+    /* Array elements are not. */
+    return EPERM;
 }
 
 typedef struct fru_array_s
@@ -3520,8 +3720,7 @@ fru_array_idx_set_field(ipmi_fru_node_t           *pnode,
 			time_t                    time,
 			double                    floatval,
 			char                      *data,
-			unsigned int              data_len,
-			ipmi_fru_node_t           **sub_node)
+			unsigned int              data_len)
 {
     fru_array_t *info = _ipmi_fru_node_get_data(pnode);
 
@@ -3649,6 +3848,7 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 	    _ipmi_fru_node_set_get_field(node, fru_mr_array_get_field);
 	    _ipmi_fru_node_set_set_field(node, fru_mr_array_set_field);
 	    _ipmi_fru_node_set_get_subtype(node, fru_mr_array_get_subtype);
+	    _ipmi_fru_node_set_settable(node, fru_mr_array_settable);
 	    _ipmi_fru_node_set_destructor(node, fru_node_destroy);
 	    ipmi_fru_ref(fru);
 
@@ -3667,8 +3867,7 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
 		   time_t                    time,
 		   double                    floatval,
 		   char                      *data,
-		   unsigned int              data_len,
-		   ipmi_fru_node_t           **sub_node)
+		   unsigned int              data_len)
 {
     ipmi_fru_t     *fru = _ipmi_fru_node_get_data(pnode);
     fru_data_rep_t *p;
@@ -3705,18 +3904,15 @@ fru_node_settable(ipmi_fru_node_t           *node,
 {
     fru_data_rep_t *p;
 
-    if ((index >= 0) || (index < (int) NUM_FRUL_ENTRIES)) {
+    if ((index >= 0) && (index < (int) NUM_FRUL_ENTRIES)) {
 	p = frul + index;
-	if (p->hasnum)
-	    /* Cannot directly set the array nodes. */
-	    return EPERM;
-	else if (p->settable)
+	if (p->settable)
 	    return 0;
 	else
 	    return EPERM;
     } else if (index == (int) NUM_FRUL_ENTRIES)
-	/* Can't directly set multirecords. */
-	return EPERM;
+	/* The multirecord array is settable. */
+	return 0;
     else
 	return EINVAL;
 }

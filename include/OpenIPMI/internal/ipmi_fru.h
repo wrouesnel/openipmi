@@ -76,8 +76,7 @@ typedef int (*ipmi_fru_oem_node_set_field_cb)
       time_t                    time,
       double                    floatval,
       char                      *data,
-      unsigned int              data_len,
-      ipmi_fru_node_t           **sub_node);
+      unsigned int              data_len);
 
 typedef int (*ipmi_fru_oem_node_settable_cb)
      (ipmi_fru_node_t           *node,
