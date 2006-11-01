@@ -9453,6 +9453,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 
 	if (strcmp(type, "subnode") == 0) {
 	    dtype = IPMI_FRU_DATA_SUB_NODE;
+	    if (value) {
+		data = (char *) parse_raw_str_data(value, &data_len);
+		if (!data)
+		    return ENOMEM;
+	    }
 	    goto ready_to_set;
 	} else if (strcmp(type, "binary") == 0) {
 	    dtype = IPMI_FRU_DATA_BINARY;

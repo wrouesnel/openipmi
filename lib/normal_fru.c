@@ -3427,6 +3427,49 @@ fru_mr_array_get_field(ipmi_fru_node_t           *pnode,
     return 0;
 }
 
+static int
+fru_mr_array_get_subtype(ipmi_fru_node_t           *pnode,
+			 enum ipmi_fru_data_type_e *dtype)
+{
+    *dtype = IPMI_FRU_DATA_SUB_NODE;
+    return 0;
+}
+
+static int
+fru_mr_array_set_field(ipmi_fru_node_t           *pnode,
+		       unsigned int              index,
+		       enum ipmi_fru_data_type_e dtype,
+		       int                       intval,
+		       time_t                    time,
+		       double                    floatval,
+		       char                      *data,
+		       unsigned int              data_len,
+		       ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_t    *fru = _ipmi_fru_node_get_data(pnode);
+    unsigned char type = 0, version = 2;
+
+    if (dtype != IPMI_FRU_DATA_SUB_NODE)
+	return EINVAL;
+
+    if (data) {
+	if (data_len >= 1) {
+	    type = data[0];
+	    data++;
+	    data_len--;
+	}
+	if (data_len >= 1) {
+	    version = data[0];
+	    data++;
+	    data_len--;
+	}
+	/* First two bytes are the type and version */
+	return ipmi_fru_set_multi_record(fru, index, type, version,
+					 (unsigned char *) data, data_len);
+    } else
+	return ipmi_fru_set_multi_record(fru, index, 0, 0, NULL, 0);
+}
+
 typedef struct fru_array_s
 {
     int        index;
@@ -3604,6 +3647,8 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 		return ENOMEM;
 	    _ipmi_fru_node_set_data(node, fru);
 	    _ipmi_fru_node_set_get_field(node, fru_mr_array_get_field);
+	    _ipmi_fru_node_set_set_field(node, fru_mr_array_set_field);
+	    _ipmi_fru_node_set_get_subtype(node, fru_mr_array_get_subtype);
 	    _ipmi_fru_node_set_destructor(node, fru_node_destroy);
 	    ipmi_fru_ref(fru);
 

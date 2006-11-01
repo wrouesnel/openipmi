@@ -3429,21 +3429,24 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	   that every unfound entity will only have one set of
 	   contained entities in the cent array even if it has
 	   multiple DLRs.  It will always be in the first entry. */
-	j = i - 1;
-	ent = found->ent;
-	while ((j > 0) && (ent == (infos->found+j)->ent)) {
-	    if ((infos->found+j)->found)
-		goto next_ent;
-	    if ((infos->dlrs[j]->type != IPMI_ENTITY_EAR)
-		&& (infos->dlrs[j]->type != IPMI_ENTITY_DREAR))
-		goto next_ent;
-	    found = infos->found+j;
+	if (i > 0) {
+	    j = i - 1;
+	    ent = found->ent;
+	    for (; ent == (infos->found+j)->ent; j--) {
+		if ((infos->found+j)->found)
+		    goto next_ent;
+		if ((infos->dlrs[j]->type != IPMI_ENTITY_EAR)
+		    && (infos->dlrs[j]->type != IPMI_ENTITY_DREAR))
+		    goto next_ent;
+		found = infos->found+j;
 
-	    /* Since this is an EAR and we are putting it's entries in
-	       another place, ignore this one. */
-	    (infos->found+i)->found = 1;
-	next_ent:
-	    j--;
+		/* Since this is an EAR and we are putting it's entries in
+		   another place, ignore this one. */
+		(infos->found+i)->found = 1;
+	    next_ent:
+		if (j == 0)
+		    break;
+	    }
 	}
 
 	if (infos->dlrs[i]->is_ranges) {

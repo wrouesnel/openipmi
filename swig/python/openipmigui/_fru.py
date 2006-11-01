@@ -193,7 +193,7 @@ class FRUArrayData:
             value = " "
             pass
         elif (self.ptype == "subnode"):
-            value = None
+            value = ""
             pass
         else:
             value = "0"
@@ -303,6 +303,10 @@ class FruInfoDisplay(gui_treelist.TreeList):
                                             node_s[0].get_subtype(),
                                             int(value_s[0]), parent)
                         np = data
+                        pass
+                    elif (value_s[0] == "-1"):
+                        data = FRUData(self, node, i, name_s[0], type_s[0],
+                                       None, parent, False)
                         pass
                     sub = self.add_data(item, name_s[0], [], data)
                     if (data != None):

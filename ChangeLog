@@ -1,3 +1,8 @@
+2006-11-01 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fixed a problem with scanning entity association
+	records.
+
 2006-10-31 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h, lib/normal_fru.c: Added some better
