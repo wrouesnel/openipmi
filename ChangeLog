@@ -9,6 +9,13 @@
 	* swig/python/openipmigui/_fru.py: Add the ability to insert items
 	before an array element.  Fix boolean handling.
 
+	* lib/normal_fru.c, include/OpenIPMI/internal/ipmi_fru.h: Move the
+	FRU decoding from the ATCA code into here and make it generic.
+	Convert the standard FRU multirecord handling to the new code.
+
+	* lib/oem_atca_fru.c: Convert multirecord handling over to the
+	generic version.
+
 2006-11-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed a problem with scanning entity association

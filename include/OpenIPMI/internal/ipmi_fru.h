@@ -257,5 +257,356 @@ void _ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
 int _ipmi_fru_register_decoder(ipmi_fru_err_op op);
 int _ipmi_fru_deregister_decoder(ipmi_fru_err_op op);
 
+/* Table-driven multirecord FRU handling. */
+typedef struct ipmi_mr_struct_layout_s ipmi_mr_struct_layout_t;
+typedef struct ipmi_mr_struct_info_s ipmi_mr_struct_info_t;
+typedef struct ipmi_mr_item_layout_s ipmi_mr_item_layout_t;
+typedef struct ipmi_mr_array_layout_s ipmi_mr_array_layout_t;
+typedef struct ipmi_mr_array_info_s ipmi_mr_array_info_t;
+typedef struct ipmi_mr_offset_s ipmi_mr_offset_t;
+
+struct ipmi_mr_offset_s {
+    uint8_t          offset;
+    uint8_t          length;
+    ipmi_mr_offset_t *parent;
+};
+
+typedef struct ipmi_mr_fru_info_s {
+    ipmi_fru_t   *fru;
+    unsigned int mr_rec_num;
+} ipmi_mr_fru_info_t;
+
+struct ipmi_mr_array_info_s {
+    uint8_t                count;
+    uint8_t                nr_after; /* Number of arrays after me. */
+    ipmi_mr_offset_t       offset;
+    ipmi_mr_array_layout_t *layout;
+    ipmi_mr_struct_info_t  **items;
+};
+
+struct ipmi_mr_struct_info_s
+{
+    uint8_t                 len;
+    ipmi_mr_offset_t        offset;
+    ipmi_mr_struct_layout_t *layout;
+    unsigned char           *data;
+    ipmi_mr_array_info_t    *arrays;
+};
+
+typedef struct ipmi_mr_tab_item_s {
+    unsigned int count;
+    char         *table[];
+} ipmi_mr_tab_item_t;
+
+typedef struct ipmi_mr_floattab_item_s {
+    unsigned int count;
+    double       defval;
+    struct {
+	float low;
+	float nominal;
+	float high;
+    } table[];
+} ipmi_mr_floattab_item_t;
+
+struct ipmi_mr_item_layout_s
+{
+    char                      *name;
+    enum ipmi_fru_data_type_e dtype;
+
+    uint8_t settable;
+
+    uint16_t start;
+    uint16_t length;
+
+    float multiplier;
+    void *tab_data;
+
+    int (*set_field)(ipmi_mr_item_layout_t     *layout,
+		     ipmi_mr_struct_info_t     *rec,
+		     ipmi_mr_fru_info_t        *finfo,
+		     enum ipmi_fru_data_type_e dtype,
+		     int                       intval,
+		     time_t                    time,
+		     double                    floatval,
+		     char                      *data,
+		     unsigned int              data_len);
+    int (*get_field)(ipmi_mr_item_layout_t     *layout,
+		     ipmi_mr_struct_info_t     *rec,
+		     enum ipmi_fru_data_type_e *dtype,
+		     int                       *intval,
+		     time_t                    *time,
+		     double                    *floatval,
+		     char                      **data,
+		     unsigned int              *data_len);
+};
+
+struct ipmi_mr_array_layout_s
+{
+    char    *name;
+    uint8_t has_count;
+    uint8_t min_elem_size;
+    ipmi_mr_struct_layout_t *elem_layout;
+    int (*elem_check)(ipmi_mr_struct_layout_t *layout,
+		      unsigned char **mr_data,
+		      unsigned int  *mr_data_len);
+    int (*elem_decode)(ipmi_mr_struct_info_t   *rec,
+		       unsigned char      **mr_data,
+		       unsigned int       *mr_data_len);
+    void (*cleanup)(ipmi_mr_array_info_t *arec);
+    int (*get_field)(ipmi_mr_array_info_t      *arec,
+		     ipmi_fru_node_t           *rnode,
+		     enum ipmi_fru_data_type_e *dtype,
+		     int                       *intval,
+		     time_t                    *time,
+		     double                    *floatval,
+		     char                      **data,
+		     unsigned int              *data_len,
+		     ipmi_fru_node_t           **sub_node);
+};
+
+struct ipmi_mr_struct_layout_s
+{
+    char                   *name;
+    uint8_t                length; /* Excluding arrays. */
+    unsigned int           item_count;
+    ipmi_mr_item_layout_t  *items;
+    unsigned int           array_count;
+    ipmi_mr_array_layout_t *arrays;
+
+    void (*cleanup)(ipmi_mr_struct_info_t *rec);
+};
+
+uint8_t ipmi_mr_full_offset(ipmi_mr_offset_t *o);
+void ipmi_mr_adjust_len(ipmi_mr_offset_t *o, int len);
+
+void ipmi_mr_array_cleanup(ipmi_mr_array_info_t *arec);
+void ipmi_mr_struct_cleanup(ipmi_mr_struct_info_t *rec);
+void ipmi_mr_struct_root_destroy(ipmi_fru_node_t *node);
+void ipmi_mr_sub_destroy(ipmi_fru_node_t *node);
+int ipmi_mr_node_array_set_field(ipmi_fru_node_t           *node,
+				 unsigned int              index,
+				 enum ipmi_fru_data_type_e dtype,
+				 int                       intval,
+				 time_t                    time,
+				 double                    floatval,
+				 char                      *data,
+				 unsigned int              data_len);
+int ipmi_mr_node_array_get_subtype(ipmi_fru_node_t           *node,
+				   enum ipmi_fru_data_type_e *dtype);
+int ipmi_mr_node_array_settable(ipmi_fru_node_t *node,
+				unsigned int    index);
+int ipmi_mr_node_array_get_field(ipmi_fru_node_t           *node,
+				 unsigned int              index,
+				 const char                **name,
+				 enum ipmi_fru_data_type_e *dtype,
+				 int                       *intval,
+				 time_t                    *time,
+				 double                    *floatval,
+				 char                      **data,
+				 unsigned int              *data_len,
+				 ipmi_fru_node_t           **sub_node);
+int ipmi_mr_array_get_field(ipmi_mr_array_info_t      *arec,
+			    ipmi_fru_node_t           *rnode,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    double                    *floatval,
+			    char                      **data,
+			    unsigned int              *data_len,
+			    ipmi_fru_node_t           **sub_node);
+int ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
+				  unsigned int              index,
+				  enum ipmi_fru_data_type_e dtype,
+				  int                       intval,
+				  time_t                    time,
+				  double                    floatval,
+				  char                      *data,
+				  unsigned int              data_len);
+int ipmi_mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
+				       unsigned int              index,
+				       enum ipmi_fru_data_type_e dtype,
+				       int                       intval,
+				       time_t                    time,
+				       double                    floatval,
+				       char                      *data,
+				       unsigned int              data_len);
+int ipmi_mr_node_struct_settable(ipmi_fru_node_t *node,
+				 unsigned int    index);
+int ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
+				  unsigned int              index,
+				  const char                **name,
+				  enum ipmi_fru_data_type_e *dtype,
+				  int                       *intval,
+				  time_t                    *time,
+				  double                    *floatval,
+				  char                      **data,
+				  unsigned int              *data_len,
+				  ipmi_fru_node_t           **sub_node);
+int ipmi_mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
+				       unsigned int              index,
+				       const char                **name,
+				       enum ipmi_fru_data_type_e *dtype,
+				       int                       *intval,
+				       time_t                    *time,
+				       double                    *floatval,
+				       char                      **data,
+				       unsigned int              *data_len,
+				       ipmi_fru_node_t           **sub_node);
+int ipmi_mr_struct_elem_check(ipmi_mr_struct_layout_t *layout,
+			      unsigned char           **rmr_data,
+			      unsigned int            *rmr_data_len);
+int ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
+			  unsigned char         **rmr_data,
+			  unsigned int          *rmr_data_len);
+int ipmi_mr_root(ipmi_fru_t              *fru,
+		 unsigned int            mr_rec_num,
+		 unsigned char           *rmr_data,
+		 unsigned int            rmr_data_len,
+		 ipmi_mr_struct_layout_t *layout,
+		 const char              **name,
+		 ipmi_fru_node_t         **rnode);
+
+/***********************************************************************
+ *
+ * Generic field encoders and decoders.
+ *
+ **********************************************************************/
+
+int ipmi_mr_int_set_field(ipmi_mr_item_layout_t     *layout,
+			  ipmi_mr_struct_info_t     *rec,
+			  ipmi_mr_fru_info_t        *finfo,
+			  enum ipmi_fru_data_type_e dtype,
+			  int                       intval,
+			  time_t                    time,
+			  double                    floatval,
+			  char                      *data,
+			  unsigned int              data_len);
+int ipmi_mr_int_get_field(ipmi_mr_item_layout_t     *layout,
+			  ipmi_mr_struct_info_t     *rec,
+			  enum ipmi_fru_data_type_e *dtype,
+			  int                       *intval,
+			  time_t                    *time,
+			  double                    *floatval,
+			  char                      **data,
+			  unsigned int              *data_len);
+int ipmi_mr_intfloat_set_field(ipmi_mr_item_layout_t     *layout,
+			       ipmi_mr_struct_info_t     *rec,
+			       ipmi_mr_fru_info_t        *finfo,
+			       enum ipmi_fru_data_type_e dtype,
+			       int                       intval,
+			       time_t                    time,
+			       double                    floatval,
+			       char                      *data,
+			       unsigned int              data_len);
+int ipmi_mr_intfloat_get_field(ipmi_mr_item_layout_t     *layout,
+			       ipmi_mr_struct_info_t     *rec,
+			       enum ipmi_fru_data_type_e *dtype,
+			       int                       *intval,
+			       time_t                    *time,
+			       double                    *floatval,
+			       char                      **data,
+			       unsigned int              *data_len);
+int ipmi_mr_bitint_set_field(ipmi_mr_item_layout_t     *layout,
+			     ipmi_mr_struct_info_t     *rec,
+			     ipmi_mr_fru_info_t        *finfo,
+			     enum ipmi_fru_data_type_e dtype,
+			     int                       intval,
+			     time_t                    time,
+			     double                    floatval,
+			     char                      *data,
+			     unsigned int              data_len);
+int ipmi_mr_bitint_get_field(ipmi_mr_item_layout_t     *layout,
+			     ipmi_mr_struct_info_t     *rec,
+			     enum ipmi_fru_data_type_e *dtype,
+			     int                       *intval,
+			     time_t                    *time,
+			     double                    *floatval,
+			     char                      **data,
+			     unsigned int              *data_len);
+int ipmi_mr_bitvaltab_set_field(ipmi_mr_item_layout_t     *layout,
+				ipmi_mr_struct_info_t     *rec,
+				ipmi_mr_fru_info_t        *finfo,
+				enum ipmi_fru_data_type_e dtype,
+				int                       intval,
+				time_t                    time,
+				double                    floatval,
+				char                      *data,
+				unsigned int              data_len);
+int ipmi_mr_bitvaltab_get_field(ipmi_mr_item_layout_t     *layout,
+				ipmi_mr_struct_info_t     *rec,
+				enum ipmi_fru_data_type_e *dtype,
+				int                       *intval,
+				time_t                    *time,
+				double                    *floatval,
+				char                      **data,
+				unsigned int              *data_len);
+int ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_item_layout_t     *layout,
+				     ipmi_mr_struct_info_t     *rec,
+				     ipmi_mr_fru_info_t        *finfo,
+				     enum ipmi_fru_data_type_e dtype,
+				     int                       intval,
+				     time_t                    time,
+				     double                    floatval,
+				     char                      *data,
+				     unsigned int              data_len);
+int ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_item_layout_t     *layout,
+				     ipmi_mr_struct_info_t     *rec,
+				     enum ipmi_fru_data_type_e *dtype,
+				     int                       *intval,
+				     time_t                    *time,
+				     double                    *floatval,
+				     char                      **data,
+				     unsigned int              *data_len);
+int ipmi_mr_str_set_field(ipmi_mr_item_layout_t     *layout,
+			  ipmi_mr_struct_info_t     *rec,
+			  ipmi_mr_fru_info_t        *finfo,
+			  enum ipmi_fru_data_type_e dtype,
+			  int                       intval,
+			  time_t                    time,
+			  double                    floatval,
+			  char                      *data,
+			  unsigned int              data_len);
+int ipmi_mr_str_get_field(ipmi_mr_item_layout_t     *layout,
+			  ipmi_mr_struct_info_t     *rec,
+			  enum ipmi_fru_data_type_e *dtype,
+			  int                       *intval,
+			  time_t                    *time,
+			  double                    *floatval,
+			  char                      **data,
+			  unsigned int              *data_len);
+int ipmi_mr_binary_set_field(ipmi_mr_item_layout_t     *layout,
+			     ipmi_mr_struct_info_t     *rec,
+			     ipmi_mr_fru_info_t        *finfo,
+			     enum ipmi_fru_data_type_e dtype,
+			     int                       intval,
+			     time_t                    time,
+			     double                    floatval,
+			     char                      *data,
+			     unsigned int              data_len);
+int ipmi_mr_binary_get_field(ipmi_mr_item_layout_t     *layout,
+			     ipmi_mr_struct_info_t     *rec,
+			     enum ipmi_fru_data_type_e *dtype,
+			     int                       *intval,
+			     time_t                    *time,
+			     double                    *floatval,
+			     char                      **data,
+			     unsigned int              *data_len);
+int ipmi_mr_ip_set_field(ipmi_mr_item_layout_t     *layout,
+			 ipmi_mr_struct_info_t     *rec,
+			 ipmi_mr_fru_info_t        *finfo,
+			 enum ipmi_fru_data_type_e dtype,
+			 int                       intval,
+			 time_t                    time,
+			 double                    floatval,
+			 char                      *data,
+			 unsigned int              data_len);
+int ipmi_mr_ip_get_field(ipmi_mr_item_layout_t     *layout,
+			 ipmi_mr_struct_info_t     *rec,
+			 enum ipmi_fru_data_type_e *dtype,
+			 int                       *intval,
+			 time_t                    *time,
+			 double                    *floatval,
+			 char                      **data,
+			 unsigned int              *data_len);
 
 #endif /* _IPMI_FRU_INTERNAL_H */
