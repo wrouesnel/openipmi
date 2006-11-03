@@ -1884,10 +1884,11 @@ ipmi_fru_get_num_multi_records(ipmi_fru_t *fru)
     return num;
 }
 
-int
-ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
-			       unsigned int  num,
-			       unsigned char *type)
+static int
+validate_and_lock_multi_record(ipmi_fru_t                   *fru,
+			       unsigned int                 num,
+			       ipmi_fru_multi_record_area_t **ru,
+			       ipmi_fru_record_t            **rrec)
 {
     ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
@@ -1906,6 +1907,23 @@ ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
 	_ipmi_fru_unlock(fru);
 	return E2BIG;
     }
+    *ru = u;
+    if (rrec)
+	*rrec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    return 0;
+}
+
+int
+ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char *type)
+{
+    ipmi_fru_multi_record_area_t *u;
+    int                          rv;
+
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
     *type = u->records[num].type;
     _ipmi_fru_unlock(fru);
     return 0;
@@ -1916,23 +1934,12 @@ ipmi_fru_set_multi_record_type(ipmi_fru_t    *fru,
 			       unsigned int  num,
 			       unsigned char type)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    if (!recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
     u->records[num].type = type;
     _ipmi_fru_unlock(fru);
     return 0;
@@ -1943,23 +1950,12 @@ ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
 					 unsigned int  num,
 					 unsigned char *ver)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    if (!recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
     *ver = u->records[num].format_version;
     _ipmi_fru_unlock(fru);
     return 0;
@@ -1970,23 +1966,12 @@ ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
 				   unsigned int num,
 				   unsigned int *len)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    if (!recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
     *len = u->records[num].length;
     _ipmi_fru_unlock(fru);
     return 0;
@@ -1998,23 +1983,12 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned char *data,
 			       unsigned int  *length)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    if (!recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
     if (*length < u->records[num].length) {
 	_ipmi_fru_unlock(fru);
 	return EINVAL;
@@ -2026,36 +2000,48 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 }
 
 int
+ipmi_fru_get_multi_record_slice(ipmi_fru_t    *fru,
+				unsigned int  num,
+				unsigned int  offset,
+				unsigned int  length,
+				unsigned char *data)
+{
+    ipmi_fru_multi_record_area_t *u;
+    int                          rv;
+
+    rv = validate_and_lock_multi_record(fru, num, &u, NULL);
+    if (rv)
+	return rv;
+
+    if ((offset + length) > u->records[num].length) {
+	_ipmi_fru_unlock(fru);
+	return EINVAL;
+    }
+
+    memcpy(data, u->records[num].data+offset, length);
+    _ipmi_fru_unlock(fru);
+    return 0;
+}
+
+int
 ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned int  num,
 			       unsigned char *data,
 			       unsigned int  length)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
     ipmi_fru_record_t            *rec;
     int                          raw_diff;
     unsigned int                 i;
     unsigned char                *new_data;
-
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
+    int                          rv;
 
     if (length > 255)
 	return EINVAL;
 
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
-    if (!rec) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, &rec);
+    if (rv)
+	return rv;
 
     raw_diff = length - u->records[num].length;
 
@@ -2221,25 +2207,13 @@ ipmi_fru_ovw_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned int  offset,
 			       unsigned int  length)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
     ipmi_fru_record_t            *rec;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
-    if (!rec) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, &rec);
+    if (rv)
+	return rv;
 
     if ((offset + length) > u->records[num].length) {
 	_ipmi_fru_unlock(fru);
@@ -2259,28 +2233,16 @@ ipmi_fru_ins_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned int  offset,
 			       unsigned int  length)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
     ipmi_fru_record_t            *rec;
     int                          new_length;
     unsigned int                 i;
     unsigned char                *new_data;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
-    if (!rec) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, &rec);
+    if (rv)
+	return rv;
 
     if (offset > u->records[num].length) {
 	_ipmi_fru_unlock(fru);
@@ -2336,28 +2298,16 @@ ipmi_fru_del_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned int  offset,
 			       unsigned int  length)
 {
-    ipmi_fru_record_t            **recs;
     ipmi_fru_multi_record_area_t *u;
     ipmi_fru_record_t            *rec;
     int                          new_length;
     unsigned int                 i;
     unsigned char                *new_data;
+    int                          rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
-    _ipmi_fru_lock(fru);
-    recs = normal_fru_get_recs(fru);
-    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
-    if (!rec) {
-	_ipmi_fru_unlock(fru);
-	return ENOSYS;
-    }
-    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
-    if (num >= u->num_records) {
-	_ipmi_fru_unlock(fru);
-	return E2BIG;
-    }
+    rv = validate_and_lock_multi_record(fru, num, &u, &rec);
+    if (rv)
+	return rv;
 
     if ((offset + length) > u->records[num].length) {
 	_ipmi_fru_unlock(fru);

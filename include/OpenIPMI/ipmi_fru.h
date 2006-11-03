@@ -444,6 +444,12 @@ int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 				   unsigned int  num,
 				   unsigned char *data,
 				   unsigned int  *length);
+/* Get part of the multirecord data. */
+int ipmi_fru_get_multi_record_slice(ipmi_fru_t    *fru,
+				    unsigned int  num,
+				    unsigned int  offset,
+				    unsigned int  length,
+				    unsigned char *data);
 
 /*
  * This interface lets you get the FRU data by name.

@@ -1,3 +1,14 @@
+2006-11-03 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca_fru.c: Massive rewrite to make this table-driven and
+	add setting capability.
+
+	* swig/python/openipmigui/gui_treelist.py: Add the ability to insert
+	items before a list element.
+	
+	* swig/python/openipmigui/_fru.py: Add the ability to insert items
+	before an array element.  Fix boolean handling.
+
 2006-11-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed a problem with scanning entity association

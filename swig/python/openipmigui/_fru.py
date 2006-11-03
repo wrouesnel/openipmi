@@ -48,7 +48,7 @@ class FRUData:
         self.currval = origval
         self.parent = parent
         if (parent != None):
-            parent.children.append(self)
+            parent.children.insert(index, self)
             pass
         self.reinit_on_zero = reinit_on_zero
         self.settable = settable
@@ -74,6 +74,7 @@ class FRUData:
             pass
         if (self.parent != None):
             menul.append( ("Delete", self.delete_item) )
+            menul.append( ("Insert Before", self.ins_before) )
             pass
         if (len(menul) > 0):
             gui_popup.popup(self.glist, event, menul, point)
@@ -118,16 +119,59 @@ class FRUData:
         self.parent.length -= 1
         return
     
+    def ins_before(self, event):
+        if ((self.ptype == "binary") or (self.ptype == "unicode")
+            or (self.ptype == "ascii")):
+            value = " "
+            pass
+        elif (self.ptype == "subnode"):
+            value = ""
+            pass
+        elif (self.ptype == "boolean"):
+            value = "false"
+            pass
+        else:
+            value = "0"
+            pass
+        rv = self.parent.node.set_field(self.aidx, self.ptype, value)
+        if (rv != 0):
+            self.glist.SetError("Could not insert item: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+        name_s = [ "" ]
+        type_s = [ "" ]
+        value_s = [ "" ]
+        node_s = [ None ]
+        rv = self.parent.node.get_field(self.aidx, name_s, type_s, value_s,
+                                        node_s)
+        if (rv != 0):
+            self.glist.SetError("Could not get field: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+        if (type_s[0] == "boolean"):
+            value_s[0] = str(bool(int(value_s[0])))
+        self.glist.add_fru_data(self.parent.myitem, self.parent.node,
+                                self.aidx, self.parent, False, self.aidx,
+                                self.item)
+        i = 0
+        for l in self.parent.children:
+            l.aidx = i
+            self.glist.SetColumn(l.item, str(i), 0)
+            i += 1
+            pass
+        self.parent.length += 1
+        return
+    
     def setvalue(self, event):
         gui_setdialog.SetDialog("Set value for " + self.pname,
                                 [ self.currval ], 1, self)
         return
 
     def togglevalue(self, event):
-        if (self.currval == "true"):
-            newval = "false"
+        if (self.currval == "True"):
+            newval = "False"
         else:
-            newval = "true"
+            newval = "True"
             pass
         rv = self.node.set_field(self.aidx, self.ptype, newval)
         if (rv != 0):
@@ -152,7 +196,7 @@ class FRUArrayData:
         self.parent = parent
         self.children = [ ]
         if (parent != None):
-            parent.children.append(self)
+            parent.children.insert(index, self)
             pass
         self.settable = settable
         return
@@ -203,6 +247,9 @@ class FRUArrayData:
         elif (self.ptype == "subnode"):
             value = ""
             pass
+        elif (self.ptype == "boolean"):
+            value = "false"
+            pass
         else:
             value = "0"
             pass
@@ -221,7 +268,7 @@ class FRUArrayData:
                                 + OpenIPMI.get_error_string(rv))
             return
         self.glist.add_fru_data(self.myitem, self.node, self.length,
-                                self.parent, False)
+                                self, False)
         
         self.length += 1
         return
@@ -287,7 +334,8 @@ class FruInfoDisplay(gui_treelist.TreeList):
         self.ExpandItem("")
         return
     
-    def add_fru_data(self, item, node, startidx, parent, normal_top):
+    def add_fru_data(self, item, node, startidx, parent, normal_top,
+                     endidx=-1, before=None):
         i = startidx
         while True:
             name_s = [ "" ]
@@ -297,6 +345,8 @@ class FruInfoDisplay(gui_treelist.TreeList):
             rv = node.get_field(i, name_s, type_s, value_s, node_s)
             if (rv == OpenIPMI.einval):
                 return
+            if (type_s[0] == "boolean"):
+                value_s[0] = str(bool(int(value_s[0])))
             # Ignore other errors, just keep going
             if (rv == 0):
                 if (name_s[0] == None):
@@ -316,7 +366,8 @@ class FruInfoDisplay(gui_treelist.TreeList):
                                        None, parent, False,
                                        node.settable(i) == 0)
                         pass
-                    sub = self.add_data(item, name_s[0], [], data)
+                    sub = self.add_data(item, name_s[0], [], data,
+                                        before=before)
                     if (data != None):
                         data.myitem = sub
                         pass
@@ -327,9 +378,12 @@ class FruInfoDisplay(gui_treelist.TreeList):
                                    (normal_top and
                                     name_s[0].endswith("_offset")),
                                    node.settable(i) == 0)
-                    self.add_data(item, name_s[0], [value_s[0]], data=data)
+                    self.add_data(item, name_s[0], [value_s[0]], data=data,
+                                  before=before)
                     pass
                 pass
+            if (endidx >= 0) and (i == endidx):
+                break
             i = i + 1
             pass
         return

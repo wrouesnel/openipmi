@@ -121,7 +121,7 @@ class TreeList(Tix.Toplevel):
     def AfterDone(self):
         return
 
-    def Append(self, node, name, values, data=None):
+    def Append(self, node, name, values, data=None, before=None):
         hide = False
         if (node == ""):
             key = str(self.currkey)
@@ -137,7 +137,12 @@ class TreeList(Tix.Toplevel):
                 pass
             pass
         self.currkey += 1
-        self.tree.add(key, text=name)
+        if (before != None):
+            self.tree.add(key, text=name, before=before)
+            pass
+        else:
+            self.tree.add(key, text=name)
+            pass
         if (hide):
             self.tree.hide_entry(key)
             pass
@@ -182,8 +187,8 @@ class TreeList(Tix.Toplevel):
         self.errstr.SetError(str)
         return
 
-    def add_data(self, parent, name, value, data=None):
-        item = self.Append(parent, name, value, data);
+    def add_data(self, parent, name, value, data=None, before=None):
+        item = self.Append(parent, name, value, data, before);
         if (data != None):
             data.SetItem(item)
             pass

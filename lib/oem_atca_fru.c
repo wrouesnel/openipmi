@@ -29,60 +29,1165 @@
 
 #include <string.h>
 #include <stdio.h> /* for sprintf */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <OpenIPMI/internal/ipmi_fru.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 
+
 /***********************************************************************
  *
- * FRU Multi-record decoding
+ * Table-driven data engine for handling multirecord fru info.
  *
  **********************************************************************/
 
-static int
-convert_int_to_fru_int(const char                *name,
-		       int                       val,
-		       const char                **rname,
-		       enum ipmi_fru_data_type_e *dtype,
-		       int                       *intval)
+typedef struct mr_struct_layout_s mr_struct_layout_t;
+typedef struct mr_struct_info_s mr_struct_info_t;
+typedef struct mr_item_layout_s mr_item_layout_t;
+typedef struct mr_array_layout_s mr_array_layout_t;
+typedef struct mr_array_info_s mr_array_info_t;
+typedef struct mr_offset_s mr_offset_t;
+
+struct mr_offset_s {
+    uint8_t     offset;
+    uint8_t     length;
+    mr_offset_t *parent;
+};
+
+static uint8_t full_offset(mr_offset_t *o)
 {
-    if (rname)
-	*rname = name;
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_INT;
-    if (intval)
-	*intval = val;
+    uint8_t rv = 0;
+
+    while (o) {
+	rv += o->offset;
+	o = o->parent;
+    }
+    return rv;
+}
+
+static void adjust_len(mr_offset_t *o, int len)
+{
+    while (o) {
+	o->length += len;
+	o = o->parent;
+    }
+}
+
+typedef struct mr_fru_info_s {
+    ipmi_fru_t   *fru;
+    unsigned int mr_rec_num;
+} mr_fru_info_t;
+
+struct mr_array_info_s {
+    uint8_t           count;
+    uint8_t           nr_after; /* Number of arrays after me. */
+    mr_offset_t       offset;
+    mr_array_layout_t *layout;
+    mr_struct_info_t  **items;
+};
+
+struct mr_struct_info_s
+{
+    uint8_t            len;
+    mr_offset_t        offset;
+    mr_struct_layout_t *layout;
+    unsigned char      *data;
+    mr_array_info_t    *arrays;
+};
+
+typedef struct mr_tab_item_s {
+    unsigned int count;
+    char         *table[];
+} mr_tab_item_t;
+
+struct mr_item_layout_s
+{
+    char                      *name;
+    enum ipmi_fru_data_type_e dtype;
+
+    uint8_t settable;
+
+    uint16_t start;
+    uint16_t length;
+
+    float multiplier;
+    mr_tab_item_t *tab;
+
+    int (*set_field)(mr_item_layout_t          *layout,
+		     mr_struct_info_t          *rec,
+		     mr_fru_info_t             *finfo,
+		     enum ipmi_fru_data_type_e dtype,
+		     int                       intval,
+		     time_t                    time,
+		     double                    floatval,
+		     char                      *data,
+		     unsigned int              data_len);
+    int (*get_field)(mr_item_layout_t          *layout,
+		     mr_struct_info_t          *rec,
+		     enum ipmi_fru_data_type_e *dtype,
+		     int                       *intval,
+		     time_t                    *time,
+		     double                    *floatval,
+		     char                      **data,
+		     unsigned int              *data_len);
+};
+
+struct mr_array_layout_s
+{
+    char    *name;
+    uint8_t has_count;
+    uint8_t min_elem_size;
+    mr_struct_layout_t *elem_layout;
+    int (*elem_check)(mr_struct_layout_t *layout,
+		      unsigned char **mr_data,
+		      unsigned int  *mr_data_len);
+    int (*elem_decode)(mr_struct_info_t   *rec,
+		       unsigned char      **mr_data,
+		       unsigned int       *mr_data_len);
+    void (*cleanup)(mr_array_info_t *arec);
+    int (*get_field)(mr_array_info_t           *arec,
+		     ipmi_fru_node_t           *rnode,
+		     enum ipmi_fru_data_type_e *dtype,
+		     int                       *intval,
+		     time_t                    *time,
+		     double                    *floatval,
+		     char                      **data,
+		     unsigned int              *data_len,
+		     ipmi_fru_node_t           **sub_node);
+};
+
+struct mr_struct_layout_s
+{
+    char              *name;
+    uint8_t           length; /* Excluding arrays. */
+    unsigned int      item_count;
+    mr_item_layout_t  *items;
+    unsigned int      array_count;
+    mr_array_layout_t *arrays;
+
+    void (*cleanup)(mr_struct_info_t *rec);
+};
+
+static int mr_node_struct_get_field(ipmi_fru_node_t           *node,
+				    unsigned int              index,
+				    const char                **name,
+				    enum ipmi_fru_data_type_e *dtype,
+				    int                       *intval,
+				    time_t                    *time,
+				    double                    *floatval,
+				    char                      **data,
+				    unsigned int              *data_len,
+				    ipmi_fru_node_t           **sub_node);
+static int mr_node_struct_set_field(ipmi_fru_node_t           *node,
+				    unsigned int              index,
+				    enum ipmi_fru_data_type_e dtype,
+				    int                       intval,
+				    time_t                    time,
+				    double                    floatval,
+				    char                      *data,
+				    unsigned int              data_len);
+static int mr_node_struct_settable(ipmi_fru_node_t *node,
+				   unsigned int    index);
+
+
+static void
+mr_array_cleanup(mr_array_info_t *arec)
+{
+    int i;
+
+    if (arec->items) {
+	for (i=0; i<arec->count; i++) {
+	    if (arec->items[i])
+		arec->items[i]->layout->cleanup(arec->items[i]);
+	}
+	ipmi_mem_free(arec->items);
+    }
+}
+
+static void
+mr_struct_cleanup(mr_struct_info_t *rec)
+{
+    unsigned int i;
+
+    if (rec->data)
+	ipmi_mem_free(rec->data);
+    if (rec->arrays) {
+	for (i=0; i<rec->layout->array_count; i++) {
+	    if (rec->arrays[i].layout)
+		rec->arrays[i].layout->cleanup(rec->arrays+i);
+	}
+	ipmi_mem_free(rec->arrays);
+    }
+    ipmi_mem_free(rec);
+}
+
+static void
+mr_struct_root_destroy(ipmi_fru_node_t *node)
+{
+    mr_struct_info_t *rec = _ipmi_fru_node_get_data(node);
+    mr_fru_info_t    *finfo = _ipmi_fru_node_get_data2(node);
+    ipmi_fru_deref(finfo->fru);
+    rec->layout->cleanup(rec);
+    ipmi_mem_free(finfo);
+}
+
+static void
+mr_sub_destroy(ipmi_fru_node_t *node)
+{
+    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
+    ipmi_fru_put_node(root_node);
+}
+
+static int
+mr_node_array_set_field(ipmi_fru_node_t           *node,
+			unsigned int              index,
+			enum ipmi_fru_data_type_e dtype,
+			int                       intval,
+			time_t                    time,
+			double                    floatval,
+			char                      *data,
+			unsigned int              data_len)
+{
+    mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_node_t  *rnode = _ipmi_fru_node_get_data2(node);
+    mr_fru_info_t    *finfo = _ipmi_fru_node_get_data2(rnode);
+    mr_struct_info_t **newa;
+    mr_struct_info_t **olda;
+    mr_struct_info_t *newv;
+    int              i, j, no;
+    int              rv;
+    unsigned char    *sdata;
+    uint8_t          offset;
+
+    if (index > arec->count)
+	index = arec->count;
+
+    if (data) {
+	/* insert a new entry */
+
+	if (arec->count >= 255)
+	    return E2BIG;
+
+	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count+1));
+	if (!newa)
+	    return ENOMEM;
+	newv = ipmi_mem_alloc(sizeof(*newv));
+	if (!newv) {
+	    ipmi_mem_free(newa);
+	    return ENOMEM;
+	}
+	memset(newv, 0, sizeof(*newv));
+	sdata = ipmi_mem_alloc(arec->layout->min_elem_size);
+	if (!sdata) {
+	    ipmi_mem_free(newa);
+	    ipmi_mem_free(newv);
+	    return ENOMEM;
+	}
+	memset(sdata, 0, arec->layout->min_elem_size);
+	if (data) {
+	    if (data_len > arec->layout->min_elem_size)
+		memcpy(sdata, data, arec->layout->min_elem_size);
+	    else
+		memcpy(sdata, data, data_len);
+	}
+
+	if (index == arec->count)
+	    offset = arec->offset.length;
+	else
+	    offset = arec->items[index]->offset.offset;
+	newv->offset.offset = offset;
+	newv->offset.parent = &arec->offset;
+
+	rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					    sdata,
+					    full_offset(&newv->offset),
+					    arec->layout->min_elem_size);
+	if (rv) {
+	    ipmi_mem_free(sdata);
+	    ipmi_mem_free(newa);
+	    ipmi_mem_free(newv);
+	    return rv;
+	}
+	adjust_len(&arec->offset, arec->layout->min_elem_size);
+
+	if (arec->items) {
+	    no = 0;
+	    for (i=0, j=0; i<(int)arec->count; j++) {
+		if (j == (int) index) {
+		    no = arec->layout->min_elem_size;
+		    continue;
+		}
+		newa[j] = arec->items[i];
+		newa[j]->offset.offset += no;
+		i++;
+	    }
+	}
+	newa[index] = newv;
+	newv->len = arec->layout->min_elem_size;
+	newv->data = sdata;
+	newv->layout = arec->layout->elem_layout;
+	
+	no = arec->layout->min_elem_size;
+	i = 1;
+    } else {
+	/* Delete an entry */
+	mr_struct_info_t *cr;
+
+	if (index > arec->count)
+	    return EINVAL;
+
+	cr = arec->items[index];
+
+	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count-1));
+	if (!newa)
+	    return ENOMEM;
+	rv = ipmi_fru_del_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					    full_offset(&cr->offset),
+					    cr->offset.length);
+	if (rv) {
+	    ipmi_mem_free(newa);
+	    return rv;
+	}
+
+	adjust_len(&arec->offset, - (int) cr->offset.length);
+
+	no = 0;
+	for (i=0, j=0; j<(int)arec->count; j++) {
+	    if (j == (int) index) {
+		no = -3;
+		continue;
+	    }
+	    newa[i] = arec->items[j];
+	    newa[i]->offset.offset += no;
+	    i++;
+	}
+	no = cr->offset.length;
+	cr->layout->cleanup(cr);
+	i = -1;
+    }
+
+    arec->count += i;
+
+    /* Adjust the arrays that come after me in the record. */
+    for (j=0; j<arec->nr_after; j++) {
+	mr_array_info_t *ai = arec + j + 1;
+	
+	ai->offset.offset += no;
+	for (i=0; i<(int)ai->count; i++)
+	    ai->items[i]->offset.offset += no;
+    }
+
+    olda = arec->items;
+    arec->items = newa;
+    if (arec->layout->has_count)
+	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				       &arec->count,
+				       full_offset(&arec->offset), 1);
+    if (olda)
+	ipmi_mem_free(olda);
+
     return 0;
 }
 
 static int
-convert_int_to_fru_float(const char                *name,
-			 int                       val,
-			 float                     multiplier,
-			 const char                **rname,
-			 enum ipmi_fru_data_type_e *dtype,
-			 double                    *floatval)
+mr_node_array_get_subtype(ipmi_fru_node_t           *node,
+			  enum ipmi_fru_data_type_e *dtype)
 {
-    if (rname)
-	*rname = name;
+    *dtype = IPMI_FRU_DATA_SUB_NODE;
+    return 0;
+}
+
+static int
+mr_node_array_settable(ipmi_fru_node_t *node,
+		       unsigned int    index)
+{
+    return EPERM;
+}
+
+static int
+mr_node_array_get_field(ipmi_fru_node_t           *node,
+			unsigned int              index,
+			const char                **name,
+			enum ipmi_fru_data_type_e *dtype,
+			int                       *intval,
+			time_t                    *time,
+			double                    *floatval,
+			char                      **data,
+			unsigned int              *data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    mr_array_info_t    *arec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(node);
+    mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(rnode);
+
+    if (index >= arec->count)
+	return EINVAL;
+
+    if (name)
+	*name = NULL; /* We are an array */
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = -1; /* Sub element is not an array */
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(finfo->fru);
+	if (!node)
+	    return ENOMEM;
+
+	ipmi_fru_get_node(rnode);
+	_ipmi_fru_node_set_data(node, arec->items[index]);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, mr_node_struct_get_field);
+	_ipmi_fru_node_set_set_field(node, mr_node_struct_set_field);
+	_ipmi_fru_node_set_settable(node, mr_node_struct_settable);
+	_ipmi_fru_node_set_destructor(node, mr_sub_destroy);
+
+	*sub_node = node;
+    }
+    return 0;
+}
+
+static int
+mr_array_get_field(mr_array_info_t           *arec,
+		   ipmi_fru_node_t           *rnode,
+		   enum ipmi_fru_data_type_e *dtype,
+		   int                       *intval,
+		   time_t                    *time,
+		   double                    *floatval,
+		   char                      **data,
+		   unsigned int              *data_len,
+		   ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_node_t *node;
+    mr_fru_info_t   *finfo = _ipmi_fru_node_get_data2(rnode);
+
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = arec->count;
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(finfo->fru);
+	if (!node)
+	    return ENOMEM;
+	ipmi_fru_get_node(rnode);
+	_ipmi_fru_node_set_data(node, arec);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, mr_node_array_get_field);
+	_ipmi_fru_node_set_set_field(node, mr_node_array_set_field);
+	_ipmi_fru_node_set_settable(node, mr_node_array_settable);
+	_ipmi_fru_node_set_get_subtype(node, mr_node_array_get_subtype);
+	_ipmi_fru_node_set_destructor(node, mr_sub_destroy);
+	*sub_node = node;
+    }
+    return 0;
+}
+
+static int
+mr_node_struct_set_field(ipmi_fru_node_t           *node,
+			 unsigned int              index,
+			 enum ipmi_fru_data_type_e dtype,
+			 int                       intval,
+			 time_t                    time,
+			 double                    floatval,
+			 char                      *data,
+			 unsigned int              data_len)
+{
+    mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(node);
+    mr_struct_layout_t *layout = rec->layout;
+    mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(rnode);
+
+    if (index < layout->item_count) {
+	if (!layout->items[index].set_field)
+	    return EPERM;
+	return layout->items[index].set_field(layout->items+index, rec, finfo,
+					      dtype, intval, time, floatval,
+					      data, data_len);
+    }
+
+    index -= layout->item_count;
+    if (index < layout->array_count) {
+	/* Cannot directly set arrays this way. */
+	return EPERM;
+    }
+
+    return EINVAL;
+}
+
+static int
+mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
+			      unsigned int              index,
+			      enum ipmi_fru_data_type_e dtype,
+			      int                       intval,
+			      time_t                    time,
+			      double                    floatval,
+			      char                      *data,
+			      unsigned int              data_len)
+{
+    mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    mr_struct_layout_t *layout = rec->layout;
+    mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(node);
+
+    if (index < layout->item_count) {
+	return layout->items[index].set_field(layout->items+index, rec, finfo,
+					      dtype, intval, time, floatval,
+					      data, data_len);
+    }
+
+    index -= layout->item_count;
+    if (index < layout->array_count) {
+	/* Cannot directly set arrays this way. */
+	return EPERM;
+    }
+
+    return EINVAL;
+}
+
+static int
+mr_node_struct_settable(ipmi_fru_node_t *node,
+			unsigned int    index)
+{
+    mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    mr_struct_layout_t *layout = rec->layout;
+
+    if (index < layout->item_count) {
+	if (layout->items[index].settable)
+	    return 0;
+	else
+	    return EPERM;
+    }
+
+    index -= layout->item_count;
+    if (index < layout->array_count) {
+	/* All our arrays are settable. */
+	return 0;
+    }
+
+    return EINVAL;
+}
+
+static int
+mr_node_struct_get_field(ipmi_fru_node_t           *node,
+			 unsigned int              index,
+			 const char                **name,
+			 enum ipmi_fru_data_type_e *dtype,
+			 int                       *intval,
+			 time_t                    *time,
+			 double                    *floatval,
+			 char                      **data,
+			 unsigned int              *data_len,
+			 ipmi_fru_node_t           **sub_node)
+{
+    mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    mr_struct_layout_t *layout = rec->layout;
+
+    if (index < layout->item_count) {
+	if (name)
+	    *name = layout->items[index].name;
+	return layout->items[index].get_field(layout->items+index, rec, dtype,
+					      intval, time, floatval,
+					      data, data_len);
+    }
+
+    index -= layout->item_count;
+    if (index < layout->array_count) {
+	if (name)
+	    *name = layout->arrays[index].name;
+
+	return layout->arrays[index].get_field(rec->arrays+index,
+					       _ipmi_fru_node_get_data2(node),
+					       dtype, intval, time, floatval,
+					       data, data_len, sub_node);
+    }
+
+    return EINVAL;
+}
+
+static int
+mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
+			      unsigned int              index,
+			      const char                **name,
+			      enum ipmi_fru_data_type_e *dtype,
+			      int                       *intval,
+			      time_t                    *time,
+			      double                    *floatval,
+			      char                      **data,
+			      unsigned int              *data_len,
+			      ipmi_fru_node_t           **sub_node)
+{
+    mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    mr_struct_layout_t *layout = rec->layout;
+
+    if (index < layout->item_count) {
+	if (name)
+	    *name = layout->items[index].name;
+	return layout->items[index].get_field(layout->items+index, rec, dtype,
+					      intval, time, floatval,
+					      data, data_len);
+    }
+
+    index -= layout->item_count;
+    if (index < layout->array_count) {
+	if (name)
+	    *name = layout->arrays[index].name;
+
+	return layout->arrays[index].get_field(rec->arrays+index, node, dtype,
+					       intval, time, floatval,
+					       data, data_len, sub_node);
+    }
+
+    return EINVAL;
+}
+
+static int
+mr_struct_elem_check(mr_struct_layout_t *layout,
+		     unsigned char      **rmr_data,
+		     unsigned int       *rmr_data_len)
+{
+    unsigned char      *mr_data = *rmr_data;
+    unsigned int       mr_data_len = *rmr_data_len;
+    int                i, j;
+    int                rv;
+
+    if (mr_data_len < layout->length)
+	return EINVAL;
+
+    mr_data += layout->length;
+    mr_data_len -= layout->length;
+
+    for (i=0; i<(int)layout->array_count; i++) {
+	mr_array_layout_t *al = layout->arrays + i;
+	unsigned int      count;
+
+	if (al->has_count) {
+	    if (mr_data_len < 1)
+		return EINVAL;
+	    count = *mr_data;
+	    mr_data++;
+	    mr_data_len--;
+	    for (j=0; j<(int)count; j++) {
+		rv = al->elem_check(al->elem_layout, &mr_data, &mr_data_len);
+		if (rv)
+		    return rv;
+	    }
+	} else {
+	    count = 0;
+	    while (mr_data_len > 0) {
+		rv = al->elem_check(al->elem_layout, &mr_data, &mr_data_len);
+		if (rv)
+		    return rv;
+		count++;
+	    }
+	}
+    }
+
+    *rmr_data = mr_data;
+    *rmr_data_len = mr_data_len;
+
+    return 0;
+}
+
+static int
+mr_struct_decode(mr_struct_info_t   *rec,
+		 unsigned char      **rmr_data,
+		 unsigned int       *rmr_data_len)
+{
+    unsigned char      *mr_data = *rmr_data;
+    unsigned int       mr_data_len = *rmr_data_len;
+    int                i, j;
+    mr_struct_layout_t *layout = rec->layout;
+    int                rv;
+
+    if (mr_data_len < layout->length)
+	return EINVAL;
+
+    if (layout->length > 0) {
+	rec->data = ipmi_mem_alloc(layout->length);
+	if (!rec->data)
+	    return ENOMEM;
+	memcpy(rec->data, mr_data, layout->length);
+	mr_data += layout->length;
+	mr_data_len -= layout->length;
+    }
+
+    if (layout->array_count > 0) {
+	rec->arrays = ipmi_mem_alloc(sizeof(*(rec->arrays))
+				     * layout->array_count);
+	if (!rec->arrays)
+	    return ENOMEM;
+	memset(rec->arrays, 0, sizeof(*(rec->arrays)) * layout->array_count);
+    }
+
+    for (i=0; i<(int)layout->array_count; i++) {
+	mr_array_layout_t *al = layout->arrays + i;
+	mr_array_info_t   *ai = rec->arrays + i;
+	unsigned int      count;
+	unsigned char     *astart_mr_data = mr_data;
+
+	ai->offset.offset = mr_data - *rmr_data;
+	ai->offset.parent = &(rec->offset);
+	ai->nr_after = layout->array_count - i - 1;
+	ai->layout = al;
+	if (al->has_count) {
+	    if (mr_data_len < 1)
+		return EINVAL;
+	    count = *mr_data;
+	    mr_data++;
+	    mr_data_len--;
+	} else {
+	    unsigned char *d = mr_data;
+	    unsigned int  l = mr_data_len;
+
+	    count = 0;
+	    while (l > 0) {
+		rv = al->elem_check(al->elem_layout, &d, &l);
+		if (rv)
+		    return rv;
+		count++;
+	    }
+	}
+	if (count > 0) {
+	    ai->count = count;
+	    ai->items = ipmi_mem_alloc(sizeof(*(ai->items)) * count);
+	    if (!ai->items)
+		return ENOMEM;
+	    memset(ai->items, 0, sizeof(*(ai->items)) * count);
+	    for (j=0; j<(int)count; j++) {
+		ai->items[j] = ipmi_mem_alloc(sizeof(*(ai->items[j])));
+		if (!ai->items[j])
+		    return ENOMEM;
+		memset(ai->items[j], 0, sizeof(*(ai->items[j])));
+		ai->items[j]->offset.offset = mr_data - astart_mr_data;
+		ai->items[j]->offset.parent = &(ai->offset);
+		ai->items[j]->layout = al->elem_layout;
+		rv = al->elem_decode(ai->items[j], &mr_data, &mr_data_len);
+		if (rv)
+		    return rv;
+	    }
+	}
+	ai->offset.length = mr_data - astart_mr_data;
+    }
+
+    rec->offset.length = mr_data - *rmr_data;
+    *rmr_data = mr_data;
+    *rmr_data_len = mr_data_len;
+
+    return 0;
+}
+
+static int
+mr_root(ipmi_fru_t         *fru,
+	unsigned int       mr_rec_num,
+	unsigned char      *rmr_data,
+	unsigned int       rmr_data_len,
+	mr_struct_layout_t *layout,
+	const char         **name,
+	ipmi_fru_node_t    **rnode)
+{
+    unsigned char      *mr_data = rmr_data;
+    unsigned int       mr_data_len = rmr_data_len;
+    mr_struct_info_t   *rec;
+    ipmi_fru_node_t    *node;
+    mr_fru_info_t      *finfo = NULL;
+    int                rv;
+
+    if (mr_data_len == 0)
+	return EINVAL;
+    
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memset(rec, 0, sizeof(*rec));
+
+    finfo = ipmi_mem_alloc(sizeof(*finfo));
+    if (!finfo)
+	goto out_no_mem;
+    ipmi_fru_ref(fru);
+    finfo->fru = fru;
+    finfo->mr_rec_num = mr_rec_num;
+
+    rec->layout = layout;
+    rec->offset.offset = 4;
+    rec->offset.parent = NULL;
+
+    rv = mr_struct_decode(rec, &mr_data, &mr_data_len);
+    if (rv)
+	goto out_cleanup;
+    rec->offset.length = mr_data - rmr_data;
+
+    node = _ipmi_fru_node_alloc(fru);
+    if (!node)
+	goto out_no_mem;
+
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_data2(node, finfo);
+    _ipmi_fru_node_set_get_field(node, mr_root_node_struct_get_field);
+    _ipmi_fru_node_set_set_field(node, mr_root_node_struct_set_field);
+    _ipmi_fru_node_set_settable(node, mr_node_struct_settable);
+    _ipmi_fru_node_set_destructor(node, mr_struct_root_destroy);
+
+    *rnode = node;
+
+    if (name)
+	*name = layout->name;
+
+    return 0;
+
+ out_no_mem:
+    rv = ENOMEM;
+
+ out_cleanup:
+    if (finfo) {
+	ipmi_fru_deref(fru);
+	ipmi_mem_free(finfo);
+    }
+    mr_struct_cleanup(rec);
+    return rv;
+}
+
+
+/***********************************************************************
+ *
+ * Generic field encoders and decoders.
+ *
+ **********************************************************************/
+
+static int mr_int_set_field(mr_item_layout_t          *layout,
+			    mr_struct_info_t          *rec,
+			    mr_fru_info_t             *finfo,
+			    enum ipmi_fru_data_type_e dtype,
+			    int                       intval,
+			    time_t                    time,
+			    double                    floatval,
+			    char                      *data,
+			    unsigned int              data_len)
+{
+    unsigned char *c = rec->data + layout->start;
+    unsigned int  val = intval;
+    int           i;
+
+    if (dtype != layout->dtype)
+	return EINVAL;
+
+    if (dtype == IPMI_FRU_DATA_BOOLEAN)
+	val = !!val;
+
+    for (i=0; i<layout->length; i++) {
+	*c = val & 0xff;
+	val >>= 8;
+	c++;
+    }
+    c = rec->data + layout->start;
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				   c, full_offset(&rec->offset)+layout->start,
+				   layout->length);
+    return 0;
+}
+
+static int mr_int_get_field(mr_item_layout_t          *layout,
+			    mr_struct_info_t          *rec,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    double                    *floatval,
+			    char                      **data,
+			    unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start;
+    int           val = 0;
+    int           shift = 0;
+    int           i;
+
+    if (dtype)
+	*dtype = layout->dtype;
+    if (intval) {
+	for (i=0; i<layout->length; i++) {
+	    val |= ((int) *c) << shift;
+	    c++;
+	    shift += 8;
+	}
+	*intval = val;
+    }
+    return 0;
+}
+
+static int mr_intfloat_set_field(mr_item_layout_t          *layout,
+				 mr_struct_info_t          *rec,
+				 mr_fru_info_t             *finfo,
+				 enum ipmi_fru_data_type_e dtype,
+				 int                       intval,
+				 time_t                    time,
+				 double                    floatval,
+				 char                      *data,
+				 unsigned int              data_len)
+{
+    unsigned char *c = rec->data + layout->start;
+    unsigned int  val;
+    int           i;
+
+    if (dtype != IPMI_FRU_DATA_FLOAT)
+	return EINVAL;
+
+    val = (unsigned int) ((floatval / layout->multiplier) + 0.5);
+
+    for (i=0; i<layout->length; i++) {
+	*c = val & 0xff;
+	val >>= 8;
+	c++;
+    }
+    c = rec->data + layout->start;
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				   c, full_offset(&rec->offset)+layout->start,
+				   layout->length);
+    return 0;
+}
+
+static int mr_intfloat_get_field(mr_item_layout_t          *layout,
+				 mr_struct_info_t          *rec,
+				 enum ipmi_fru_data_type_e *dtype,
+				 int                       *intval,
+				 time_t                    *time,
+				 double                    *floatval,
+				 char                      **data,
+				 unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start;
+    int           val = 0;
+    int           shift = 0;
+    int           i;
+
     if (dtype)
 	*dtype = IPMI_FRU_DATA_FLOAT;
-    if (floatval)
-	*floatval = ((double) val) * multiplier;
+    if (floatval) {
+	for (i=0; i<layout->length; i++) {
+	    val |= ((int) *c) << shift;
+	    c++;
+	    shift += 8;
+	}
+	*floatval = ((double) val) * layout->multiplier;
+    }
     return 0;
 }
 
-static int
-convert_str_to_fru_str(const char                *name,
-		       enum ipmi_str_type_e      type,
-		       unsigned int              len,
-		       char                      *raw_data,
-		       const char                **rname,
-		       enum ipmi_fru_data_type_e *dtype,
-		       unsigned int              *data_len,
-		       char                      **data)
+static int mr_bitint_set_field(mr_item_layout_t          *layout,
+			       mr_struct_info_t          *rec,
+			       mr_fru_info_t             *finfo,
+			       enum ipmi_fru_data_type_e dtype,
+			       int                       intval,
+			       time_t                    time,
+			       double                    floatval,
+			       char                      *data,
+			       unsigned int              data_len)
 {
-    if (rname)
-	*rname = name;
+    unsigned char *c = rec->data + layout->start / 8;
+    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    int           val = intval;
+    int           shift = layout->start % 8;
+    int           offset = 8 - shift;
+    unsigned char mask1 = (~0) << shift;
+    unsigned char mask2 = (~0) << ((layout->start + layout->length) % 8);
+
+    if (dtype != layout->dtype)
+	return EINVAL;
+
+    if (dtype == IPMI_FRU_DATA_BOOLEAN)
+	val = !!val;
+
+    while (c != end) {
+	*c = (*c & ~mask1) | (val << shift);
+	val >>= offset;
+	mask1 = 0xff;
+	shift = 0;
+	offset = 8;
+	c++;
+    }
+    mask1 = ~mask1 | mask2;
+    *c = (*c & mask1 ) | ((val << shift) & ~mask1);
+
+    c = rec->data + layout->start / 8;
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				   c,
+				   full_offset(&rec->offset) + (c - rec->data),
+				   end - c + 1);
+    return 0;
+}
+
+static int mr_bitint_get_field(mr_item_layout_t          *layout,
+			       mr_struct_info_t          *rec,
+			       enum ipmi_fru_data_type_e *dtype,
+			       int                       *intval,
+			       time_t                    *time,
+			       double                    *floatval,
+			       char                      **data,
+			       unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start / 8;
+    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    int           val = 0;
+    int           offset = layout->start % 8;
+    int           shift = 8 - offset;
+    unsigned int  mask = (~0) << layout->length;
+
+    if (dtype)
+	*dtype = layout->dtype;
+
+    if (intval) {
+	val = *c >> offset;
+	while (c != end) {
+	    c++;
+	    val |= ((int) *c) << shift;
+	    shift += 8;
+	}
+	val &= ~mask;
+
+	*intval = val;
+    }
+    return 0;
+}
+
+static int mr_bitvaltab_set_field(mr_item_layout_t          *layout,
+				  mr_struct_info_t          *rec,
+				  mr_fru_info_t             *finfo,
+				  enum ipmi_fru_data_type_e dtype,
+				  int                       intval,
+				  time_t                    time,
+				  double                    floatval,
+				  char                      *data,
+				  unsigned int              data_len)
+{
+    unsigned char *c = rec->data + layout->start / 8;
+    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    int           val;
+    int           shift = layout->start % 8;
+    int           offset = 8 - shift;
+    unsigned char mask1 = (~0) << shift;
+    unsigned char mask2 = (~0) << ((layout->start + layout->length) % 8);
+
+    if (dtype != layout->dtype)
+	return EINVAL;
+
+    for (val=0; val<(int)layout->tab->count; val++) {
+	if (strcasecmp(data, layout->tab->table[val]) == 0)
+	    break;
+    }
+    if (val == (int)layout->tab->count)
+	return EINVAL;
+
+    while (c != end) {
+	*c = (*c & ~mask1) | (val << shift);
+	val >>= offset;
+	mask1 = 0xff;
+	shift = 0;
+	offset = 8;
+	c++;
+    }
+    mask1 = ~mask1 | mask2;
+    *c = (*c & mask1 ) | ((val << shift) & ~mask1);
+
+    c = rec->data + layout->start / 8;
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				   c,
+				   full_offset(&rec->offset) + (c - rec->data),
+				   end - c + 1);
+    return 0;
+}
+
+static int mr_bitvaltab_get_field(mr_item_layout_t          *layout,
+				  mr_struct_info_t          *rec,
+				  enum ipmi_fru_data_type_e *dtype,
+				  int                       *intval,
+				  time_t                    *time,
+				  double                    *floatval,
+				  char                      **data,
+				  unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start / 8;
+    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    int           val = 0;
+    int           offset = layout->start % 8;
+    int           shift = 8 - offset;
+    unsigned int  mask = (~0) << layout->length;
+    char          *str;
+
+    if (dtype)
+	*dtype = layout->dtype;
+
+    val = *c >> offset;
+    while (c != end) {
+	c++;
+	val |= ((int) *c) << shift;
+	shift += 8;
+    }
+    val &= ~mask;
+
+    if (val >= (int)layout->tab->count)
+	str = "?";
+    else
+	str = layout->tab->table[val];
+    if (data_len)
+	*data_len = strlen(str);
+    if (data) {
+	*data = ipmi_strdup(str);
+	if (!(*data))
+	    return ENOMEM;
+    }
+    return 0;
+}
+
+static int mr_str_set_field(mr_item_layout_t          *layout,
+			    mr_struct_info_t          *rec,
+			    mr_fru_info_t             *finfo,
+			    enum ipmi_fru_data_type_e dtype,
+			    int                       intval,
+			    time_t                    time,
+			    double                    floatval,
+			    char                      *data,
+			    unsigned int              data_len)
+{
+    unsigned char        *c = rec->data + layout->start;
+    enum ipmi_str_type_e stype;
+    unsigned int         len;
+
+    if (!data)
+	return ENOSYS;
+    switch (dtype) {
+    case IPMI_FRU_DATA_ASCII: stype = IPMI_ASCII_STR; break;
+    case IPMI_FRU_DATA_BINARY: stype = IPMI_UNICODE_STR; break;
+    case IPMI_FRU_DATA_UNICODE: stype = IPMI_BINARY_STR; break;
+    default:
+	return EINVAL;
+    }
+    memset(c, 0, layout->length);
+    len = layout->length;
+    ipmi_set_device_string(data, stype, data_len, c, 0, &len);
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
+				   full_offset(&rec->offset)+layout->start,
+				   layout->length);
+    return 0;
+}
+
+static int mr_str_get_field(mr_item_layout_t          *layout,
+			    mr_struct_info_t          *rec,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    double                    *floatval,
+			    char                      **data,
+			    unsigned int              *data_len)
+{
+    unsigned char        *c = rec->data + layout->start;
+    char                 str[64];
+    unsigned int         len;
+    enum ipmi_str_type_e type;
+    int                  rv;
+
+    rv = ipmi_get_device_string(&c, layout->length, str,
+				IPMI_STR_FRU_SEMANTICS, 0,
+				&type, sizeof(str), &len);
+    if (rv)
+	return rv;
+
     if (dtype) {
 	switch (type) {
 	case IPMI_ASCII_STR: *dtype = IPMI_FRU_DATA_ASCII; break;
@@ -101,30 +1206,118 @@ convert_str_to_fru_str(const char                *name,
 	if (!(*data))
 	    return ENOMEM;
 	if (type == IPMI_ASCII_STR) {
-	    memcpy(*data, raw_data, len-1);
+	    memcpy(*data, str, len-1);
 	    (*data)[len-1] = '\0';
 	} else
-	    memcpy(*data, raw_data, len);
+	    memcpy(*data, str, len);
     }
     return 0;
 }
 
-static int
-convert_ip_to_fru_str(const char                *name,
-		      uint32_t                  val,
-		      const char                **rname,
-		      enum ipmi_fru_data_type_e *dtype,
-		      unsigned int              *data_len,
-		      char                      **data)
+static int mr_binary_set_field(mr_item_layout_t          *layout,
+			       mr_struct_info_t          *rec,
+			       mr_fru_info_t             *finfo,
+			       enum ipmi_fru_data_type_e dtype,
+			       int                       intval,
+			       time_t                    time,
+			       double                    floatval,
+			       char                      *data,
+			       unsigned int              data_len)
 {
+    unsigned char        *c = rec->data + layout->start;
+
+    if (!data)
+	return ENOSYS;
+    if (dtype != layout->dtype)
+	return EINVAL;
+    if (data_len > layout->length)
+	return EINVAL;
+
+    memcpy(c, data, data_len);
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
+				   full_offset(&rec->offset)+layout->start,
+				   data_len);
+    return 0;
+}
+
+static int mr_binary_get_field(mr_item_layout_t          *layout,
+			       mr_struct_info_t          *rec,
+			       enum ipmi_fru_data_type_e *dtype,
+			       int                       *intval,
+			       time_t                    *time,
+			       double                    *floatval,
+			       char                      **data,
+			       unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start;
+
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_BINARY;
+    if (data_len)
+	*data_len = layout->length;
+    if (data) {
+	*data = ipmi_mem_alloc(layout->length);
+	if (!(*data))
+	    return ENOMEM;
+	memcpy(*data, c, layout->length);
+    }
+    return 0;
+}
+
+static int mr_ip_set_field(mr_item_layout_t          *layout,
+			   mr_struct_info_t          *rec,
+			   mr_fru_info_t             *finfo,
+			   enum ipmi_fru_data_type_e dtype,
+			   int                       intval,
+			   time_t                    time,
+			   double                    floatval,
+			   char                      *data,
+			   unsigned int              data_len)
+{
+    unsigned char  *c = rec->data + layout->start;
+    void           *addr;
+    int            addr_len;
+    int            af;
+    struct in_addr ip_addr;
+    int            rv;
+
+    if (dtype != IPMI_FRU_DATA_ASCII)
+	return EINVAL;
+
+    if (strncmp(data, "ip:", 3) == 0) {
+	af = AF_INET;
+	data += 3;
+	addr = &ip_addr;
+	addr_len = sizeof(ip_addr);
+    } else
+	return EINVAL;
+
+    rv = inet_pton(af, data, addr);
+    if (rv <= 0)
+	return EINVAL;
+    memcpy(c, addr, addr_len);
+    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
+				   full_offset(&rec->offset)+layout->start,
+				   addr_len);
+
+    return 0;
+}
+
+static int mr_ip_get_field(mr_item_layout_t          *layout,
+			   mr_struct_info_t          *rec,
+			   enum ipmi_fru_data_type_e *dtype,
+			   int                       *intval,
+			   time_t                    *time,
+			   double                    *floatval,
+			   char                      **data,
+			   unsigned int              *data_len)
+{
+    unsigned char *c = rec->data + layout->start;
     char          ipstr[19]; /* worst case size */
-    unsigned char *ipp = (unsigned char *) &val;
     int           len;
 
-    sprintf(ipstr, "ip:%d.%d.%d.%d", ipp[0], ipp[1], ipp[2], ipp[3]);
+    sprintf(ipstr, "ip:%d.%d.%d.%d", c[0], c[1], c[2], c[3]);
     len = strlen(ipstr);
-    if (rname)
-	*rname = name;
     if (dtype)
 	*dtype = IPMI_FRU_DATA_ASCII;
     if (data_len)
@@ -144,384 +1337,60 @@ convert_ip_to_fru_str(const char                *name,
  *
  **********************************************************************/
 
-typedef struct atca_p2p_cr_desc_s
-{
-    uint8_t  channel_type;
-    uint8_t  slot_address;
-    uint8_t  channel_count;
-    uint32_t *chans;
-} atca_p2p_cr_desc_t;
-
-typedef struct atca_p2p_cr_s
-{
-    unsigned int       mr_rec_num;
-    uint8_t            version;
-    unsigned int       desc_count;
-    atca_p2p_cr_desc_t *descs;
-    ipmi_fru_t         *fru;
-} atca_p2p_cr_t;
-
-static void atca_p2p_cleanup_rec(atca_p2p_cr_t *rec)
-{
-    unsigned int i;
-
-    if (rec->descs) {
-	for (i=0; i<rec->desc_count; i++) {
-	    if (rec->descs[i].chans)
-		ipmi_mem_free(rec->descs[i].chans);
-	}
-	ipmi_mem_free(rec->descs);
-    }
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_p2p_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_p2p_cr_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_p2p_cleanup_rec(rec);
-}
-
-static void
-atca_p2p_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_p2p_desc_entry_get_field(ipmi_fru_node_t           *pnode,
-			      unsigned int              index,
-			      const char                **name,
-			      enum ipmi_fru_data_type_e *dtype,
-			      int                       *intval,
-			      time_t                    *time,
-			      double                    *floatval,
-			      char                      **data,
-			      unsigned int              *data_len,
-			      ipmi_fru_node_t           **sub_node)
-{
-    uint32_t rec = *((uint32_t *) _ipmi_fru_node_get_data(pnode));
-    int      rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("remote slot", rec & 0xff,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("remote channel", (rec >> 8) & 0x1f,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("local channel", (rec >> 13) & 0x1f,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_p2p_desc_entry_array_get_field(ipmi_fru_node_t           *pnode,
-				    unsigned int              index,
-				    const char                **name,
-				    enum ipmi_fru_data_type_e *dtype,
-				    int                       *intval,
-				    time_t                    *time,
-				    double                    *floatval,
-				    char                      **data,
-				    unsigned int              *data_len,
-				    ipmi_fru_node_t           **sub_node)
-{
-    atca_p2p_cr_desc_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_p2p_cr_t      *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t    *node;
-
-    if (index >= rec->channel_count)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->chans + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_p2p_desc_entry_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
-
-	*sub_node = node;
-    }
-    return 0;
-}
-
-
-static int
-atca_p2p_desc_get_field(ipmi_fru_node_t           *pnode,
-			unsigned int              index,
-			const char                **name,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
-{
-    atca_p2p_cr_desc_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_p2p_cr_t      *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t    *node;
-    int                rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("channel type", rec->channel_type,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("slot address", rec->slot_address,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	if (name)
-	    *name = "channels";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->channel_count;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rrec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_p2p_desc_entry_array_get_field);
-	    _ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_p2p_desc_array_get_field(ipmi_fru_node_t           *pnode,
-			      unsigned int              index,
-			      const char                **name,
-			      enum ipmi_fru_data_type_e *dtype,
-			      int                       *intval,
-			      time_t                    *time,
-			      double                    *floatval,
-			      char                      **data,
-			      unsigned int              *data_len,
-			      ipmi_fru_node_t           **sub_node)
-{
-    atca_p2p_cr_t   *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_p2p_cr_t   *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t *node;
-
-    if (index >= rec->desc_count)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->descs + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_p2p_desc_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
-
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_p2p_root_get_field(ipmi_fru_node_t           *rnode,
-			unsigned int              index,
-			const char                **name,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
-{
-    atca_p2p_cr_t   *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t *node;
-    int             rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	if (name)
-	    *name = "descriptors";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->desc_count;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node, atca_p2p_desc_array_get_field);
-	    _ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
-		    unsigned int        mr_rec_num,
-		    unsigned char       *mr_data,
-		    unsigned int        mr_data_len,
-		    const char          **name,
-		    ipmi_fru_node_t     **rnode)
-{
-    atca_p2p_cr_t      *rec;
-    atca_p2p_cr_desc_t *drec;
-    unsigned int       left;
-    unsigned char      *p;
-    int                i, j;
-    ipmi_fru_node_t    *node;
-    int                rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    if (mr_data_len == 0)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    mr_data++;
-    mr_data_len--;
-
-    left = mr_data_len;
-    p = mr_data;
-    while (left > 0) {
-	if (left < 3)
-	    goto out_invalid;
-	left -= 3;
-	if ((unsigned int) (p[2] * 3) > left)
-	    goto out_invalid;
-	left -= p[2] * 3;
-	p += 3 + (p[2] * 3);
-	(rec->desc_count)++;
-    }
-    rec->descs = ipmi_mem_alloc(sizeof(atca_p2p_cr_desc_t) * rec->desc_count);
-    if (!rec->descs)
-	goto out_no_mem;
-    memset(rec->descs, 0, sizeof(atca_p2p_cr_desc_t) * rec->desc_count);
-
-    left = mr_data_len;
-    p = mr_data;
-    i = 0;
-    while (left > 0) {
-	drec = &(rec->descs[i]);
-	drec->channel_type = p[0];
-	drec->slot_address = p[1];
-	drec->channel_count = p[2];
-	drec->chans = ipmi_mem_alloc(sizeof(uint32_t) * p[2]);
-	if (!drec->chans)
-	    goto out_no_mem;
-	p += 3;
-	left -= 3;
-	for (j=0; j<drec->channel_count; j++) {
-	    drec->chans[j] = p[0] | (p[1] << 8) | (p[2] << 16);
-	    p += 3;
-	    left -= 3;
-	}
-	i++;
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-      goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_p2p_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_p2p_root_destroy);
-
-    *rnode = node;
-
-    if (name)
-	*name = "Point-to-Point Connectivity Record";
-
-    return 0;
-
- out_invalid:
-    rv = EINVAL;
-    goto out_cleanup;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_p2p_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t p2p_cr_desc_ent_items[] = {
+    { .name = "remote slot", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 8,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "remote channel", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 8, .length = 5,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "local channel ", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 13, .length = 5,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field }
+};
+static mr_struct_layout_t p2p_cr_desc_ent = {
+    .name = NULL, .length = 3,
+    .item_count = 3, .items = p2p_cr_desc_ent_items,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t p2p_cr_desc_items[] = {
+    { .name = "channel type", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "slot address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t p2p_cr_desc_arys[] = {
+    { .name = "channels", .has_count = 1, .min_elem_size = 3,
+      .elem_layout = &p2p_cr_desc_ent,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t p2p_cr_desc = {
+    .name = NULL, .length = 2,
+    .item_count = 2, .items = p2p_cr_desc_items,
+    .array_count = 1, .arrays = p2p_cr_desc_arys,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t p2p_cr_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t p2p_cr_arys[] = {
+    { .name = "descriptors", .has_count = 0, .min_elem_size = 3,
+      .elem_layout = &p2p_cr_desc,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t p2p_cr = {
+    .name = "Point-to-Point Connectivity Record", .length = 1,
+    .item_count = 1, .items = p2p_cr_items,
+    .array_count = 1, .arrays = p2p_cr_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -530,536 +1399,43 @@ atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_addr_tab_desc_s
-{
-    uint8_t offset;
-    uint8_t hw_addr;
-    uint8_t site_number;
-    uint8_t site_type;
-} atca_addr_tab_desc_t;
-
-typedef struct atca_addr_tab_s
-{
-    unsigned int         mr_rec_num;
-    uint8_t              version;
-    unsigned int         shelf_addr_len;
-    enum ipmi_str_type_e shelf_addr_type;
-    char                 shelf_addr[64];
-    uint8_t              addr_count;
-    atca_addr_tab_desc_t **addrs;
-    ipmi_fru_t           *fru;
-} atca_addr_tab_t;
-
-static void atca_addr_tab_cleanup_rec(atca_addr_tab_t *rec)
-{
-    int i;
-
-    if (rec->addrs) {
-	for (i=0; i<rec->addr_count; i++) {
-	    if (rec->addrs[i])
-		ipmi_mem_free(rec->addrs[i]);
-	}
-	ipmi_mem_free(rec->addrs);
-    }
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_addr_tab_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_addr_tab_cleanup_rec(rec);
-}
-
-static void
-atca_addr_tab_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_addr_tab_desc_set_field(ipmi_fru_node_t           *pnode,
-			     unsigned int              index,
-			     enum ipmi_fru_data_type_e dtype,
-			     int                       intval,
-			     time_t                    time,
-			     double                    floatval,
-			     char                      *data,
-			     unsigned int              data_len)
-{
-    atca_addr_tab_desc_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t      *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_addr_tab_t      *rrec = _ipmi_fru_node_get_data(rnode);
-    unsigned char        v = intval;
-    int                  rv;
-
-    if (dtype != IPMI_FRU_DATA_INT)
-	return EINVAL;
-
-    switch(index) {
-    case 0:
-	rv = ipmi_fru_ovw_multi_record_data(rrec->fru, rrec->mr_rec_num,
-					    &v, rec->offset + 0, 1);
-	if (rv)
-	    break;
-	rec->hw_addr = intval;
-	break;
-
-    case 1:
-	rv = ipmi_fru_ovw_multi_record_data(rrec->fru, rrec->mr_rec_num,
-					    &v, rec->offset + 1, 1);
-	if (rv)
-	    break;
-	rec->site_number = intval;
-	break;
-
-    case 2:
-	rv = ipmi_fru_ovw_multi_record_data(rrec->fru, rrec->mr_rec_num,
-					    &v, rec->offset + 2, 1);
-	if (rv)
-	    break;
-	rec->site_type = intval;
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_addr_tab_desc_get_field(ipmi_fru_node_t           *pnode,
-			     unsigned int              index,
-			     const char                **name,
-			     enum ipmi_fru_data_type_e *dtype,
-			     int                       *intval,
-			     time_t                    *time,
-			     double                    *floatval,
-			     char                      **data,
-			     unsigned int              *data_len,
-			     ipmi_fru_node_t           **sub_node)
-{
-    atca_addr_tab_desc_t *rec = _ipmi_fru_node_get_data(pnode);
-    int                  rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware address", rec->hw_addr,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("site number", rec->site_number,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("site type", rec->site_type,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_addr_tab_desc_array_set_field(ipmi_fru_node_t           *pnode,
-				   unsigned int              index,
-				   enum ipmi_fru_data_type_e dtype,
-				   int                       intval,
-				   time_t                    time,
-				   double                    floatval,
-				   char                      *data,
-				   unsigned int              data_len)
-{
-    atca_addr_tab_t      *rec = _ipmi_fru_node_get_data(pnode);
-    atca_addr_tab_desc_t **new_addrs;
-    atca_addr_tab_desc_t **old_addrs;
-    atca_addr_tab_desc_t *new_addr;
-    int                  i, j, no;
-    int                  rv;
-    unsigned char        sdata[3];
-    
-
-    if (index > rec->addr_count)
-	index = rec->addr_count;
-
-    if (data) {
-	/* insert a new entry */
-	uint8_t hw_addr = 0;
-	uint8_t site_number = 0;
-	uint8_t site_type = 0;
-
-	if (rec->addr_count >= 255)
-	    return E2BIG;
-
-	if (data_len > 0)
-	    hw_addr = data[0];
-	if (data_len > 1)
-	    site_number = data[1];
-	if (data_len > 2)
-	    site_type = data[2];
-	new_addrs = ipmi_mem_alloc(sizeof(*new_addrs) * (rec->addr_count+1));
-	if (!new_addrs)
-	    return ENOMEM;
-	new_addr = ipmi_mem_alloc(sizeof(*new_addrs));
-	if (!new_addr) {
-	    ipmi_mem_free(new_addrs);
-	    return ENOMEM;
-	}
-	sdata[0] = hw_addr;
-	sdata[1] = site_number;
-	sdata[2] = site_type;
-	rv = ipmi_fru_ins_multi_record_data(rec->fru, rec->mr_rec_num,
-					    sdata, 27+index*3, 3);
-	if (rv) {
-	    ipmi_mem_free(new_addr);
-	    ipmi_mem_free(new_addrs);
-	    return rv;
-	}
-	sdata[0] = rec->addr_count + 1;
-	ipmi_fru_ovw_multi_record_data(rec->fru, rec->mr_rec_num,
-				       sdata, 26, 1);
-	if (rec->addrs) {
-	    no = 0;
-	    for (i=0, j=0; i<(int)rec->addr_count; j++) {
-		if (j == (int) index) {
-		    no = 3;
-		    continue;
-		}
-		new_addrs[j] = rec->addrs[i];
-		new_addrs[j]->offset += no;
-		i++;
-	    }
-	}
-	new_addrs[index] = new_addr;
-	new_addr->offset = 27 + (index * 3);
-	new_addr->hw_addr = hw_addr;
-	new_addr->site_number = site_number;
-	new_addr->site_type = site_type;
-	i = 1;
-    } else {
-	/* Delete an entry */
-	new_addrs = ipmi_mem_alloc(sizeof(*new_addrs) * (rec->addr_count-1));
-	if (!new_addrs)
-	    return ENOMEM;
-	rv = ipmi_fru_del_multi_record_data(rec->fru, rec->mr_rec_num,
-					    27+index*3, 3);
-	if (rv) {
-	    ipmi_mem_free(new_addrs);
-	    return rv;
-	}
-	sdata[0] = rec->addr_count - 1;
-	ipmi_fru_ovw_multi_record_data(rec->fru, rec->mr_rec_num,
-				       sdata, 26, 1);
-	if (rec->addrs) {
-	    no = 0;
-	    for (i=0, j=0; j<(int)rec->addr_count; j++) {
-		if (j == (int) index) {
-		    ipmi_mem_free(rec->addrs[j]);
-		    no = -3;
-		    continue;
-		}
-		new_addrs[i] = rec->addrs[j];
-		new_addrs[i]->offset += no;
-		i++;
-	    }
-	}
-	i = -1;
-    }
-
-    old_addrs = rec->addrs;
-    rec->addrs = new_addrs;
-    rec->addr_count += i;
-    if (old_addrs)
-	ipmi_mem_free(old_addrs);
-
-    return 0;
-}
-
-static int
-atca_addr_tab_desc_array_get_subtype(ipmi_fru_node_t           *pnode,
-				     enum ipmi_fru_data_type_e *dtype)
-{
-    *dtype = IPMI_FRU_DATA_SUB_NODE;
-    return 0;
-}
-
-static int
-atca_addr_tab_desc_array_settable(ipmi_fru_node_t *pnode,
-				  unsigned int    index)
-{
-    return EPERM;
-}
-
-static int
-atca_addr_tab_desc_array_get_field(ipmi_fru_node_t           *pnode,
-				   unsigned int              index,
-				   const char                **name,
-				   enum ipmi_fru_data_type_e *dtype,
-				   int                       *intval,
-				   time_t                    *time,
-				   double                    *floatval,
-				   char                      **data,
-				   unsigned int              *data_len,
-				   ipmi_fru_node_t           **sub_node)
-{
-    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_addr_tab_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t *node;
-
-    if (index >= rec->addr_count)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->addrs[index]);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_addr_tab_desc_get_field);
-	_ipmi_fru_node_set_set_field(node, atca_addr_tab_desc_set_field);
-	_ipmi_fru_node_set_destructor(node, atca_addr_tab_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_addr_tab_root_set_field(ipmi_fru_node_t           *pnode,
-			     unsigned int              index,
-			     enum ipmi_fru_data_type_e dtype,
-			     int                       intval,
-			     time_t                    time,
-			     double                    floatval,
-			     char                      *data,
-			     unsigned int              data_len)
-{
-    atca_addr_tab_t      *rec = _ipmi_fru_node_get_data(pnode);
-    enum ipmi_str_type_e stype;
-    unsigned int         len;
-    unsigned char        ds[21];
-
-    switch (index) {
-    case 1:
-	if (!data)
-	    return ENOSYS;
-	switch (dtype) {
-	case IPMI_FRU_DATA_ASCII: stype = IPMI_ASCII_STR; break;
-	case IPMI_FRU_DATA_BINARY: stype = IPMI_UNICODE_STR; break;
-	case IPMI_FRU_DATA_UNICODE: stype = IPMI_BINARY_STR; break;
-	default:
-	    return EINVAL;
-	}
-	memset(ds, 0, sizeof(ds));
-	len = 21;
-	ipmi_set_device_string(data, stype, data_len, ds, 0, &len);
-	ipmi_fru_ovw_multi_record_data(rec->fru, rec->mr_rec_num, ds, 5, 21);
-	return 0;
-    case 2:
-    case 0:
-	return EPERM;
-    default:
-	return EINVAL;
-    }
-}
-
-static int
-atca_addr_tab_root_settable(ipmi_fru_node_t           *node,
-			    unsigned int              index)
-{
-    switch (index) {
-    case 1:
-    case 2:
-	return 0;
-    case 0:
-	return EPERM;
-    default:
-	return EINVAL;
-    }
-}
-
-static int
-atca_addr_tab_root_get_field(ipmi_fru_node_t           *rnode,
-			     unsigned int              index,
-			     const char                **name,
-			     enum ipmi_fru_data_type_e *dtype,
-			     int                       *intval,
-			     time_t                    *time,
-			     double                    *floatval,
-			     char                      **data,
-			     unsigned int              *data_len,
-			     ipmi_fru_node_t           **sub_node)
-{
-    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t *node;
-    int             rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_str_to_fru_str("shelf address", rec->shelf_addr_type,
-				    rec->shelf_addr_len,
-				    rec->shelf_addr,
-				    name, dtype, data_len, data);
-	break;
-
-    case 2:
-	if (name)
-	    *name = "addresses";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->addr_count;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_addr_tab_desc_array_get_field);
-	    _ipmi_fru_node_set_set_field(node,
-					 atca_addr_tab_desc_array_set_field);
-	    _ipmi_fru_node_set_get_subtype(node, 
-					 atca_addr_tab_desc_array_get_subtype);
-	    _ipmi_fru_node_set_settable(node, 
-					atca_addr_tab_desc_array_settable);
-	    _ipmi_fru_node_set_destructor(node, atca_addr_tab_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_addr_tab(ipmi_fru_t          *fru,
-		      unsigned int        mr_rec_num,
-		      unsigned char       *mr_data,
-		      unsigned int        mr_data_len,
-		      const char          **name,
-		      ipmi_fru_node_t     **rnode)
-{
-    atca_addr_tab_t      *rec;
-    unsigned char        *p;
-    int                  i;
-    ipmi_fru_node_t      *node;
-    int                  rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    /* Room for the version, shelf address, and address table entry count */
-    if (mr_data_len < 23)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    mr_data++;
-    mr_data_len--;
-
-    p = mr_data;
-    rv = ipmi_get_device_string(&p, mr_data_len,
-				rec->shelf_addr,
-				IPMI_STR_FRU_SEMANTICS, 0,
-				&rec->shelf_addr_type,
-				sizeof(rec->shelf_addr),
-				&rec->shelf_addr_len);
-    if (rv)
-	return rv;
-    if ((p - mr_data) > 21)
-	return EINVAL;
-    mr_data += 21;
-    mr_data_len -= 21;
-
-    rec->addr_count = mr_data[0];
-    mr_data++;
-    mr_data_len--;
-
-    if ((unsigned int) (rec->addr_count * 3) > mr_data_len)
-	goto out_invalid;
-
-    rec->addrs = ipmi_mem_alloc(sizeof(*(rec->addrs)) * rec->addr_count);
-    if (!rec->addrs)
-	goto out_no_mem;
-    memset(rec->addrs, 0, sizeof(*(rec->addrs)) * rec->addr_count);
-
-    for (i=0; i<rec->addr_count; i++) {
-	rec->addrs[i] = ipmi_mem_alloc(sizeof(*(rec->addrs[i])));
-	if (!rec->addrs[i])
-	    atca_addr_tab_cleanup_rec(rec);
-	rec->addrs[i]->offset = 27 + (i * 3);
-	rec->addrs[i]->hw_addr = mr_data[0];
-	rec->addrs[i]->site_number = mr_data[1];
-	rec->addrs[i]->site_type = mr_data[2];
-	mr_data += 3;
-	mr_data_len -= 3;
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_addr_tab_root_get_field);
-    _ipmi_fru_node_set_set_field(node, atca_addr_tab_root_set_field);
-    _ipmi_fru_node_set_settable(node, atca_addr_tab_root_settable);
-    _ipmi_fru_node_set_destructor(node, atca_addr_tab_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Address Table";
-
-    return 0;
-
- out_invalid:
-    rv = EINVAL;
-    goto out_cleanup;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_addr_tab_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t addr_tab_ent[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "site_number", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "site_type", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 2, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_struct_layout_t addr_tab_ents = {
+    .name = NULL, .length = 3,
+    .item_count = 3, .items = addr_tab_ent,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t addr_tab_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field },
+    { .name = "shelf address", .dtype = IPMI_FRU_DATA_ASCII, .settable = 1,
+      .start = 1, .length = 21,
+      .set_field = mr_str_set_field, .get_field = mr_str_get_field },
+};
+static mr_array_layout_t addr_tab_arys[] = {
+    { .name = "addresses", .has_count = 1, .min_elem_size = 3,
+      .elem_layout = &addr_tab_ents,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t addr_tab = {
+    .name = "Address Table", .length = 22,
+    .item_count = 2, .items = addr_tab_items,
+    .array_count = 1, .arrays = addr_tab_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -1068,398 +1444,66 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_feed_to_frus
-{
-    uint8_t hw_address;
-    uint8_t fru_device_id;
-} atca_feed_to_fru_t;
-
-typedef struct atca_power_dist_map_s
-{
-    uint16_t           max_extern_avail_current;
-    uint16_t           max_internal_current;
-    uint16_t           min_operating_voltage;
-    uint16_t           feed_to_fru_count;
-    atca_feed_to_fru_t *feed_to_frus;
-} atca_power_dist_map_t;
-
-typedef struct atca_shelf_power_dist_s
-{
-    unsigned int          mr_rec_num;
-    uint8_t               version;
-    uint8_t               nr_power_feeds;
-    atca_power_dist_map_t *power_feeds;
-    ipmi_fru_t            *fru;
-} atca_shelf_power_dist_t;
-
-static void
-atca_shelf_power_dist_cleanup_rec(atca_shelf_power_dist_t *rec)
-{
-    unsigned int i;
-
-    if (!rec)
-	return;
-
-    if (rec->power_feeds) {
-	for (i=0; i<rec->nr_power_feeds; i++) {
-	    atca_power_dist_map_t *f = &(rec->power_feeds[i]);
-
-	    if (f->feed_to_frus)
-		ipmi_mem_free(f->feed_to_frus);
-	}
-	ipmi_mem_free(rec->power_feeds);
-    }
-
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_shelf_power_dist_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_shelf_power_dist_cleanup_rec(rec);
-}
-
-static void
-atca_shelf_power_dist_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_feed_to_fru_get_field(ipmi_fru_node_t           *rnode,
-			   unsigned int              index,
-			   const char                **name,
-			   enum ipmi_fru_data_type_e *dtype,
-			   int                       *intval,
-			   time_t                    *time,
-			   double                    *floatval,
-			   char                      **data,
-			   unsigned int              *data_len,
-			   ipmi_fru_node_t           **sub_node)
-{
-    atca_feed_to_fru_t *rec = _ipmi_fru_node_get_data(rnode);
-    int                rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware_address", rec->hw_address,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("fru_device_id", rec->fru_device_id,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_feed_to_fru_array_get_field(ipmi_fru_node_t           *pnode,
-				 unsigned int              index,
-				 const char                **name,
-				 enum ipmi_fru_data_type_e *dtype,
-				 int                       *intval,
-				 time_t                    *time,
-				 double                    *floatval,
-				 char                      **data,
-				 unsigned int              *data_len,
-				 ipmi_fru_node_t           **sub_node)
-{
-    atca_power_dist_map_t   *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t         *node;
-
-    if (index >= rec->feed_to_fru_count)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->feed_to_frus + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_feed_to_fru_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_power_feed_get_field(ipmi_fru_node_t           *pnode,
-			  unsigned int              index,
-			  const char                **name,
-			  enum ipmi_fru_data_type_e *dtype,
-			  int                       *intval,
-			  time_t                    *time,
-			  double                    *floatval,
-			  char                      **data,
-			  unsigned int              *data_len,
-			  ipmi_fru_node_t           **sub_node)
-{
-    atca_power_dist_map_t   *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t         *node;
-    int                     rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_float("max_extern_avail_current",
-				      rec->max_extern_avail_current, 0.1,
-				      name, dtype, floatval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_float("max_internal_current",
-				      rec->max_internal_current, 0.1,
-				      name, dtype, floatval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_float("min_operating_voltage",
-				      rec->min_operating_voltage, 0.5,
-				      name, dtype, floatval);
-	break;
-
-    case 3:
-	if (name)
-	    *name = "feed_to_frus";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->feed_to_fru_count;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rrec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_feed_to_fru_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_shelf_power_dist_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_power_feed_array_get_field(ipmi_fru_node_t           *pnode,
-				unsigned int              index,
-				const char                **name,
-				enum ipmi_fru_data_type_e *dtype,
-				int                       *intval,
-				time_t                    *time,
-				double                    *floatval,
-				char                      **data,
-				unsigned int              *data_len,
-				ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_shelf_power_dist_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t         *node;
-
-    if (index >= rec->nr_power_feeds)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->power_feeds + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_power_feed_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_shelf_power_dist_root_get_field(ipmi_fru_node_t           *rnode,
-				     unsigned int              index,
-				     const char                **name,
-				     enum ipmi_fru_data_type_e *dtype,
-				     int                       *intval,
-				     time_t                    *time,
-				     double                    *floatval,
-				     char                      **data,
-				     unsigned int              *data_len,
-				     ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_power_dist_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t         *node;
-    int                     rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	if (name)
-	    *name = "power_feeds";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_power_feeds;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_power_feed_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_shelf_power_dist_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_shelf_power_dist(ipmi_fru_t          *fru,
-			      unsigned int        mr_rec_num,
-			      unsigned char       *mr_data,
-			      unsigned int        mr_data_len,
-			      const char          **name,
-			      ipmi_fru_node_t     **rnode)
-{
-    atca_shelf_power_dist_t *rec;
-    unsigned int            i, j;
-    ipmi_fru_node_t         *node;
-    int                     rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    if (mr_data_len < 2)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    rec->nr_power_feeds = mr_data[1];
-
-    mr_data += 2;
-    mr_data_len -= 2;
-
-    rec->power_feeds = ipmi_mem_alloc(rec->nr_power_feeds
-				      * sizeof(atca_shelf_power_dist_t));
-    if (!rec->power_feeds) {
-	rv = ENOMEM;
-	goto out_cleanup;
-    }
-
-    for (i=0; i<rec->nr_power_feeds; i++) {
-	atca_power_dist_map_t *f;
-
-	if (mr_data_len < 6) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-
-	f = &(rec->power_feeds[i]);
-	f->max_extern_avail_current = ipmi_get_uint16(mr_data);
-	f->max_internal_current = ipmi_get_uint16(mr_data+2);
-	f->min_operating_voltage = mr_data[4];
-	f->feed_to_fru_count = mr_data[5];
-	mr_data += 6;
-	mr_data_len -= 6;
-
-	if (mr_data_len < (unsigned int) (2 * f->feed_to_fru_count)) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-	f->feed_to_frus = ipmi_mem_alloc(f->feed_to_fru_count
-					 * sizeof(atca_feed_to_fru_t));
-	if (!f->feed_to_frus) {
-	    rv = ENOMEM;
-	    goto out_cleanup;
-	}
-	for (j=0; j<f->feed_to_fru_count; j++) {
-	    f->feed_to_frus[j].hw_address = mr_data[0];
-	    f->feed_to_frus[j].fru_device_id = mr_data[1];
-	    mr_data += 2;
-	    mr_data_len -= 2;
-	}
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_shelf_power_dist_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_shelf_power_dist_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Shelf Power Distribution";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_shelf_power_dist_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t pow_dist_f2f_items[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "FRU device id", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_struct_layout_t pow_dist_f2f = {
+    .name = NULL, .length = 2,
+    .item_count = 2, .items = pow_dist_f2f_items,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t pow_dist_maps_items[] = {
+    { .name = "max extern avail current", .dtype = IPMI_FRU_DATA_FLOAT,
+      .settable = 1,
+      .start = 0, .length = 2,
+      .multiplier = 0.1,
+      .set_field = mr_intfloat_set_field, .get_field = mr_intfloat_get_field },
+    { .name = "max internal current", .dtype = IPMI_FRU_DATA_FLOAT,
+      .settable = 1,
+      .start = 2, .length = 2,
+      .multiplier = 0.1,
+      .set_field = mr_intfloat_set_field, .get_field = mr_intfloat_get_field },
+    { .name = "min operating voltage", .dtype = IPMI_FRU_DATA_FLOAT,
+      .settable = 1,
+      .start = 2, .length = 2,
+      .multiplier = 0.5,
+      .set_field = mr_intfloat_set_field, .get_field = mr_intfloat_get_field }
+};
+static mr_array_layout_t pow_dist_maps_arys[] = {
+    { .name = "feed to frus", .has_count = 1, .min_elem_size = 6,
+      .elem_layout = &pow_dist_f2f,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t pow_dist_maps = {
+    .name = NULL, .length = 5,
+    .item_count = 3, .items = pow_dist_maps_items,
+    .array_count = 1, .arrays = pow_dist_maps_arys,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t pow_dist_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t pow_dist_arys[] = {
+    { .name = "power feeds", .has_count = 1, .min_elem_size = 3,
+      .elem_layout = &pow_dist_maps,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t pow_dist = {
+    .name = "Shelf Power Distribution", .length = 1,
+    .item_count = 1, .items = pow_dist_items,
+    .array_count = 1, .arrays = pow_dist_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -1468,285 +1512,53 @@ atca_root_mr_shelf_power_dist(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_act_power_desc_s
-{
-    uint8_t  hw_address;
-    uint8_t  fru_device_id;
-    uint16_t max_fru_power;
-    uint8_t  shelf_manager_activation;
-    uint8_t  delay_before_next_power_on;
-} atca_act_power_desc_t;
-
-typedef struct atca_shelf_act_power_s
-{
-    unsigned int          mr_rec_num;
-    uint8_t               version;
-    uint8_t               allowance_for_activation_readiness;
-    unsigned int          nr_recs;
-    atca_act_power_desc_t *act_power_descs;
-    ipmi_fru_t            *fru;
-} atca_shelf_act_power_t;
-
-static void
-atca_shelf_act_power_cleanup_rec(atca_shelf_act_power_t *rec)
-{
-    if (!rec)
-	return;
-
-    if (rec->act_power_descs)
-	ipmi_mem_free(rec->act_power_descs);
-
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_shelf_act_power_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_shelf_act_power_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_shelf_act_power_cleanup_rec(rec);
-}
-
-static void
-atca_shelf_act_power_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_act_power_desc_get_field(ipmi_fru_node_t           *rnode,
-			      unsigned int              index,
-			      const char                **name,
-			      enum ipmi_fru_data_type_e *dtype,
-			      int                       *intval,
-			      time_t                    *time,
-			      double                    *floatval,
-			      char                      **data,
-			      unsigned int              *data_len,
-			      ipmi_fru_node_t           **sub_node)
-{
-    atca_act_power_desc_t *rec = _ipmi_fru_node_get_data(rnode);
-    int                   rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware_address", rec->hw_address,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("fru_device_id", rec->fru_device_id,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("max_fru_power", rec->max_fru_power,
-				    name, dtype, intval);
-	break;
-
-    case 3:
-	rv = convert_int_to_fru_int("shelf_manager_activation",
-				    rec->shelf_manager_activation,
-				    name, dtype, intval);
-	break;
-
-    case 4:
-	rv = convert_int_to_fru_int("delay_before_next_power_on",
-				    rec->delay_before_next_power_on,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_act_power_desc_array_get_field(ipmi_fru_node_t           *pnode,
-				    unsigned int              index,
-				    const char                **name,
-				    enum ipmi_fru_data_type_e *dtype,
-				    int                       *intval,
-				    time_t                    *time,
-				    double                    *floatval,
-				    char                      **data,
-				    unsigned int              *data_len,
-				    ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_act_power_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t        *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_shelf_act_power_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t        *node;
-
-    if (index >= rec->nr_recs)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->act_power_descs + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_act_power_desc_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_shelf_act_power_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_shelf_act_power_root_get_field(ipmi_fru_node_t           *rnode,
-				    unsigned int              index,
-				    const char                **name,
-				    enum ipmi_fru_data_type_e *dtype,
-				    int                       *intval,
-				    time_t                    *time,
-				    double                    *floatval,
-				    char                      **data,
-				    unsigned int              *data_len,
-				    ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_act_power_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t        *node;
-    int                    rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("allowance_for_activation_readiness",
-				    rec->allowance_for_activation_readiness,
-				    name, dtype, intval);
-	break;
-	
-    case 2:
-	if (name)
-	    *name = "activation_power_descriptors";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_recs;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_act_power_desc_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_shelf_act_power_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_shelf_act_power(ipmi_fru_t          *fru,
-			     unsigned int        mr_rec_num,
-			     unsigned char       *mr_data,
-			     unsigned int        mr_data_len,
-			     const char          **name,
-			     ipmi_fru_node_t     **rnode)
-{
-    atca_shelf_act_power_t *rec;
-    unsigned int           i;
-    ipmi_fru_node_t        *node;
-    int                    rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    if (mr_data_len < 3)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    rec->allowance_for_activation_readiness = mr_data[1];
-    rec->nr_recs = mr_data[2];
-
-    mr_data += 3;
-    mr_data_len -= 3;
-
-    rec->act_power_descs = ipmi_mem_alloc(rec->nr_recs
-					  * sizeof(atca_act_power_desc_t));
-    if (!rec->act_power_descs) {
-	rv = ENOMEM;
-	goto out_cleanup;
-    }
-
-    for (i=0; i<rec->nr_recs; i++) {
-	atca_act_power_desc_t *r;
-
-	if (mr_data_len < 5) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-
-	r = &(rec->act_power_descs[i]);
-	r->hw_address = mr_data[0];
-	r->fru_device_id = mr_data[1];
-	r->max_fru_power = ipmi_get_uint16(mr_data+2);
-	r->shelf_manager_activation = (mr_data[4] >> 6) & 1;
-	r->delay_before_next_power_on = mr_data[4] & 0x3f;
-	mr_data += 5;
-	mr_data_len -= 5;
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_shelf_act_power_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_shelf_act_power_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Shelf Activation and Power Management";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_shelf_act_power_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t act_pm_desc[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "FRU device id", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "max FRU power", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 2, .length = 2,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "shelf manager activation", .dtype = IPMI_FRU_DATA_BOOLEAN,
+      .settable = 1,
+      .start = 38, .length = 1,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "delay before next power on", .dtype = IPMI_FRU_DATA_INT,
+      .settable = 1,
+      .start = 32, .length = 6,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field }
+};
+static mr_struct_layout_t act_pm_descs = {
+    .name = NULL, .length = 5,
+    .item_count = 5, .items = act_pm_desc,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t act_pm_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field },
+    { .name = "allowance for activation readiness", .dtype = IPMI_FRU_DATA_INT,
+      .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t act_pm_arys[] = {
+    { .name = "activation power descriptors", .has_count = 1,
+      .min_elem_size = 5,
+      .elem_layout = &act_pm_descs,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t act_pm = {
+    .name = "Shelf Activation and Power Management", .length = 2,
+    .item_count = 1, .items = act_pm_items,
+    .array_count = 1, .arrays = act_pm_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -1755,80 +1567,45 @@ atca_root_mr_shelf_act_power(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_shelf_mgr_ip_conn_s
-{
-    unsigned int          mr_rec_num;
-    uint8_t               version;
-    uint32_t              ip_address;
-    uint32_t              gateway_address;
-    uint32_t              subnet_mask;
-    ipmi_fru_t            *fru;
-} atca_shelf_mgr_ip_conn_t;
+static mr_item_layout_t ip_conn0_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field },
+    { .name = "ip address", .dtype = IPMI_FRU_DATA_ASCII,
+      .settable = 1,
+      .start = 1, .length = 4,
+      .set_field = mr_ip_set_field, .get_field = mr_ip_get_field }
+};
+static mr_struct_layout_t ip_conn0 = {
+    .name = "Shelf Manager IP Connection", .length = 5,
+    .item_count = 2, .items = ip_conn0_items,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
 
-static void
-atca_shelf_mgr_ip_conn_cleanup_rec(atca_shelf_mgr_ip_conn_t *rec)
-{
-    if (!rec)
-	return;
-
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_shelf_mgr_ip_conn_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_shelf_mgr_ip_conn_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_shelf_mgr_ip_conn_cleanup_rec(rec);
-}
-
-static int
-atca_shelf_mgr_ip_conn_root_get_field(ipmi_fru_node_t           *rnode,
-				      unsigned int              index,
-				      const char                **name,
-				      enum ipmi_fru_data_type_e *dtype,
-				      int                       *intval,
-				      time_t                    *time,
-				      double                    *floatval,
-				      char                      **data,
-				      unsigned int              *data_len,
-				      ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_mgr_ip_conn_t *rec = _ipmi_fru_node_get_data(rnode);
-    int                      rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_ip_to_fru_str("ip_address", rec->ip_address,
-				   name, dtype, data_len, data);
-	break;
-	
-    case 2:
-	if (rec->version < 1)
-	    goto out_bad_version;
-	rv = convert_ip_to_fru_str("gateway_address", rec->gateway_address,
-				   name, dtype, data_len, data);
-	break;
-	
-    case 3:
-	if (rec->version < 1)
-	    goto out_bad_version;
-	rv = convert_ip_to_fru_str("subnet_mask", rec->subnet_mask,
-				   name, dtype, data_len, data);
-	break;
-
-    default:
-    out_bad_version:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
+static mr_item_layout_t ip_conn1_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field },
+    { .name = "ip address", .dtype = IPMI_FRU_DATA_ASCII,
+      .settable = 1,
+      .start = 1, .length = 4,
+      .set_field = mr_ip_set_field, .get_field = mr_ip_get_field },
+    { .name = "gateway address", .dtype = IPMI_FRU_DATA_ASCII,
+      .settable = 1,
+      .start = 5, .length = 4,
+      .set_field = mr_ip_set_field, .get_field = mr_ip_get_field },
+    { .name = "subnet mask", .dtype = IPMI_FRU_DATA_ASCII,
+      .settable = 1,
+      .start = 9, .length = 4,
+      .set_field = mr_ip_set_field, .get_field = mr_ip_get_field }
+};
+static mr_struct_layout_t ip_conn1 = {
+    .name = "Shelf Manager IP Connection", .length = 13,
+    .item_count = 4, .items = ip_conn1_items,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
 
 static int
 atca_root_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
@@ -1836,64 +1613,21 @@ atca_root_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
 			       unsigned char       *mr_data,
 			       unsigned int        mr_data_len,
 			       const char          **name,
-			       ipmi_fru_node_t     **rnode)
+			       ipmi_fru_node_t     **node)
 {
-    atca_shelf_mgr_ip_conn_t *rec;
-    ipmi_fru_node_t          *node;
-    int                      rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
+    mr_struct_layout_t *layout;
 
     if (mr_data_len < 5)
 	return EINVAL;
-    
-    if (mr_data[0] == 1) { /* Support version 1 */
-	if (mr_data_len < 13)
-	    return EINVAL;
-    } else if (mr_data[0] != 0) /* And version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    memcpy(&rec->ip_address, mr_data+1, 4);
-
-    if (rec->version > 0) {
-	memcpy(&rec->gateway_address, mr_data+5, 4);
-	memcpy(&rec->subnet_mask, mr_data+9, 4);
+    switch (mr_data[4]) {
+    case 0: layout = &ip_conn0; break;
+    case 1: layout = &ip_conn1; break;
+    default:
+	return EINVAL;
     }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_shelf_mgr_ip_conn_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_shelf_mgr_ip_conn_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Shelf Manager IP Connection";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_shelf_mgr_ip_conn_cleanup_rec(rec);
-    return rv;
+    return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4, layout,
+		   name, node);
 }
-
 
 /***********************************************************************
  *
@@ -1901,403 +1635,81 @@ atca_root_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_guid_s
-{
-    uint8_t  guid[16];
-} atca_guid_t;
-
-typedef struct atca_link_desc_s
-{
-    unsigned int link_grouping_id : 8;
-    unsigned int link_type_extention : 4;
-    unsigned int link_type : 8;
-    unsigned int port3 : 1;
-    unsigned int port2 : 1;
-    unsigned int port1 : 1;
-    unsigned int port0 : 1;
-    unsigned int interface : 2;
-    unsigned int channel : 6;
-} atca_link_desc_t;
-
-typedef struct atca_board_p2p_conn_s
-{
-    unsigned int     mr_rec_num;
-    uint8_t          version;
-    unsigned int     nr_guids;
-    atca_guid_t      *guids;
-    unsigned int     nr_link_descs;
-    atca_link_desc_t *link_descs;
-    ipmi_fru_t       *fru;
-} atca_board_p2p_conn_t;
-
-static void
-atca_board_p2p_conn_cleanup_rec(atca_board_p2p_conn_t *rec)
-{
-    if (!rec)
-	return;
-
-    if (rec->guids)
-	ipmi_mem_free(rec->guids);
-    if (rec->link_descs)
-	ipmi_mem_free(rec->link_descs);
-
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_board_p2p_conn_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_board_p2p_conn_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_board_p2p_conn_cleanup_rec(rec);
-}
-
-static void
-atca_board_p2p_conn_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_link_desc_get_field(ipmi_fru_node_t           *rnode,
-			 unsigned int              index,
-			 const char                **name,
-			 enum ipmi_fru_data_type_e *dtype,
-			 int                       *intval,
-			 time_t                    *time,
-			 double                    *floatval,
-			 char                      **data,
-			 unsigned int              *data_len,
-			 ipmi_fru_node_t           **sub_node)
-{
-    atca_link_desc_t *rec = _ipmi_fru_node_get_data(rnode);
-    int              rv = 0;
-    char             *str;
-
-    switch(index) {
-    case 0:
-	switch (rec->interface) {
-	case 0: str = "base"; break;
-	case 1: str = "fabric"; break;
-	case 2: str = "update channel"; break;
-	default: str = "?";
-	}
-	if (name)
-	    *name = "interface";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_ASCII;
-	if (data_len)
-	    *data_len = strlen(str);
-	if (data) {
-	    *data = ipmi_strdup(str);
-	    if (!(*data))
-		return ENOMEM;
-	}
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("channel", rec->channel,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("port0", rec->port0, name, dtype, intval);
-	break;
-
-    case 3:
-	rv = convert_int_to_fru_int("port1", rec->port1, name, dtype, intval);
-	break;
-
-    case 4:
-	rv = convert_int_to_fru_int("port2", rec->port2, name, dtype, intval);
-	break;
-
-    case 5:
-	rv = convert_int_to_fru_int("port3", rec->port3, name, dtype, intval);
-	break;
-
-    case 6:
-	rv = convert_int_to_fru_int("link_type", rec->link_type,
-				    name, dtype, intval);
-	break;
-
-    case 7:
-	rv = convert_int_to_fru_int("link_type_extention",
-				    rec->link_type_extention,
-				    name, dtype, intval);
-	break;
-
-    case 8:
-	rv = convert_int_to_fru_int("link_grouping_id", rec->link_grouping_id,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_link_desc_array_get_field(ipmi_fru_node_t           *pnode,
-			       unsigned int              index,
-			       const char                **name,
-			       enum ipmi_fru_data_type_e *dtype,
-			       int                       *intval,
-			       time_t                    *time,
-			       double                    *floatval,
-			       char                      **data,
-			       unsigned int              *data_len,
-			       ipmi_fru_node_t           **sub_node)
-{
-    atca_board_p2p_conn_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t       *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_board_p2p_conn_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t       *node;
-
-    if (index >= rec->nr_link_descs)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->link_descs + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_link_desc_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_board_p2p_conn_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_guid_array_get_field(ipmi_fru_node_t           *pnode,
-			  unsigned int              index,
-			  const char                **name,
-			  enum ipmi_fru_data_type_e *dtype,
-			  int                       *intval,
-			  time_t                    *time,
-			  double                    *floatval,
-			  char                      **data,
-			  unsigned int              *data_len,
-			  ipmi_fru_node_t           **sub_node)
-{
-    atca_board_p2p_conn_t *rec = _ipmi_fru_node_get_data(pnode);
-
-    if (index >= rec->nr_guids)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_BINARY;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (data_len)
-	*data_len = 16;
-    if (data) {
-	*data = ipmi_mem_alloc(16);
-	if (!(*data))
-	    return ENOMEM;
-	memcpy(*data, rec->guids[index].guid, 16);
-    }
-    return 0;
-}
-
-static int
-atca_board_p2p_conn_root_get_field(ipmi_fru_node_t           *rnode,
-				    unsigned int              index,
-				    const char                **name,
-				    enum ipmi_fru_data_type_e *dtype,
-				    int                       *intval,
-				    time_t                    *time,
-				    double                    *floatval,
-				    char                      **data,
-				    unsigned int              *data_len,
-				    ipmi_fru_node_t           **sub_node)
-{
-    atca_board_p2p_conn_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t        *node;
-    int                    rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	if (name)
-	    *name = "GUIDs";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_guids;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_guid_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_board_p2p_conn_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    case 2:
-	if (name)
-	    *name = "link_descriptors";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_link_descs;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_link_desc_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_board_p2p_conn_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_board_p2p_conn(ipmi_fru_t          *fru,
-			    unsigned int        mr_rec_num,
-			    unsigned char       *mr_data,
-			    unsigned int        mr_data_len,
-			    const char          **name,
-			    ipmi_fru_node_t     **rnode)
-{
-    atca_board_p2p_conn_t *rec;
-    unsigned int           i;
-    ipmi_fru_node_t        *node;
-    int                    rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    if (mr_data_len < 2)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    rec->nr_guids = mr_data[1];
-    mr_data += 2;
-    mr_data_len -= 2;
-
-    rec->guids = ipmi_mem_alloc(rec->nr_guids * sizeof(atca_guid_t));
-    if (!rec->guids) {
-	rv = ENOMEM;
-	goto out_cleanup;
-    }
-
-    for (i=0; i<rec->nr_guids; i++) {
-	atca_guid_t *r;
-
-	if (mr_data_len < 16) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-
-	r = &(rec->guids[i]);
-	memcpy(r->guid, mr_data, 16);
-	mr_data += 16;
-	mr_data_len -= 16;
-    }
-
-    rec->nr_link_descs = mr_data_len / 4;
-    rec->link_descs = ipmi_mem_alloc(rec->nr_link_descs
-				     * sizeof(atca_link_desc_t));
-    if (!rec->link_descs) {
-	rv = ENOMEM;
-	goto out_cleanup;
-    }
-
-    for (i=0; i<rec->nr_link_descs; i++) {
-	uint32_t         v;
-	atca_link_desc_t *r;
-
-	r = &(rec->link_descs[i]);
-	v = ipmi_get_uint32(mr_data);
-	mr_data += 4;
-	mr_data_len -= 4;
-	r->channel = v & 0x03f;
-	r->interface = (v >> 6) & 0x03;
-	r->port0 = (v >> 8) & 0x01;
-	r->port1 = (v >> 9) & 0x01;
-	r->port2 = (v >> 10) & 0x01;
-	r->port3 = (v >> 11) & 0x01;
-	r->link_type = (v >> 12) & 0xff;
-	r->link_type_extention = (v >> 20) & 0xf;
-	r->link_grouping_id = (v >> 24) & 0xff;
-    }
-
-    if (mr_data_len != 0) {
-	rv = EINVAL;
-	goto out_cleanup;
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_board_p2p_conn_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_board_p2p_conn_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Shelf Activation and Power Management";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_board_p2p_conn_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t guid_elem[] = {
+    { .name = "GUID", .dtype = IPMI_FRU_DATA_BINARY, .settable = 1,
+      .start = 0, .length = 16,
+      .set_field = mr_binary_set_field, .get_field = mr_binary_get_field }
+};
+static mr_struct_layout_t guid_elems = {
+    .name = NULL, .length = 16,
+    .item_count = 1, .items = guid_elem,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_tab_item_t link_if_tab = {
+    .count = 3,
+    .table = { "base", "fabric", "update channel" }
+};
+static mr_item_layout_t link_desc[] = {
+    { .name = "link grouping id", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 24, .length = 8,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "link type extension", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 20, .length = 4,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "link type", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 12, .length = 8,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "port 3 included", .dtype = IPMI_FRU_DATA_BOOLEAN, .settable = 1,
+      .start = 11, .length = 1,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "port 2 included", .dtype = IPMI_FRU_DATA_BOOLEAN, .settable = 1,
+      .start = 10, .length = 1,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "port 1 included", .dtype = IPMI_FRU_DATA_BOOLEAN, .settable = 1,
+      .start = 9, .length = 1,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "port 0 included", .dtype = IPMI_FRU_DATA_BOOLEAN, .settable = 1,
+      .start = 8, .length = 1,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field },
+    { .name = "interface", .dtype = IPMI_FRU_DATA_ASCII, .settable = 1,
+      .start = 6, .length = 2,
+      .tab = &link_if_tab,
+      .set_field = mr_bitvaltab_set_field,
+      .get_field = mr_bitvaltab_get_field },
+    { .name = "channel number", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 6,
+      .set_field = mr_bitint_set_field, .get_field = mr_bitint_get_field }
+};
+static mr_struct_layout_t link_descs = {
+    .name = NULL, .length = 4,
+    .item_count = 9, .items = link_desc,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t bp2p_conn_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t bp2p_conn_arys[] = {
+    { .name = "OEM GUIDs", .has_count = 1,
+      .min_elem_size = 16,
+      .elem_layout = &guid_elems,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field },
+    { .name = "Link Descriptors", .has_count = 0,
+      .min_elem_size = 4,
+      .elem_layout = &link_descs,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t bp2p_conn = {
+    .name = "Board P2P Connectivity", .length = 1,
+    .item_count = 1, .items = bp2p_conn_items,
+    .array_count = 2, .arrays = bp2p_conn_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -2306,425 +1718,71 @@ atca_root_mr_board_p2p_conn(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_link_map_s
-{
-    uint8_t hw_address;
-    uint8_t link_entry;
-} atca_link_map_t;
-
-typedef struct atca_ipmb0_hub_desc_s
-{
-    uint8_t         hw_address;
-    uint8_t         hub_info;
-    uint8_t         nr_link_maps;
-    atca_link_map_t *link_maps;
-} atca_ipmb0_hub_desc_t;
-
-typedef struct atca_radial_ipmb0_link_map_s
-{
-    unsigned int          mr_rec_num;
-    uint8_t               version;
-    uint32_t              connector_definer;
-    uint16_t              connector_version;
-    uint8_t               nr_hub_descs;
-    atca_ipmb0_hub_desc_t *hub_descs;
-    ipmi_fru_t            *fru;
-} atca_radial_ipmb0_link_map_t;
-
-static void
-atca_radial_ipmb0_link_map_cleanup_rec(atca_radial_ipmb0_link_map_t *rec)
-{
-    unsigned int i;
-
-    if (!rec)
-	return;
-
-    if (rec->hub_descs) {
-	for (i=0; i<rec->nr_hub_descs; i++) {
-	    atca_ipmb0_hub_desc_t *f = &(rec->hub_descs[i]);
-
-	    if (f->link_maps)
-		ipmi_mem_free(f->link_maps);
-	}
-	ipmi_mem_free(rec->hub_descs);
-    }
-
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_radial_ipmb0_link_map_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_radial_ipmb0_link_map_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_radial_ipmb0_link_map_cleanup_rec(rec);
-}
-
-static void
-atca_radial_ipmb0_link_map_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_link_map_get_field(ipmi_fru_node_t           *rnode,
-			unsigned int              index,
-			const char                **name,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
-{
-    atca_link_map_t *rec = _ipmi_fru_node_get_data(rnode);
-    int             rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware_address", rec->hw_address,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("link_entry", rec->link_entry,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_link_map_array_get_field(ipmi_fru_node_t           *pnode,
-			      unsigned int              index,
-			      const char                **name,
-			      enum ipmi_fru_data_type_e *dtype,
-			      int                       *intval,
-			      time_t                    *time,
-			      double                    *floatval,
-			      char                      **data,
-			      unsigned int              *data_len,
-			      ipmi_fru_node_t           **sub_node)
-{
-    atca_ipmb0_hub_desc_t        *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t              *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_radial_ipmb0_link_map_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t              *node;
-
-    if (index >= rec->nr_link_maps)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->link_maps + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_link_map_get_field);
-	_ipmi_fru_node_set_destructor(node,
-				      atca_radial_ipmb0_link_map_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_hub_desc_get_field(ipmi_fru_node_t           *pnode,
-			unsigned int              index,
-			const char                **name,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
-{
-    atca_ipmb0_hub_desc_t        *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t              *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_radial_ipmb0_link_map_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t              *node;
-    int                          rv = 0;
-    char                         *str;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware_address", rec->hw_address,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	switch (rec->hub_info) {
-	case 1: str = "IPMB-A only"; break;
-	case 2: str = "IPMB-B only"; break;
-	case 3: str = "IPMB-B and IPMB-B"; break;
-	default: str = "?";
-	}
-	if (name)
-	    *name = "hub_info";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_ASCII;
-	if (data_len)
-	    *data_len = strlen(str);
-	if (data) {
-	    *data = ipmi_strdup(str);
-	    if (!(*data))
-		return ENOMEM;
-	}
-	break;
-
-    case 3:
-	if (name)
-	    *name = "link_mapping";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_link_maps;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rrec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_link_map_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-				       atca_radial_ipmb0_link_map_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_hub_desc_array_get_field(ipmi_fru_node_t           *pnode,
-			      unsigned int              index,
-			      const char                **name,
-			      enum ipmi_fru_data_type_e *dtype,
-			      int                       *intval,
-			      time_t                    *time,
-			      double                    *floatval,
-			      char                      **data,
-			      unsigned int              *data_len,
-			      ipmi_fru_node_t           **sub_node)
-{
-    atca_radial_ipmb0_link_map_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t              *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_radial_ipmb0_link_map_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t              *node;
-
-    if (index >= rec->nr_hub_descs)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->hub_descs + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_hub_desc_get_field);
-	_ipmi_fru_node_set_destructor(node,
-				      atca_radial_ipmb0_link_map_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_radial_ipmb0_link_map_root_get_field(ipmi_fru_node_t           *rnode,
-				     unsigned int              index,
-				     const char                **name,
-				     enum ipmi_fru_data_type_e *dtype,
-				     int                       *intval,
-				     time_t                    *time,
-				     double                    *floatval,
-				     char                      **data,
-				     unsigned int              *data_len,
-				     ipmi_fru_node_t           **sub_node)
-{
-    atca_radial_ipmb0_link_map_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t              *node;
-    int                          rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("connector_definer",
-				    rec->connector_definer,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("connector_version",
-				    rec->connector_version,
-				    name, dtype, intval);
-	break;
-
-    case 3:
-	if (name)
-	    *name = "hub_descriptors";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_hub_descs;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_hub_desc_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-				       atca_radial_ipmb0_link_map_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_radial_ipmb0_link_map(ipmi_fru_t          *fru,
-				   unsigned int        mr_rec_num,
-				   unsigned char       *mr_data,
-				   unsigned int        mr_data_len,
-				   const char          **name,
-				   ipmi_fru_node_t     **rnode)
-{
-    atca_radial_ipmb0_link_map_t *rec;
-    unsigned int                 i, j;
-    ipmi_fru_node_t              *node;
-    int                          rv;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    if (mr_data_len < 7)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    rec->connector_definer = (mr_data[1] | (mr_data[2] << 8)
-			      | (mr_data[3] << 16));
-    rec->connector_version = ipmi_get_uint16(mr_data+4);
-    rec->nr_hub_descs = mr_data[6];
-    mr_data += 7;
-    mr_data_len -= 7;
-
-    rec->hub_descs = ipmi_mem_alloc(rec->nr_hub_descs
-				    * sizeof(atca_ipmb0_hub_desc_t));
-    if (!rec->hub_descs) {
-	rv = ENOMEM;
-	goto out_cleanup;
-    }
-
-    for (i=0; i<rec->nr_hub_descs; i++) {
-	atca_ipmb0_hub_desc_t *r;
-
-	if (mr_data_len < 3) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-
-	r = &(rec->hub_descs[i]);
-	r->hw_address = mr_data[0];
-	r->hub_info = mr_data[1] & 0x3;
-	r->nr_link_maps = mr_data[2];
-	mr_data += 3;
-	mr_data_len -= 3;
-
-	if (mr_data_len < (unsigned int) (2 * r->nr_link_maps)) {
-	    rv = EINVAL;
-	    goto out_cleanup;
-	}
-	r->link_maps = ipmi_mem_alloc(r->nr_link_maps
-				      * sizeof(atca_link_map_t));
-	if (!r->link_maps) {
-	    rv = ENOMEM;
-	    goto out_cleanup;
-	}
-	for (j=0; j<r->nr_link_maps; j++) {
-	    r->link_maps[j].hw_address = mr_data[0];
-	    r->link_maps[j].link_entry = mr_data[1];
-	    mr_data += 2;
-	    mr_data_len -= 2;
-	}
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node,
-				 atca_radial_ipmb0_link_map_root_get_field);
-    _ipmi_fru_node_set_destructor(node,
-				  atca_radial_ipmb0_link_map_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Radial IPMB-0 Link Mapping";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_radial_ipmb0_link_map_cleanup_rec(rec);
-    return rv;
-}
-
+static mr_item_layout_t ipmb_link_mapping[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "IPMB-0 link entry", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_struct_layout_t ipmb_link_mappings = {
+    .name = NULL, .length = 2,
+    .item_count = 2, .items = ipmb_link_mapping,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_tab_item_t hub_info_if_tab = {
+    .count = 4,
+    .table = { "?", "IPMB-A only", "IPMB-B only", "IPMB-A and IPMB-B" }
+};
+static mr_item_layout_t hub_desc_items[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "bus coverage", .dtype = IPMI_FRU_DATA_ASCII, .settable = 1,
+      .start = 8, .length = 2,
+      .tab = &hub_info_if_tab,
+      .set_field = mr_bitvaltab_set_field,
+      .get_field = mr_bitvaltab_get_field }
+};
+static mr_array_layout_t hub_desc_arys[] = {
+    { .name = "IPMB-0 link mappings", .has_count = 1,
+      .min_elem_size = 4,
+      .elem_layout = &ipmb_link_mappings,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t hub_descs = {
+    .name = NULL, .length = 2,
+    .item_count = 2, .items = hub_desc_items,
+    .array_count = 1, .arrays = hub_desc_arys,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t rad_ipmb_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field },
+    { .name = "connecter definer", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 3,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "connecter version", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 4, .length = 2,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t rad_ipmb_arys[] = {
+    { .name = "hub descriptors", .has_count = 1,
+      .min_elem_size = 4,
+      .elem_layout = &hub_descs,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t rad_ipmb = {
+    .name = "Radial IPMB-0 Link Mapping", .length = 6,
+    .item_count = 3, .items = rad_ipmb_items,
+    .array_count = 1, .arrays = rad_ipmb_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 /***********************************************************************
  *
@@ -2732,253 +1790,44 @@ atca_root_mr_radial_ipmb0_link_map(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-typedef struct atca_fan_to_fru_s
-{
-    uint8_t hw_addr;
-    uint8_t device_id;
-    uint8_t site_number;
-    uint8_t site_type;
-} atca_fan_to_fru_t;
-
-typedef struct atca_shelf_fan_geog_s
-{
-    unsigned int      mr_rec_num;
-    uint8_t           version;
-    uint8_t           nr_fan_to_frus;
-    atca_fan_to_fru_t *fan_to_frus;
-    ipmi_fru_t        *fru;
-} atca_shelf_fan_geog_t;
-
-static void atca_shelf_fan_geog_cleanup_rec(atca_shelf_fan_geog_t *rec)
-{
-    if (rec->fan_to_frus)
-	ipmi_mem_free(rec->fan_to_frus);
-    ipmi_mem_free(rec);
-}
-
-static void
-atca_shelf_fan_geog_root_destroy(ipmi_fru_node_t *node)
-{
-    atca_shelf_fan_geog_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_deref(rec->fru);
-    atca_shelf_fan_geog_cleanup_rec(rec);
-}
-
-static void
-atca_shelf_fan_geog_sub_destroy(ipmi_fru_node_t *node)
-{
-    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
-    ipmi_fru_put_node(root_node);
-}
-
-static int
-atca_fan_to_fru_get_field(ipmi_fru_node_t           *pnode,
-			  unsigned int              index,
-			  const char                **name,
-			  enum ipmi_fru_data_type_e *dtype,
-			  int                       *intval,
-			  time_t                    *time,
-			  double                    *floatval,
-			  char                      **data,
-			  unsigned int              *data_len,
-			  ipmi_fru_node_t           **sub_node)
-{
-    atca_fan_to_fru_t *rec = _ipmi_fru_node_get_data(pnode);
-    int               rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("hardware address", rec->hw_addr,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	rv = convert_int_to_fru_int("device id", rec->device_id,
-				    name, dtype, intval);
-	break;
-
-    case 2:
-	rv = convert_int_to_fru_int("site number", rec->site_number,
-				    name, dtype, intval);
-	break;
-
-    case 3:
-	rv = convert_int_to_fru_int("site type", rec->site_type,
-				    name, dtype, intval);
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_fan_to_fru_array_get_field(ipmi_fru_node_t           *pnode,
-				   unsigned int              index,
-				   const char                **name,
-				   enum ipmi_fru_data_type_e *dtype,
-				   int                       *intval,
-				   time_t                    *time,
-				   double                    *floatval,
-				   char                      **data,
-				   unsigned int              *data_len,
-				   ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_fan_geog_t *rec = _ipmi_fru_node_get_data(pnode);
-    ipmi_fru_node_t       *rnode = _ipmi_fru_node_get_data2(pnode);
-    atca_shelf_fan_geog_t *rrec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t       *node;
-
-    if (index >= rec->nr_fan_to_frus)
-	return EINVAL;
-
-    if (name)
-	*name = NULL; /* We are an array */
-    if (dtype)
-	*dtype = IPMI_FRU_DATA_SUB_NODE;
-    if (intval)
-	*intval = -1; /* Sub element is not an array */
-    if (sub_node) {
-	node = _ipmi_fru_node_alloc(rrec->fru);
-	if (!node)
-	    return ENOMEM;
-
-	ipmi_fru_get_node(rnode);
-	_ipmi_fru_node_set_data(node, rec->fan_to_frus + index);
-	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, atca_fan_to_fru_get_field);
-	_ipmi_fru_node_set_destructor(node, atca_shelf_fan_geog_sub_destroy);
-	*sub_node = node;
-    }
-    return 0;
-}
-
-static int
-atca_shelf_fan_geog_root_get_field(ipmi_fru_node_t           *rnode,
-				   unsigned int              index,
-				   const char                **name,
-				   enum ipmi_fru_data_type_e *dtype,
-				   int                       *intval,
-				   time_t                    *time,
-				   double                    *floatval,
-				   char                      **data,
-				   unsigned int              *data_len,
-				   ipmi_fru_node_t           **sub_node)
-{
-    atca_shelf_fan_geog_t *rec = _ipmi_fru_node_get_data(rnode);
-    ipmi_fru_node_t *node;
-    int             rv = 0;
-
-    switch(index) {
-    case 0:
-	rv = convert_int_to_fru_int("version", rec->version,
-				    name, dtype, intval);
-	break;
-
-    case 1:
-	if (name)
-	    *name = "fan to frus";
-	if (dtype)
-	    *dtype = IPMI_FRU_DATA_SUB_NODE;
-	if (intval)
-	    *intval = rec->nr_fan_to_frus;
-	if (sub_node) {
-	    node = _ipmi_fru_node_alloc(rec->fru);
-	    if (!node)
-		return ENOMEM;
-	    ipmi_fru_get_node(rnode);
-	    _ipmi_fru_node_set_data(node, rec);
-	    _ipmi_fru_node_set_data2(node, rnode);
-	    _ipmi_fru_node_set_get_field(node,
-					 atca_fan_to_fru_array_get_field);
-	    _ipmi_fru_node_set_destructor(node,
-					  atca_shelf_fan_geog_sub_destroy);
-	    *sub_node = node;
-	}
-	break;
-
-    default:
-	rv = EINVAL;
-    }
-
-    return rv;
-}
-
-static int
-atca_root_mr_shelf_fan_geog(ipmi_fru_t          *fru,
-			    unsigned int        mr_rec_num,
-			    unsigned char       *mr_data,
-			    unsigned int        mr_data_len,
-			    const char          **name,
-			    ipmi_fru_node_t     **rnode)
-{
-    atca_shelf_fan_geog_t *rec;
-    int                   i;
-    ipmi_fru_node_t       *node;
-    int                   rv = 0;
-
-    mr_data += 4;
-    mr_data_len -= 4;
-
-    /* Room for the version, shelf address, and address table entry count */
-    if (mr_data_len < 2)
-	return EINVAL;
-    
-    if (mr_data[0] != 0) /* Only support version 0 */
-	return ENOSYS;
-
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
-
-    rec->mr_rec_num = mr_rec_num;
-    rec->version = mr_data[0];
-    rec->nr_fan_to_frus = mr_data[1];
-    mr_data += 2;
-    mr_data_len -= 2;
-
-    rec->fan_to_frus = ipmi_mem_alloc(rec->nr_fan_to_frus
-				      * sizeof(atca_fan_to_fru_t));
-    if (!rec->fan_to_frus)
-	goto out_no_mem;
-
-    for (i=0; i<rec->nr_fan_to_frus; i++) {
-	rec->fan_to_frus[i].hw_addr = mr_data[0];
-	rec->fan_to_frus[i].device_id = mr_data[1];
-	rec->fan_to_frus[i].site_number = mr_data[2];
-	rec->fan_to_frus[i].site_type = mr_data[3];
-	mr_data += 4;
-	mr_data_len -= 4;
-    }
-
-    node = _ipmi_fru_node_alloc(fru);
-    if (!node)
-	goto out_no_mem;
-
-    rec->fru = fru;
-    ipmi_fru_ref(fru);
-
-    _ipmi_fru_node_set_data(node, rec);
-    _ipmi_fru_node_set_get_field(node, atca_shelf_fan_geog_root_get_field);
-    _ipmi_fru_node_set_destructor(node, atca_shelf_fan_geog_root_destroy);
-    *rnode = node;
-
-    if (name)
-	*name = "Shelf Fan Geography";
-
-    return 0;
-
- out_no_mem:
-    rv = ENOMEM;
-    goto out_cleanup;
-
- out_cleanup:
-    atca_shelf_fan_geog_cleanup_rec(rec);
-    return rv;
-}
+static mr_item_layout_t fan_to_frus_items[] = {
+    { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 0, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "FRU device id", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 1, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "site number", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 2, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field },
+    { .name = "site type", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
+      .start = 3, .length = 1,
+      .set_field = mr_int_set_field, .get_field = mr_int_get_field }
+};
+static mr_struct_layout_t fan_to_frus = {
+    .name = NULL, .length = 4,
+    .item_count = 4, .items = fan_to_frus_items,
+    .array_count = 0, .arrays = NULL,
+    .cleanup = mr_struct_cleanup
+};
+static mr_item_layout_t fan_geog_items[] = {
+    { .name = "version", .dtype = IPMI_FRU_DATA_INT, .settable = 0,
+      .start = 0, .length = 1,
+      .set_field = NULL, .get_field = mr_int_get_field }
+};
+static mr_array_layout_t fan_geog_arys[] = {
+    { .name = "fan to frus", .has_count = 1,
+      .min_elem_size = 4,
+      .elem_layout = &fan_to_frus,
+      .elem_check = mr_struct_elem_check, .elem_decode = mr_struct_decode,
+      .cleanup = mr_array_cleanup, .get_field = mr_array_get_field }
+};
+static mr_struct_layout_t fan_geog = {
+    .name = "Shelf Fan Geography", .length = 1,
+    .item_count = 1, .items = fan_geog_items,
+    .array_count = 1, .arrays = fan_geog_arys,
+    .cleanup = mr_struct_cleanup
+};
 
 
 /***********************************************************************
@@ -3004,22 +1853,32 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
 
     switch (mr_data[3]) {
     case 4: /* backplane point-to-point connectivity record */
-	return atca_root_mr_p2p_cr(fru, mr_rec_num,
-				   mr_data, mr_data_len, name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &p2p_cr,
+		       name, node);
 
     case 0x10: /* shelf address table */
-	return atca_root_mr_addr_tab(fru, mr_rec_num,
-				     mr_data, mr_data_len, name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &addr_tab,
+		       name, node);
 
     case 0x11: /* Shelf power distribution */
-	return atca_root_mr_shelf_power_dist(fru, mr_rec_num,
-					     mr_data, mr_data_len,
-					     name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &pow_dist,
+		       name, node);
 
     case 0x12: /* Shelf activation and power mgmt */
-	return atca_root_mr_shelf_act_power(fru, mr_rec_num,
-					    mr_data, mr_data_len,
-					    name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &act_pm,
+		       name, node);
 
     case 0x13: /* Shelf Manager IP Connection Record */
 	return atca_root_mr_shelf_mgr_ip_conn(fru, mr_rec_num,
@@ -3027,19 +1886,25 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
 					      name, node);
 
     case 0x14: /* Board p2p connectivity record */
-	return atca_root_mr_board_p2p_conn(fru, mr_rec_num,
-					   mr_data, mr_data_len,
-					   name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &bp2p_conn,
+		       name, node);
 
     case 0x15: /* radial ipmb0 link mapping */
-	return atca_root_mr_radial_ipmb0_link_map(fru, mr_rec_num,
-						  mr_data, mr_data_len,
-						  name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &rad_ipmb,
+		       name, node);
 
     case 0x1b: /* Shelf fan geography record */
-	return atca_root_mr_shelf_fan_geog(fru, mr_rec_num,
-					   mr_data, mr_data_len,
-					   name, node);
+	if (mr_data[4] != 0)
+	    return EINVAL;
+	return mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+		       &fan_geog,
+		       name, node);
 
     default:
 	return ENOSYS;
