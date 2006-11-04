@@ -16,6 +16,8 @@
 	* lib/oem_atca_fru.c: Convert multirecord handling over to the
 	generic version.
 
+	* configure.in: Move to version 2.0.9-rc1
+
 2006-11-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed a problem with scanning entity association
