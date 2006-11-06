@@ -38,7 +38,7 @@ import gui_setdialog
 
 class FRUData:
     def __init__(self, glist, node, index, pname, ptype, origval, parent,
-                 settable, reinit_on_zero):
+                 settable, reinit_on_zero = False, reinit_on_any = False):
         self.glist = glist
         self.node = node
         self.aidx = index
@@ -51,6 +51,7 @@ class FRUData:
             parent.children.insert(index, self)
             pass
         self.reinit_on_zero = reinit_on_zero
+        self.reinit_on_any = reinit_on_any
         self.settable = settable
         return
 
@@ -90,7 +91,10 @@ class FRUData:
         try:
             oldval = int(self.currval)
             newval = int(vals[0])
-            if (self.reinit_on_zero and (oldval != newval)
+            if (self.reinit_on_any and (oldval != newval)):
+                self.glist.refresh_data()
+                return
+            elif (self.reinit_on_zero and (oldval != newval)
                 and ((oldval == 0) or (newval == 0))):
                 # We need to re-initialize the whole display.
                 self.glist.refresh_data()
@@ -313,7 +317,9 @@ class FruInfoDisplay(gui_treelist.TreeList):
                                    value_s[0], parent,
                                    node.settable(i) == 0,
                                    (normal_top and
-                                    name_s[0].endswith("_offset")))
+                                    name_s[0].endswith("_offset")),
+                                   (normal_top and
+                                    name_s[0] == "multi_record_offset"))
                     self.add_data(item, name_s[0], [value_s[0]], data=data,
                                   before=before)
                     pass

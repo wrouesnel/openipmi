@@ -4078,8 +4078,8 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
 	    /* Insert/delete array indexes. */
 	    if (intval >= 0) {
 		if (!data) {
-		    data = "asdf";
-		    data_len = 4;
+		    data = "";
+		    data_len = 0;
 		}
 		return ipmi_fru_ins_data_val(fru, index, intval,
 					     IPMI_FRU_DATA_ASCII, data,
@@ -4943,6 +4943,11 @@ void
 ipmi_mr_adjust_len(ipmi_mr_offset_t *o, int len)
 {
     while (o) {
+	ipmi_mr_offset_t *l = o->next;
+	while (l) {
+	    l->offset += len;
+	    l = l->next;
+	}
 	o->length += len;
 	o = o->parent;
     }
@@ -5163,15 +5168,6 @@ ipmi_mr_struct_array_set_field(ipmi_mr_array_info_t      *arec,
 		memcpy(sdata, data, data_len);
 	}
 
-	if (index == arec->count)
-	    offset = arec->offset.length;
-	else {
-	    ipmi_mr_struct_info_t *item = arec->items[index];
-	    offset = item->offset.offset;
-	}
-	newv->offset.offset = offset;
-	newv->offset.parent = &arec->offset;
-
 	rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
 					    sdata,
 					    ipmi_mr_full_offset(&newv->offset),
@@ -5182,6 +5178,22 @@ ipmi_mr_struct_array_set_field(ipmi_mr_array_info_t      *arec,
 	    ipmi_mem_free(newv);
 	    return rv;
 	}
+
+	newv->offset.parent = &arec->offset;
+	newv->offset.length = arec->layout->min_elem_size;
+	if (index == arec->count) {
+	    newv->offset.offset = arec->offset.length;
+	    newv->offset.next = NULL;
+	} else {
+	    ipmi_mr_struct_info_t *item = arec->items[index];
+	    offset = item->offset.offset;
+	    newv->offset.next = &item->offset;
+	}
+	if (index > 0) {
+	    ipmi_mr_struct_info_t *pitem = arec->items[index-1];
+	    pitem->offset.next = &newv->offset;
+	}
+
 	ipmi_mr_adjust_len(&arec->offset, arec->layout->min_elem_size);
 
 	if (arec->items) {
@@ -5223,6 +5235,11 @@ ipmi_mr_struct_array_set_field(ipmi_mr_array_info_t      *arec,
 	if (rv) {
 	    ipmi_mem_free(newa);
 	    return rv;
+	}
+
+	if (index > 0) {
+	    ipmi_mr_struct_info_t *pitem = arec->items[index-1];
+	    pitem->offset.next = cr->offset.next;
 	}
 
 	ipmi_mr_adjust_len(&arec->offset, - (int) cr->offset.length);
@@ -5530,6 +5547,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
     ipmi_mr_struct_layout_t *layout = vlayout;
     int                     rv;
     ipmi_mr_struct_info_t   *rec;
+    ipmi_mr_array_info_t    *ap;
 
     if (mr_data_len < layout->length)
 	return EINVAL;
@@ -5541,6 +5559,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
 
     rec->offset.offset = offset;
     rec->offset.parent = offset_parent;
+    rec->offset.next = NULL;
     rec->layout = layout;
 
     if (layout->length > 0) {
@@ -5564,14 +5583,19 @@ ipmi_mr_struct_decode(void                  *vlayout,
 	memset(rec->arrays, 0, sizeof(*(rec->arrays)) * layout->array_count);
     }
 
+    ap = NULL;
     for (i=0; i<(int)layout->array_count; i++) {
 	ipmi_mr_array_layout_t *al = layout->arrays + i;
 	ipmi_mr_array_info_t   *ai = rec->arrays + i;
-	unsigned int      count;
-	unsigned char     *astart_mr_data = mr_data;
+	unsigned int           count;
+	unsigned char          *astart_mr_data = mr_data;
 
 	ai->offset.offset = mr_data - *rmr_data;
 	ai->offset.parent = &(rec->offset);
+	ai->offset.next = NULL;
+	if (ap)
+	    ap->offset.next = &ai->offset;
+
 	ai->nr_after = layout->array_count - i - 1;
 	ai->layout = al;
 	if (al->has_count) {
@@ -5595,11 +5619,14 @@ ipmi_mr_struct_decode(void                  *vlayout,
 	    }
 	}
 	if (count > 0) {
+	    ipmi_mr_struct_info_t *p;
+
 	    ai->count = count;
 	    ai->items = ipmi_mem_alloc(sizeof(*(ai->items)) * count);
 	    if (!ai->items)
 		return ENOMEM;
 	    memset(ai->items, 0, sizeof(*(ai->items)) * count);
+	    p = NULL;
 	    for (j=0; j<(int)count; j++) {
 		ipmi_mr_struct_info_t *r;
 
@@ -5612,10 +5639,14 @@ ipmi_mr_struct_decode(void                  *vlayout,
 		if (rv)
 		    goto out_err;
 
+		if (p)
+		    p->offset.next = &r->offset;
 		ai->items[j] = r;
+		p = r;
 	    }
 	}
 	ai->offset.length = mr_data - astart_mr_data;
+	ap = ai;
     }
 
     rec->offset.length = mr_data - *rmr_data;

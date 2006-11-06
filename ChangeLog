@@ -1,3 +1,12 @@
+2006-11-06 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Redid
+	the adjustment of offsets and lengths to work properly with nested
+	arrays.
+
+	* swig/python/openipmigui/gui_cmdwin.py: Fixed some problems
+	dealing with backspace and delete.
+	
 2006-11-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Reworked

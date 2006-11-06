@@ -289,9 +289,18 @@ typedef struct ipmi_mr_array_info_s ipmi_mr_array_info_t;
 
 typedef struct ipmi_mr_offset_s ipmi_mr_offset_t;
 struct ipmi_mr_offset_s {
+    /* Offset from the beginning of the *parent*, not the whole
+       structure. */
     uint8_t          offset;
     uint8_t          length;
+
+    /* Items that contain this item, if we adjust this items length we
+       need to adjust the parent's lengths as well. */
     ipmi_mr_offset_t *parent;
+
+    /* Items after this one that need their offset adjusted if we
+       alter this item's length. */
+    ipmi_mr_offset_t *next;
 };
 
 typedef struct ipmi_mr_fru_info_s {

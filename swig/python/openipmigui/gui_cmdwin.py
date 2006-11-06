@@ -169,7 +169,7 @@ class CommandWindow(Tix.ScrolledText):
     
     def HandleChar(self, event):
         key = event.keysym
-        if ((key == "Backspace") or (key == "Delete")):
+        if (key == "BackSpace"):
             # A key that will result in a backspace.  Make sure it
             # only occurs on the last line and not in the prompt area.
             if (self.cmd_in_progress):
@@ -177,7 +177,19 @@ class CommandWindow(Tix.ScrolledText):
             (lastrow, lastcol) = self.text.index("end").split(".")
             lastrow = str(int(lastrow)-1)
             (currrow, currcol) = self.text.index("insert").split(".")
-            if ((lastrow != currrow) or (col <= 2)):
+            if ((lastrow != currrow) or (int(currcol) <= 2)):
+                # Ignore the keypress
+                return "break"
+            pass
+        elif (key == "Delete"):
+            # A key that will result in a deletion.  Make sure it
+            # only occurs on the last line and not in the prompt area.
+            if (self.cmd_in_progress):
+                return "break"
+            (lastrow, lastcol) = self.text.index("end").split(".")
+            lastrow = str(int(lastrow)-1)
+            (currrow, currcol) = self.text.index("insert").split(".")
+            if ((lastrow != currrow) or (int(currcol) <= 1)):
                 # Ignore the keypress
                 return "break"
             pass
