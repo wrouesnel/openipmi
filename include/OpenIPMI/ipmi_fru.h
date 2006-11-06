@@ -170,7 +170,9 @@ void ipmi_fru_put_node(ipmi_fru_node_t *node);
  * the individual elements are not named.  The "index" is an index
  * into the array itself, starting at 0.  The elements of an array
  * node will always set the "name" to NULL.  If you fetch beyond the
- * end of an array, it will return EINVAL.
+ * end of an array, it will return EINVAL.  If you fetch a field and
+ * it returns a SUB_NODE type and "intval" is not -1, the sub_node
+ * field will be set to an array subnode.
  *
  * A record node is a node that has a set of elements that are named,
  * the "name" will always be set to a value when fetching one of
@@ -178,7 +180,9 @@ void ipmi_fru_put_node(ipmi_fru_node_t *node);
  * that, unlike arrays, individual fields in a record node may not be
  * present.  Fetching these fields will return ENOSYS, but there may
  * be valid fields after this.  This returns EINVAL if you go beyond
- * the last field.
+ * the last field.  If you fetch a field and it returns a SUB_NODE
+ * type and "intval" is -1, the sub_node field will be set to an
+ * record subnode.
  *
  * The various dtypes are:
  *    IPMI_FRU_DATA_INT  - sets "intval"
@@ -218,9 +222,17 @@ int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
  * This function returns EPERM if the field is not writable or EINVAL if
  * something is invalid about the data or index or data type.
  *
- * To extend an array, write to an index beyond the current length and
- * it will be automatically extended.  Make sure to fill the values
- * inbetween if necessary.
+ * Setting a base value (int, float, time, etc.) will set that value
+ * for the field.  Nothing magical or suprising.
+ *
+ * Setting an index that returns an array will insert a new value into
+ * the array at the given index (if the index is positive) or delete
+ * the value at -index-1 (if the index is negative).  To extend an
+ * array, write to an index beyond the current length and it will be
+ * automatically extended by one value.  The new element will be set
+ * to some initial value.
+ *
+ * Setting a record type subnode is not supported.
  */
 int ipmi_fru_node_set_field(ipmi_fru_node_t           *node,
 			    unsigned int              index,

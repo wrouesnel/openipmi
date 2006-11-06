@@ -64,10 +64,13 @@ static ipmi_mr_item_layout_t p2p_cr_desc_items[] = {
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t p2p_cr_desc_arys[] = {
-    { .name = "channels", .has_count = 1, .min_elem_size = 3,
+    { .name = "channels", .has_count = 1, .min_elem_size = 3, .settable = 1,
       .elem_layout = &p2p_cr_desc_ent,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t p2p_cr_desc = {
     .name = NULL, .length = 2,
@@ -81,10 +84,12 @@ static ipmi_mr_item_layout_t p2p_cr_items[] = {
       .set_field = NULL, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t p2p_cr_arys[] = {
-    { .name = "descriptors", .has_count = 0, .min_elem_size = 3,
+    { .name = "descriptors", .has_count = 0, .min_elem_size = 3, .settable = 1,
       .elem_layout = &p2p_cr_desc,
       .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t p2p_cr = {
     .name = "Point-to-Point Connectivity Record", .length = 1,
@@ -126,10 +131,12 @@ static ipmi_mr_item_layout_t addr_tab_items[] = {
       .set_field = ipmi_mr_str_set_field, .get_field = ipmi_mr_str_get_field },
 };
 static ipmi_mr_array_layout_t addr_tab_arys[] = {
-    { .name = "addresses", .has_count = 1, .min_elem_size = 3,
+    { .name = "addresses", .has_count = 1, .min_elem_size = 3, .settable = 1,
       .elem_layout = &addr_tab_ents,
       .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t addr_tab = {
     .name = "Address Table", .length = 22,
@@ -177,10 +184,12 @@ static ipmi_mr_item_layout_t pow_dist_maps_items[] = {
       .set_field = ipmi_mr_intfloat_set_field, .get_field = ipmi_mr_intfloat_get_field }
 };
 static ipmi_mr_array_layout_t pow_dist_maps_arys[] = {
-    { .name = "feed to frus", .has_count = 1, .min_elem_size = 6,
+    { .name = "feed to frus", .has_count = 1, .min_elem_size = 6, .settable = 1,
       .elem_layout = &pow_dist_f2f,
       .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t pow_dist_maps = {
     .name = NULL, .length = 5,
@@ -194,10 +203,12 @@ static ipmi_mr_item_layout_t pow_dist_items[] = {
       .set_field = NULL, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t pow_dist_arys[] = {
-    { .name = "power feeds", .has_count = 1, .min_elem_size = 3,
+    { .name = "power feeds", .has_count = 1, .min_elem_size = 3, .settable = 1,
       .elem_layout = &pow_dist_maps,
       .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t pow_dist = {
     .name = "Shelf Power Distribution", .length = 1,
@@ -248,11 +259,13 @@ static ipmi_mr_item_layout_t act_pm_items[] = {
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t act_pm_arys[] = {
-    { .name = "activation power descriptors", .has_count = 1,
+    { .name = "activation power descriptors", .has_count = 1, .settable = 1,
       .min_elem_size = 5,
       .elem_layout = &act_pm_descs,
       .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t act_pm = {
     .name = "Shelf Activation and Power Management", .length = 2,
@@ -394,16 +407,22 @@ static ipmi_mr_item_layout_t bp2p_conn_items[] = {
       .set_field = NULL, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t bp2p_conn_arys[] = {
-    { .name = "OEM GUIDs", .has_count = 1,
+    { .name = "OEM GUIDs", .has_count = 1, .settable = 1,
       .min_elem_size = 16,
       .elem_layout = &guid_elems,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field },
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field },
     { .name = "Link Descriptors", .has_count = 0,
       .min_elem_size = 4,
       .elem_layout = &link_descs,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t bp2p_conn = {
     .name = "Board P2P Connectivity", .length = 1,
@@ -448,11 +467,14 @@ static ipmi_mr_item_layout_t hub_desc_items[] = {
       .get_field = ipmi_mr_bitvaltab_get_field }
 };
 static ipmi_mr_array_layout_t hub_desc_arys[] = {
-    { .name = "IPMB-0 link mappings", .has_count = 1,
+    { .name = "IPMB-0 link mappings", .has_count = 1, .settable = 1,
       .min_elem_size = 4,
       .elem_layout = &ipmb_link_mappings,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t hub_descs = {
     .name = NULL, .length = 2,
@@ -472,11 +494,14 @@ static ipmi_mr_item_layout_t rad_ipmb_items[] = {
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t rad_ipmb_arys[] = {
-    { .name = "hub descriptors", .has_count = 1,
+    { .name = "hub descriptors", .has_count = 1, .settable = 1,
       .min_elem_size = 4,
       .elem_layout = &hub_descs,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t rad_ipmb = {
     .name = "Radial IPMB-0 Link Mapping", .length = 6,
@@ -517,11 +542,14 @@ static ipmi_mr_item_layout_t fan_geog_items[] = {
       .set_field = NULL, .get_field = ipmi_mr_int_get_field }
 };
 static ipmi_mr_array_layout_t fan_geog_arys[] = {
-    { .name = "fan to frus", .has_count = 1,
+    { .name = "fan to frus", .has_count = 1, .settable = 1,
       .min_elem_size = 4,
       .elem_layout = &fan_to_frus,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_array_cleanup, .get_field = ipmi_mr_array_get_field }
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
+      .cleanup = ipmi_mr_struct_array_cleanup,
+      .get_field = ipmi_mr_struct_array_get_field,
+      .set_field = ipmi_mr_struct_array_set_field }
 };
 static ipmi_mr_struct_layout_t fan_geog = {
     .name = "Shelf Fan Geography", .length = 1,

@@ -1,3 +1,18 @@
+2006-11-05 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Reworked
+	the way writing to arrays is done so it is cleaner and allows
+	insertion at arbitrary points and elements that are other arrays
+	or basic items.
+
+	* include/OpenIPMI/ipmi_fru.h: Worked on docs for the changes.
+
+	* swig/python/openipmigui/_fru.py, lib/oem_atca_fru.c: Adjusted
+	for the previous changes.
+
+	* swig/OpenIPMI.i: Make sure the string on an empty binary array
+	is terminated.
+
 2006-11-03 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_fru.c: Massive rewrite to make this table-driven and

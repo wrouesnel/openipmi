@@ -539,6 +539,76 @@ fru_variable_string_set(ipmi_fru_record_t    *rec,
 }
 
 static int
+fru_variable_string_ins(ipmi_fru_record_t    *rec,
+			fru_variable_t       *val,
+			unsigned int         first_custom,
+			unsigned int         num,
+			enum ipmi_str_type_e type,
+			char                 *str,
+			unsigned int         len)
+{
+    int rv;
+    int i;
+    int offset;
+
+    /* Renumber to get the custom fields.  We do this a little
+       strangly to avoid overflows if the user passes in MAX_INT
+       for the num. */
+    if (num > val->next - first_custom)
+	num = val->next;
+    else
+	num += first_custom;
+
+    if (num > val->next)
+	return EINVAL;
+
+    if (!str)
+	return EINVAL;
+
+    if ((rec->used_length + 1) > rec->length)
+	return ENOSPC;
+
+    /* If not enough room, expand the array by a set amount (to
+       keep from thrashing memory when adding lots of things). */
+    if (val->next >= val->len) {
+	fru_string_t *newval;
+	unsigned int alloc_num = val->len + 16;
+
+	newval = ipmi_mem_alloc(sizeof(fru_string_t) * alloc_num);
+	if (!newval)
+	    return ENOMEM;
+	memset(newval, 0, sizeof(fru_string_t) * alloc_num);
+	if (val->strings) {
+	    memcpy(newval, val->strings, sizeof(fru_string_t) * val->next);
+	    ipmi_mem_free(val->strings);
+	}
+	val->strings = newval;
+	val->len = alloc_num;
+    }
+
+    if (num == val->next)
+	/* Subtract 2 below because of the end marker and the checksum. */
+	offset = rec->used_length-2;
+    else
+	offset = val->strings[num].offset;
+
+    for (i=val->next; i>(int)num; i--) {
+	val->strings[i] = val->strings[i-1];
+	val->strings[i].changed = 1;
+    }
+
+    val->strings[num].str = NULL;
+    val->strings[num].raw_data = NULL;
+    val->strings[num].offset = offset;
+    val->strings[num].length = 0;
+    val->strings[num].raw_len = 0;
+    val->next++;
+
+    rv = fru_string_set(type, str, len, rec, val, num, 1);
+    return rv;
+}
+
+static int
 fru_decode_variable_string(ipmi_fru_t     *fru,
 			   unsigned char  *start_pos,
 			   unsigned char  **in,
@@ -820,6 +890,22 @@ ipmi_fru_set_ ## lcname ## _ ## custom(ipmi_fru_t	    *fru,	\
 				 &u->fields,				\
 				 ucname ## _ ## custom_start, num,	\
                                  type, str, len, 1);			\
+    _ipmi_fru_unlock(fru);						\
+    return rv;								\
+}									\
+int									\
+ipmi_fru_ins_ ## lcname ## _ ## custom(ipmi_fru_t	    *fru,	\
+				       unsigned int         num,	\
+				       enum ipmi_str_type_e type,	\
+				       char                 *str,	\
+				       unsigned int         len)	\
+{									\
+    int rv;								\
+    GET_DATA_PREFIX(lcname, ucname);					\
+    rv = fru_variable_string_ins(rec,					\
+				 &u->fields,				\
+				 ucname ## _ ## custom_start, num,	\
+                                 type, str, len);			\
     _ipmi_fru_unlock(fru);						\
     return rv;								\
 }
@@ -2204,6 +2290,109 @@ ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
 }
 
 int
+ipmi_fru_ins_multi_record(ipmi_fru_t    *fru,
+			  unsigned int  num,
+			  unsigned char type,
+			  unsigned char version,
+			  unsigned char *data,
+			  unsigned int  length)
+{
+    normal_fru_rec_data_t        *info = _ipmi_fru_get_rec_data(fru);
+    ipmi_fru_record_t            **recs;
+    ipmi_fru_multi_record_area_t *u;
+    unsigned char                *new_data;
+    ipmi_fru_record_t            *rec;
+    int                          raw_diff = 0;
+    unsigned int                 i;
+    int                          offset;
+
+    if (data && version != 2)
+	return EINVAL;
+
+    if (length > 255)
+	return EINVAL;
+
+    if (!_ipmi_fru_is_normal_fru(fru))
+	return ENOSYS;
+
+    _ipmi_fru_lock(fru);
+    recs = normal_fru_get_recs(fru);
+    rec = recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    if (!rec) {
+	_ipmi_fru_unlock(fru);
+	return ENOSYS;
+    }
+
+    u = fru_record_get_data(rec);
+
+    if (num >= u->num_records) {
+	num = u->num_records;
+	/* If not enough room, expand the array by a set amount (to
+	   keep from thrashing memory when adding lots of things). */
+	if (u->num_records >= u->rec_len) {
+	    unsigned int           new_len = u->rec_len + 16;
+	    ipmi_fru_record_elem_t *new_recs;
+
+	    new_recs = ipmi_mem_alloc(new_len * sizeof(*new_recs));
+	    if (!new_recs) {
+		_ipmi_fru_unlock(fru);
+		return ENOMEM;
+	    }
+	    memset(new_recs, 0, new_len * sizeof(*new_recs));
+	    if (u->records) {
+		memcpy(new_recs, u->records, u->rec_len * sizeof(*new_recs));
+		ipmi_mem_free(u->records);
+	    }
+	    u->records = new_recs;
+	    u->rec_len = new_len;
+	}
+    }
+
+    raw_diff = 5 + length;
+
+    /* Is there enough space? */
+    if ((rec->used_length + raw_diff) > rec->length)
+	return ENOSPC;
+
+    /* Modifying the record. */
+    if (length == 0)
+	new_data = ipmi_mem_alloc(1);
+    else
+	new_data = ipmi_mem_alloc(length);
+    if (!new_data) {
+	_ipmi_fru_unlock(fru);
+	return ENOMEM;
+    }
+    memcpy(new_data, data, length);
+
+    if (num == u->num_records)
+	offset = rec->used_length;
+    else
+	offset = u->records[num].offset;
+
+    for (i=u->num_records; i>num; i--) {
+	u->records[i] = u->records[i-1];
+	u->records[i].offset += raw_diff;
+	u->records[i].changed = 1;
+    }
+
+    if (u->num_records == 0)
+	info->header_changed = 1;
+    u->num_records++;
+    u->records[num].offset = offset;
+    u->records[num].changed = 1;
+    u->records[num].data = new_data;
+    u->records[num].type = type;
+    u->records[num].format_version = version;
+    u->records[num].length = length;
+
+    rec->used_length += raw_diff;
+    rec->changed |= 1;
+    _ipmi_fru_unlock(fru);
+    return 0;
+}
+
+int
 ipmi_fru_ovw_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned int  num,
 			       unsigned char *data,
@@ -2282,6 +2471,7 @@ ipmi_fru_ins_multi_record_data(ipmi_fru_t    *fru,
     memcpy(new_data+offset, data, length);
     u->records[num].data = new_data;
     u->records[num].length = new_length;
+    u->records[num].changed = 1;
     if (length) {
 	for (i=num+1; i<u->num_records; i++) {
 	    u->records[i].offset += length;
@@ -2324,7 +2514,7 @@ ipmi_fru_del_multi_record_data(ipmi_fru_t    *fru,
     }
 
     /* Modifying the record. */
-    if (length == 0)
+    if (new_length == 0)
 	new_data = ipmi_mem_alloc(1);
     else
 	new_data = ipmi_mem_alloc(new_length);
@@ -2887,6 +3077,9 @@ typedef struct fru_data_rep_s
 	    int (*set)(ipmi_fru_t *fru, unsigned int num,
 		       enum ipmi_str_type_e type, char *data,
 		       unsigned int len);
+	    int (*ins)(ipmi_fru_t *fru, unsigned int num,
+		       enum ipmi_str_type_e type, char *data,
+		       unsigned int len);
 	} strnumtype;
 
 	struct {
@@ -2903,6 +3096,8 @@ typedef struct fru_data_rep_s
 	    int (*fetch_data)(ipmi_fru_t *fru, unsigned intnum,
 			      unsigned char *data, unsigned int *max_len);
 	    int (*set)(ipmi_fru_t *fru, unsigned int num,
+		       unsigned char *data, unsigned int len);
+	    int (*ins)(ipmi_fru_t *fru, unsigned int num,
 		       unsigned char *data, unsigned int len);
 	} binnumtype;
     } u;
@@ -2942,7 +3137,8 @@ typedef struct fru_data_rep_s
 			        .fetch_len = ipmi_fru_get_ ## x ## _len,     \
 		                .fetch_type = ipmi_fru_get_ ## x ## _type,   \
 		                .fetch_data = ipmi_fru_get_ ## x,            \
-			        .set = ipmi_fru_set_ ## x }}}
+			        .set = ipmi_fru_set_ ## x,		     \
+				.ins = ipmi_fru_ins_ ## x }}}
 #define F_BIN(x,s) { .name = #x, .type = IPMI_FRU_DATA_BINARY,		     \
 		     .hasnum = 0, .settable = s,			     \
 		     .u = { .bintype = {				     \
@@ -2954,7 +3150,8 @@ typedef struct fru_data_rep_s
 		         .u = { .binnumtype = {				     \
 			        .fetch_len = ipmi_fru_get_ ## x ## _len,     \
 		       	        .fetch_data = ipmi_fru_get_ ## x,	     \
-			        .set = ipmi_fru_set_ ## x }}}
+			        .set = ipmi_fru_set_ ## x,		     \
+			        .ins = ipmi_fru_ins_ ## x }}}
 static fru_data_rep_t frul[] =
 {
     F_UCHAR(internal_use_version, 0),
@@ -3321,6 +3518,53 @@ ipmi_fru_set_data_val(ipmi_fru_t                *fru,
 	} else {
 	    rv = p->u.binnumtype.set(fru, num, (unsigned char *) data, len);
 	}
+	break;
+
+    default:
+	return EINVAL;
+    }
+
+    return rv;
+}
+
+int
+ipmi_fru_ins_data_val(ipmi_fru_t                *fru,
+		      int                       index,
+		      int                       num,
+		      enum ipmi_fru_data_type_e dtype,
+		      char                      *data,
+		      unsigned int              len)
+{
+    fru_data_rep_t       *p;
+    int                  rv;
+    enum ipmi_str_type_e stype;
+    
+    if ((index < 0) || (index >= (int) NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+
+    switch (dtype) {
+    case IPMI_FRU_DATA_UNICODE: stype = IPMI_UNICODE_STR; break;
+    case IPMI_FRU_DATA_BINARY: stype = IPMI_BINARY_STR; break;
+    case IPMI_FRU_DATA_ASCII: stype = IPMI_ASCII_STR; break;
+    default:
+	return EINVAL;
+    }
+
+    switch (p->type)
+    {
+    case IPMI_FRU_DATA_UNICODE:
+    case IPMI_FRU_DATA_ASCII:
+	if (! p->hasnum)
+	    return ENOSYS;
+	rv = p->u.strnumtype.ins(fru, num, stype, data, len);
+	break;
+
+    case IPMI_FRU_DATA_BINARY:
+	if (! p->hasnum)
+	    return ENOSYS;
+	rv = p->u.binnumtype.ins(fru, num, (unsigned char *) data, len);
 	break;
 
     default:
@@ -3830,10 +4074,25 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
 
     p = frul + index;
     if ((index >= 0) && (index < NUM_FRUL_ENTRIES)) {
-	if (p->hasnum)
-	    /* Can't directly set the arrayed entries, need to use the
-	       array node. */
-	    return EPERM;
+	if (p->hasnum) {
+	    /* Insert/delete array indexes. */
+	    if (intval >= 0) {
+		if (!data) {
+		    data = "asdf";
+		    data_len = 4;
+		}
+		return ipmi_fru_ins_data_val(fru, index, intval,
+					     IPMI_FRU_DATA_ASCII, data,
+					     data_len);
+	    } else {
+		intval = (-intval) - 1;
+		data = NULL;
+		data_len = 0;
+		return ipmi_fru_set_data_val(fru, index, intval,
+					     IPMI_FRU_DATA_ASCII, data,
+					     data_len);
+	    }
+	}
 
 	switch (dtype) {
 	case IPMI_FRU_DATA_INT:
@@ -3845,9 +4104,36 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
 	default:
 	    return ipmi_fru_set_data_val(fru, index, 0, dtype, data, data_len);
 	}
-    } else if (index == (int) NUM_FRUL_ENTRIES)
-	return EPERM;
-    else
+    } else if (index == (int) NUM_FRUL_ENTRIES) {
+	/* Insert/delete multirecords. */
+	unsigned char type = 0, version = 2;
+
+	if (data) {
+	    /* First two bytes are the type and version */
+	    if (data_len >= 1) {
+		type = data[0];
+		data++;
+		data_len--;
+	    }
+	    if (data_len >= 1) {
+		version = data[0];
+		data++;
+		data_len--;
+	    }
+	}
+
+	if (intval >= 0) {
+	    if (!data) {
+		data = "";
+		data_len = 0;
+	    }
+	    return ipmi_fru_ins_multi_record(fru, intval, type, version,
+					     (unsigned char *) data, data_len);
+	} else {
+	    intval = (-intval) - 1;
+	    return ipmi_fru_set_multi_record(fru, intval, 0, 0, NULL, 0);
+	}
+    } else
 	return EINVAL;
 }
 
@@ -4620,6 +4906,26 @@ _ipmi_normal_fru_shutdown(void)
  * Table-driven data engine for handling multirecord fru info.
  *
  **********************************************************************/
+static int ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
+					 unsigned int              index,
+					 const char                **name,
+					 enum ipmi_fru_data_type_e *dtype,
+					 int                       *intval,
+					 time_t                    *time,
+					 double                    *floatval,
+					 char                      **data,
+					 unsigned int              *data_len,
+					 ipmi_fru_node_t           **sub_node);
+static int ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
+					 unsigned int              index,
+					 enum ipmi_fru_data_type_e dtype,
+					 int                       intval,
+					 time_t                    time,
+					 double                    floatval,
+					 char                      *data,
+					 unsigned int              data_len);
+static int ipmi_mr_node_struct_settable(ipmi_fru_node_t *node,
+					unsigned int    index);
 
 uint8_t
 ipmi_mr_full_offset(ipmi_mr_offset_t *o)
@@ -4643,20 +4949,6 @@ ipmi_mr_adjust_len(ipmi_mr_offset_t *o, int len)
 }
 
 void
-ipmi_mr_array_cleanup(ipmi_mr_array_info_t *arec)
-{
-    int i;
-
-    if (arec->items) {
-	for (i=0; i<arec->count; i++) {
-	    if (arec->items[i])
-		arec->items[i]->layout->cleanup(arec->items[i]);
-	}
-	ipmi_mem_free(arec->items);
-    }
-}
-
-void
 ipmi_mr_struct_cleanup(ipmi_mr_struct_info_t *rec)
 {
     unsigned int i;
@@ -4664,7 +4956,8 @@ ipmi_mr_struct_cleanup(ipmi_mr_struct_info_t *rec)
     if (rec->data)
 	ipmi_mem_free(rec->data);
     if (rec->arrays) {
-	for (i=0; i<rec->layout->array_count; i++) {
+	ipmi_mr_struct_layout_t *layout = rec->layout;
+	for (i=0; i<layout->array_count; i++) {
 	    if (rec->arrays[i].layout)
 		rec->arrays[i].layout->cleanup(rec->arrays+i);
 	}
@@ -4674,199 +4967,120 @@ ipmi_mr_struct_cleanup(ipmi_mr_struct_info_t *rec)
 }
 
 void
+ipmi_mr_item_cleanup(ipmi_mr_item_info_t *rec)
+{
+    if (rec->data)
+	ipmi_mem_free(rec->data);
+    ipmi_mem_free(rec);
+}
+
+static void
 ipmi_mr_struct_root_destroy(ipmi_fru_node_t *node)
 {
-    ipmi_mr_struct_info_t *rec = _ipmi_fru_node_get_data(node);
-    ipmi_mr_fru_info_t    *finfo = _ipmi_fru_node_get_data2(node);
+    ipmi_mr_struct_info_t *rec      = _ipmi_fru_node_get_data(node);
+    ipmi_mr_fru_info_t    *finfo    = _ipmi_fru_node_get_data2(node);
+    ipmi_mr_struct_layout_t *layout = rec->layout;
     ipmi_fru_deref(finfo->fru);
-    rec->layout->cleanup(rec);
+    layout->cleanup(rec);
     ipmi_mem_free(finfo);
 }
 
-void
+static void
 ipmi_mr_sub_destroy(ipmi_fru_node_t *node)
 {
     ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
     ipmi_fru_put_node(root_node);
 }
 
-int
-ipmi_mr_node_array_set_field(ipmi_fru_node_t           *node,
-			     unsigned int              index,
-			     enum ipmi_fru_data_type_e dtype,
-			     int                       intval,
-			     time_t                    time,
-			     double                    floatval,
-			     char                      *data,
-			     unsigned int              data_len)
+void
+ipmi_mr_item_array_cleanup(ipmi_mr_array_info_t *arec)
 {
-    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
-    ipmi_fru_node_t       *rnode = _ipmi_fru_node_get_data2(node);
-    ipmi_mr_fru_info_t    *finfo = _ipmi_fru_node_get_data2(rnode);
-    ipmi_mr_struct_info_t **newa;
-    ipmi_mr_struct_info_t **olda;
-    ipmi_mr_struct_info_t *newv;
-    int                   i, j, no;
-    int                   rv;
-    unsigned char         *sdata;
-    uint8_t               offset;
+    int i;
 
-    if (index > arec->count)
-	index = arec->count;
-
-    if (data) {
-	/* insert a new entry */
-
-	if (arec->count >= 255)
-	    return E2BIG;
-
-	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count+1));
-	if (!newa)
-	    return ENOMEM;
-	newv = ipmi_mem_alloc(sizeof(*newv));
-	if (!newv) {
-	    ipmi_mem_free(newa);
-	    return ENOMEM;
-	}
-	memset(newv, 0, sizeof(*newv));
-	sdata = ipmi_mem_alloc(arec->layout->min_elem_size);
-	if (!sdata) {
-	    ipmi_mem_free(newa);
-	    ipmi_mem_free(newv);
-	    return ENOMEM;
-	}
-	memset(sdata, 0, arec->layout->min_elem_size);
-	if (data) {
-	    if (data_len > arec->layout->min_elem_size)
-		memcpy(sdata, data, arec->layout->min_elem_size);
-	    else
-		memcpy(sdata, data, data_len);
-	}
-
-	if (index == arec->count)
-	    offset = arec->offset.length;
-	else
-	    offset = arec->items[index]->offset.offset;
-	newv->offset.offset = offset;
-	newv->offset.parent = &arec->offset;
-
-	rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
-					    sdata,
-					    ipmi_mr_full_offset(&newv->offset),
-					    arec->layout->min_elem_size);
-	if (rv) {
-	    ipmi_mem_free(sdata);
-	    ipmi_mem_free(newa);
-	    ipmi_mem_free(newv);
-	    return rv;
-	}
-	ipmi_mr_adjust_len(&arec->offset, arec->layout->min_elem_size);
-
-	if (arec->items) {
-	    no = 0;
-	    for (i=0, j=0; i<(int)arec->count; j++) {
-		if (j == (int) index) {
-		    no = arec->layout->min_elem_size;
-		    continue;
-		}
-		newa[j] = arec->items[i];
-		newa[j]->offset.offset += no;
-		i++;
+    if (arec->items) {
+	for (i=0; i<arec->count; i++) {
+	    if (arec->items[i]) {
+		ipmi_mr_item_info_t *irec = arec->items[i];
+		if (irec->data)
+		    ipmi_mem_free(irec->data);
+		ipmi_mem_free(irec);
 	    }
 	}
-	newa[index] = newv;
-	newv->len = arec->layout->min_elem_size;
-	newv->data = sdata;
-	newv->layout = arec->layout->elem_layout;
-	
-	no = arec->layout->min_elem_size;
-	i = 1;
-    } else {
-	/* Delete an entry */
-	ipmi_mr_struct_info_t *cr;
-
-	if (index > arec->count)
-	    return EINVAL;
-
-	cr = arec->items[index];
-
-	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count-1));
-	if (!newa)
-	    return ENOMEM;
-	rv = ipmi_fru_del_multi_record_data(finfo->fru, finfo->mr_rec_num,
-					    ipmi_mr_full_offset(&cr->offset),
-					    cr->offset.length);
-	if (rv) {
-	    ipmi_mem_free(newa);
-	    return rv;
-	}
-
-	ipmi_mr_adjust_len(&arec->offset, - (int) cr->offset.length);
-
-	no = 0;
-	for (i=0, j=0; j<(int)arec->count; j++) {
-	    if (j == (int) index) {
-		no = -3;
-		continue;
-	    }
-	    newa[i] = arec->items[j];
-	    newa[i]->offset.offset += no;
-	    i++;
-	}
-	no = cr->offset.length;
-	cr->layout->cleanup(cr);
-	i = -1;
+	ipmi_mem_free(arec->items);
     }
-
-    arec->count += i;
-
-    /* Adjust the arrays that come after me in the record. */
-    for (j=0; j<arec->nr_after; j++) {
-	ipmi_mr_array_info_t *ai = arec + j + 1;
-	
-	ai->offset.offset += no;
-	for (i=0; i<(int)ai->count; i++)
-	    ai->items[i]->offset.offset += no;
-    }
-
-    olda = arec->items;
-    arec->items = newa;
-    if (arec->layout->has_count)
-	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				       &arec->count,
-				       ipmi_mr_full_offset(&arec->offset), 1);
-    if (olda)
-	ipmi_mem_free(olda);
-
-    return 0;
 }
 
-int
-ipmi_mr_node_array_get_subtype(ipmi_fru_node_t           *node,
-			       enum ipmi_fru_data_type_e *dtype)
+void
+ipmi_mr_array_array_cleanup(ipmi_mr_array_info_t *arec)
+{
+    int i;
+
+    if (arec->items) {
+	for (i=0; i<arec->count; i++) {
+	    if (arec->items[i]) {
+		ipmi_mr_array_layout_t *layout = arec->layout->elem_layout;
+		layout->cleanup(arec->items[i]);
+	    }
+	}
+	ipmi_mem_free(arec->items);
+    }
+}
+
+void
+ipmi_mr_struct_array_cleanup(ipmi_mr_array_info_t *arec)
+{
+    int i;
+
+    if (arec->items) {
+	for (i=0; i<arec->count; i++) {
+	    if (arec->items[i]) {
+		ipmi_mr_struct_layout_t *layout = arec->layout->elem_layout;
+		layout->cleanup(arec->items[i]);
+	    }
+	}
+	ipmi_mem_free(arec->items);
+    }
+}
+
+static int
+ipmi_mr_node_struct_array_set_field(ipmi_fru_node_t           *node,
+				    unsigned int              index,
+				    enum ipmi_fru_data_type_e dtype,
+				    int                       intval,
+				    time_t                    time,
+				    double                    floatval,
+				    char                      *data,
+				    unsigned int              data_len)
+{
+    return EPERM;
+}
+
+static int
+ipmi_mr_node_struct_array_get_subtype(ipmi_fru_node_t           *node,
+				      enum ipmi_fru_data_type_e *dtype)
 {
     *dtype = IPMI_FRU_DATA_SUB_NODE;
     return 0;
 }
 
-int
-ipmi_mr_node_array_settable(ipmi_fru_node_t *node,
-			    unsigned int    index)
+static int
+ipmi_mr_node_struct_array_settable(ipmi_fru_node_t *node,
+				   unsigned int    index)
 {
     return EPERM;
 }
 
-int
-ipmi_mr_node_array_get_field(ipmi_fru_node_t           *node,
-			     unsigned int              index,
-			     const char                **name,
-			     enum ipmi_fru_data_type_e *dtype,
-			     int                       *intval,
-			     time_t                    *time,
-			     double                    *floatval,
-			     char                      **data,
-			     unsigned int              *data_len,
-			     ipmi_fru_node_t           **sub_node)
+static int
+ipmi_mr_node_struct_array_get_field(ipmi_fru_node_t           *node,
+				    unsigned int              index,
+				    const char                **name,
+				    enum ipmi_fru_data_type_e *dtype,
+				    int                       *intval,
+				    time_t                    *time,
+				    double                    *floatval,
+				    char                      **data,
+				    unsigned int              *data_len,
+				    ipmi_fru_node_t           **sub_node)
 {
     ipmi_mr_array_info_t *arec = _ipmi_fru_node_get_data(node);
     ipmi_fru_node_t      *rnode = _ipmi_fru_node_get_data2(node);
@@ -4900,18 +5114,173 @@ ipmi_mr_node_array_get_field(ipmi_fru_node_t           *node,
 }
 
 int
-ipmi_mr_array_get_field(ipmi_mr_array_info_t      *arec,
-			ipmi_fru_node_t           *rnode,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
+ipmi_mr_struct_array_set_field(ipmi_mr_array_info_t      *arec,
+			       ipmi_mr_fru_info_t        *finfo,
+			       enum ipmi_fru_data_type_e dtype,
+			       int                       intval,
+			       time_t                    time,
+			       double                    floatval,
+			       char                      *data,
+			       unsigned int              data_len)
 {
-    ipmi_fru_node_t *node;
-    ipmi_mr_fru_info_t   *finfo = _ipmi_fru_node_get_data2(rnode);
+    void                  **newa;
+    void                  **olda;
+    ipmi_mr_struct_info_t *newv;
+    int                   index = intval;
+    int                   i, j, no;
+    int                   rv;
+    unsigned char         *sdata;
+    uint8_t               offset;
+
+    if (index >= 0) {
+	/* insert a new entry */
+	if (index > arec->count)
+	    index = arec->count;
+
+	if (arec->count >= 255)
+	    return E2BIG;
+
+	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count+1));
+	if (!newa)
+	    return ENOMEM;
+	newv = ipmi_mem_alloc(sizeof(*newv));
+	if (!newv) {
+	    ipmi_mem_free(newa);
+	    return ENOMEM;
+	}
+	memset(newv, 0, sizeof(*newv));
+	sdata = ipmi_mem_alloc(arec->layout->min_elem_size);
+	if (!sdata) {
+	    ipmi_mem_free(newa);
+	    ipmi_mem_free(newv);
+	    return ENOMEM;
+	}
+	memset(sdata, 0, arec->layout->min_elem_size);
+	if (data) {
+	    if (data_len > arec->layout->min_elem_size)
+		memcpy(sdata, data, arec->layout->min_elem_size);
+	    else
+		memcpy(sdata, data, data_len);
+	}
+
+	if (index == arec->count)
+	    offset = arec->offset.length;
+	else {
+	    ipmi_mr_struct_info_t *item = arec->items[index];
+	    offset = item->offset.offset;
+	}
+	newv->offset.offset = offset;
+	newv->offset.parent = &arec->offset;
+
+	rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					    sdata,
+					    ipmi_mr_full_offset(&newv->offset),
+					    arec->layout->min_elem_size);
+	if (rv) {
+	    ipmi_mem_free(sdata);
+	    ipmi_mem_free(newa);
+	    ipmi_mem_free(newv);
+	    return rv;
+	}
+	ipmi_mr_adjust_len(&arec->offset, arec->layout->min_elem_size);
+
+	if (arec->items) {
+	    no = 0;
+	    for (i=0, j=0; i<(int)arec->count; j++) {
+		ipmi_mr_struct_info_t *item = arec->items[i];
+		if (j == (int) index) {
+		    no = arec->layout->min_elem_size;
+		    continue;
+		}
+		newa[j] = item;
+		item->offset.offset += no;
+		i++;
+	    }
+	}
+	newa[index] = newv;
+	newv->len = arec->layout->min_elem_size;
+	newv->data = sdata;
+	newv->layout = arec->layout->elem_layout;
+	
+	no = arec->layout->min_elem_size;
+	i = 1;
+    } else {
+	/* Delete an entry */
+	ipmi_mr_struct_info_t *cr;
+
+	index = (-index) - 1;
+	if (index > arec->count)
+	    return EINVAL;
+
+	cr = arec->items[index];
+
+	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count-1));
+	if (!newa)
+	    return ENOMEM;
+	rv = ipmi_fru_del_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					    ipmi_mr_full_offset(&cr->offset),
+					    cr->offset.length);
+	if (rv) {
+	    ipmi_mem_free(newa);
+	    return rv;
+	}
+
+	ipmi_mr_adjust_len(&arec->offset, - (int) cr->offset.length);
+
+	no = 0;
+	for (i=0, j=0; j<(int)arec->count; j++) {
+	    ipmi_mr_struct_info_t *item = arec->items[j];
+	    if (j == (int) index) {
+		no = - cr->offset.length;
+		continue;
+	    }
+	    newa[i] = item;
+	    item->offset.offset += no;
+	    i++;
+	}
+	no = - cr->offset.length;
+	cr->layout->cleanup(cr);
+	i = -1;
+    }
+
+    arec->count += i;
+
+    /* Adjust the arrays that come after me in the record. */
+    for (j=0; j<arec->nr_after; j++) {
+	ipmi_mr_array_info_t *ai = arec + j + 1;
+	
+	ai->offset.offset += no;
+	for (i=0; i<(int)ai->count; i++) {
+	    ipmi_mr_struct_info_t *item = ai->items[i];
+	    item->offset.offset += no;
+	}
+    }
+
+    olda = arec->items;
+    arec->items = newa;
+    if (arec->layout->has_count)
+	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				       &arec->count,
+				       ipmi_mr_full_offset(&arec->offset), 1);
+    if (olda)
+	ipmi_mem_free(olda);
+
+    return 0;
+}
+
+int
+ipmi_mr_struct_array_get_field(ipmi_mr_array_info_t      *arec,
+			       ipmi_fru_node_t           *rnode,
+			       enum ipmi_fru_data_type_e *dtype,
+			       int                       *intval,
+			       time_t                    *time,
+			       double                    *floatval,
+			       char                      **data,
+			       unsigned int              *data_len,
+			       ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_node_t    *node;
+    ipmi_mr_fru_info_t *finfo = _ipmi_fru_node_get_data2(rnode);
 
     if (dtype)
 	*dtype = IPMI_FRU_DATA_SUB_NODE;
@@ -4924,17 +5293,20 @@ ipmi_mr_array_get_field(ipmi_mr_array_info_t      *arec,
 	ipmi_fru_get_node(rnode);
 	_ipmi_fru_node_set_data(node, arec);
 	_ipmi_fru_node_set_data2(node, rnode);
-	_ipmi_fru_node_set_get_field(node, ipmi_mr_node_array_get_field);
-	_ipmi_fru_node_set_set_field(node, ipmi_mr_node_array_set_field);
-	_ipmi_fru_node_set_settable(node, ipmi_mr_node_array_settable);
-	_ipmi_fru_node_set_get_subtype(node, ipmi_mr_node_array_get_subtype);
+	_ipmi_fru_node_set_get_field(node,
+				     ipmi_mr_node_struct_array_get_field);
+	_ipmi_fru_node_set_set_field(node,
+				     ipmi_mr_node_struct_array_set_field);
+	_ipmi_fru_node_set_settable(node, ipmi_mr_node_struct_array_settable);
+	_ipmi_fru_node_set_get_subtype(node,
+				       ipmi_mr_node_struct_array_get_subtype);
 	_ipmi_fru_node_set_destructor(node, ipmi_mr_sub_destroy);
 	*sub_node = node;
     }
     return 0;
 }
 
-int
+static int
 ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
 			      unsigned int              index,
 			      enum ipmi_fru_data_type_e dtype,
@@ -4959,14 +5331,15 @@ ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
 
     index -= layout->item_count;
     if (index < layout->array_count) {
-	/* Cannot directly set arrays this way. */
-	return EPERM;
+	return layout->arrays[index].set_field(rec->arrays+index, finfo,
+					       dtype, intval, time, floatval,
+					       data, data_len);
     }
 
     return EINVAL;
 }
 
-int
+static int
 ipmi_mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
 				   unsigned int              index,
 				   enum ipmi_fru_data_type_e dtype,
@@ -4988,14 +5361,15 @@ ipmi_mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
 
     index -= layout->item_count;
     if (index < layout->array_count) {
-	/* Cannot directly set arrays this way. */
-	return EPERM;
+	return layout->arrays[index].set_field(rec->arrays+index, finfo,
+					       dtype, intval, time, floatval,
+					       data, data_len);
     }
 
     return EINVAL;
 }
 
-int
+static int
 ipmi_mr_node_struct_settable(ipmi_fru_node_t *node,
 			     unsigned int    index)
 {
@@ -5011,14 +5385,16 @@ ipmi_mr_node_struct_settable(ipmi_fru_node_t *node,
 
     index -= layout->item_count;
     if (index < layout->array_count) {
-	/* All our arrays are settable. */
-	return 0;
+	if (layout->arrays[index].settable)
+	    return 0;
+	else
+	    return EPERM;
     }
 
     return EINVAL;
 }
 
-int
+static int
 ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
 			      unsigned int              index,
 			      const char                **name,
@@ -5055,7 +5431,7 @@ ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
     return EINVAL;
 }
 
-int
+static int
 ipmi_mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
 				   unsigned int              index,
 				   const char                **name,
@@ -5092,14 +5468,15 @@ ipmi_mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
 }
 
 int
-ipmi_mr_struct_elem_check(ipmi_mr_struct_layout_t *layout,
-			  unsigned char           **rmr_data,
-			  unsigned int            *rmr_data_len)
+ipmi_mr_struct_elem_check(void          *vlayout,
+			  unsigned char **rmr_data,
+			  unsigned int  *rmr_data_len)
 {
-    unsigned char      *mr_data = *rmr_data;
-    unsigned int       mr_data_len = *rmr_data_len;
-    int                i, j;
-    int                rv;
+    ipmi_mr_struct_layout_t *layout = vlayout;
+    unsigned char           *mr_data = *rmr_data;
+    unsigned int            mr_data_len = *rmr_data_len;
+    int                     i, j;
+    int                     rv;
 
     if (mr_data_len < layout->length)
 	return EINVAL;
@@ -5140,23 +5517,38 @@ ipmi_mr_struct_elem_check(ipmi_mr_struct_layout_t *layout,
 }
 
 int
-ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
+ipmi_mr_struct_decode(void                  *vlayout,
+		      unsigned int          offset,
+		      ipmi_mr_offset_t      *offset_parent,
+		      ipmi_mr_struct_info_t **rrec,
 		      unsigned char         **rmr_data,
 		      unsigned int          *rmr_data_len)
 {
-    unsigned char      *mr_data = *rmr_data;
-    unsigned int       mr_data_len = *rmr_data_len;
-    int                i, j;
-    ipmi_mr_struct_layout_t *layout = rec->layout;
-    int                rv;
+    unsigned char           *mr_data = *rmr_data;
+    unsigned int            mr_data_len = *rmr_data_len;
+    int                     i, j;
+    ipmi_mr_struct_layout_t *layout = vlayout;
+    int                     rv;
+    ipmi_mr_struct_info_t   *rec;
 
     if (mr_data_len < layout->length)
 	return EINVAL;
 
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memset(rec, 0, sizeof(*rec));
+
+    rec->offset.offset = offset;
+    rec->offset.parent = offset_parent;
+    rec->layout = layout;
+
     if (layout->length > 0) {
 	rec->data = ipmi_mem_alloc(layout->length);
-	if (!rec->data)
-	    return ENOMEM;
+	if (!rec->data) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
 	memcpy(rec->data, mr_data, layout->length);
 	mr_data += layout->length;
 	mr_data_len -= layout->length;
@@ -5165,8 +5557,10 @@ ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
     if (layout->array_count > 0) {
 	rec->arrays = ipmi_mem_alloc(sizeof(*(rec->arrays))
 				     * layout->array_count);
-	if (!rec->arrays)
-	    return ENOMEM;
+	if (!rec->arrays) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
 	memset(rec->arrays, 0, sizeof(*(rec->arrays)) * layout->array_count);
     }
 
@@ -5181,8 +5575,10 @@ ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
 	ai->nr_after = layout->array_count - i - 1;
 	ai->layout = al;
 	if (al->has_count) {
-	    if (mr_data_len < 1)
-		return EINVAL;
+	    if (mr_data_len < 1) {
+		rv = EINVAL;
+		goto out_err;
+	    }
 	    count = *mr_data;
 	    mr_data++;
 	    mr_data_len--;
@@ -5194,7 +5590,7 @@ ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
 	    while (l > 0) {
 		rv = al->elem_check(al->elem_layout, &d, &l);
 		if (rv)
-		    return rv;
+		    goto out_err;
 		count++;
 	    }
 	}
@@ -5205,16 +5601,18 @@ ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
 		return ENOMEM;
 	    memset(ai->items, 0, sizeof(*(ai->items)) * count);
 	    for (j=0; j<(int)count; j++) {
-		ai->items[j] = ipmi_mem_alloc(sizeof(*(ai->items[j])));
-		if (!ai->items[j])
-		    return ENOMEM;
-		memset(ai->items[j], 0, sizeof(*(ai->items[j])));
-		ai->items[j]->offset.offset = mr_data - astart_mr_data;
-		ai->items[j]->offset.parent = &(ai->offset);
-		ai->items[j]->layout = al->elem_layout;
-		rv = al->elem_decode(ai->items[j], &mr_data, &mr_data_len);
+		ipmi_mr_struct_info_t *r;
+
+		rv = al->elem_decode(al->elem_layout,
+				     mr_data - astart_mr_data,
+				     &ai->offset,
+				     &r,
+				     &mr_data,
+				     &mr_data_len);
 		if (rv)
-		    return rv;
+		    goto out_err;
+
+		ai->items[j] = r;
 	    }
 	}
 	ai->offset.length = mr_data - astart_mr_data;
@@ -5223,8 +5621,13 @@ ipmi_mr_struct_decode(ipmi_mr_struct_info_t *rec,
     rec->offset.length = mr_data - *rmr_data;
     *rmr_data = mr_data;
     *rmr_data_len = mr_data_len;
+    *rrec = rec;
 
     return 0;
+
+ out_err:
+    ipmi_mr_struct_cleanup(rec);
+    return rv;
 }
 
 int
@@ -5246,10 +5649,9 @@ ipmi_mr_root(ipmi_fru_t              *fru,
     if (mr_data_len == 0)
 	return EINVAL;
     
-    rec = ipmi_mem_alloc(sizeof(*rec));
-    if (!rec)
-	return ENOMEM;
-    memset(rec, 0, sizeof(*rec));
+    rv = ipmi_mr_struct_decode(layout, 4, NULL, &rec, &mr_data, &mr_data_len);
+    if (rv)
+	return rv;
 
     finfo = ipmi_mem_alloc(sizeof(*finfo));
     if (!finfo)
@@ -5257,15 +5659,6 @@ ipmi_mr_root(ipmi_fru_t              *fru,
     ipmi_fru_ref(fru);
     finfo->fru = fru;
     finfo->mr_rec_num = mr_rec_num;
-
-    rec->layout = layout;
-    rec->offset.offset = 4;
-    rec->offset.parent = NULL;
-
-    rv = ipmi_mr_struct_decode(rec, &mr_data, &mr_data_len);
-    if (rv)
-	goto out_cleanup;
-    rec->offset.length = mr_data - rmr_data;
 
     node = _ipmi_fru_node_alloc(fru);
     if (!node)
@@ -5288,7 +5681,6 @@ ipmi_mr_root(ipmi_fru_t              *fru,
  out_no_mem:
     rv = ENOMEM;
 
- out_cleanup:
     if (finfo) {
 	ipmi_fru_deref(fru);
 	ipmi_mem_free(finfo);

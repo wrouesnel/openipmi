@@ -9391,6 +9391,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    s = str;
 	    if (data_len > 0)
 		s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    else
+		*s = '\0';
 	    for (i=1; i<data_len; i++)
 		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    *type = "binary";
@@ -9402,6 +9404,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    s = str;
 	    if (data_len > 0)
 		s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    else
+		*s = '\0';
 	    for (i=1; i<data_len; i++)
 		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    *type = "unicode";
