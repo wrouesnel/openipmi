@@ -45,7 +45,7 @@ class ReinitOnAny:
         oldval = int(s_oldval)
         newval = int(s_newval)
         if (oldval != newval):
-            self.glist.refresh_data()
+            self.glist.refresh()
             return True
         return False
 
@@ -60,7 +60,7 @@ class ReinitOnZero:
         oldval = int(s_oldval)
         newval = int(s_newval)
         if (oldval != newval) and ((oldval == 0) or (newval == 0)):
-            self.glist.refresh_data()
+            self.glist.refresh()
             return True
         return False
 
@@ -82,6 +82,12 @@ class FRUData:
             pass
         self.reiniter = reiniter
         self.settable = settable
+        if (ptype == "binary") or (ptype == "unicode"):
+            self.longtext = True
+            pass
+        else:
+            self.longtext = False;
+            pass
         return
 
     def do_on_close(self):
@@ -151,7 +157,8 @@ class FRUData:
     
     def setvalue(self, event):
         gui_setdialog.SetDialog("Set value for " + self.pname,
-                                [ self.currval ], 1, self)
+                                [ self.currval ], 1, self,
+                                longtext=self.longtext)
         return
 
     def togglevalue(self, event):
@@ -319,7 +326,7 @@ class FruInfoDisplay(gui_treelist.TreeList):
             pass
         return
     
-    def refresh_data(self):
+    def refresh(self):
         name_s = [ "" ]
         node_s = [ None ]
         rv = self.fru.get_root_node(name_s, node_s)
@@ -380,10 +387,10 @@ class FruInfoDisplay(gui_treelist.TreeList):
                             reiniter = ReinitOnZero(self)
                             pass
                         pass
+                    self.cleanup_field(type_s[0], value_s)
                     data = FRUData(self, node, i, name_s[0], type_s[0],
                                    value_s[0], parent, node.settable(i) == 0,
                                    reiniter)
-                    self.cleanup_field(type_s[0], value_s)
                     self.add_data(item, name_s[0], [value_s[0]], data=data,
                                   before=before)
                     pass

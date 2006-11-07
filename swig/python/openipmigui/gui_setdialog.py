@@ -37,10 +37,12 @@ def isbool(v):
     return type(v) == type(True)
 
 class SetDialog(Tix.Toplevel):
-    def __init__(self, name, default, count, handler, labels=None):
+    def __init__(self, name, default, count, handler, labels=None,
+                 longtext=False):
         self.handler = handler
         Tix.Toplevel.__init__(self)
         self.title(name)
+        self.longtext = longtext
 
         sw = Tix.ScrolledWindow(self)
         self.values = sw.window
@@ -59,6 +61,10 @@ class SetDialog(Tix.Toplevel):
                     field.set(default[i])
                     w = Tix.Checkbutton(self.values, variable=field)
                     pass
+                elif longtext:
+                    field = Tix.Text(self.values)
+                    field.insert("1.0", str(default[i]))
+                    w = field
                 else:
                     field = Tix.Entry(self.values)
                     field.insert("0", str(default[i]))
@@ -80,6 +86,10 @@ class SetDialog(Tix.Toplevel):
                     field.set(default[i])
                     w = Tix.Checkbutton(self.values, variable=field)
                     pass
+                elif longtext:
+                    field = Tix.Text(self.values)
+                    field.insert("1.0", str(default[i]))
+                    w = field
                 else:
                     field = Tix.Entry(self.values)
                     field.insert("0", str(default[i]))
@@ -118,7 +128,12 @@ class SetDialog(Tix.Toplevel):
     def ok(self):
         vals = [ ]
         for f in self.fields:
-            v = f.get()
+            if (self.longtext):
+                v = f.get("1.0", "end")
+                pass
+            else:
+                v = f.get()
+                pass
             if (not isbool(v)):
                 v = v.strip()
                 pass

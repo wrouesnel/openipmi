@@ -160,6 +160,7 @@ class ConnTypeInfo(Tix.Frame):
                 pass
             i += 1
             pass
+
         return
 
     def SetupArgs(self):
@@ -243,6 +244,7 @@ class ConnInfo(Tix.ScrolledWindow):
             pass
 
         self.contype.invoke(self.contypes.keys()[0])
+
         return
 
     def parse_args_iter_help_cb(self, name, help):

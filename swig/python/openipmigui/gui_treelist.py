@@ -70,6 +70,9 @@ class TreeList(Tix.Toplevel):
         if hasattr(self, "cancel"):
             bbox.add("cancel", text="Cancel", command=self.cancel)
             pass
+        if hasattr(self, "refresh"):
+            bbox.add("refresh", text="Refresh", command=self.refresh)
+            pass
         if hasattr(self, "clear"):
             bbox.add("clear", text="Clear", command=self.clear)
             pass
@@ -78,6 +81,12 @@ class TreeList(Tix.Toplevel):
         tree.bind("<Button-3>", self.TreeMenu)
 
         self.bind("<Destroy>", self.OnDestroy)
+        
+        self.bind("<MouseWheel>", self.Wheel)
+        if (self.tk.eval("return [ tk windowingsystem ]") == "x11"):
+            self.bind("<Button-4>", self.ButtonUp)
+            self.bind("<Button-5>", self.ButtonDown)
+            pass
 
         self.treeroot = ""
         self.tree = tree
@@ -85,6 +94,20 @@ class TreeList(Tix.Toplevel):
         self.currkey = 0
         return
 
+    def Wheel(self, event):
+        self.tree.yview("scroll", -(event.delta / 20), "units")
+        return
+    
+    def ButtonUp(self, event):
+        event.delta = 120
+        self.Wheel(event);
+        return
+    
+    def ButtonDown(self, event):
+        event.delta = -120
+        self.Wheel(event);
+        return
+    
     def ExpandItem(self, item):
         children = self.stree.hlist.info_children(item)
         for child in children:

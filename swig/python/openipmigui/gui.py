@@ -178,6 +178,12 @@ class IPMIGUI(Tix.Frame):
         self.setup_item("D", active=True)
         self.tree.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         self.tree.hlist.bind("<Button-3>", self.TreeMenu)
+        
+        self.tree.hlist.bind("<MouseWheel>", self.Wheel)
+        if (self.tk.eval("return [ tk windowingsystem ]") == "x11"):
+            self.tree.hlist.bind("<Button-4>", self.ButtonUp)
+            self.tree.hlist.bind("<Button-5>", self.ButtonDown)
+            pass
 
         self.numloglines = 1
         self.maxloglines = 1000
@@ -209,6 +215,20 @@ class IPMIGUI(Tix.Frame):
         top.after(self.timer_timeout_ms, self.Timeout)
         return
 
+    def Wheel(self, event):
+        self.tree.hlist.yview("scroll", -(event.delta / 20), "units")
+        return
+    
+    def ButtonUp(self, event):
+        event.delta = 120
+        self.Wheel(event);
+        return
+    
+    def ButtonDown(self, event):
+        event.delta = -120
+        self.Wheel(event);
+        return
+    
     def ReportError(self, str):
         if (self.in_destroy):
             return

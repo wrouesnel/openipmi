@@ -53,8 +53,28 @@ class SubList(Tix.ScrolledHList):
 
         self.bind("<Destroy>", self.OnDestroy)
 
+        self.hlist.bind("<MouseWheel>", self.Wheel)
+        if (self.tk.eval("return [ tk windowingsystem ]") == "x11"):
+            self.hlist.bind("<Button-4>", self.ButtonUp)
+            self.hlist.bind("<Button-5>", self.ButtonDown)
+            pass
+
         return
 
+    def Wheel(self, event):
+        self.hlist.yview("scroll", -(event.delta / 20), "units")
+        return
+    
+    def ButtonUp(self, event):
+        event.delta = 120
+        self.Wheel(event);
+        return
+    
+    def ButtonDown(self, event):
+        event.delta = -120
+        self.Wheel(event);
+        return
+    
     def OnDestroy(self, event):
         self.list_hash = None
         return

@@ -1,3 +1,20 @@
+2006-11-07 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/_fru.py: Added a refresh button to
+	re-read the whole FRU contents.  This allows you to change
+	multi-record data and see what happens.
+	
+	* swig/python/openipmigui/gui.py: Got wheel mouse scrolling working.
+	* swig/python/openipmigui/gui_list.py: ditto
+	* swig/python/openipmigui/gui_treelist.py: ditto
+
+	* swig/python/openipmigui/gui_setdialog.py: Added an option to
+	allow using a Text widget for multi-line input (for multi-record
+	data).
+
+	* swig/python/openipmigui/_fru.py: Use the long option to
+	gui_setdialog for binary or unicode data.
+	
 2006-11-06 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Redid
