@@ -3642,8 +3642,8 @@ fru_mr_array_idx_set_field(ipmi_fru_node_t           *pnode,
 }
 
 static int
-fru_mr_array_idx_settable(ipmi_fru_node_t           *pnode,
-			  unsigned int              index)
+fru_mr_array_idx_settable(ipmi_fru_node_t *pnode,
+			  unsigned int    index)
 {
     switch (index) {
     case 0:
@@ -4458,7 +4458,7 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
  *
  ************************************************************************/
 
-ipmi_mr_floattab_item_t pow_supply_intfloat =
+static ipmi_mr_floattab_item_t pow_supply_intfloat =
 {
     .count = 4,
     .defval = 0.0,
@@ -4479,31 +4479,31 @@ static ipmi_mr_item_layout_t pow_supply_items[] = {
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field },
     { .name = "inrush current", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 5, .length = 1,
-      .multiplier = 0.001,
+      .u.multiplier = 0.001,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "low input voltage 1", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 6, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "high input voltage 1", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 8, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "low input voltage 2", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 10, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "high input voltage 2", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 12, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "low frequency", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
@@ -4515,7 +4515,7 @@ static ipmi_mr_item_layout_t pow_supply_items[] = {
     { .name = "A/C dropout tolerance", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 16, .length = 1,
-      .multiplier = 0.001,
+      .u.multiplier = 0.001,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "tach pulses per rotation", .dtype = IPMI_FRU_DATA_BOOLEAN,
@@ -4556,13 +4556,13 @@ static ipmi_mr_item_layout_t pow_supply_items[] = {
     { .name = "combined wattage voltage 1", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 164, .length = 4,
-      .tab_data = &pow_supply_intfloat,
+      .u.tab_data = &pow_supply_intfloat,
       .set_field = ipmi_mr_bitfloatvaltab_set_field,
       .get_field = ipmi_mr_bitfloatvaltab_get_field },
     { .name = "combined wattage voltage 2", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 160, .length = 4,
-      .tab_data = &pow_supply_intfloat,
+      .u.tab_data = &pow_supply_intfloat,
       .set_field = ipmi_mr_bitfloatvaltab_set_field,
       .get_field = ipmi_mr_bitfloatvaltab_get_field },
     { .name = "combined wattage", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
@@ -4593,34 +4593,34 @@ static ipmi_mr_item_layout_t dc_output_items[] = {
       .get_field = ipmi_mr_bitint_get_field },
     { .name = "nominal voltage", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 1, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max negative voltage deviation",
       .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 3, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max positive voltage deviation",
       .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 5, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "ripple", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 7, .length = 2,
-      .multiplier = 0.001,
+      .u.multiplier = 0.001,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "min current", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 9, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max current", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 11, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
 };
@@ -4639,34 +4639,34 @@ static ipmi_mr_item_layout_t dc_load_items[] = {
       .get_field = ipmi_mr_bitint_get_field },
     { .name = "nominal voltage", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 1, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "min voltage",
       .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 3, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max voltage",
       .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 5, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "ripple", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 7, .length = 2,
-      .multiplier = 0.001,
+      .u.multiplier = 0.001,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "min current", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 9, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max current", .dtype = IPMI_FRU_DATA_FLOAT, .settable = 1,
       .start = 11, .length = 2,
-      .multiplier = 0.01,
+      .u.multiplier = 0.01,
       .set_field = ipmi_mr_intfloat_set_field,
       .get_field = ipmi_mr_intfloat_get_field },
 };
@@ -4690,17 +4690,17 @@ std_get_mr_root(ipmi_fru_t          *fru,
 {
     switch (record_type_id) {
     case 0x00:
-	return ipmi_mr_root(fru, mr_rec_num, mr_data, mr_data_len,
-			    &pow_supply,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data, mr_data_len,
+				   &pow_supply,
+				   name, node);
     case 0x01:
-	return ipmi_mr_root(fru, mr_rec_num, mr_data, mr_data_len,
-			    &dc_output,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data, mr_data_len,
+				   &dc_output,
+				   name, node);
     case 0x02:
-	return ipmi_mr_root(fru, mr_rec_num, mr_data, mr_data_len,
-			    &dc_load,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data, mr_data_len,
+				   &dc_load,
+				   name, node);
     default:
 	return EINVAL;
     }
@@ -4997,22 +4997,190 @@ ipmi_mr_sub_destroy(ipmi_fru_node_t *node)
     ipmi_fru_put_node(root_node);
 }
 
-void
-ipmi_mr_item_array_cleanup(ipmi_mr_array_info_t *arec)
+static int
+ins_array_item(ipmi_mr_array_info_t *arec,
+	       ipmi_mr_fru_info_t   *finfo,
+	       ipmi_mr_offset_t     *poff,
+	       int                  index,
+	       char                 *data,
+	       unsigned int         data_len,
+	       unsigned char        **rdata)
 {
-    int i;
+    ipmi_mr_offset_t **newa;
+    ipmi_mr_offset_t **olda;
+    unsigned char    *sdata;
+    int              i, j;
+    int              rv;
+    int              no;
+
+    /* insert a new entry */
+    if (index > arec->count)
+	index = arec->count;
+
+    if (arec->count >= 255)
+	return E2BIG;
+
+    newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count+1));
+    if (!newa)
+	return ENOMEM;
+    sdata = ipmi_mem_alloc(arec->layout->min_elem_size);
+    if (!sdata) {
+	ipmi_mem_free(newa);
+	return ENOMEM;
+    }
+    memset(sdata, 0, arec->layout->min_elem_size);
+    if (data) {
+	if (data_len > arec->layout->min_elem_size)
+	    memcpy(sdata, data, arec->layout->min_elem_size);
+	else
+	    memcpy(sdata, data, data_len);
+    }
+
+    poff->parent = &arec->offset;
+    poff->length = arec->layout->min_elem_size;
+    if (index == arec->count) {
+	poff->offset = arec->offset.length;
+	poff->next = NULL;
+    } else {
+	ipmi_mr_offset_t *o = arec->items[index];
+	poff->offset = o->offset;
+	poff->next = o;
+    }
+
+    rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					sdata,
+					ipmi_mr_full_offset(poff),
+					arec->layout->min_elem_size);
+    if (rv) {
+	ipmi_mem_free(sdata);
+	ipmi_mem_free(newa);
+	return rv;
+    }
+
+    if (index > 0) {
+	ipmi_mr_offset_t *o = arec->items[index-1];
+	o->next = poff;
+    }
+    ipmi_mr_adjust_len(&arec->offset, arec->layout->min_elem_size);
 
     if (arec->items) {
-	for (i=0; i<arec->count; i++) {
-	    if (arec->items[i]) {
-		ipmi_mr_item_info_t *irec = arec->items[i];
-		if (irec->data)
-		    ipmi_mem_free(irec->data);
-		ipmi_mem_free(irec);
+	no = 0;
+	for (i=0, j=0; i<(int)arec->count; j++) {
+	    ipmi_mr_offset_t *o = arec->items[i];
+	    if (j == (int) index) {
+		no = arec->layout->min_elem_size;
+		continue;
 	    }
+	    newa[j] = o;
+	    o->offset += no;
+	    i++;
 	}
-	ipmi_mem_free(arec->items);
     }
+    newa[index] = poff;
+	
+    no = arec->layout->min_elem_size;
+
+    arec->count += 1;
+
+    /* Adjust the arrays that come after me in the record. */
+    for (j=0; j<arec->nr_after; j++) {
+	ipmi_mr_array_info_t *ai = arec + j + 1;
+	
+	ai->offset.offset += no;
+	for (i=0; i<(int)ai->count; i++) {
+	    ipmi_mr_offset_t *o = ai->items[i];
+	    o->offset += no;
+	}
+    }
+
+    olda = arec->items;
+    arec->items = newa;
+    if (arec->layout->has_count)
+	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				       &arec->count,
+				       ipmi_mr_full_offset(&arec->offset), 1);
+    if (olda)
+	ipmi_mem_free(olda);
+
+    *rdata = sdata;
+    return 0;
+}
+
+static int
+del_array_item(ipmi_mr_array_info_t *arec,
+	       ipmi_mr_fru_info_t   *finfo,
+	       int                  index,
+	       ipmi_mr_offset_t     **delitem)
+{
+    ipmi_mr_offset_t **newa;
+    ipmi_mr_offset_t **olda;
+    int              i, j;
+    int              rv;
+    int              no;
+    ipmi_mr_offset_t *poff;
+
+    index = (-index) - 1;
+    if (index > arec->count)
+	return EINVAL;
+
+    poff = arec->items[index];
+
+    newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count-1));
+    if (!newa)
+	return ENOMEM;
+    rv = ipmi_fru_del_multi_record_data(finfo->fru, finfo->mr_rec_num,
+					ipmi_mr_full_offset(poff),
+					poff->length);
+    if (rv) {
+	ipmi_mem_free(newa);
+	return rv;
+    }
+
+    if (index > 0) {
+	ipmi_mr_offset_t *o = arec->items[index-1];
+	o->next = poff->next;
+    }
+
+    ipmi_mr_adjust_len(&arec->offset, - (int) poff->length);
+
+    no = 0;
+    for (i=0, j=0; j<(int)arec->count; j++) {
+	ipmi_mr_offset_t *o = arec->items[j];
+	if (j == (int) index) {
+	    no = - poff->length;
+	    continue;
+	}
+	newa[i] = o;
+	o->offset += no;
+	i++;
+    }
+    no = - poff->length;
+
+    arec->count -= 1;
+
+    /* Adjust the arrays that come after me in the record. */
+    for (j=0; j<arec->nr_after; j++) {
+	ipmi_mr_array_info_t *ai = arec + j + 1;
+	
+	ai->offset.offset += no;
+	for (i=0; i<(int)ai->count; i++) {
+	    ipmi_mr_offset_t *o = ai->items[i];
+	    o->offset += no;
+	}
+    }
+
+    olda = arec->items;
+    arec->items = newa;
+    if (arec->layout->has_count)
+	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
+				       &arec->count,
+				       ipmi_mr_full_offset(&arec->offset), 1);
+    if (olda)
+	ipmi_mem_free(olda);
+
+    *delitem = poff;
+
+    return 0;
 }
 
 void
@@ -5024,11 +5192,189 @@ ipmi_mr_array_array_cleanup(ipmi_mr_array_info_t *arec)
 	for (i=0; i<arec->count; i++) {
 	    if (arec->items[i]) {
 		ipmi_mr_array_layout_t *layout = arec->layout->elem_layout;
-		layout->cleanup(arec->items[i]);
+		layout->cleanup((void *) arec->items[i]);
 	    }
 	}
 	ipmi_mem_free(arec->items);
     }
+}
+
+void
+ipmi_mr_item_array_cleanup(ipmi_mr_array_info_t *arec)
+{
+    int i;
+
+    if (arec->items) {
+	for (i=0; i<arec->count; i++) {
+	    if (arec->items[i]) {
+		ipmi_mr_item_info_t *irec = (void *) arec->items[i];
+		if (irec->data)
+		    ipmi_mem_free(irec->data);
+		ipmi_mem_free(irec);
+	    }
+	}
+	ipmi_mem_free(arec->items);
+    }
+}
+
+static int
+ipmi_mr_node_item_array_set_field(ipmi_fru_node_t           *node,
+				  unsigned int              index,
+				  enum ipmi_fru_data_type_e dtype,
+				  int                       intval,
+				  time_t                    time,
+				  double                    floatval,
+				  char                      *data,
+				  unsigned int              data_len)
+{
+    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_node_t       *rnode = _ipmi_fru_node_get_data2(node);
+    ipmi_mr_item_info_t   *info;
+    ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
+    ipmi_mr_getset_t      gs = { layout, NULL, NULL,
+				 _ipmi_fru_node_get_data2(rnode) };
+
+    if (index >= arec->count)
+	return EINVAL;
+
+    info = (void *) arec->items[index];
+    gs.rdata = info->data;
+    gs.offset = arec->items[index];
+    return layout->set_field(&gs,
+			     dtype, intval, time, floatval, data, data_len);
+    return 0;
+}
+
+static int
+ipmi_mr_node_item_array_get_subtype(ipmi_fru_node_t           *node,
+				    enum ipmi_fru_data_type_e *dtype)
+{
+    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
+
+    *dtype = layout->dtype;
+    return 0;
+}
+
+static int
+ipmi_mr_node_item_array_settable(ipmi_fru_node_t *node,
+				 unsigned int    index)
+{
+    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
+
+    if (layout->settable)
+	return 0;
+    else
+	return EPERM;
+}
+
+static int
+ipmi_mr_node_item_array_get_field(ipmi_fru_node_t           *node,
+				  unsigned int              index,
+				  const char                **name,
+				  enum ipmi_fru_data_type_e *dtype,
+				  int                       *intval,
+				  time_t                    *time,
+				  double                    *floatval,
+				  char                      **data,
+				  unsigned int              *data_len,
+				  ipmi_fru_node_t           **sub_node)
+{
+    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
+    ipmi_mr_item_info_t   *info;
+    ipmi_mr_getset_t      gs = { layout, NULL, NULL, NULL };
+
+    if (index >= arec->count)
+	return EINVAL;
+
+    info = (void *) arec->items[index];
+    gs.rdata = info->data;
+    gs.offset = arec->items[index];
+    return layout->get_field(&gs,
+			     dtype, intval, time, floatval, data, data_len);
+    return 0;
+}
+
+int
+ipmi_mr_item_array_set_field(ipmi_mr_array_info_t      *arec,
+			     ipmi_mr_fru_info_t        *finfo,
+			     enum ipmi_fru_data_type_e dtype,
+			     int                       intval,
+			     time_t                    time,
+			     double                    floatval,
+			     char                      *data,
+			     unsigned int              data_len)
+{
+    int index = intval;
+    int rv;
+
+    if (index >= 0) {
+	ipmi_mr_item_info_t *newv;
+
+	newv = ipmi_mem_alloc(sizeof(*newv));
+	if (!newv)
+	    return ENOMEM;
+	memset(newv, 0, sizeof(*newv));
+	newv->layout = arec->layout->elem_layout;
+
+	rv = ins_array_item(arec, finfo, &newv->offset, index, data, data_len,
+			    &newv->data);
+	if (rv)
+	    ipmi_mem_free(newv);
+    } else {
+	ipmi_mr_offset_t      *delo;
+	ipmi_mr_item_info_t *delv;
+
+	rv = del_array_item(arec, finfo, index, &delo);
+	if (!rv) {
+	    delv = (void *) delo;
+	    if (delv->data)
+		ipmi_mem_free(delv->data);
+	    ipmi_mem_free(delv);
+	}
+    }
+
+    return rv;
+}
+
+int
+ipmi_mr_item_array_get_field(ipmi_mr_array_info_t      *arec,
+			     ipmi_fru_node_t           *rnode,
+			     enum ipmi_fru_data_type_e *dtype,
+			     int                       *intval,
+			     time_t                    *time,
+			     double                    *floatval,
+			     char                      **data,
+			     unsigned int              *data_len,
+			     ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_node_t    *node;
+    ipmi_mr_fru_info_t *finfo = _ipmi_fru_node_get_data2(rnode);
+
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = arec->count;
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(finfo->fru);
+	if (!node)
+	    return ENOMEM;
+	ipmi_fru_get_node(rnode);
+	_ipmi_fru_node_set_data(node, arec);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node,
+				     ipmi_mr_node_item_array_get_field);
+	_ipmi_fru_node_set_set_field(node,
+				     ipmi_mr_node_item_array_set_field);
+	_ipmi_fru_node_set_settable(node, ipmi_mr_node_item_array_settable);
+	_ipmi_fru_node_set_get_subtype(node,
+				       ipmi_mr_node_item_array_get_subtype);
+	_ipmi_fru_node_set_destructor(node, ipmi_mr_sub_destroy);
+	*sub_node = node;
+    }
+    return 0;
 }
 
 void
@@ -5040,7 +5386,7 @@ ipmi_mr_struct_array_cleanup(ipmi_mr_array_info_t *arec)
 	for (i=0; i<arec->count; i++) {
 	    if (arec->items[i]) {
 		ipmi_mr_struct_layout_t *layout = arec->layout->elem_layout;
-		layout->cleanup(arec->items[i]);
+		layout->cleanup((void *) arec->items[i]);
 	    }
 	}
 	ipmi_mem_free(arec->items);
@@ -5128,161 +5474,34 @@ ipmi_mr_struct_array_set_field(ipmi_mr_array_info_t      *arec,
 			       char                      *data,
 			       unsigned int              data_len)
 {
-    void                  **newa;
-    void                  **olda;
-    ipmi_mr_struct_info_t *newv;
-    int                   index = intval;
-    int                   i, j, no;
-    int                   rv;
-    unsigned char         *sdata;
-    uint8_t               offset;
+    int index = intval;
+    int rv;
 
     if (index >= 0) {
-	/* insert a new entry */
-	if (index > arec->count)
-	    index = arec->count;
+	ipmi_mr_struct_info_t *newv;
 
-	if (arec->count >= 255)
-	    return E2BIG;
-
-	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count+1));
-	if (!newa)
-	    return ENOMEM;
 	newv = ipmi_mem_alloc(sizeof(*newv));
-	if (!newv) {
-	    ipmi_mem_free(newa);
+	if (!newv)
 	    return ENOMEM;
-	}
 	memset(newv, 0, sizeof(*newv));
-	sdata = ipmi_mem_alloc(arec->layout->min_elem_size);
-	if (!sdata) {
-	    ipmi_mem_free(newa);
-	    ipmi_mem_free(newv);
-	    return ENOMEM;
-	}
-	memset(sdata, 0, arec->layout->min_elem_size);
-	if (data) {
-	    if (data_len > arec->layout->min_elem_size)
-		memcpy(sdata, data, arec->layout->min_elem_size);
-	    else
-		memcpy(sdata, data, data_len);
-	}
-
-	rv = ipmi_fru_ins_multi_record_data(finfo->fru, finfo->mr_rec_num,
-					    sdata,
-					    ipmi_mr_full_offset(&newv->offset),
-					    arec->layout->min_elem_size);
-	if (rv) {
-	    ipmi_mem_free(sdata);
-	    ipmi_mem_free(newa);
-	    ipmi_mem_free(newv);
-	    return rv;
-	}
-
-	newv->offset.parent = &arec->offset;
-	newv->offset.length = arec->layout->min_elem_size;
-	if (index == arec->count) {
-	    newv->offset.offset = arec->offset.length;
-	    newv->offset.next = NULL;
-	} else {
-	    ipmi_mr_struct_info_t *item = arec->items[index];
-	    offset = item->offset.offset;
-	    newv->offset.next = &item->offset;
-	}
-	if (index > 0) {
-	    ipmi_mr_struct_info_t *pitem = arec->items[index-1];
-	    pitem->offset.next = &newv->offset;
-	}
-
-	ipmi_mr_adjust_len(&arec->offset, arec->layout->min_elem_size);
-
-	if (arec->items) {
-	    no = 0;
-	    for (i=0, j=0; i<(int)arec->count; j++) {
-		ipmi_mr_struct_info_t *item = arec->items[i];
-		if (j == (int) index) {
-		    no = arec->layout->min_elem_size;
-		    continue;
-		}
-		newa[j] = item;
-		item->offset.offset += no;
-		i++;
-	    }
-	}
-	newa[index] = newv;
-	newv->len = arec->layout->min_elem_size;
-	newv->data = sdata;
 	newv->layout = arec->layout->elem_layout;
-	
-	no = arec->layout->min_elem_size;
-	i = 1;
+
+	rv = ins_array_item(arec, finfo, &newv->offset, index, data, data_len,
+			    &newv->data);
+	if (rv)
+	    ipmi_mem_free(newv);
     } else {
-	/* Delete an entry */
-	ipmi_mr_struct_info_t *cr;
+	ipmi_mr_offset_t      *delo;
+	ipmi_mr_struct_info_t *delv;
 
-	index = (-index) - 1;
-	if (index > arec->count)
-	    return EINVAL;
-
-	cr = arec->items[index];
-
-	newa = ipmi_mem_alloc(sizeof(*newa) * (arec->count-1));
-	if (!newa)
-	    return ENOMEM;
-	rv = ipmi_fru_del_multi_record_data(finfo->fru, finfo->mr_rec_num,
-					    ipmi_mr_full_offset(&cr->offset),
-					    cr->offset.length);
-	if (rv) {
-	    ipmi_mem_free(newa);
-	    return rv;
-	}
-
-	if (index > 0) {
-	    ipmi_mr_struct_info_t *pitem = arec->items[index-1];
-	    pitem->offset.next = cr->offset.next;
-	}
-
-	ipmi_mr_adjust_len(&arec->offset, - (int) cr->offset.length);
-
-	no = 0;
-	for (i=0, j=0; j<(int)arec->count; j++) {
-	    ipmi_mr_struct_info_t *item = arec->items[j];
-	    if (j == (int) index) {
-		no = - cr->offset.length;
-		continue;
-	    }
-	    newa[i] = item;
-	    item->offset.offset += no;
-	    i++;
-	}
-	no = - cr->offset.length;
-	cr->layout->cleanup(cr);
-	i = -1;
-    }
-
-    arec->count += i;
-
-    /* Adjust the arrays that come after me in the record. */
-    for (j=0; j<arec->nr_after; j++) {
-	ipmi_mr_array_info_t *ai = arec + j + 1;
-	
-	ai->offset.offset += no;
-	for (i=0; i<(int)ai->count; i++) {
-	    ipmi_mr_struct_info_t *item = ai->items[i];
-	    item->offset.offset += no;
+	rv = del_array_item(arec, finfo, index, &delo);
+	if (!rv) {
+	    delv = (void *) delo;
+	    delv->layout->cleanup(delv);
 	}
     }
 
-    olda = arec->items;
-    arec->items = newa;
-    if (arec->layout->has_count)
-	ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				       &arec->count,
-				       ipmi_mr_full_offset(&arec->offset), 1);
-    if (olda)
-	ipmi_mem_free(olda);
-
-    return 0;
+    return rv;
 }
 
 int
@@ -5339,9 +5558,12 @@ ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
     ipmi_mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(rnode);
 
     if (index < layout->item_count) {
+	ipmi_mr_item_layout_t   *ilayout = layout->items+index;
+	ipmi_mr_getset_t        gs = { ilayout, &rec->offset,
+				       rec->data, finfo };
 	if (!layout->items[index].set_field)
 	    return EPERM;
-	return layout->items[index].set_field(layout->items+index, rec, finfo,
+	return layout->items[index].set_field(&gs,
 					      dtype, intval, time, floatval,
 					      data, data_len);
     }
@@ -5371,7 +5593,9 @@ ipmi_mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
     ipmi_mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(node);
 
     if (index < layout->item_count) {
-	return layout->items[index].set_field(layout->items+index, rec, finfo,
+	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
+				       rec->data, finfo };
+	return layout->items[index].set_field(&gs,
 					      dtype, intval, time, floatval,
 					      data, data_len);
     }
@@ -5427,9 +5651,11 @@ ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
     ipmi_mr_struct_layout_t *layout = rec->layout;
 
     if (index < layout->item_count) {
+	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
+				       rec->data, NULL };
 	if (name)
 	    *name = layout->items[index].name;
-	return layout->items[index].get_field(layout->items+index, rec, dtype,
+	return layout->items[index].get_field(&gs, dtype,
 					      intval, time, floatval,
 					      data, data_len);
     }
@@ -5464,9 +5690,12 @@ ipmi_mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
     ipmi_mr_struct_layout_t *layout = rec->layout;
 
     if (index < layout->item_count) {
+	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
+				       rec->data,
+				       _ipmi_fru_node_get_data2(node) };
 	if (name)
 	    *name = layout->items[index].name;
-	return layout->items[index].get_field(layout->items+index, rec, dtype,
+	return layout->items[index].get_field(&gs, dtype,
 					      intval, time, floatval,
 					      data, data_len);
     }
@@ -5534,12 +5763,12 @@ ipmi_mr_struct_elem_check(void          *vlayout,
 }
 
 int
-ipmi_mr_struct_decode(void                  *vlayout,
-		      unsigned int          offset,
-		      ipmi_mr_offset_t      *offset_parent,
-		      ipmi_mr_struct_info_t **rrec,
-		      unsigned char         **rmr_data,
-		      unsigned int          *rmr_data_len)
+ipmi_mr_struct_decode(void             *vlayout,
+		      unsigned int     offset,
+		      ipmi_mr_offset_t *offset_parent,
+		      ipmi_mr_offset_t **rrec,
+		      unsigned char    **rmr_data,
+		      unsigned int     *rmr_data_len)
 {
     unsigned char           *mr_data = *rmr_data;
     unsigned int            mr_data_len = *rmr_data_len;
@@ -5619,7 +5848,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
 	    }
 	}
 	if (count > 0) {
-	    ipmi_mr_struct_info_t *p;
+	    ipmi_mr_offset_t *p;
 
 	    ai->count = count;
 	    ai->items = ipmi_mem_alloc(sizeof(*(ai->items)) * count);
@@ -5628,7 +5857,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
 	    memset(ai->items, 0, sizeof(*(ai->items)) * count);
 	    p = NULL;
 	    for (j=0; j<(int)count; j++) {
-		ipmi_mr_struct_info_t *r;
+		ipmi_mr_offset_t *r;
 
 		rv = al->elem_decode(al->elem_layout,
 				     mr_data - astart_mr_data,
@@ -5640,7 +5869,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
 		    goto out_err;
 
 		if (p)
-		    p->offset.next = &r->offset;
+		    p->next = r;
 		ai->items[j] = r;
 		p = r;
 	    }
@@ -5652,7 +5881,7 @@ ipmi_mr_struct_decode(void                  *vlayout,
     rec->offset.length = mr_data - *rmr_data;
     *rmr_data = mr_data;
     *rmr_data_len = mr_data_len;
-    *rrec = rec;
+    *rrec = &rec->offset;
 
     return 0;
 
@@ -5662,17 +5891,89 @@ ipmi_mr_struct_decode(void                  *vlayout,
 }
 
 int
-ipmi_mr_root(ipmi_fru_t              *fru,
-	     unsigned int            mr_rec_num,
-	     unsigned char           *rmr_data,
-	     unsigned int            rmr_data_len,
-	     ipmi_mr_struct_layout_t *layout,
-	     const char              **name,
-	     ipmi_fru_node_t         **rnode)
+ipmi_mr_item_elem_check(void          *vlayout,
+			unsigned char **rmr_data,
+			unsigned int  *rmr_data_len)
+{
+    ipmi_mr_item_layout_t *layout = vlayout;
+    unsigned char         *mr_data = *rmr_data;
+    unsigned int          mr_data_len = *rmr_data_len;
+
+    if (mr_data_len < layout->length)
+	return EINVAL;
+
+    mr_data += layout->length;
+    mr_data_len -= layout->length;
+
+    *rmr_data = mr_data;
+    *rmr_data_len = mr_data_len;
+
+    return 0;
+}
+
+int
+ipmi_mr_item_decode(void             *vlayout,
+		    unsigned int     offset,
+		    ipmi_mr_offset_t *offset_parent,
+		    ipmi_mr_offset_t **rrec,
+		    unsigned char    **rmr_data,
+		    unsigned int     *rmr_data_len)
+{
+    unsigned char         *mr_data = *rmr_data;
+    unsigned int          mr_data_len = *rmr_data_len;
+    ipmi_mr_item_layout_t *layout = vlayout;
+    int                   rv;
+    ipmi_mr_item_info_t   *rec;
+
+    if (mr_data_len < layout->length)
+	return EINVAL;
+
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memset(rec, 0, sizeof(*rec));
+
+    rec->offset.offset = offset;
+    rec->offset.parent = offset_parent;
+    rec->offset.next = NULL;
+    rec->layout = layout;
+
+    if (layout->length > 0) {
+	rec->data = ipmi_mem_alloc(layout->length);
+	if (!rec->data) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	memcpy(rec->data, mr_data, layout->length);
+	mr_data += layout->length;
+	mr_data_len -= layout->length;
+    }
+
+    rec->offset.length = mr_data - *rmr_data;
+    *rmr_data = mr_data;
+    *rmr_data_len = mr_data_len;
+
+    *rrec = &rec->offset;
+
+    return 0;
+
+ out_err:
+    ipmi_mr_item_cleanup(rec);
+    return rv;
+}
+
+int
+ipmi_mr_struct_root(ipmi_fru_t              *fru,
+		    unsigned int            mr_rec_num,
+		    unsigned char           *rmr_data,
+		    unsigned int            rmr_data_len,
+		    ipmi_mr_struct_layout_t *layout,
+		    const char              **name,
+		    ipmi_fru_node_t         **rnode)
 {
     unsigned char         *mr_data = rmr_data;
     unsigned int          mr_data_len = rmr_data_len;
-    ipmi_mr_struct_info_t *rec;
+    ipmi_mr_offset_t      *orec;
     ipmi_fru_node_t       *node;
     ipmi_mr_fru_info_t    *finfo = NULL;
     int                   rv;
@@ -5680,7 +5981,7 @@ ipmi_mr_root(ipmi_fru_t              *fru,
     if (mr_data_len == 0)
 	return EINVAL;
     
-    rv = ipmi_mr_struct_decode(layout, 4, NULL, &rec, &mr_data, &mr_data_len);
+    rv = ipmi_mr_struct_decode(layout, 4, NULL, &orec, &mr_data, &mr_data_len);
     if (rv)
 	return rv;
 
@@ -5695,7 +5996,7 @@ ipmi_mr_root(ipmi_fru_t              *fru,
     if (!node)
 	goto out_no_mem;
 
-    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_data(node, orec);
     _ipmi_fru_node_set_data2(node, finfo);
     _ipmi_fru_node_set_get_field(node, ipmi_mr_root_node_struct_get_field);
     _ipmi_fru_node_set_set_field(node, ipmi_mr_root_node_struct_set_field);
@@ -5716,7 +6017,7 @@ ipmi_mr_root(ipmi_fru_t              *fru,
 	ipmi_fru_deref(fru);
 	ipmi_mem_free(finfo);
     }
-    ipmi_mr_struct_cleanup(rec);
+    ipmi_mr_struct_cleanup((void *) orec);
     return rv;
 }
 
@@ -5728,41 +6029,40 @@ ipmi_mr_root(ipmi_fru_t              *fru,
  **********************************************************************/
 
 int
-ipmi_mr_int_set_field(ipmi_mr_item_layout_t     *layout,
-		       ipmi_mr_struct_info_t     *rec,
-		       ipmi_mr_fru_info_t        *finfo,
-		       enum ipmi_fru_data_type_e dtype,
-		       int                       intval,
-		       time_t                    time,
-		       double                    floatval,
-		       char                      *data,
-		       unsigned int              data_len)
+ipmi_mr_int_set_field(ipmi_mr_getset_t          *getset,
+		      enum ipmi_fru_data_type_e dtype,
+		      int                       intval,
+		      time_t                    time,
+		      double                    floatval,
+		      char                      *data,
+		      unsigned int              data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
     unsigned int  val = intval;
     int           i;
 
-    if (dtype != layout->dtype)
+    if (dtype != getset->layout->dtype)
 	return EINVAL;
 
     if (dtype == IPMI_FRU_DATA_BOOLEAN)
 	val = !!val;
 
-    for (i=0; i<layout->length; i++) {
+    for (i=0; i<getset->layout->length; i++) {
 	*c = val & 0xff;
 	val >>= 8;
 	c++;
     }
-    c = rec->data + layout->start;
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				   c, ipmi_mr_full_offset(&rec->offset)+layout->start,
-				   layout->length);
+    c = getset->rdata + getset->layout->start;
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    +getset->layout->start),
+				   getset->layout->length);
     return 0;
 }
 
 int
-ipmi_mr_int_get_field(ipmi_mr_item_layout_t     *layout,
-		      ipmi_mr_struct_info_t     *rec,
+ipmi_mr_int_get_field(ipmi_mr_getset_t          *getset,
 		      enum ipmi_fru_data_type_e *dtype,
 		      int                       *intval,
 		      time_t                    *time,
@@ -5770,15 +6070,15 @@ ipmi_mr_int_get_field(ipmi_mr_item_layout_t     *layout,
 		      char                      **data,
 		      unsigned int              *data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
     int           val = 0;
     int           shift = 0;
     int           i;
 
     if (dtype)
-	*dtype = layout->dtype;
+	*dtype = getset->layout->dtype;
     if (intval) {
-	for (i=0; i<layout->length; i++) {
+	for (i=0; i<getset->layout->length; i++) {
 	    val |= ((int) *c) << shift;
 	    c++;
 	    shift += 8;
@@ -5789,9 +6089,7 @@ ipmi_mr_int_get_field(ipmi_mr_item_layout_t     *layout,
 }
 
 int
-ipmi_mr_intfloat_set_field(ipmi_mr_item_layout_t     *layout,
-			   ipmi_mr_struct_info_t     *rec,
-			   ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_intfloat_set_field(ipmi_mr_getset_t          *getset,
 			   enum ipmi_fru_data_type_e dtype,
 			   int                       intval,
 			   time_t                    time,
@@ -5799,30 +6097,29 @@ ipmi_mr_intfloat_set_field(ipmi_mr_item_layout_t     *layout,
 			   char                      *data,
 			   unsigned int              data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
     unsigned int  val;
     int           i;
 
     if (dtype != IPMI_FRU_DATA_FLOAT)
 	return EINVAL;
 
-    val = (unsigned int) ((floatval / layout->multiplier) + 0.5);
+    val = (unsigned int) ((floatval / getset->layout->u.multiplier) + 0.5);
 
-    for (i=0; i<layout->length; i++) {
+    for (i=0; i<getset->layout->length; i++) {
 	*c = val & 0xff;
 	val >>= 8;
 	c++;
     }
-    c = rec->data + layout->start;
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				   c, ipmi_mr_full_offset(&rec->offset)+layout->start,
-				   layout->length);
+    c = getset->rdata + getset->layout->start;
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru, getset->finfo->mr_rec_num,
+				   c, ipmi_mr_full_offset(getset->offset)+getset->layout->start,
+				   getset->layout->length);
     return 0;
 }
 
 int
-ipmi_mr_intfloat_get_field(ipmi_mr_item_layout_t     *layout,
-			   ipmi_mr_struct_info_t     *rec,
+ipmi_mr_intfloat_get_field(ipmi_mr_getset_t          *getset,
 			   enum ipmi_fru_data_type_e *dtype,
 			   int                       *intval,
 			   time_t                    *time,
@@ -5830,7 +6127,7 @@ ipmi_mr_intfloat_get_field(ipmi_mr_item_layout_t     *layout,
 			   char                      **data,
 			   unsigned int              *data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
     int           val = 0;
     int           shift = 0;
     int           i;
@@ -5838,20 +6135,18 @@ ipmi_mr_intfloat_get_field(ipmi_mr_item_layout_t     *layout,
     if (dtype)
 	*dtype = IPMI_FRU_DATA_FLOAT;
     if (floatval) {
-	for (i=0; i<layout->length; i++) {
+	for (i=0; i<getset->layout->length; i++) {
 	    val |= ((int) *c) << shift;
 	    c++;
 	    shift += 8;
 	}
-	*floatval = ((double) val) * layout->multiplier;
+	*floatval = ((double) val) * getset->layout->u.multiplier;
     }
     return 0;
 }
 
 int
-ipmi_mr_bitint_set_field(ipmi_mr_item_layout_t     *layout,
-			 ipmi_mr_struct_info_t     *rec,
-			 ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_bitint_set_field(ipmi_mr_getset_t          *getset,
 			 enum ipmi_fru_data_type_e dtype,
 			 int                       intval,
 			 time_t                    time,
@@ -5859,15 +6154,17 @@ ipmi_mr_bitint_set_field(ipmi_mr_item_layout_t     *layout,
 			 char                      *data,
 			 unsigned int              data_len)
 {
-    unsigned char *c = rec->data + layout->start / 8;
-    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char *c = getset->rdata + getset->layout->start / 8;
+    unsigned char *end = getset->rdata + (getset->layout->start
+					  + getset->layout->length) / 8;
     int           val = intval;
-    int           shift = layout->start % 8;
+    int           shift = getset->layout->start % 8;
     int           offset = 8 - shift;
     unsigned char mask1 = (~0) << shift;
-    unsigned char mask2 = (~0) << ((layout->start + layout->length) % 8);
+    unsigned char mask2 = (~0) << ((getset->layout->start
+				    + getset->layout->length) % 8);
 
-    if (dtype != layout->dtype)
+    if (dtype != getset->layout->dtype)
 	return EINVAL;
 
     if (dtype == IPMI_FRU_DATA_BOOLEAN)
@@ -5884,17 +6181,17 @@ ipmi_mr_bitint_set_field(ipmi_mr_item_layout_t     *layout,
     mask1 = ~mask1 | mask2;
     *c = (*c & mask1 ) | ((val << shift) & ~mask1);
 
-    c = rec->data + layout->start / 8;
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				   c,
-				   ipmi_mr_full_offset(&rec->offset) + (c - rec->data),
+    c = getset->rdata + getset->layout->start / 8;
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + (c - getset->rdata)),
 				   end - c + 1);
     return 0;
 }
 
 int
-ipmi_mr_bitint_get_field(ipmi_mr_item_layout_t     *layout,
-			 ipmi_mr_struct_info_t     *rec,
+ipmi_mr_bitint_get_field(ipmi_mr_getset_t          *getset,
 			 enum ipmi_fru_data_type_e *dtype,
 			 int                       *intval,
 			 time_t                    *time,
@@ -5902,15 +6199,16 @@ ipmi_mr_bitint_get_field(ipmi_mr_item_layout_t     *layout,
 			 char                      **data,
 			 unsigned int              *data_len)
 {
-    unsigned char *c = rec->data + layout->start / 8;
-    unsigned char *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char *c = getset->rdata + getset->layout->start / 8;
+    unsigned char *end = getset->rdata + (getset->layout->start
+					  + getset->layout->length) / 8;
     int           val = 0;
-    int           offset = layout->start % 8;
+    int           offset = getset->layout->start % 8;
     int           shift = 8 - offset;
-    unsigned int  mask = (~0) << layout->length;
+    unsigned int  mask = (~0) << getset->layout->length;
 
     if (dtype)
-	*dtype = layout->dtype;
+	*dtype = getset->layout->dtype;
 
     if (intval) {
 	val = *c >> offset;
@@ -5927,9 +6225,7 @@ ipmi_mr_bitint_get_field(ipmi_mr_item_layout_t     *layout,
 }
 
 int
-ipmi_mr_bitvaltab_set_field(ipmi_mr_item_layout_t     *layout,
-			    ipmi_mr_struct_info_t     *rec,
-			    ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_bitvaltab_set_field(ipmi_mr_getset_t          *getset,
 			    enum ipmi_fru_data_type_e dtype,
 			    int                       intval,
 			    time_t                    time,
@@ -5937,16 +6233,18 @@ ipmi_mr_bitvaltab_set_field(ipmi_mr_item_layout_t     *layout,
 			    char                      *data,
 			    unsigned int              data_len)
 {
-    unsigned char      *c = rec->data + layout->start / 8;
-    unsigned char      *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char      *c = getset->rdata + getset->layout->start / 8;
+    unsigned char      *end = getset->rdata + (getset->layout->start
+					       + getset->layout->length) / 8;
     int                val;
-    int                shift = layout->start % 8;
+    int                shift = getset->layout->start % 8;
     int                offset = 8 - shift;
     unsigned char      mask1 = (~0) << shift;
-    unsigned char      mask2 = (~0) << ((layout->start + layout->length) % 8);
-    ipmi_mr_tab_item_t *tab = layout->tab_data;
+    unsigned char      mask2 = (~0) << ((getset->layout->start
+					 + getset->layout->length) % 8);
+    ipmi_mr_tab_item_t *tab = getset->layout->u.tab_data;
 
-    if (dtype != layout->dtype)
+    if (dtype != getset->layout->dtype)
 	return EINVAL;
 
     for (val=0; val<(int)tab->count; val++) {
@@ -5967,17 +6265,17 @@ ipmi_mr_bitvaltab_set_field(ipmi_mr_item_layout_t     *layout,
     mask1 = ~mask1 | mask2;
     *c = (*c & mask1 ) | ((val << shift) & ~mask1);
 
-    c = rec->data + layout->start / 8;
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				   c,
-				   ipmi_mr_full_offset(&rec->offset) + (c - rec->data),
+    c = getset->rdata + getset->layout->start / 8;
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + (c - getset->rdata)),
 				   end - c + 1);
     return 0;
 }
 
 int
-ipmi_mr_bitvaltab_get_field(ipmi_mr_item_layout_t     *layout,
-			    ipmi_mr_struct_info_t     *rec,
+ipmi_mr_bitvaltab_get_field(ipmi_mr_getset_t          *getset,
 			    enum ipmi_fru_data_type_e *dtype,
 			    int                       *intval,
 			    time_t                    *time,
@@ -5985,17 +6283,18 @@ ipmi_mr_bitvaltab_get_field(ipmi_mr_item_layout_t     *layout,
 			    char                      **data,
 			    unsigned int              *data_len)
 {
-    unsigned char      *c = rec->data + layout->start / 8;
-    unsigned char      *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char      *c = getset->rdata + getset->layout->start / 8;
+    unsigned char      *end = getset->rdata + (getset->layout->start
+					       + getset->layout->length) / 8;
     int                val = 0;
-    int                offset = layout->start % 8;
+    int                offset = getset->layout->start % 8;
     int                shift = 8 - offset;
-    unsigned int       mask = (~0) << layout->length;
+    unsigned int       mask = (~0) << getset->layout->length;
     char               *str;
-    ipmi_mr_tab_item_t *tab = layout->tab_data;
+    ipmi_mr_tab_item_t *tab = getset->layout->u.tab_data;
 
     if (dtype)
-	*dtype = layout->dtype;
+	*dtype = getset->layout->dtype;
 
     val = *c >> offset;
     while (c != end) {
@@ -6020,9 +6319,7 @@ ipmi_mr_bitvaltab_get_field(ipmi_mr_item_layout_t     *layout,
 }
 
 int
-ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_item_layout_t     *layout,
-				 ipmi_mr_struct_info_t     *rec,
-				 ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_getset_t          *getset,
 				 enum ipmi_fru_data_type_e dtype,
 				 int                       intval,
 				 time_t                    time,
@@ -6030,16 +6327,18 @@ ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_item_layout_t     *layout,
 				 char                      *data,
 				 unsigned int              data_len)
 {
-    unsigned char *c = rec->data + layout->start / 8;
-    unsigned char           *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char           *c = getset->rdata + getset->layout->start / 8;
+    unsigned char           *end = getset->rdata + (getset->layout->start
+						 + getset->layout->length) / 8;
     int                     val;
-    int                     shift = layout->start % 8;
+    int                     shift = getset->layout->start % 8;
     int                     offset = 8 - shift;
     unsigned char           mask1 = (~0) << shift;
-    unsigned char           mask2 = (~0) << ((layout->start + layout->length) % 8);
-    ipmi_mr_floattab_item_t *tab = layout->tab_data;
+    unsigned char           mask2 = (~0) << ((getset->layout->start
+					      + getset->layout->length) % 8);
+    ipmi_mr_floattab_item_t *tab = getset->layout->u.tab_data;
 
-    if (dtype != layout->dtype)
+    if (dtype != getset->layout->dtype)
 	return EINVAL;
 
     for (val=0; val<(int)tab->count; val++) {
@@ -6061,17 +6360,17 @@ ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_item_layout_t     *layout,
     mask1 = ~mask1 | mask2;
     *c = (*c & mask1 ) | ((val << shift) & ~mask1);
 
-    c = rec->data + layout->start / 8;
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num,
-				   c,
-				   ipmi_mr_full_offset(&rec->offset) + (c - rec->data),
+    c = getset->rdata + getset->layout->start / 8;
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + (c - getset->rdata)),
 				   end - c + 1);
     return 0;
 }
 
 int
-ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_item_layout_t     *layout,
-				 ipmi_mr_struct_info_t     *rec,
+ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_getset_t          *getset,
 				 enum ipmi_fru_data_type_e *dtype,
 				 int                       *intval,
 				 time_t                    *time,
@@ -6079,16 +6378,17 @@ ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_item_layout_t     *layout,
 				 char                      **data,
 				 unsigned int              *data_len)
 {
-    unsigned char           *c = rec->data + layout->start / 8;
-    unsigned char           *end = rec->data + (layout->start + layout->length) / 8;
+    unsigned char           *c = getset->rdata + getset->layout->start / 8;
+    unsigned char           *end = getset->rdata + (getset->layout->start
+						 + getset->layout->length) / 8;
     int                     val = 0;
-    int                     offset = layout->start % 8;
+    int                     offset = getset->layout->start % 8;
     int                     shift = 8 - offset;
-    unsigned int            mask = (~0) << layout->length;
-    ipmi_mr_floattab_item_t *tab = layout->tab_data;
+    unsigned int            mask = (~0) << getset->layout->length;
+    ipmi_mr_floattab_item_t *tab = getset->layout->u.tab_data;
 
     if (dtype)
-	*dtype = layout->dtype;
+	*dtype = getset->layout->dtype;
 
     if (floatval) {
 	val = *c >> offset;
@@ -6108,9 +6408,7 @@ ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_item_layout_t     *layout,
 }
 
 int
-ipmi_mr_str_set_field(ipmi_mr_item_layout_t     *layout,
-		      ipmi_mr_struct_info_t     *rec,
-		      ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_str_set_field(ipmi_mr_getset_t          *getset,
 		      enum ipmi_fru_data_type_e dtype,
 		      int                       intval,
 		      time_t                    time,
@@ -6118,7 +6416,7 @@ ipmi_mr_str_set_field(ipmi_mr_item_layout_t     *layout,
 		      char                      *data,
 		      unsigned int              data_len)
 {
-    unsigned char        *c = rec->data + layout->start;
+    unsigned char        *c = getset->rdata + getset->layout->start;
     enum ipmi_str_type_e stype;
     unsigned int         len;
 
@@ -6131,18 +6429,19 @@ ipmi_mr_str_set_field(ipmi_mr_item_layout_t     *layout,
     default:
 	return EINVAL;
     }
-    memset(c, 0, layout->length);
-    len = layout->length;
+    memset(c, 0, getset->layout->length);
+    len = getset->layout->length;
     ipmi_set_device_string(data, stype, data_len, c, 0, &len);
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
-				   ipmi_mr_full_offset(&rec->offset)+layout->start,
-				   layout->length);
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + getset->layout->start),
+				   getset->layout->length);
     return 0;
 }
 
 int
-ipmi_mr_str_get_field(ipmi_mr_item_layout_t     *layout,
-		      ipmi_mr_struct_info_t     *rec,
+ipmi_mr_str_get_field(ipmi_mr_getset_t          *getset,
 		      enum ipmi_fru_data_type_e *dtype,
 		      int                       *intval,
 		      time_t                    *time,
@@ -6150,13 +6449,13 @@ ipmi_mr_str_get_field(ipmi_mr_item_layout_t     *layout,
 		      char                      **data,
 		      unsigned int              *data_len)
 {
-    unsigned char        *c = rec->data + layout->start;
+    unsigned char        *c = getset->rdata + getset->layout->start;
     char                 str[64];
     unsigned int         len;
     enum ipmi_str_type_e type;
     int                  rv;
 
-    rv = ipmi_get_device_string(&c, layout->length, str,
+    rv = ipmi_get_device_string(&c, getset->layout->length, str,
 				IPMI_STR_FRU_SEMANTICS, 0,
 				&type, sizeof(str), &len);
     if (rv)
@@ -6189,9 +6488,7 @@ ipmi_mr_str_get_field(ipmi_mr_item_layout_t     *layout,
 }
 
 int
-ipmi_mr_binary_set_field(ipmi_mr_item_layout_t     *layout,
-			 ipmi_mr_struct_info_t     *rec,
-			 ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_binary_set_field(ipmi_mr_getset_t          *getset,
 			 enum ipmi_fru_data_type_e dtype,
 			 int                       intval,
 			 time_t                    time,
@@ -6199,25 +6496,26 @@ ipmi_mr_binary_set_field(ipmi_mr_item_layout_t     *layout,
 			 char                      *data,
 			 unsigned int              data_len)
 {
-    unsigned char        *c = rec->data + layout->start;
+    unsigned char        *c = getset->rdata + getset->layout->start;
 
     if (!data)
 	return ENOSYS;
-    if (dtype != layout->dtype)
+    if (dtype != getset->layout->dtype)
 	return EINVAL;
-    if (data_len > layout->length)
+    if (data_len > getset->layout->length)
 	return EINVAL;
 
     memcpy(c, data, data_len);
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
-				   ipmi_mr_full_offset(&rec->offset)+layout->start,
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + getset->layout->start),
 				   data_len);
     return 0;
 }
 
 int
-ipmi_mr_binary_get_field(ipmi_mr_item_layout_t     *layout,
-			 ipmi_mr_struct_info_t     *rec,
+ipmi_mr_binary_get_field(ipmi_mr_getset_t          *getset,
 			 enum ipmi_fru_data_type_e *dtype,
 			 int                       *intval,
 			 time_t                    *time,
@@ -6225,25 +6523,23 @@ ipmi_mr_binary_get_field(ipmi_mr_item_layout_t     *layout,
 			 char                      **data,
 			 unsigned int              *data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
 
     if (dtype)
 	*dtype = IPMI_FRU_DATA_BINARY;
     if (data_len)
-	*data_len = layout->length;
+	*data_len = getset->layout->length;
     if (data) {
-	*data = ipmi_mem_alloc(layout->length);
+	*data = ipmi_mem_alloc(getset->layout->length);
 	if (!(*data))
 	    return ENOMEM;
-	memcpy(*data, c, layout->length);
+	memcpy(*data, c, getset->layout->length);
     }
     return 0;
 }
 
 int
-ipmi_mr_ip_set_field(ipmi_mr_item_layout_t     *layout,
-		     ipmi_mr_struct_info_t     *rec,
-		     ipmi_mr_fru_info_t        *finfo,
+ipmi_mr_ip_set_field(ipmi_mr_getset_t          *getset,
 		     enum ipmi_fru_data_type_e dtype,
 		     int                       intval,
 		     time_t                    time,
@@ -6251,7 +6547,7 @@ ipmi_mr_ip_set_field(ipmi_mr_item_layout_t     *layout,
 		     char                      *data,
 		     unsigned int              data_len)
 {
-    unsigned char  *c = rec->data + layout->start;
+    unsigned char  *c = getset->rdata + getset->layout->start;
     void           *addr;
     int            addr_len;
     int            af;
@@ -6273,16 +6569,17 @@ ipmi_mr_ip_set_field(ipmi_mr_item_layout_t     *layout,
     if (rv <= 0)
 	return EINVAL;
     memcpy(c, addr, addr_len);
-    ipmi_fru_ovw_multi_record_data(finfo->fru, finfo->mr_rec_num, c,
-				   ipmi_mr_full_offset(&rec->offset)+layout->start,
+    ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
+				   getset->finfo->mr_rec_num, c,
+				   (ipmi_mr_full_offset(getset->offset)
+				    + getset->layout->start),
 				   addr_len);
 
     return 0;
 }
 
 int
-ipmi_mr_ip_get_field(ipmi_mr_item_layout_t     *layout,
-		     ipmi_mr_struct_info_t     *rec,
+ipmi_mr_ip_get_field(ipmi_mr_getset_t          *getset,
 		     enum ipmi_fru_data_type_e *dtype,
 		     int                       *intval,
 		     time_t                    *time,
@@ -6290,7 +6587,7 @@ ipmi_mr_ip_get_field(ipmi_mr_item_layout_t     *layout,
 		     char                      **data,
 		     unsigned int              *data_len)
 {
-    unsigned char *c = rec->data + layout->start;
+    unsigned char *c = getset->rdata + getset->layout->start;
     char          ipstr[19]; /* worst case size */
     int           len;
 

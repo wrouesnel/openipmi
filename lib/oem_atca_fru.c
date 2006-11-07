@@ -170,23 +170,28 @@ static ipmi_mr_item_layout_t pow_dist_maps_items[] = {
     { .name = "max extern avail current", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 0, .length = 2,
-      .multiplier = 0.1,
-      .set_field = ipmi_mr_intfloat_set_field, .get_field = ipmi_mr_intfloat_get_field },
+      .u.multiplier = 0.1,
+      .set_field = ipmi_mr_intfloat_set_field,
+      .get_field = ipmi_mr_intfloat_get_field },
     { .name = "max internal current", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 2, .length = 2,
-      .multiplier = 0.1,
-      .set_field = ipmi_mr_intfloat_set_field, .get_field = ipmi_mr_intfloat_get_field },
+      .u.multiplier = 0.1,
+      .set_field = ipmi_mr_intfloat_set_field,
+      .get_field = ipmi_mr_intfloat_get_field },
     { .name = "min operating voltage", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 2, .length = 2,
-      .multiplier = 0.5,
-      .set_field = ipmi_mr_intfloat_set_field, .get_field = ipmi_mr_intfloat_get_field }
+      .u.multiplier = 0.5,
+      .set_field = ipmi_mr_intfloat_set_field,
+      .get_field = ipmi_mr_intfloat_get_field }
 };
 static ipmi_mr_array_layout_t pow_dist_maps_arys[] = {
-    { .name = "feed to frus", .has_count = 1, .min_elem_size = 6, .settable = 1,
+    { .name = "feed to frus", .has_count = 1, .min_elem_size = 6,
+      .settable = 1,
       .elem_layout = &pow_dist_f2f,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
       .cleanup = ipmi_mr_struct_array_cleanup,
       .get_field = ipmi_mr_struct_array_get_field,
       .set_field = ipmi_mr_struct_array_set_field }
@@ -205,7 +210,8 @@ static ipmi_mr_item_layout_t pow_dist_items[] = {
 static ipmi_mr_array_layout_t pow_dist_arys[] = {
     { .name = "power feeds", .has_count = 1, .min_elem_size = 3, .settable = 1,
       .elem_layout = &pow_dist_maps,
-      .elem_check = ipmi_mr_struct_elem_check, .elem_decode = ipmi_mr_struct_decode,
+      .elem_check = ipmi_mr_struct_elem_check,
+      .elem_decode = ipmi_mr_struct_decode,
       .cleanup = ipmi_mr_struct_array_cleanup,
       .get_field = ipmi_mr_struct_array_get_field,
       .set_field = ipmi_mr_struct_array_set_field }
@@ -339,8 +345,8 @@ atca_root_ipmi_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
     default:
 	return EINVAL;
     }
-    return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4, layout,
-		   name, node);
+    return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+			       layout, name, node);
 }
 
 /***********************************************************************
@@ -349,16 +355,11 @@ atca_root_ipmi_mr_shelf_mgr_ip_conn(ipmi_fru_t          *fru,
  *
  **********************************************************************/
 
-static ipmi_mr_item_layout_t guid_elem[] = {
-    { .name = "GUID", .dtype = IPMI_FRU_DATA_BINARY, .settable = 1,
-      .start = 0, .length = 16,
-      .set_field = ipmi_mr_binary_set_field, .get_field = ipmi_mr_binary_get_field }
-};
-static ipmi_mr_struct_layout_t guid_elems = {
-    .name = NULL, .length = 16,
-    .item_count = 1, .items = guid_elem,
-    .array_count = 0, .arrays = NULL,
-    .cleanup = ipmi_mr_struct_cleanup
+static ipmi_mr_item_layout_t guid_elem = {
+    .name = "GUID", .dtype = IPMI_FRU_DATA_BINARY, .settable = 1,
+    .start = 0, .length = 16,
+    .set_field = ipmi_mr_binary_set_field,
+    .get_field = ipmi_mr_binary_get_field
 };
 static ipmi_mr_tab_item_t link_if_tab = {
     .count = 3,
@@ -388,7 +389,7 @@ static ipmi_mr_item_layout_t link_desc[] = {
       .set_field = ipmi_mr_bitint_set_field, .get_field = ipmi_mr_bitint_get_field },
     { .name = "interface", .dtype = IPMI_FRU_DATA_ASCII, .settable = 1,
       .start = 6, .length = 2,
-      .tab_data = &link_if_tab,
+      .u.tab_data = &link_if_tab,
       .set_field = ipmi_mr_bitvaltab_set_field,
       .get_field = ipmi_mr_bitvaltab_get_field },
     { .name = "channel number", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
@@ -409,12 +410,12 @@ static ipmi_mr_item_layout_t bp2p_conn_items[] = {
 static ipmi_mr_array_layout_t bp2p_conn_arys[] = {
     { .name = "OEM GUIDs", .has_count = 1, .settable = 1,
       .min_elem_size = 16,
-      .elem_layout = &guid_elems,
-      .elem_check = ipmi_mr_struct_elem_check,
-      .elem_decode = ipmi_mr_struct_decode,
-      .cleanup = ipmi_mr_struct_array_cleanup,
-      .get_field = ipmi_mr_struct_array_get_field,
-      .set_field = ipmi_mr_struct_array_set_field },
+      .elem_layout = &guid_elem,
+      .elem_check = ipmi_mr_item_elem_check,
+      .elem_decode = ipmi_mr_item_decode,
+      .cleanup = ipmi_mr_item_array_cleanup,
+      .get_field = ipmi_mr_item_array_get_field,
+      .set_field = ipmi_mr_item_array_set_field },
     { .name = "Link Descriptors", .has_count = 0,
       .min_elem_size = 4,
       .elem_layout = &link_descs,
@@ -462,7 +463,7 @@ static ipmi_mr_item_layout_t hub_desc_items[] = {
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field },
     { .name = "bus coverage", .dtype = IPMI_FRU_DATA_ASCII, .settable = 1,
       .start = 8, .length = 2,
-      .tab_data = &hub_info_if_tab,
+      .u.tab_data = &hub_info_if_tab,
       .set_field = ipmi_mr_bitvaltab_set_field,
       .get_field = ipmi_mr_bitvaltab_get_field }
 };
@@ -584,30 +585,30 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t      *fru,
     case 4: /* backplane point-to-point connectivity record */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &p2p_cr,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &p2p_cr,
+				   name, node);
 
     case 0x10: /* shelf address table */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &addr_tab,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &addr_tab,
+				   name, node);
 
     case 0x11: /* Shelf power distribution */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &pow_dist,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &pow_dist,
+				   name, node);
 
     case 0x12: /* Shelf activation and power mgmt */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &act_pm,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &act_pm,
+				   name, node);
 
     case 0x13: /* Shelf Manager IP Connection Record */
 	return atca_root_ipmi_mr_shelf_mgr_ip_conn(fru, mr_rec_num,
@@ -617,23 +618,23 @@ _ipmi_atca_fru_get_mr_root(ipmi_fru_t      *fru,
     case 0x14: /* Board p2p connectivity record */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &bp2p_conn,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &bp2p_conn,
+				   name, node);
 
     case 0x15: /* radial ipmb0 link mapping */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &rad_ipmb,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &rad_ipmb,
+				   name, node);
 
     case 0x1b: /* Shelf fan geography record */
 	if (mr_data[4] != 0)
 	    return EINVAL;
-	return ipmi_mr_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
-			    &fan_geog,
-			    name, node);
+	return ipmi_mr_struct_root(fru, mr_rec_num, mr_data+4, mr_data_len-4,
+				   &fan_geog,
+				   name, node);
 
     default:
 	return ENOSYS;

@@ -36,9 +36,39 @@ import gui_treelist
 import gui_popup
 import gui_setdialog
 
+class ReinitOnAny:
+    def __init__(self, glist):
+        self.glist = glist;
+        return
+
+    def reinit(self, data, s_oldval, s_newval):
+        oldval = int(s_oldval)
+        newval = int(s_newval)
+        if (oldval != newval):
+            self.glist.refresh_data()
+            return True
+        return False
+
+    pass
+
+class ReinitOnZero:
+    def __init__(self, glist):
+        self.glist = glist;
+        return
+
+    def reinit(self, data, s_oldval, s_newval):
+        oldval = int(s_oldval)
+        newval = int(s_newval)
+        if (oldval != newval) and ((oldval == 0) or (newval == 0)):
+            self.glist.refresh_data()
+            return True
+        return False
+
+    pass
+
 class FRUData:
     def __init__(self, glist, node, index, pname, ptype, origval, parent,
-                 settable, reinit_on_zero = False, reinit_on_any = False):
+                 settable, reiniter = None):
         self.glist = glist
         self.node = node
         self.aidx = index
@@ -50,8 +80,7 @@ class FRUData:
         if (parent != None):
             parent.children.insert(index, self)
             pass
-        self.reinit_on_zero = reinit_on_zero
-        self.reinit_on_any = reinit_on_any
+        self.reiniter = reiniter
         self.settable = settable
         return
 
@@ -89,20 +118,26 @@ class FRUData:
                                 + OpenIPMI.get_error_string(rv))
             return
         try:
-            oldval = int(self.currval)
-            newval = int(vals[0])
-            if (self.reinit_on_any and (oldval != newval)):
-                self.glist.refresh_data()
-                return
-            elif (self.reinit_on_zero and (oldval != newval)
-                and ((oldval == 0) or (newval == 0))):
-                # We need to re-initialize the whole display.
-                self.glist.refresh_data()
-                return
+            if (self.reiniter != None):
+                if self.reiniter.reinit(self, self.currval, vals[0]):
+                    return
+                pass
             pass
         except:
             pass
-        self.currval = vals[0]
+        
+        name_s = [ "" ]
+        type_s = [ "" ]
+        value_s = [ "" ]
+        node_s = [ None ]
+        rv = self.node.get_field(self.aidx, name_s, type_s, value_s, node_s)
+        if (rv != 0):
+            self.glist.SetError("Could not re-get field: "
+                                + OpenIPMI.get_error_string(rv))
+            return
+
+        self.glist.cleanup_field(type_s[0], value_s)
+        self.currval = value_s[0]
         self.glist.SetColumn(self.item, self.currval, 1)
         return
     
@@ -261,6 +296,29 @@ class FruInfoDisplay(gui_treelist.TreeList):
         self.Close()
         return
 
+    def cleanup_field(self, type, value_s):
+        if (type == "binary"):
+            splitup = value_s[0].split()
+            p = 0
+            value_s[0] = ""
+            if (len(splitup) > 0):
+                value_s[0] += splitup[0]
+                del splitup[0]
+                pass
+            for v in splitup:
+                p += 1
+                if (p >= 8):
+                    value_s[0] += "\n"
+                    p = 0
+                    pass
+                else:
+                    value_s[0] += " "
+                    pass
+                value_s[0] += v
+                pass
+            pass
+        return
+    
     def refresh_data(self):
         name_s = [ "" ]
         node_s = [ None ]
@@ -313,13 +371,19 @@ class FruInfoDisplay(gui_treelist.TreeList):
                                         before=before)
                     self.add_fru_data(sub, node_s[0], 0, np, False)
                 else:
+                    reiniter = None
+                    if (normal_top):
+                        if (name_s[0] == "multi_record_offset"):
+                            reiniter = ReinitOnAny(self)
+                            pass
+                        elif name_s[0].endswith("_offset"):
+                            reiniter = ReinitOnZero(self)
+                            pass
+                        pass
                     data = FRUData(self, node, i, name_s[0], type_s[0],
-                                   value_s[0], parent,
-                                   node.settable(i) == 0,
-                                   (normal_top and
-                                    name_s[0].endswith("_offset")),
-                                   (normal_top and
-                                    name_s[0] == "multi_record_offset"))
+                                   value_s[0], parent, node.settable(i) == 0,
+                                   reiniter)
+                    self.cleanup_field(type_s[0], value_s)
                     self.add_data(item, name_s[0], [value_s[0]], data=data,
                                   before=before)
                     pass
