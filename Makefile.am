@@ -27,10 +27,9 @@ uninstall-local:
 rpm: dist
 	$(RPM) $(RPMFLAGS) $(distdir).tar.gz < /dev/null
 
-PYPATH=$(top_builddir)/swig/python
-PYLDPATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs:$(top_builddir)/tcl/.libs
+PYPATH=$(top_builddir)/swig/python:$(srcdir)/swig/python
 rungui:
-	LD_LIBRARY_PATH=$(PYLDPATH) PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
 
 DISTCLEANFILES=OpenIPMI.spec OpenIPMIcmdlang.pc OpenIPMI.pc OpenIPMItcl.pc \
 	OpenIPMIglib12.pc OpenIPMIposix.pc OpenIPMIui.pc OpenIPMIglib.pc \

@@ -18,16 +18,10 @@ all-local: _OpenIPMI.so
 OpenIPMI_SRC = OpenIPMI_wrap.c
 OpenIPMI_OBJ = OpenIPMI_wrap.o
 
-OpenIPMI_LIB = @PYTHON_POSIX_LIB@ \
-	       $(top_builddir)/lib/libOpenIPMI.la \
-	       $(top_builddir)/utils/libOpenIPMIutils.la \
-	       $(top_builddir)/cmdlang/libOpenIPMIcmdlang.la \
-	       $(GLIB_SINGLE_LIB) $(TCL_LIB)
-
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB) \
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS) \
 		-R/$(libdir)
 	rm _OpenIPMI.so
 	mv .libs/_OpenIPMI.so .
@@ -66,8 +60,7 @@ uninstall-local:
 	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.pyo"
 	rm -f "$(DESTDIR)$(bindir)/openipmigui"
 
-PYPATH=$(top_builddir)/swig/python
-PYLDPATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs:$(top_builddir)/cmdlang/.libs:$(top_builddir)/tcl/.libs
+PYPATH=$(top_builddir)/swig/python:$(srcdir)/openipmigui
 
 rungui:
-	LD_LIBRARY_PATH=$(PYLDPATH) PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py

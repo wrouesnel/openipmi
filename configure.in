@@ -347,10 +347,12 @@ echo "checking for glib... $haveglib"
 if test "x$haveglib" = "xyes"; then
    AC_DEFINE([HAVE_GLIB], [], [Have GLIB libraries])
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
+   GLIB_SO='$(top_builddir)/glib/.libs/libOpenIPMIglib.so'
    GLIB_PKGCONF=OpenIPMIglib.pc
    GLIB_TARGET=libOpenIPMIglib.la
 else
    GLIB_LIB=
+   GLIB_SO=
    GLIB_PKGCONF=
    GLIB_TARGET=
 fi
@@ -359,6 +361,7 @@ AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 
 AC_SUBST(GLIB_LIB)
+AC_SUBST(GLIB_SO)
 AC_SUBST(GLIB_PKGCONF)
 AC_SUBST(GLIB_TARGET)
 
@@ -390,10 +393,12 @@ echo "checking for glib 1.2... $haveglib12"
 if test "x$haveglib12" = "xyes"; then
    AC_DEFINE([HAVE_GLIB12], [], [Have the GLIB 1.2 libraries])
    GLIB12_LIB='$(top_builddir)/glib/libOpenIPMIglib12.la'
+   GLIB12_SO='$(top_builddir)/glib/.libs/libOpenIPMIglib12.so'
    GLIB12_PKGCONF=OpenIPMIglib12.pc
    GLIB12_TARGET=libOpenIPMIglib12.la
 else
    GLIB12_LIB=
+   GLIB12_SO=
    GLIB12_PKGCONF=
    GLIB12_TARGET=
 fi
@@ -401,6 +406,7 @@ AC_SUBST(GLIB12_CFLAGS)
 AC_SUBST(GLIB12_LIBS)
 
 AC_SUBST(GLIB12_LIB)
+AC_SUBST(GLIB12_SO)
 AC_SUBST(GLIB12_PKGCONF)
 AC_SUBST(GLIB12_TARGET)
 
@@ -412,19 +418,24 @@ if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
    # don't directly link with it.
    if test "x$haveglib12" = "xyes" -a "x$haveglib" = "xyes"; then
       GLIB_SINGLE_LIB=
+      GLIB_SINGLE_SO=
    else
       if test "x$haveglib12" = "xyes"; then
          GLIB_SINGLE_LIB=$GLIB12_LIB
+         GLIB_SINGLE_SO=$GLIB12_SO
       else
          GLIB_SINGLE_LIB=$GLIB_LIB
+         GLIB_SINGLE_SO=$GLIB_SO
       fi
    fi
 else
    GLIB_DIR=
    GLIB_SINGLE_LIB=
+   GLIB_SINGLE_SO=
 fi
 AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_SINGLE_LIB)
+AC_SUBST(GLIB_SINGLE_SO)
 
 # Handle TCL support
 TCL_LIBS=
@@ -465,11 +476,13 @@ fi
 if test "x$havetcl" = "xyes"; then
    AC_DEFINE([HAVE_TCL], [], [Have TCL libraries])
    TCL_LIB='$(top_builddir)/tcl/libOpenIPMItcl.la'
+   TCL_SO='$(top_builddir)/tcl/.libs/libOpenIPMItcl.so'
    TCL_PKGCONF=OpenIPMItcl.pc
    TCL_TARGET=libOpenIPMItcl.la
    TCL_DIR=tcl
 else
    TCL_LIB=
+   TCL_SO=
    TCL_PKGCONF=
    TCL_TARGET=
    TCL_DIR=
@@ -478,6 +491,7 @@ AC_SUBST(TCL_CFLAGS)
 AC_SUBST(TCL_LIBS)
 
 AC_SUBST(TCL_LIB)
+AC_SUBST(TCL_SO)
 AC_SUBST(TCL_PKGCONF)
 AC_SUBST(TCL_TARGET)
 AC_SUBST(TCL_DIR)
@@ -527,6 +541,7 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
       PERL_INSTALL_DIR=
       PERL_HAS_POSIX_THREADS=
       PERL_POSIX_LIB=
+      PERL_POSIX_SO=
    fi
 else
    AC_DEFINE([HAVE_PERL], [], [Have perl installed])
@@ -545,15 +560,18 @@ fi
 if test "x$perlusepthreads" = "xyes"; then
    PERL_HAS_POSIX_THREADS=1
    PERL_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
+   PERL_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIpthread.so'
 else
    PERL_HAS_POSIX_THREADS=0
    PERL_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
+   PERL_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIposix.so'
 fi
 AC_SUBST(PERL_DIR)
 AC_SUBST(PERL_CFLAGS)
 AC_SUBST(PERL_INSTALL_DIR)
 AC_SUBST(PERL_HAS_POSIX_THREADS)
 AC_SUBST(PERL_POSIX_LIB)
+AC_SUBST(PERL_POSIX_SO)
 
 # Handle PYTHON support
 if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
@@ -607,15 +625,18 @@ fi
 if test "x$pythonusepthreads" = "xyes"; then
    PYTHON_HAS_POSIX_THREADS=1
    PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
+   PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIpthread.so'
 else
    PYTHON_HAS_POSIX_THREADS=0
    PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
+   PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIposix.so'
 fi
 AC_SUBST(PYTHON_DIR)
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_INSTALL_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
+AC_SUBST(PYTHON_POSIX_SO)
 
 # Check for Tkinter/Tix
 if test "x$tkinter" = "x"; then
@@ -786,6 +807,10 @@ AC_SUBST(LATEX)
 AC_SUBST(BIBTEX)
 AC_SUBST(DVIPDF)
 
+OPENIPMI_SWIG_LIBS="${PYTHON_POSIX_LIB} \$(top_builddir)/lib/libOpenIPMI.la \$(top_builddir)/utils/libOpenIPMIutils.la \$(top_builddir)/cmdlang/libOpenIPMIcmdlang.la ${GLIB_SINGLE_LIB} ${TCL_LIB}"
+OPENIPMI_SWIG_SO="${PYTHON_POSIX_SO}:\$(top_builddir)/lib/.libs/libOpenIPMI.so:\$(top_builddir)/utils/.libs/libOpenIPMIutils.so:\$(top_builddir)/cmdlang/.libs/libOpenIPMIcmdlang.so:${GLIB_SINGLE_SO}:${TCL_SO}"
+AC_SUBST(OPENIPMI_SWIG_LIBS)
+AC_SUBST(OPENIPMI_SWIG_SO)
 
 # Everything from here to AC_OUTPUT is for libedit
 

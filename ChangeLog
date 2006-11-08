@@ -1,3 +1,15 @@
+2006-11-08 Corey Minyard <cminyard@mvista.com>
+
+	* Makefile.am, configure.in: Rework the setting up of the library
+	environment for Perl and Python.  The code would, by default, pick
+	up the libraries from the installed directory instead of the local
+	directories.  For lack of a better option, the modifications
+	LD_PRELOAD the libraries that are required.  Also make the setting
+	of the libs required by swig cleaner and put it in a common place.
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+	* swig/python/openipmigui/Makefile.am: ditto
+
 2006-11-07 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_fru.py: Added a refresh button to
