@@ -4462,10 +4462,10 @@ static ipmi_mr_floattab_item_t pow_supply_intfloat =
 {
     .count = 4,
     .defval = 0.0,
-    .table = { {  11.9,  12.0,  12.1 },
-	       { -12.1, -12.0, -11.9 },
-	       {   4.9,   5.0,   5.1 },
-	       {   3.2,   3.3,   3.4 } }
+    .table = { {  11.9,  12.0,  12.1, "12.0" },
+	       { -12.1, -12.0, -11.9, "-12.0" },
+	       {   4.9,   5.0,   5.1, "5.0" },
+	       {   3.2,   3.3,   3.4, "3.3" } }
 };
 static ipmi_mr_item_layout_t pow_supply_items[] = {
     { .name = "overall capacity", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
@@ -4558,13 +4558,15 @@ static ipmi_mr_item_layout_t pow_supply_items[] = {
       .start = 164, .length = 4,
       .u.tab_data = &pow_supply_intfloat,
       .set_field = ipmi_mr_bitfloatvaltab_set_field,
-      .get_field = ipmi_mr_bitfloatvaltab_get_field },
+      .get_field = ipmi_mr_bitfloatvaltab_get_field,
+      .get_enum  = ipmi_mr_bitfloatvaltab_get_enum },
     { .name = "combined wattage voltage 2", .dtype = IPMI_FRU_DATA_FLOAT,
       .settable = 1,
       .start = 160, .length = 4,
       .u.tab_data = &pow_supply_intfloat,
       .set_field = ipmi_mr_bitfloatvaltab_set_field,
-      .get_field = ipmi_mr_bitfloatvaltab_get_field },
+      .get_field = ipmi_mr_bitfloatvaltab_get_field,
+      .get_enum  = ipmi_mr_bitfloatvaltab_get_enum },
     { .name = "combined wattage", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
       .start = 21, .length = 2,
       .set_field = ipmi_mr_int_set_field, .get_field = ipmi_mr_int_get_field },
@@ -4916,6 +4918,11 @@ static int ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
 					 char                      **data,
 					 unsigned int              *data_len,
 					 ipmi_fru_node_t           **sub_node);
+static int ipmi_mr_node_struct_get_enum(ipmi_fru_node_t *node,
+					unsigned int    index,
+					int             *pos,
+					int             *nextpos,
+					const char      **data);
 static int ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
 					 unsigned int              index,
 					 enum ipmi_fru_data_type_e dtype,
@@ -5231,18 +5238,24 @@ ipmi_mr_node_item_array_set_field(ipmi_fru_node_t           *node,
     ipmi_fru_node_t       *rnode = _ipmi_fru_node_get_data2(node);
     ipmi_mr_item_info_t   *info;
     ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
-    ipmi_mr_getset_t      gs = { layout, NULL, NULL,
-				 _ipmi_fru_node_get_data2(rnode) };
+    ipmi_mr_fru_info_t    *finfo =_ipmi_fru_node_get_data2(rnode);
+    ipmi_mr_getset_t      gs = { layout, NULL, NULL, finfo };
+    int                   rv = EINVAL;
 
-    if (index >= arec->count)
-	return EINVAL;
+    _ipmi_fru_lock(finfo->fru);
+    if (index >= arec->count) {
+	rv = EINVAL;
+	goto out;
+    }
 
     info = (void *) arec->items[index];
     gs.rdata = info->data;
     gs.offset = arec->items[index];
-    return layout->set_field(&gs,
-			     dtype, intval, time, floatval, data, data_len);
-    return 0;
+    rv = layout->set_field(&gs,
+			   dtype, intval, time, floatval, data, data_len);
+ out:
+    _ipmi_fru_unlock(finfo->fru);
+    return rv;
 }
 
 static int
@@ -5284,17 +5297,60 @@ ipmi_mr_node_item_array_get_field(ipmi_fru_node_t           *node,
     ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
     ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
     ipmi_mr_item_info_t   *info;
-    ipmi_mr_getset_t      gs = { layout, NULL, NULL, NULL };
+    ipmi_fru_node_t       *rnode =_ipmi_fru_node_get_data2(node);
+    ipmi_mr_fru_info_t    *finfo =_ipmi_fru_node_get_data2(rnode);
+    ipmi_mr_getset_t      gs = { layout, NULL, NULL, finfo };
+    int                   rv = EINVAL;
 
-    if (index >= arec->count)
-	return EINVAL;
+    _ipmi_fru_lock(finfo->fru);
+    if (index >= arec->count) {
+	rv = EINVAL;
+	goto out;
+    }
 
     info = (void *) arec->items[index];
     gs.rdata = info->data;
     gs.offset = arec->items[index];
-    return layout->get_field(&gs,
-			     dtype, intval, time, floatval, data, data_len);
-    return 0;
+    rv = layout->get_field(&gs,
+			   dtype, intval, time, floatval, data, data_len);
+ out:
+    _ipmi_fru_unlock(finfo->fru);
+    return rv;
+}
+
+static int
+ipmi_mr_node_item_array_get_enum(ipmi_fru_node_t *node,
+				 unsigned int    index,
+				 int             *pos,
+				 int             *nextpos,
+				 const char      **data)
+{
+    ipmi_mr_array_info_t  *arec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_item_layout_t *layout = arec->layout->elem_layout;
+    ipmi_mr_item_info_t   *info;
+    ipmi_fru_node_t       *rnode =_ipmi_fru_node_get_data2(node);
+    ipmi_mr_fru_info_t    *finfo =_ipmi_fru_node_get_data2(rnode);
+    ipmi_mr_getset_t      gs = { layout, NULL, NULL, finfo };
+    int                   rv;
+
+    _ipmi_fru_lock(finfo->fru);
+    if (index >= arec->count) {
+	rv = EINVAL;
+	goto out;
+    }
+
+    if (!layout->get_enum) {
+	rv = ENOSYS;
+	goto out;
+    }
+
+    info = (void *) arec->items[index];
+    gs.rdata = info->data;
+    gs.offset = arec->items[index];
+    rv = layout->get_enum(&gs, pos, nextpos, data);
+ out:
+    _ipmi_fru_unlock(finfo->fru);
+    return rv;
 }
 
 int
@@ -5366,6 +5422,8 @@ ipmi_mr_item_array_get_field(ipmi_mr_array_info_t      *arec,
 	_ipmi_fru_node_set_data2(node, rnode);
 	_ipmi_fru_node_set_get_field(node,
 				     ipmi_mr_node_item_array_get_field);
+	_ipmi_fru_node_set_get_enum(node, 
+				    ipmi_mr_node_item_array_get_enum);
 	_ipmi_fru_node_set_set_field(node,
 				     ipmi_mr_node_item_array_set_field);
 	_ipmi_fru_node_set_settable(node, ipmi_mr_node_item_array_settable);
@@ -5436,9 +5494,13 @@ ipmi_mr_node_struct_array_get_field(ipmi_fru_node_t           *node,
     ipmi_mr_array_info_t *arec = _ipmi_fru_node_get_data(node);
     ipmi_fru_node_t      *rnode = _ipmi_fru_node_get_data2(node);
     ipmi_mr_fru_info_t   *finfo = _ipmi_fru_node_get_data2(rnode);
+    int                  rv = 0;
 
-    if (index >= arec->count)
-	return EINVAL;
+    _ipmi_fru_lock(finfo->fru);
+    if (index >= arec->count) {
+	rv = EINVAL;
+	goto out;
+    }
 
     if (name)
 	*name = NULL; /* We are an array */
@@ -5448,20 +5510,26 @@ ipmi_mr_node_struct_array_get_field(ipmi_fru_node_t           *node,
 	*intval = -1; /* Sub element is not an array */
     if (sub_node) {
 	node = _ipmi_fru_node_alloc(finfo->fru);
-	if (!node)
-	    return ENOMEM;
+	if (!node) {
+	    rv = ENOMEM;
+	    goto out;
+	}
 
 	ipmi_fru_get_node(rnode);
 	_ipmi_fru_node_set_data(node, arec->items[index]);
 	_ipmi_fru_node_set_data2(node, rnode);
 	_ipmi_fru_node_set_get_field(node, ipmi_mr_node_struct_get_field);
+	_ipmi_fru_node_set_get_enum(node, ipmi_mr_node_struct_get_enum);
 	_ipmi_fru_node_set_set_field(node, ipmi_mr_node_struct_set_field);
 	_ipmi_fru_node_set_settable(node, ipmi_mr_node_struct_settable);
 	_ipmi_fru_node_set_destructor(node, ipmi_mr_sub_destroy);
 
 	*sub_node = node;
     }
-    return 0;
+
+ out:
+    _ipmi_fru_unlock(finfo->fru);
+    return rv;
 }
 
 int
@@ -5556,26 +5624,29 @@ ipmi_mr_node_struct_set_field(ipmi_fru_node_t           *node,
     ipmi_fru_node_t         *rnode = _ipmi_fru_node_get_data2(node);
     ipmi_mr_struct_layout_t *layout = rec->layout;
     ipmi_mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(rnode);
+    int                     rv = EINVAL;
 
+    _ipmi_fru_lock(finfo->fru);
     if (index < layout->item_count) {
-	ipmi_mr_item_layout_t   *ilayout = layout->items+index;
-	ipmi_mr_getset_t        gs = { ilayout, &rec->offset,
-				       rec->data, finfo };
+	ipmi_mr_item_layout_t *ilayout = layout->items+index;
+	ipmi_mr_getset_t      gs = { ilayout, &rec->offset,
+				     rec->data, finfo };
 	if (!layout->items[index].set_field)
-	    return EPERM;
-	return layout->items[index].set_field(&gs,
-					      dtype, intval, time, floatval,
-					      data, data_len);
+	    rv = EPERM;
+	else
+	    rv = layout->items[index].set_field(&gs,
+						dtype, intval, time, floatval,
+						data, data_len);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count)
+	    rv = layout->arrays[index].set_field(rec->arrays+index, finfo,
+						 dtype, intval, time,
+						 floatval, data, data_len);
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    index -= layout->item_count;
-    if (index < layout->array_count) {
-	return layout->arrays[index].set_field(rec->arrays+index, finfo,
-					       dtype, intval, time, floatval,
-					       data, data_len);
-    }
-
-    return EINVAL;
+    return rv;
 }
 
 static int
@@ -5591,23 +5662,25 @@ ipmi_mr_root_node_struct_set_field(ipmi_fru_node_t           *node,
     ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
     ipmi_mr_struct_layout_t *layout = rec->layout;
     ipmi_mr_fru_info_t      *finfo = _ipmi_fru_node_get_data2(node);
+    int                     rv = EINVAL;
 
+    _ipmi_fru_lock(finfo->fru);
     if (index < layout->item_count) {
-	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
-				       rec->data, finfo };
-	return layout->items[index].set_field(&gs,
-					      dtype, intval, time, floatval,
-					      data, data_len);
+	ipmi_mr_getset_t gs = { layout->items+index, &rec->offset,
+				rec->data, finfo };
+	rv = layout->items[index].set_field(&gs,
+					    dtype, intval, time, floatval,
+					    data, data_len);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count)
+	    rv = layout->arrays[index].set_field(rec->arrays+index, finfo,
+						 dtype, intval, time, floatval,
+						 data, data_len);
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    index -= layout->item_count;
-    if (index < layout->array_count) {
-	return layout->arrays[index].set_field(rec->arrays+index, finfo,
-					       dtype, intval, time, floatval,
-					       data, data_len);
-    }
-
-    return EINVAL;
+    return rv;
 }
 
 static int
@@ -5616,23 +5689,88 @@ ipmi_mr_node_struct_settable(ipmi_fru_node_t *node,
 {
     ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
     ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_fru_node_t         *rnode =_ipmi_fru_node_get_data2(node);
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(rnode);
+    int                     rv = EINVAL;
 
+    _ipmi_fru_lock(finfo->fru);
     if (index < layout->item_count) {
 	if (layout->items[index].settable)
-	    return 0;
+	    rv = 0;
 	else
-	    return EPERM;
+	    rv = EPERM;
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count) {
+	    if (layout->arrays[index].settable)
+		rv = 0;
+	    else
+		rv = EPERM;
+	}
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    index -= layout->item_count;
-    if (index < layout->array_count) {
-	if (layout->arrays[index].settable)
-	    return 0;
+    return rv;
+}
+
+static int
+ipmi_mr_root_node_struct_settable(ipmi_fru_node_t *node,
+				  unsigned int    index)
+{
+    ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(node);
+    int                     rv = EINVAL;
+
+    _ipmi_fru_lock(finfo->fru);
+    if (index < layout->item_count) {
+	if (layout->items[index].settable)
+	    rv = 0;
 	else
-	    return EPERM;
+	    rv = EPERM;
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count) {
+	    if (layout->arrays[index].settable)
+		rv = 0;
+	    else
+		rv = EPERM;
+	}
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    return EINVAL;
+    return rv;
+}
+
+static int
+ipmi_mr_node_struct_get_enum(ipmi_fru_node_t *node,
+			     unsigned int    index,
+			     int             *pos,
+			     int             *nextpos,
+			     const char      **data)
+{
+    ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_fru_node_t         *rnode =_ipmi_fru_node_get_data2(node);
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(rnode);
+    int                     rv = EINVAL;
+
+    _ipmi_fru_lock(finfo->fru);
+    if (index < layout->item_count) {
+	ipmi_mr_getset_t gs = { layout->items+index, &rec->offset,
+				rec->data, finfo };
+	if (! layout->items[index].get_enum)
+	    rv = ENOSYS;
+	else
+	    rv = layout->items[index].get_enum(&gs, pos, nextpos, data);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count)
+	    rv = ENOSYS;
+    }
+    _ipmi_fru_unlock(finfo->fru);
+
+    return rv;
 }
 
 static int
@@ -5649,29 +5787,33 @@ ipmi_mr_node_struct_get_field(ipmi_fru_node_t           *node,
 {
     ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
     ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_fru_node_t         *rnode =_ipmi_fru_node_get_data2(node);
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(rnode);
+    int                     rv = EINVAL;
 
+    _ipmi_fru_lock(finfo->fru);
     if (index < layout->item_count) {
-	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
-				       rec->data, NULL };
+	ipmi_mr_getset_t gs = { layout->items+index, &rec->offset,
+				rec->data, finfo };
 	if (name)
 	    *name = layout->items[index].name;
-	return layout->items[index].get_field(&gs, dtype,
-					      intval, time, floatval,
-					      data, data_len);
+	rv = layout->items[index].get_field(&gs, dtype,
+					    intval, time, floatval,
+					    data, data_len);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count) {
+	    if (name)
+		*name = layout->arrays[index].name;
+	    
+	    rv = layout->arrays[index].get_field(rec->arrays+index, rnode,
+						 dtype, intval, time, floatval,
+						 data, data_len, sub_node);
+	}
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    index -= layout->item_count;
-    if (index < layout->array_count) {
-	if (name)
-	    *name = layout->arrays[index].name;
-
-	return layout->arrays[index].get_field(rec->arrays+index,
-					       _ipmi_fru_node_get_data2(node),
-					       dtype, intval, time, floatval,
-					       data, data_len, sub_node);
-    }
-
-    return EINVAL;
+    return rv;
 }
 
 static int
@@ -5688,29 +5830,63 @@ ipmi_mr_root_node_struct_get_field(ipmi_fru_node_t           *node,
 {
     ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
     ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(node);
+    int                     rv = EINVAL;
 
+    _ipmi_fru_lock(finfo->fru);
     if (index < layout->item_count) {
-	ipmi_mr_getset_t        gs = { layout->items+index, &rec->offset,
-				       rec->data,
-				       _ipmi_fru_node_get_data2(node) };
+	ipmi_mr_getset_t gs = { layout->items+index, &rec->offset,
+				rec->data, finfo };
 	if (name)
 	    *name = layout->items[index].name;
-	return layout->items[index].get_field(&gs, dtype,
-					      intval, time, floatval,
-					      data, data_len);
+	rv = layout->items[index].get_field(&gs, dtype,
+					    intval, time, floatval,
+					    data, data_len);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count) {
+	    if (name)
+		*name = layout->arrays[index].name;
+
+	    rv = layout->arrays[index].get_field(rec->arrays+index,
+						 node, dtype,
+						 intval, time, floatval,
+						 data, data_len, sub_node);
+	}
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    index -= layout->item_count;
-    if (index < layout->array_count) {
-	if (name)
-	    *name = layout->arrays[index].name;
+    return rv;
+}
 
-	return layout->arrays[index].get_field(rec->arrays+index, node, dtype,
-					       intval, time, floatval,
-					       data, data_len, sub_node);
+static int
+ipmi_mr_root_node_struct_get_enum(ipmi_fru_node_t *node,
+				  unsigned int    index,
+				  int             *pos,
+				  int             *nextpos,
+				  const char      **data)
+{
+    ipmi_mr_struct_info_t   *rec = _ipmi_fru_node_get_data(node);
+    ipmi_mr_struct_layout_t *layout = rec->layout;
+    ipmi_mr_fru_info_t      *finfo =_ipmi_fru_node_get_data2(node);
+    int                     rv = EINVAL;
+
+    _ipmi_fru_lock(finfo->fru);
+    if (index < layout->item_count) {
+	ipmi_mr_getset_t gs = { layout->items+index, &rec->offset,
+				rec->data, finfo };
+	if (! layout->items[index].get_enum)
+	    rv = ENOSYS;
+	else
+	    rv = layout->items[index].get_enum(&gs, pos, nextpos, data);
+    } else {
+	index -= layout->item_count;
+	if (index < layout->array_count)
+	    rv = ENOSYS;
     }
+    _ipmi_fru_unlock(finfo->fru);
 
-    return EINVAL;
+    return rv;
 }
 
 int
@@ -5981,6 +6157,7 @@ ipmi_mr_struct_root(ipmi_fru_t              *fru,
     if (mr_data_len == 0)
 	return EINVAL;
     
+    _ipmi_fru_lock(fru);
     rv = ipmi_mr_struct_decode(layout, 4, NULL, &orec, &mr_data, &mr_data_len);
     if (rv)
 	return rv;
@@ -5999,18 +6176,21 @@ ipmi_mr_struct_root(ipmi_fru_t              *fru,
     _ipmi_fru_node_set_data(node, orec);
     _ipmi_fru_node_set_data2(node, finfo);
     _ipmi_fru_node_set_get_field(node, ipmi_mr_root_node_struct_get_field);
+    _ipmi_fru_node_set_get_enum(node, ipmi_mr_root_node_struct_get_enum);
     _ipmi_fru_node_set_set_field(node, ipmi_mr_root_node_struct_set_field);
-    _ipmi_fru_node_set_settable(node, ipmi_mr_node_struct_settable);
+    _ipmi_fru_node_set_settable(node, ipmi_mr_root_node_struct_settable);
     _ipmi_fru_node_set_destructor(node, ipmi_mr_struct_root_destroy);
 
     *rnode = node;
 
     if (name)
 	*name = layout->name;
+    _ipmi_fru_unlock(fru);
 
     return 0;
 
  out_no_mem:
+    _ipmi_fru_unlock(fru);
     rv = ENOMEM;
 
     if (finfo) {
@@ -6248,6 +6428,8 @@ ipmi_mr_bitvaltab_set_field(ipmi_mr_getset_t          *getset,
 	return EINVAL;
 
     for (val=0; val<(int)tab->count; val++) {
+	if (!tab->table[val])
+	    continue;
 	if (strcasecmp(data, tab->table[val]) == 0)
 	    break;
     }
@@ -6290,7 +6472,7 @@ ipmi_mr_bitvaltab_get_field(ipmi_mr_getset_t          *getset,
     int                offset = getset->layout->start % 8;
     int                shift = 8 - offset;
     unsigned int       mask = (~0) << getset->layout->length;
-    char               *str;
+    const char         *str;
     ipmi_mr_tab_item_t *tab = getset->layout->u.tab_data;
 
     if (dtype)
@@ -6306,6 +6488,8 @@ ipmi_mr_bitvaltab_get_field(ipmi_mr_getset_t          *getset,
 
     if (val >= (int)tab->count)
 	str = "?";
+    else if (!tab->table[val])
+	str = "?";
     else
 	str = tab->table[val];
     if (data_len)
@@ -6315,6 +6499,45 @@ ipmi_mr_bitvaltab_get_field(ipmi_mr_getset_t          *getset,
 	if (!(*data))
 	    return ENOMEM;
     }
+    return 0;
+}
+
+int
+ipmi_mr_bitvaltab_get_enum(ipmi_mr_getset_t *getset,
+			   int              *pos,
+			   int              *nextpos,
+			   const char       **data)
+{
+    ipmi_mr_tab_item_t *tab = getset->layout->u.tab_data;
+    int                p = *pos;
+
+    if (p < 0) {
+	p = 0;
+	while ((p < (int) tab->count) && !tab->table[p])
+	    p++;
+    }
+
+    if (p > (int) tab->count)
+	return EINVAL;
+
+    if (data) {
+	if (!tab->table[p])
+	    *data = "?";
+	else
+	    *data = tab->table[p];
+    }
+    *pos = p;
+
+    if (nextpos) {
+	p++;
+	while ((p < (int) tab->count) && !tab->table[p])
+	    p++;
+	if (p >= (int) tab->count)
+	    *nextpos = -1;
+	else
+	    *nextpos = p;
+    }
+
     return 0;
 }
 
@@ -6403,6 +6626,43 @@ ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_getset_t          *getset,
 	    *floatval = tab->defval;
 	else
 	    *floatval = tab->table[val].nominal;
+    }
+    return 0;
+}
+
+int
+ipmi_mr_bitfloatvaltab_get_enum(ipmi_mr_getset_t *getset,
+				int              *pos,
+				int              *nextpos,
+				const char       **data)
+{
+    ipmi_mr_floattab_item_t *tab = getset->layout->u.tab_data;
+    int                     p = *pos;
+
+    if (p < 0) {
+	p = 0;
+	while ((p < (int) tab->count) && !tab->table[p].nominal_str)
+	    p++;
+    }
+
+    if (p > (int) tab->count)
+	return EINVAL;
+
+    if (data) {
+	if (!tab->table[p].nominal_str)
+	    *data = "?";
+	else
+	    *data = tab->table[p].nominal_str;
+    }
+
+    if (nextpos) {
+	p++;
+	while ((p < (int) tab->count) && !tab->table[p].nominal_str)
+	    p++;
+	if (p >= (int) tab->count)
+	    *nextpos = -1;
+	else
+	    *nextpos = p;
     }
     return 0;
 }

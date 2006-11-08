@@ -9325,7 +9325,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	ipmi_fru_put_node(self);
     }
 
-    int get_field(unsigned        index,
+    int get_field(unsigned int    index,
 		  const char      **name,
 		  const char      **type,
 		  char            **value,
@@ -9438,7 +9438,15 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	return 0;
     }
 
-    int set_field(unsigned        index,
+    int get_enum_val(unsigned int index,
+		     int          *pos,
+		     int          *nextpos,
+		     const char   **data)
+    {
+	return ipmi_fru_node_get_enum_val(self, index, pos, nextpos, data);
+    }
+
+    int set_field(unsigned int    index,
 		  const char      *type,
 		  char            *value)
     {
@@ -9530,7 +9538,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	return rv;
     }
 
-    int settable(unsigned index)
+    int settable(unsigned int index)
     {
 	return ipmi_fru_node_settable(self, index);
     }

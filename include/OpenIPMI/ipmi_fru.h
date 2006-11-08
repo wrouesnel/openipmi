@@ -253,6 +253,18 @@ int ipmi_fru_node_settable(ipmi_fru_node_t *node,
 int ipmi_fru_node_get_subtype(ipmi_fru_node_t           *node,
 			      enum ipmi_fru_data_type_e *subtype);
 
+/* Used to map enum-type values, where there is a limited set of value
+   values.  Pass in -1 for "pos" to get the first value, "pos" will be
+   set to the actual value.  nextpos will be set to the next valid
+   value.  data will return a pointer to an allocated string for the
+   value.  For integer values, pos will map to the actual intval
+   values.  For others, the order is undetermined. */
+int ipmi_fru_node_get_enum_val(ipmi_fru_node_t *node,
+			       unsigned int    index,
+			       int             *pos,
+			       int             *nextpos,
+			       const char      **data);
+
 /* Free data that comes from ipmi_fru_node_get_field if the data return is
    non-NULL. */
 void ipmi_fru_data_free(char *data);

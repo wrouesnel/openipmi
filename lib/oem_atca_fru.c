@@ -391,7 +391,8 @@ static ipmi_mr_item_layout_t link_desc[] = {
       .start = 6, .length = 2,
       .u.tab_data = &link_if_tab,
       .set_field = ipmi_mr_bitvaltab_set_field,
-      .get_field = ipmi_mr_bitvaltab_get_field },
+      .get_field = ipmi_mr_bitvaltab_get_field,
+      .get_enum  = ipmi_mr_bitvaltab_get_enum },
     { .name = "channel number", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
       .start = 0, .length = 6,
       .set_field = ipmi_mr_bitint_set_field, .get_field = ipmi_mr_bitint_get_field }
@@ -455,7 +456,7 @@ static ipmi_mr_struct_layout_t ipmb_link_mappings = {
 };
 static ipmi_mr_tab_item_t hub_info_if_tab = {
     .count = 4,
-    .table = { "?", "IPMB-A only", "IPMB-B only", "IPMB-A and IPMB-B" }
+    .table = { NULL, "IPMB-A only", "IPMB-B only", "IPMB-A and IPMB-B" }
 };
 static ipmi_mr_item_layout_t hub_desc_items[] = {
     { .name = "hardware address", .dtype = IPMI_FRU_DATA_INT, .settable = 1,
@@ -465,7 +466,8 @@ static ipmi_mr_item_layout_t hub_desc_items[] = {
       .start = 8, .length = 2,
       .u.tab_data = &hub_info_if_tab,
       .set_field = ipmi_mr_bitvaltab_set_field,
-      .get_field = ipmi_mr_bitvaltab_get_field }
+      .get_field = ipmi_mr_bitvaltab_get_field,
+      .get_enum  = ipmi_mr_bitvaltab_get_enum }
 };
 static ipmi_mr_array_layout_t hub_desc_arys[] = {
     { .name = "IPMB-0 link mappings", .has_count = 1, .settable = 1,

@@ -86,6 +86,12 @@ typedef int (*ipmi_fru_oem_node_subtype_cb)
      (ipmi_fru_node_t           *node,
       enum ipmi_fru_data_type_e *dtype);
 
+typedef int (*ipmi_fru_oem_node_enum_val_cb)(ipmi_fru_node_t *node,
+					     unsigned int    index,
+					     int             *pos,
+					     int             *nextpos,
+					     const char      **data);
+
 ipmi_fru_node_t *_ipmi_fru_node_alloc(ipmi_fru_t *fru);
 
 void *_ipmi_fru_node_get_data(ipmi_fru_node_t *node);
@@ -103,6 +109,8 @@ void _ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
 				 ipmi_fru_oem_node_settable_cb settable);
 void _ipmi_fru_node_set_get_subtype(ipmi_fru_node_t              *node,
 				    ipmi_fru_oem_node_subtype_cb get_subtype);
+void _ipmi_fru_node_set_get_enum(ipmi_fru_node_t               *node,
+				 ipmi_fru_oem_node_enum_val_cb get_enum);
 
 /* Get the root node of a multi-record.  Note that the root record
    must not be an array.  Note that you cannot keep a copy of the fru
@@ -406,6 +414,10 @@ struct ipmi_mr_item_layout_s
 		     double                    *floatval,
 		     char                      **data,
 		     unsigned int              *data_len);
+    int (*get_enum)(ipmi_mr_getset_t *getset,
+		    int              *pos,
+		    int              *nextpos,
+		    const char       **data);
 };
 
 /* Describes an array. */
@@ -607,7 +619,7 @@ int ipmi_mr_bitint_get_field(ipmi_mr_getset_t          *getset,
    structure. */
 typedef struct ipmi_mr_tab_item_s {
     unsigned int count;
-    char         *table[];
+    const char   *table[];
 } ipmi_mr_tab_item_t;
 int ipmi_mr_bitvaltab_set_field(ipmi_mr_getset_t          *getset,
 				enum ipmi_fru_data_type_e dtype,
@@ -623,6 +635,10 @@ int ipmi_mr_bitvaltab_get_field(ipmi_mr_getset_t          *getset,
 				double                    *floatval,
 				char                      **data,
 				unsigned int              *data_len);
+int ipmi_mr_bitvaltab_get_enum(ipmi_mr_getset_t *getset,
+			       int              *pos,
+			       int              *nextpos,
+			       const char       **data);
 
 /* A bitint that is a set of floating point values indexed by integer
    value.  The tab_data field must be set to an
@@ -634,9 +650,10 @@ typedef struct ipmi_mr_floattab_item_s {
        is what it is converted to.  Anything between low and high will
        convert to this value. */
     struct {
-	float low;
-	float nominal;
-	float high;
+	float      low;
+	float      nominal;
+	float      high;
+	const char *nominal_str;
     } table[];
 } ipmi_mr_floattab_item_t;
 int ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_getset_t          *getset,
@@ -653,6 +670,10 @@ int ipmi_mr_bitfloatvaltab_get_field(ipmi_mr_getset_t          *getset,
 				     double                    *floatval,
 				     char                      **data,
 				     unsigned int              *data_len);
+int ipmi_mr_bitfloatvaltab_get_enum(ipmi_mr_getset_t *getset,
+				    int              *pos,
+				    int              *nextpos,
+				    const char       **data);
 
 /* A fixed-size area for a standard IPMI FRU string. */
 int ipmi_mr_str_set_field(ipmi_mr_getset_t          *getset,

@@ -14,6 +14,20 @@
 
 	* swig/python/openipmigui/_fru.py: Use the long option to
 	gui_setdialog for binary or unicode data.
+
+	* include/OpenIPMI/ipmi_fru.c, lib/fru.c, include/OpenIPMI/ipmi_fru.h:
+	Added infrastructure for getting enumeration values from FRU nodes.
+
+	* lib/normal_fru.c: Added enumeration support for multirecord FRU
+	nodes.
+
+	* lib/oem_atca_fru.c: Added enumeration stuff for the few items
+	that need it.
+
+	* swig/OpenIPMI.i: Added the enumeration interface.
+
+	* swig/python/openipmigui/_fru.py: Added support for the new FRU
+	enumerations.
 	
 2006-11-06 Corey Minyard <cminyard@mvista.com>
 

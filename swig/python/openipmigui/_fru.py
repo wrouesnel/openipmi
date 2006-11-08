@@ -88,6 +88,24 @@ class FRUData:
         else:
             self.longtext = False;
             pass
+
+        enums = None
+        cpos = [ -1 ]
+        npos = [ 0 ]
+        val = [ "" ]
+        rv = self.node.get_enum_val(self.aidx, cpos, npos, val)
+        if (rv == 0):
+            enums = [ ]
+            while (rv == 0):
+                enums.append(val[0])
+                if (npos[0] == -1):
+                    break
+                cpos[0] = npos[0]
+                val = [ "" ]
+                rv = self.node.get_enum_val(self.aidx, cpos, npos, val)
+                pass
+            pass
+        self.enums = enums
         return
 
     def do_on_close(self):
@@ -106,6 +124,11 @@ class FRUData:
                 pass
             else:
                 menul.append( ("Set Value", self.setvalue) )
+                if (self.enums != None):
+                    for v in self.enums:
+                        menul.append( (v, self.setenum, v) )
+                        pass
+                    pass
                 pass
             pass
         if (self.parent != None):
@@ -117,6 +140,10 @@ class FRUData:
             pass
         return
 
+    def setenum(self, val):
+        self.ok([ val ])
+        return
+    
     def ok(self, vals):
         rv = self.node.set_field(self.aidx, self.ptype, str(vals[0]))
         if (rv != 0):
