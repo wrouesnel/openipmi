@@ -58,10 +58,16 @@ class ControlSet:
         return
 
     def HandleMenu(self, event):
-        gui_popup.popup(self.c.ui, event,
-                        [ [ "Modify Value", self.modval ],
-                          [ "Set to 0",     self.SetTo0 ],
-                          [ "Set to 1",     self.SetTo1 ] ])
+        if (self.c.impt_data == None):
+            ml = [ [ "Add to watch values", self.c.add_impt ] ]
+            pass
+        else:
+            ml = [ [ "Remove from watch values", self.c.remove_impt ] ]
+            pass
+        ml.append([ "Modify Value", self.modval ])
+        ml.append([ "Set to 0",     self.SetTo0 ])
+        ml.append([ "Set to 1",     self.SetTo1 ])
+        gui_popup.popup(self.c.ui, event, ml)
         return
 
     def modval(self, event):
@@ -112,7 +118,14 @@ class LightSet:
         return
 
     def HandleMenu(self, event):
-        gui_popup.popup(self.c.ui, event, [ [ "Modify Value", self.modval ] ])
+        if (self.c.impt_data == None):
+            ml = [ [ "Add to watch values", self.c.add_impt ] ]
+            pass
+        else:
+            ml = [ [ "Remove from watch values", self.c.remove_impt ] ]
+            pass
+        ml.append([ "Modify Value", self.modval ])
+        gui_popup.popup(self.c.ui, event, ml)
         return
 
     def modval(self, event):
@@ -252,6 +265,23 @@ class Control:
         if (self.setter != None):
             self.setter.HandleMenu(event)
             pass
+        else:
+            if (self.impt_data == None):
+                ml = [ [ "Add to watch values", self.add_impt ] ]
+                pass
+            else:
+                ml = [ [ "Remove from watch values", self.remove_impt ] ]
+                pass
+            gui_popup.popup(self.ui, event, ml)
+            pass
+        return
+
+    def add_impt(self, event):
+        self.ui.add_impt_data("control", str(self), self)
+        return
+        
+    def remove_impt(self, event):
+        self.ui.remove_impt_data(self.impt_data)
         return
         
     def control_get_val_cb(self, control, err, vals):

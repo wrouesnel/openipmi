@@ -36,14 +36,18 @@ import _oi_logging
 import gui_domainDialog
 import gui_errstr
 import gui_cmdwin
+import gui_list
+import gui_popup
 
 init_treenamewidth = 150
 init_sashposition = 500
-init_bsashposition = 400
+init_isashposition = 400
+init_bsashposition = 450
 init_windowwidth = 800
 init_windowheight = 500
 init_logevents = False
 init_fullevents = False
+init_impt_objs = [ ]
 
 refresh_timer_time = 10000
 
@@ -75,6 +79,30 @@ class IPMICloser:
         gui_cmdwin.init_history = self.ui.cmdwindow.history
         return
     
+    pass
+
+class ImptObj:
+    def __init__(self, gui, type, name, obj):
+        self.gui = gui
+        self.type = type
+        self.name = name
+        self.obj = obj
+        return
+
+    def HandleMenu(self, event, key, point):
+        data = self.obj
+        if (data != None) and (hasattr(data, "HandleMenu")):
+            data.HandleMenu(event)
+            pass
+        else:
+            menul = [ [ "Remove from watch values", self.remove_impt ] ]
+            gui_popup.popup(self.gui, event, menul)
+        return
+        
+    def remove_impt(self, event):
+        self.gui.remove_impt_data(self)
+        return
+
     pass
 
 class IPMIGUI(Tix.Frame):
@@ -161,11 +189,13 @@ class IPMIGUI(Tix.Frame):
                                 width=init_windowwidth,
                                 height=init_windowheight)
         self.vpane = vpane
-        objevpane = vpane.add("objectsevents", size=init_bsashposition)
+        objevpane = vpane.add("objectsevents", size=init_sashposition)
+        imptobjpane = vpane.add("importantobjects",
+                                size = init_isashposition - init_sashposition)
         cmdpane = vpane.add("command")
         hpane = Tix.PanedWindow(objevpane, orientation="horizontal")
         self.hpane = hpane
-        objpane = hpane.add("objects", size=init_sashposition)
+        objpane = hpane.add("objects", size=init_bsashposition)
         evpane = hpane.add("events")
 
         self.tree = Tix.Tree(objpane, options="hlist.columns 2")
@@ -191,6 +221,18 @@ class IPMIGUI(Tix.Frame):
         self.logwindow.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         self.logwindow.text.insert("end", "GUI Log Window")
 
+        self.imptobjs = gui_list.SubList(imptobjpane,
+                                         ( ("Type", 50),
+                                           ("Name", 200),
+                                           ("Data", 200) ),
+                                         options=("hlist.header 1"
+                                                  + " hlist.itemtype text"
+                                                  + " hlist.columns 3"
+                                                  + " hlist.selectForeground black"
+                                                  + " hlist.selectBackground beige"),
+                                         width=0, height=0)
+        self.imptobjs.pack(fill=Tix.BOTH, expand=1)
+        
         self.errstr = gui_errstr.ErrStr(cmdpane)
         self.errstr.pack(side=Tix.TOP, fill=Tix.X, expand=1)
 
@@ -210,9 +252,18 @@ class IPMIGUI(Tix.Frame):
 
         self.bind("<Destroy>", self.OnDestroy)
 
+        self.impt_objs = { }
+        self.impt_objs["control"] = { }
+        self.impt_objs["sensor"] = { }
+        self.impt_objs["entity"] = { }
+        
         self.last_scan = None
         self.timer_timeout_ms = 200
         top.after(self.timer_timeout_ms, self.Timeout)
+
+        for i in init_impt_objs:
+            self.add_impt_data(i[0], i[1])
+            pass
         return
 
     def Wheel(self, event):
@@ -234,17 +285,95 @@ class IPMIGUI(Tix.Frame):
             return
         self.errstr.SetError(str)
         return
+
+    def find_impt_data(self, type, name):
+        s = self.impt_objs[type]
+        if name in s:
+            return s[name]
+        return None
+
+    def add_impt_data(self, type, name, obj=None):
+        if name in self.impt_objs[type]:
+            return
+        i = ImptObj(self, type, name, obj)
+        self.impt_objs[type][name] = i
+        i.key = self.imptobjs.Append(type, (name, ""), data=i)
+        if (obj != None):
+            obj.impt_data = i;
+            self.setup_impt_data(obj.impt_data, obj)
+            pass
+        else:
+            self.imptobjs.SetColumnStyle(i.key, 0, self.inactive_style)
+        return
+
+    def setup_impt_data(self, data, obj):
+        data.obj = obj
+        self.set_impt_active_change(obj)
+        self.imptobjs.SetColumnStyle(obj.impt_data.key, 0, self.active_style)
+        self.set_impt_data_text(obj)
+        return
     
+    def cleanup_impt_data(self, obj):
+        self.imptobjs.SetColumnStyle(obj.impt_data.key, 1,
+                                     self.inactive_style)
+        self.imptobjs.SetColumnStyle(obj.impt_data.key, 0, self.inactive_style)
+        self.imptobjs.SetColumn(obj.impt_data.key, 2, "")
+        obj.impt_data.obj = None
+        return
+    
+    def set_impt_style(self, obj, style):
+        self.imptobjs.SetColumnStyle(obj.impt_data.key, 1, style)
+        return
+    
+    def set_impt_active_change(self, obj):
+        if (obj.active):
+            self.imptobjs.SetColumnStyle(obj.impt_data.key, 1,
+                                         self.active_style)
+            pass
+        else:
+            self.imptobjs.SetColumnStyle(obj.impt_data.key, 1,
+                                         self.inactive_style)
+            pass
+        return
+        
+    def set_impt_data_text(self, obj):
+        if (obj.itemvalue != None):
+            self.imptobjs.SetColumn(obj.impt_data.key, 2, obj.itemvalue)
+            pass
+        else:
+            self.imptobjs.SetColumn(obj.impt_data.key, 2, "")
+            pass
+        return
+    
+    def remove_impt_data(self, data):
+        obj = data.obj
+        self.imptobjs.DelItem(data.key);
+        del self.impt_objs[data.type][data.name]
+        if (obj != None):
+            obj.impt_data = None
+            pass
+        return
+
     def Timeout(self):
         if (self.in_destroy):
             return
+        callcount = 0
+        checkcount = 0
         if (self.last_scan != None):
             next = self.last_scan
         else:
+            # Scan important objects first
             next = self.tree.hlist.info_next("D")
+            for i in self.impt_objs.values():
+                for j in i.values():
+                    if (j.obj != None) and hasattr(j.obj, "DoUpdate"):
+                        callcount = callcount + 1
+                        j.obj.DoUpdate()
+                        pass
+                    checkcount = checkcount + 1
+                    pass
+                pass
             pass
-        callcount = 0
-        checkcount = 0
         while (callcount < 100) and (checkcount < 1000) and (next != ""):
             if (self.tree.hlist.info_hidden(next) == "1"):
                 # Not on the screen, ignore it
@@ -345,12 +474,22 @@ class IPMIGUI(Tix.Frame):
             self.logwindow.text.see("end")
         return
 
-    def setup_item(self, item, active=False):
+    def setup_item(self, item, active=False, type = None):
         data = self.treedata[item]
         data.active = active
         data.num_warning = 0
         data.num_severe = 0
         data.num_critical = 0
+        data.itemvalue = None
+        if (type != None):
+            data.impt_data = self.find_impt_data(type, data.name_str)
+            if (data.impt_data != None):
+                self.setup_impt_data(data.impt_data, data)
+                pass
+            pass
+        else:
+            data.impt_data = None
+            pass
         self.tree.hlist.item_create(item, 1, itemtype=Tix.TEXT, text="",
                                     style=self.active_style)
         if (not active):
@@ -367,6 +506,9 @@ class IPMIGUI(Tix.Frame):
         data = self.treedata[item]
         if (data == None):
             return
+        if (data.impt_data != None):
+            self.cleanup_impt_data(data)
+            pass
         parent = self.parent_item(item)
         if (parent == None):
             return
@@ -497,6 +639,10 @@ class IPMIGUI(Tix.Frame):
         if (self.in_destroy):
             return
         data = self.treedata[item]
+        data.itemvalue = value
+        if (hasattr(data, "impt_data") and (data.impt_data != None)):
+            self.set_impt_data_text(data)
+            pass
         if (value == None):
             self.tree.hlist.item_configure(item, 1, text="")
             self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
@@ -519,6 +665,9 @@ class IPMIGUI(Tix.Frame):
             return
         data = self.treedata[item]
         data.active = False
+        if (hasattr(data, "impt_data") and (data.impt_data != None)):
+            self.set_impt_active_change(data)
+            pass
         self.tree.hlist.item_configure(item, 0, style=self.inactive_style)
         return
 
@@ -539,16 +688,18 @@ class IPMIGUI(Tix.Frame):
     def set_item_color(self, item):
         data = self.treedata[item]
         if (data.num_critical > 0):
-            self.tree.hlist.item_configure(item, 0, style=self.critical_style)
-            return
-        if (data.num_severe > 0):
-            self.tree.hlist.item_configure(item, 0, style=self.severe_style)
-            return
-        if (data.num_warning > 0):
-            self.tree.hlist.item_configure(item, 0, style=self.warn_style)
-            return
-        
-        self.tree.hlist.item_configure(item, 0, style=self.active_style)
+            style = self.critical_style
+        elif (data.num_severe > 0):
+            style=self.severe_style
+        elif (data.num_warning > 0):
+            style=self.warn_style
+        else:
+            style=self.active_style
+            pass
+        if (hasattr(data, "impt_data") and (data.impt_data != None)):
+            self.set_impt_style(data, style)
+            pass
+        self.tree.hlist.item_configure(item, 0, style=style)
         return
         
     def incr_item_warning(self, item):
@@ -765,7 +916,7 @@ class IPMIGUI(Tix.Frame):
         self.tree.close(item)
         self.item_sethide(parent, item)
         self.treedata[item] = e
-        self.setup_item(item)
+        self.setup_item(item, type="entity")
 
         lstr = item + ".S"
         self.tree.hlist.add(lstr, itemtype=Tix.TEXT, text="Sensors")
@@ -839,7 +990,7 @@ class IPMIGUI(Tix.Frame):
         self.tree.close(item)
         self.item_sethide(parent, item)
         self.treedata[item] = s
-        self.setup_item(item, active=True)
+        self.setup_item(item, active=True, type="sensor")
         return
 
     def remove_sensor(self, s):
@@ -865,7 +1016,7 @@ class IPMIGUI(Tix.Frame):
         self.tree.close(item)
         self.item_sethide(parent, item)
         self.treedata[item] = c
-        self.setup_item(item, active=True)
+        self.setup_item(item, active=True, type="control")
         return
 
     def remove_control(self, c):
@@ -885,13 +1036,23 @@ class IPMIGUI(Tix.Frame):
     def SaveInfo(self, doc, elem):
         elem.setAttribute("windowwidth", str(self.vpane.winfo_width()))
         elem.setAttribute("windowheight", str(self.vpane.winfo_height()))
-        elem.setAttribute("sashposition",
-                          str(self.vpane.panecget("objectsevents", "-size")))
+        spos = int(self.vpane.panecget("objectsevents", "-size"))
+        ipos = int(self.vpane.panecget("importantobjects", "-size"))
+        elem.setAttribute("sashposition", str(spos))
+        elem.setAttribute("isashposition", str(spos + ipos))
         elem.setAttribute("bsashposition",
                           str(self.hpane.panecget("objects", "-size")))
         #elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
         elem.setAttribute("logevents", str(self.logevents))
         elem.setAttribute("fullevents", str(self.fulleventsv != 0))
+        for i in self.impt_objs.values():
+            for j in i.values():
+                o = doc.createElement("watch")
+                o.setAttribute("type", j.type)
+                o.setAttribute("name", j.name)
+                elem.appendChild(o)
+                pass
+            pass
         return
     pass
 
@@ -923,9 +1084,11 @@ class _GUIRestore(_saveprefs.RestoreHandler):
         global init_windowwidth
         global init_sashposition
         global init_bsashposition
+        global init_isashposition
         global init_treenamewidth
         global init_fullevents
         global init_logevents
+        global init_impt_objs
         
         for i in range(0, node.attributes.length):
             attr = node.attributes.item(i)
@@ -936,7 +1099,9 @@ class _GUIRestore(_saveprefs.RestoreHandler):
             elif (attr.nodeName == "sashposition"):
                 init_sashposition = GetAttrInt(attr, init_sashposition)
             elif (attr.nodeName == "bsashposition"):
-                init_sashposition = GetAttrInt(attr, init_bsashposition)
+                init_bsashposition = GetAttrInt(attr, init_bsashposition)
+            elif (attr.nodeName == "isashposition"):
+                init_isashposition = GetAttrInt(attr, init_isashposition)
             elif (attr.nodeName == "treenamewidth"):
                 init_treenamewidth = GetAttrInt(attr, init_treenamewidth)
             elif (attr.nodeName == "logevents"):
@@ -945,7 +1110,24 @@ class _GUIRestore(_saveprefs.RestoreHandler):
                 init_fullevents = GetAttrBool(attr, init_fullevents)
                 pass
             pass
+        for i in node.childNodes:
+            if (i.nodeName == "watch"):
+                name = None
+                type = None
+                for j in range(0, i.attributes.length):
+                    attr = i.attributes.item(j)
+                    if (attr.nodeName == "name"):
+                        name = attr.nodeValue
+                    elif (attr.nodeName == "type"):
+                        type = attr.nodeValue
+                    pass
+                if (name != None) and (type != None):
+                    init_impt_objs.append( (type, name) )
+                    pass
+                pass
+            pass
         return
+    
     pass
 
 _GUIRestore()

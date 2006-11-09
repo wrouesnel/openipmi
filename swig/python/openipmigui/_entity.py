@@ -178,8 +178,12 @@ class Entity:
         return self.name
 
     def HandleMenu(self, event):
-        menul = [ ]
-
+        if (self.impt_data == None):
+            menul = [ [ "Add to watch values", self.add_impt ] ]
+            pass
+        else:
+            menul = [ [ "Remove from watch values", self.remove_impt ] ]
+            pass
         if (self.is_fru):
             menul.append(["View FRU Data", self.ViewFruData])
             pass
@@ -202,6 +206,14 @@ class Entity:
             pass
         return
 
+    def add_impt(self, event):
+        self.ui.add_impt_data("entity", str(self), self)
+        return
+        
+    def remove_impt(self, event):
+        self.ui.remove_impt_data(self.impt_data)
+        return
+        
     def RequestActivation(self, event):
         oper = EntityOp(self, "set_activation_requested")
         rv = oper.DoOp()

@@ -539,7 +539,12 @@ class Sensor:
         return
 
     def HandleMenu(self, event):
-        l = [ ]
+        if (self.impt_data == None):
+            l = [ [ "Add to watch values", self.add_impt ] ]
+            pass
+        else:
+            l = [ [ "Remove from watch values", self.remove_impt ] ]
+            pass
         if (self.event_support != OpenIPMI.EVENT_SUPPORT_NONE):
             l.append( ("Rearm", self.Rearm) )
             pass
@@ -559,6 +564,14 @@ class Sensor:
             pass
         return
 
+    def add_impt(self, event):
+        self.ui.add_impt_data("sensor", str(self), self)
+        return
+        
+    def remove_impt(self, event):
+        self.ui.remove_impt_data(self.impt_data)
+        return
+        
     def Rearm(self, event):
         return
     

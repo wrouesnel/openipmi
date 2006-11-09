@@ -1,3 +1,16 @@
+2006-11-09 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/gui_list.py: Added a way to set the
+	style of a column entry.
+
+	* swig/python/openipmigui/gui.py: Added a "watch list" to the GUI.
+	You can put controls, entities, and sensors you want to watch into
+	this list and monitor them.
+
+	* swig/python/openipmigui/_sensor.py: Add support for the watch list.
+	* swig/python/openipmigui/_control.py: ditto
+	* swig/python/openipmigui/_entity.py: ditto
+
 2006-11-08 Corey Minyard <cminyard@mvista.com>
 
 	* Makefile.am, configure.in: Rework the setting up of the library

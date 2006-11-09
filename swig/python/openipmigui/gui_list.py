@@ -110,6 +110,10 @@ class SubList(Tix.ScrolledHList):
         self.hlist.item_configure(idx, colnum, text=value)
         return
 
+    def SetColumnStyle(self, node, colnum, style):
+        self.hlist.item_configure(node, colnum, style=style)
+        return
+
     def add_data(self, name, values, data=None):
         idx = self.Append(name, values, data);
         if (data != None):
