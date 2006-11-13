@@ -33,6 +33,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -387,9 +388,6 @@ control_final_destroy(ipmi_control_t *control)
 	control->destroy_handler(control,
 				 control->destroy_handler_cb_data);
 
-    if (control->oem_info_cleanup_handler)
-	control->oem_info_cleanup_handler(control, control->oem_info);
-
     if (control->handler_list)
 	locked_list_destroy(control->handler_list);
 
@@ -398,6 +396,9 @@ control_final_destroy(ipmi_control_t *control)
 
     if (control->entity)
 	ipmi_entity_remove_control(control->entity, control);
+
+    if (control->oem_info_cleanup_handler)
+	control->oem_info_cleanup_handler(control, control->oem_info);
 
     _ipmi_entity_put(control->entity);
     ipmi_mem_free(control);
@@ -415,16 +416,12 @@ ipmi_control_destroy(ipmi_control_t *control)
     controls = _ipmi_mc_get_controls(control->mc);
 
     ipmi_lock(controls->idx_lock);
-    if (controls->controls_by_idx[control->num] != control) {
-	ipmi_unlock(controls->idx_lock);
-	_ipmi_mc_put(control->mc);
-	return EINVAL;
+    if (controls->controls_by_idx[control->num] == control) {
+	controls->control_count--;
+	controls->controls_by_idx[control->num] = NULL;
     }
 
     _ipmi_control_get(control);
-
-    controls->control_count--;
-    controls->controls_by_idx[control->num] = NULL;
 
     ipmi_unlock(controls->idx_lock);
 
@@ -808,6 +805,8 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     os_handler_t        *os_hnd;
     ipmi_control_info_t *controls = _ipmi_mc_get_controls(mc);
     locked_list_entry_t *link;
+    int                 err;
+    unsigned int        i;
 
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
@@ -815,11 +814,23 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     domain = ipmi_mc_get_domain(mc);
     os_hnd = ipmi_domain_get_os_hnd(domain);
 
-    if (num >= 256)
+    if ((num >= 256) && (num != UINT_MAX))
 	return EINVAL;
 
     _ipmi_domain_entity_lock(domain);
     ipmi_lock(controls->idx_lock);
+
+    if (num == UINT_MAX){
+	for (i=0; i<controls->idx_size; i++) {
+	    if (! controls->controls_by_idx[i])
+		break;
+	}
+	num = i;
+	if (num >= 256) {
+	    err = EAGAIN;
+	    goto out_err;
+	}
+    }
 
     if (num >= controls->idx_size) {
 	ipmi_control_t **new_array;
@@ -831,8 +842,8 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	new_size = ((num / 16) * 16) + 16;
 	new_array = ipmi_mem_alloc(sizeof(*new_array) * new_size);
 	if (!new_array) {
-	    ipmi_unlock(controls->idx_lock);
-	    return ENOMEM;
+	    err = ENOMEM;
+	    goto out_err;
 	}
 	if (controls->controls_by_idx)
 	    memcpy(new_array, controls->controls_by_idx,
@@ -847,15 +858,15 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
     control->waitq = opq_alloc(os_hnd);
     if (! control->waitq) {
-	ipmi_unlock(controls->idx_lock);
-	return ENOMEM;
+	err = ENOMEM;
+	goto out_err;
     }
 
     control->handler_list = locked_list_alloc(os_hnd);
     if (! control->handler_list) {
 	opq_destroy(control->waitq);
-	ipmi_unlock(controls->idx_lock);
-	return ENOMEM;
+	err = ENOMEM;
+	goto out_err;
     }
 
     link = locked_list_alloc_entry();
@@ -864,8 +875,8 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	control->waitq = NULL;
 	locked_list_destroy(control->handler_list);
 	control->handler_list = NULL;
-	ipmi_unlock(controls->idx_lock);
-	return ENOMEM;
+	err = ENOMEM;
+	goto out_err;
     }
 
     control->domain = domain;
@@ -897,6 +908,11 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     control->add_pending = 1;
 
     return 0;
+
+ out_err:
+    ipmi_unlock(controls->idx_lock);
+    _ipmi_domain_entity_unlock(domain);
+    return err;
 }
 
 int

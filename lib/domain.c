@@ -4817,7 +4817,6 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	/* A connection failed, try to find a working connection and
            activate it, if necessary. */
 	domain->con_up[u] = 0;
-	domain->con_active[u] = 0;
 	domain->working_conn = first_working_con(domain);
 	if (domain->working_conn == -1)
 	    domain->connection_up = 0;

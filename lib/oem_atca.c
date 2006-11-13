@@ -37,6 +37,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <stdio.h> /* For sprintf */
+#include <limits.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_addr.h>
@@ -60,14 +61,6 @@
    hot-swap state machine to handle power control.  Plus, the code is
    untested. */
 /* #define POWER_CONTROL_AVAILABLE */
-
-/* Allow LED controls to go from 0 to 7fh. */
-#define IPMC_FIRST_LED_CONTROL_NUM 0x00
-#define IPMC_RESET_CONTROL_NUM			0x80
-#define IPMC_POWER_CONTROL_NUM			0x81
-#define IPMC_WARM_RESET_CONTROL_NUM		0x82
-#define IPMC_GRACEFUL_REBOOT_CONTROL_NUM	0x83
-#define IPMC_DIAGNOSTIC_INTERRUPT_CONTROL_NUM	0x84
 
 /* A control attached to the system interface used to fetch the power
    feed information. */
@@ -1478,7 +1471,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     ipmi_control_light_set_has_local_control(l->control, 0, l->local_control);
     rv = atca_add_control(mc, 
 			  &l->control,
-			  num,
+			  UINT_MAX, /* Let the control code pick the number */
 			  finfo->entity);
     _ipmi_entity_put(finfo->entity);
     if (rv) {
@@ -1846,7 +1839,6 @@ add_atca_fru_control(ipmi_mc_t               *mc,
 		     atca_fru_t              *finfo,
 		     char                    *name,
 		     unsigned int            control_type,
-		     unsigned int            control_num,
 		     ipmi_control_set_val_cb set_val,
 		     ipmi_control_t          **control)
 {
@@ -1873,7 +1865,7 @@ add_atca_fru_control(ipmi_mc_t               *mc,
 
     rv = atca_add_control(mc, 
 			  control,
-			  control_num,
+			  UINT_MAX,
 			  finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1903,23 +1895,19 @@ fru_control_capabilities_rsp(ipmi_mc_t  *mc,
 
     /* Always support cold reset. */
     add_atca_fru_control(mc, finfo, "cold reset", IPMI_CONTROL_ONE_SHOT_RESET,
-			 IPMC_RESET_CONTROL_NUM, set_cold_reset,
-			 &finfo->cold_reset);
+			 set_cold_reset, &finfo->cold_reset);
     if (finfo->fru_capabilities & 0x02)
 	add_atca_fru_control(mc, finfo, "warm reset",
 			     IPMI_CONTROL_ONE_SHOT_RESET,
-			     IPMC_WARM_RESET_CONTROL_NUM, set_warm_reset,
-			     &finfo->warm_reset);
+			     set_warm_reset, &finfo->warm_reset);
     if (finfo->fru_capabilities & 0x04)
 	add_atca_fru_control(mc, finfo, "graceful reboot",
 			     IPMI_CONTROL_ONE_SHOT_RESET,
-			     IPMC_GRACEFUL_REBOOT_CONTROL_NUM,
 			     set_graceful_reboot,
 			     &finfo->graceful_reboot);
     if (finfo->fru_capabilities & 0x08)
 	add_atca_fru_control(mc, finfo, "diagnostic interrupt",
 			     IPMI_CONTROL_ONE_SHOT_RESET,
-			     IPMC_DIAGNOSTIC_INTERRUPT_CONTROL_NUM,
 			     set_diagnostic_interrupt,
 			     &finfo->diagnostic_interrupt);
 
@@ -2217,7 +2205,7 @@ add_power_mc_cb(ipmi_mc_t *mc, void *cb_info)
 
     rv = atca_add_control(mc, 
 			  &finfo->power,
-			  IPMC_POWER_CONTROL_NUM,
+			  UINT_MAX,
 			  finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -2798,6 +2786,8 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 static void
 add_fru_controls(atca_fru_t *finfo)
 {
+    if (finfo->cold_reset)
+	return;
     fetch_fru_leds(finfo);
     fetch_fru_control_handling(finfo);
 #ifdef POWER_CONTROL_AVAILABLE
@@ -2944,7 +2934,7 @@ atca_entity_update_handler(enum ipmi_update_e op,
 	ipmi_entity_set_oem_info(entity, finfo, NULL);
 
 	/* If the entity isn't set up yet but is present, handle that. */
-	if (!finfo->cold_reset && ipmi_entity_is_present(entity))
+	if (ipmi_entity_is_present(entity))
 	    add_fru_controls(finfo);
 	break;
 
@@ -4115,11 +4105,15 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
     if (info->addresses)
 	ipmi_mem_free(info->addresses);
     if (info->ipmcs) {
-	unsigned int i;
+	unsigned int i, j;
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
 	    ipmi_mem_free(b->frus[0]);
+	    for (j=1; j<b->num_frus; j++) {
+		if (b->frus[j])
+		    ipmi_mem_free(b->frus[j]);
+	    }
 	    ipmi_mem_free(b->frus);
 	    b->frus = NULL;
 	}

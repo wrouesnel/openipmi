@@ -1,3 +1,38 @@
+2006-11-11 Corey Minyard <cminyard@mvista.com>
+
+	* lib/control.c, lib/sensor.c: Change the shutdown order of OEM
+	controls so the OEM data is freed last, after the control is
+	removed from the entity.
+
+	* lib/control.c, lib/sensor.c: Don't fail freeing an OEM control
+	or sensor if the index is reused.  The control is still valid to
+	free.
+
+	* lib/oem_atca.c: Free all the FRUs for an entity when the entity
+	is freed at domain shutdown.
+
+	* lib/sdr.c: Fix a race where if the SDR data is asked for the
+	first time and then again immediately after, the DB will be
+	fetched twice and the second time will overwrite the first data.
+	Only fetch DB data if the SDR fetch state is idle.  Also, when
+	fetching from the DB, free the SDR data if it is allocated.
+
+	* lib/control.c, lib/sensor.c: Modified the addition of
+	nonstandard sensor and controls so that the next unused number is
+	picked instead of having to supply the number.
+
+	* lib/oem_atca.c: Modified the controls for the IPMCs to let the
+	control code pick the control number.  This handles a problem
+	controls not being handled correctly for ATCA blades with multiple
+	FRUs.
+
+2006-11-10 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Don't set a connection inactive if it goes down,
+	let the active-reporting interface handle that.  Otherwise systems
+	without inactive links will report inactive if the connection goes
+	down.
+
 2006-11-09 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui_list.py: Added a way to set the

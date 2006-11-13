@@ -839,6 +839,8 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     ipmi_domain_t      *domain;
     os_handler_t       *os_hnd;
     void               *link;
+    int                err;
+    unsigned int       i;
 
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
@@ -846,11 +848,23 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     domain = ipmi_mc_get_domain(mc);
     os_hnd = ipmi_domain_get_os_hnd(domain);
 
-    if (num >= 256)
+    if ((num >= 256) && (num != UINT_MAX))
 	return EINVAL;
 
     _ipmi_domain_entity_lock(domain);
     ipmi_lock(sensors->idx_lock);
+
+    if (num == UINT_MAX){
+	for (i=0; i<sensors->idx_size[4]; i++) {
+	    if (! sensors->sensors_by_idx[4][i])
+		break;
+	}
+	num = i;
+	if (num >= 256) {
+	    err = EAGAIN;
+	    goto out_err;
+	}
+    }
 
     if (num >= sensors->idx_size[4]) {
 	ipmi_sensor_t **new_array;
@@ -861,8 +875,10 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 	   too much). */
 	new_size = ((num / 16) * 16) + 16;
 	new_array = ipmi_mem_alloc(sizeof(*new_array) * new_size);
-	if (!new_array)
-	    return ENOMEM;
+	if (!new_array) {
+	    err = ENOMEM;
+	    goto out_err;
+	}
 	if (sensors->sensors_by_idx[4]) {
 	    memcpy(new_array, sensors->sensors_by_idx[4],
 		   sizeof(*new_array) * (sensors->idx_size[4]));
@@ -875,13 +891,16 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     }
 
     sensor->waitq = opq_alloc(os_hnd);
-    if (! sensor->waitq)
-	return ENOMEM;
+    if (! sensor->waitq) {
+	err = ENOMEM;
+	goto out_err;
+    }
 
     sensor->handler_list = locked_list_alloc(os_hnd);
     if (! sensor->handler_list) {
 	opq_destroy(sensor->waitq);
-	return ENOMEM;
+	err = ENOMEM;
+	goto out_err;
     }
 
     link = locked_list_alloc_entry();
@@ -890,7 +909,8 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 	sensor->waitq = NULL;
 	locked_list_destroy(sensor->handler_list);
 	sensor->handler_list = NULL;
-	return ENOMEM;
+	err = ENOMEM;
+	goto out_err;
     }
 
     sensor->domain = domain;
@@ -920,6 +940,11 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->add_pending = 1;
 
     return 0;
+
+ out_err:
+    ipmi_unlock(sensors->idx_lock);
+    _ipmi_domain_entity_unlock(domain);
+    return err;
 }
 
 static void
@@ -933,9 +958,6 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
 
-    if (sensor->oem_info_cleanup_handler)
-	sensor->oem_info_cleanup_handler(sensor, sensor->oem_info);
-
     if (sensor->waitq)
 	opq_destroy(sensor->waitq);
 
@@ -944,6 +966,9 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 
     if (sensor->entity)
 	ipmi_entity_remove_sensor(sensor->entity, sensor);
+
+    if (sensor->oem_info_cleanup_handler)
+	sensor->oem_info_cleanup_handler(sensor, sensor->oem_info);
 
     _ipmi_entity_put(sensor->entity);
     ipmi_mem_free(sensor);
@@ -961,10 +986,9 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     sensors = _ipmi_mc_get_sensors(sensor->mc);
 
     ipmi_lock(sensors->idx_lock);
-    if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num]) {
-	ipmi_unlock(sensors->idx_lock);
-	_ipmi_mc_put(sensor->mc);
-	return EINVAL;
+    if (sensor == sensors->sensors_by_idx[sensor->lun][sensor->num]) {
+	sensors->sensor_count--;
+	sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
     }
 
     _ipmi_sensor_get(sensor);
@@ -972,8 +996,6 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
 
-    sensors->sensor_count--;
-    sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
     ipmi_unlock(sensors->idx_lock);
 
     sensor->destroyed = 1;

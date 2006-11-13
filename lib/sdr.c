@@ -260,6 +260,7 @@ process_db_data(ipmi_sdr_info_t *sdrs,
 {
     int           num;
     unsigned char *d;
+    ipmi_sdr_t    *to_free;
 
     if (len < 9)
 	goto no_db;
@@ -279,6 +280,7 @@ process_db_data(ipmi_sdr_info_t *sdrs,
     num = len / sizeof(ipmi_sdr_t);
     /* Allocate 9 extra bytes for storing the timestamps and
      * format#. */
+    to_free = sdrs->sdrs;
     sdrs->sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t) * num) + 9);
     if (!sdrs->sdrs)
 	goto no_db;
@@ -286,6 +288,8 @@ process_db_data(ipmi_sdr_info_t *sdrs,
     sdrs->num_sdrs = num;
     sdrs->sdr_array_size = num;
     sdrs->fetched = 1;
+    if (to_free)
+	ipmi_mem_free(to_free);
 
  no_db:
     sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
@@ -1851,7 +1855,7 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     DEBUG_INFO(sdrs);
 
     sdr_lock(sdrs);
-    if (!sdrs->fetched) {
+    if (!sdrs->fetched && (sdrs->fetch_state == IDLE)) {
 	/* Look in the database before the first fetch. */
 	if (ipmi_mc_get_guid(mc, guid) == 0) {
 	    char *s;

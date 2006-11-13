@@ -114,7 +114,7 @@ class Connection:
                 pass
             pass
         else:
-            self.active_str = "inactive"
+            self.active_str = "inactive(" + str(rv) + ")"
             pass
 
         self.ui.add_connection(d, self)
@@ -213,7 +213,7 @@ class Connection:
                     pass
                 pass
             else:
-                new_active_str = "inactive"
+                new_active_str = "inactive("+ str(rv) + ")"
                 pass
 
             if (new_active_str != self.active_str):
