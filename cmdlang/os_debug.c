@@ -303,7 +303,7 @@ create_lock(os_handler_t  *handler,
 {
     os_hnd_lock_t *lock;
 
-    lock = ipmi_mem_alloc(sizeof(*lock));
+    lock = malloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
     lock->lock_count = 0;
@@ -323,7 +323,7 @@ destroy_lock(os_handler_t  *handler,
 	id->next->prev = id->prev;
 	id->prev->next = id->next;
     }
-    ipmi_mem_free(id);
+    free(id);
     return 0;
 }
 

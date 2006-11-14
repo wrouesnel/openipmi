@@ -1880,16 +1880,29 @@ fru_control_capabilities_rsp(ipmi_mc_t  *mc,
 			     ipmi_msg_t *rsp,
 			     void       *rsp_data)
 {
-    atca_fru_t *finfo = rsp_data;
+    ipmi_domain_t *domain;
+    atca_fru_t    *finfo = rsp_data;
+    int           rv;
 
     if (!check_for_msg_err(mc, NULL, rsp, 3, "fru_control_capabilities_rsp"))
 	finfo->fru_capabilities = rsp->data[2];
+
+    if (!mc)
+	goto out;
+
+    domain = ipmi_mc_get_domain(mc);
 
     /* If the command fails, we just go on, as the system doesn't
        support the query, but still must support at least cold
        reset. */
 
-    if (!finfo->entity)
+    _ipmi_domain_entity_lock(domain);
+    if (!finfo->entity) {
+	rv = EINVAL;
+    } else
+	rv = _ipmi_entity_get(finfo->entity);
+    _ipmi_domain_entity_unlock(domain);
+    if (rv)
 	/* The entity was destroyed while the message was in progress. */
 	goto out;
 
@@ -1910,6 +1923,7 @@ fru_control_capabilities_rsp(ipmi_mc_t  *mc,
 			     IPMI_CONTROL_ONE_SHOT_RESET,
 			     set_diagnostic_interrupt,
 			     &finfo->diagnostic_interrupt);
+    _ipmi_entity_put(finfo->entity);
 
  out:
     return;
