@@ -2925,11 +2925,13 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
     info->done_data = done_data;
 
     ipmi_lock(mc->lock);
-    if (! mc_op_ready(mc))
+    if (! mc_op_ready(mc)) {
+	ipmi_unlock(mc->lock);
 	rv = ECANCELED;
-    else
+    } else {
+	ipmi_unlock(mc->lock);
 	rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
-    ipmi_unlock(mc->lock);
+    }
     if (rv)
 	ipmi_mem_free(info);
 

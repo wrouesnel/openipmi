@@ -1,4 +1,4 @@
-2006-11-12 Corey Minyard <cminyard@mvista.com>
+2006-11-14 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui.py: Rework the mouse wheel stuff so
 	it works on older version of tk.
@@ -17,9 +17,11 @@
 
 	* lib/fru.c: If the FRU fetch start fails, return an error.
 
+	* lib/mc.c: Fixed a deadlock in certain error cases.
+
 	* configure.in: Move to version 2.0.9
 
-2006-11-11 Corey Minyard <cminyard@mvista.com>
+2006-11-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/control.c, lib/sensor.c: Change the shutdown order of OEM
 	controls so the OEM data is freed last, after the control is
