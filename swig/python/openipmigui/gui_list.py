@@ -32,6 +32,7 @@
 
 import Tix
 import gui_errstr
+import gui
 
 # A list widget that can be embedded in something else
 class SubList(Tix.ScrolledHList):
@@ -54,7 +55,7 @@ class SubList(Tix.ScrolledHList):
         self.bind("<Destroy>", self.OnDestroy)
 
         self.hlist.bind("<MouseWheel>", self.Wheel)
-        if (self.tk.eval("return [ tk windowingsystem ]") == "x11"):
+        if (gui.winsys == "x11"):
             self.hlist.bind("<Button-4>", self.ButtonUp)
             self.hlist.bind("<Button-5>", self.ButtonDown)
             pass

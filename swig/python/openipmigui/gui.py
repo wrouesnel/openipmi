@@ -49,6 +49,14 @@ init_logevents = False
 init_fullevents = False
 init_impt_objs = [ ]
 
+try:
+    winsys = self.tk.eval("return [ tk windowingsystem ]")
+    pass
+except:
+    # Assume x11
+    winsys = "x11"
+    pass
+
 refresh_timer_time = 10000
 
 class IPMITreeDummyItem:
@@ -210,7 +218,7 @@ class IPMIGUI(Tix.Frame):
         self.tree.hlist.bind("<Button-3>", self.TreeMenu)
         
         self.tree.hlist.bind("<MouseWheel>", self.Wheel)
-        if (self.tk.eval("return [ tk windowingsystem ]") == "x11"):
+        if (winsys == "x11"):
             self.tree.hlist.bind("<Button-4>", self.ButtonUp)
             self.tree.hlist.bind("<Button-5>", self.ButtonDown)
             pass
