@@ -34,7 +34,7 @@ def _error(e):
     print "ERROR: " + e
 
 def _warning(e):
-    print "ERROR: " + e
+    print "WARNING: " + e
 
 try:
     import logging
