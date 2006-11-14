@@ -9,6 +9,14 @@
 	work on systems that could dynamically choose the glib library.
 	Add an LD_LIBRARY_PATH back in for that directory only.
 
+	* lib/fru.c, include/OpenIPMI/internal/ipmi_fru.h: Exported a
+	function to reference the FRU structure without claiming the lock.
+
+	* lib/normal_fru.c: Removed a deadlock where a FRU was referenced
+	while the lock was held.
+
+	* lib/fru.c: If the FRU fetch start fails, return an error.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-11 Corey Minyard <cminyard@mvista.com>

@@ -143,6 +143,9 @@ int _ipmi_fru_deregister_multi_record_oem_handler
 void _ipmi_fru_lock(ipmi_fru_t *fru);
 void _ipmi_fru_unlock(ipmi_fru_t *fru);
 
+/* You must be holding the fru lock to call this. */
+void _ipmi_fru_ref_nolock(ipmi_fru_t *fru);
+
 /*
  * Some specialized FRU data repositories have protection against
  * multiple readers/writers to keep them from colliding.  The model

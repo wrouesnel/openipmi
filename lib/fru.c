@@ -181,8 +181,6 @@ struct ipmi_fru_s
     _ipmi_fru_complete_write_cb complete_write_cb;
 
     char iname[IPMI_FRU_NAME_LEN+1];
-
-int c;
 };
 
 #define FRU_DOMAIN_NAME(fru) (fru ? fru->iname : "")
@@ -212,6 +210,12 @@ _ipmi_fru_unlock(ipmi_fru_t *fru)
  */
 static void
 fru_get(ipmi_fru_t *fru)
+{
+    fru->refcount++;
+}
+
+void
+_ipmi_fru_ref_nolock(ipmi_fru_t *fru)
 {
     fru->refcount++;
 }
@@ -716,17 +720,19 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     _ipmi_fru_lock(fru);
     if (fru->timestamp_cb) {
 	err = fru->timestamp_cb(fru, domain, fetch_got_timestamp);
-	if (err) {
-	    _ipmi_fru_unlock(fru);
+	if (err)
 	    goto out_err;
-	}
-    } else
-	start_fru_fetch(fru, domain);
+    } else {
+	err = start_fru_fetch(fru, domain);
+	if (err)
+	    goto out_err;
+    }
 
     *new_fru = fru;
     return 0;
 
  out_err:
+    _ipmi_fru_unlock(fru);
     ipmi_destroy_lock(fru->lock);
     ipmi_mem_free(fru);
     return err;
@@ -923,6 +929,8 @@ end_fru_fetch(ipmi_fru_t    *fru,
 	      int           err,
 	      uint32_t      timestamp)
 {
+    int rv;
+
     _ipmi_fru_lock(fru);
     if (fru->deleted) {
 	fetch_complete(domain, fru, ECANCELED);
@@ -943,7 +951,9 @@ end_fru_fetch(ipmi_fru_t    *fru,
 	    fru->data = NULL;
 	    _ipmi_fru_unlock(fru);
 	    fru->last_timestamp = timestamp;
-	    start_fru_fetch(fru, domain);
+	    rv = start_fru_fetch(fru, domain);
+	    if (rv)
+		fetch_complete(domain, fru, rv);
 	}
     } else
 	fetch_complete(domain, fru, 0);

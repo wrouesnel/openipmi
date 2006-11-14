@@ -6159,13 +6159,15 @@ ipmi_mr_struct_root(ipmi_fru_t              *fru,
     
     _ipmi_fru_lock(fru);
     rv = ipmi_mr_struct_decode(layout, 4, NULL, &orec, &mr_data, &mr_data_len);
-    if (rv)
+    if (rv) {
+        _ipmi_fru_unlock(fru);
 	return rv;
+    }
 
     finfo = ipmi_mem_alloc(sizeof(*finfo));
     if (!finfo)
 	goto out_no_mem;
-    ipmi_fru_ref(fru);
+    _ipmi_fru_ref_nolock(fru);
     finfo->fru = fru;
     finfo->mr_rec_num = mr_rec_num;
 
