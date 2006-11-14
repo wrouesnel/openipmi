@@ -5,6 +5,10 @@
 	* swig/python/openipmigui/gui_list.py: ditto
 	* swig/python/openipmigui/gui_treelist.py: ditto
 
+	* Makefile.am, swig/python/Makefile.am: "make rungui" wouldn't
+	work on systems that could dynamically choose the glib library.
+	Add an LD_LIBRARY_PATH back in for that directory only.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-11 Corey Minyard <cminyard@mvista.com>

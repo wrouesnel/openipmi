@@ -63,4 +63,4 @@ uninstall-local:
 PYPATH=$(top_builddir)/swig/python:$(srcdir)/openipmigui
 
 rungui:
-	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
