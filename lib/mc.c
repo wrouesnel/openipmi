@@ -699,8 +699,10 @@ mc_stop_timer(ipmi_mc_t *mc)
     mc->sel_timer_info->timer_should_run = 0;
     if (mc->sel_timer_info->timer_running) {
 	rv = os_hnd->stop_timer(os_hnd, mc->sel_timer_info->sel_timer);
-	if (!rv)
+	if (!rv) {
 	    mc->sel_timer_info->timer_running = 0;
+	    mc->sel_timer_info->processing = 0;
+	}
     }
     if ((mc->startup_count > 0) && !mc->sel_timer_info->processing)
 	/* Hack: If we are processing, we will fail the processing or
@@ -2056,7 +2058,6 @@ start_sel_ops(ipmi_mc_t           *mc,
     info->timer_should_run = 1;
     info->retries = 0;
     info->sel_time_set = 0;
-    info->processing = 1;
 
     info->handler = handler;
     info->cb_data = cb_data;
@@ -2064,6 +2065,7 @@ start_sel_ops(ipmi_mc_t           *mc,
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */
 	DEBUG_INFO(info);
+	info->processing = 1;
 	start_sel_time_set(mc, info);
 	ipmi_unlock(info->lock);
     } else if (fail_if_down) {
@@ -2072,6 +2074,7 @@ start_sel_ops(ipmi_mc_t           *mc,
 	DEBUG_INFO(info);
 	rv = EAGAIN;
 	info->timer_should_run = 0;
+	info->processing = 0;
 	/* SELs not started, just call the handler. */
 	if (mc->sel_timer_info->sels_first_read_handler) {
 	    handler2 = mc->sel_timer_info->sels_first_read_handler;
@@ -2424,12 +2427,16 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	break;
     case MC_ACTIVE_IN_STARTUP:
 	mc->state = MC_ACTIVE_PEND_CLEANUP;
+	ipmi_unlock(mc->lock);
+	ipmi_sdr_cleanout_timer(mc->sdrs);
 	/* FIXME - shut down startup code */
-	break;
+	goto out;
     case MC_ACTIVE:
     case MC_ACTIVE_PEND_FULLY_UP:
 	mc->state = MC_ACTIVE_PEND_CLEANUP;
-	break;
+	ipmi_unlock(mc->lock);
+	ipmi_sdr_cleanout_timer(mc->sdrs);
+	goto out;
     case MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP:
 	mc->state = MC_ACTIVE_PEND_CLEANUP;
 	break;
@@ -2437,6 +2444,8 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	break;
     }
     ipmi_unlock(mc->lock);
+ out:
+    return;
 }
 
 ipmi_mcid_t

@@ -532,6 +532,30 @@ ipmi_sdr_clean_out_sdrs(ipmi_sdr_info_t *sdrs)
     sdrs->fetched = 0;
 }
 
+void
+ipmi_sdr_cleanout_timer(ipmi_sdr_info_t *sdrs)
+{
+    sdr_lock(sdrs);
+    DEBUG_INFO(sdrs);
+    if (sdrs->restart_timer_running) {
+	/* Stop the timer.  If we fail, the timer handler is
+	   running (error is returned from the stop), just let it
+	   handle the stop.  Otherwise, we handle the stop. */
+	int rv;
+
+	rv = sdrs->os_hnd->stop_timer(sdrs->os_hnd, sdrs->restart_timer);
+	if (!rv) {
+	    DEBUG_INFO(sdrs);
+	    sdr_unlock(sdrs);
+	    restart_timer_cb(sdrs, sdrs->restart_timer);
+	    goto out;
+	}
+    }
+    sdr_unlock(sdrs);
+ out:
+    return;
+}
+
 int
 ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
 		      ipmi_sdr_destroyed_t handler,
@@ -1697,14 +1721,16 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 				 &tv.tv_sec,
 				 sizeof(tv.tv_sec));
 	/* Wait a random value between 10 and 30 seconds */
+	if (tv.tv_sec < 0)
+	    tv.tv_sec = -tv.tv_sec;
 	tv.tv_sec = (tv.tv_sec % 20) + 10;
 	tv.tv_usec = 0;
+	sdrs->restart_timer_running = 1;
 	sdrs->os_hnd->start_timer(sdrs->os_hnd,
 				  sdrs->restart_timer,
 				  &tv,
 				  restart_timer_cb,
 				  sdrs);
-	sdrs->restart_timer_running = 1;
 	return 0;
     } else {
 	/* Get the SDR repository information first. */
@@ -1732,7 +1758,6 @@ handle_start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 
     DEBUG_INFO(sdrs);
     sdrs->wait_err = 0;
-    sdrs->fetch_retry_count = 0;
     sdrs->sdr_retry_count = 0;
     sdr_lock(sdrs);
     rv = start_fetch(sdrs, mc, 0);
@@ -1749,15 +1774,10 @@ handle_start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     }
 }
 
-static int
-handle_start_fetch(void *cb_data, int shutdown)
+static void
+handle_start_fetch(ipmi_sdr_info_t *sdrs)
 {
-    int             rv;
-    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
-
-    DEBUG_INFO(sdrs);
-    if (shutdown)
-	return OPQ_HANDLER_STARTED;
+    int rv;
 
     DEBUG_INFO(sdrs);
     rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
@@ -1771,7 +1791,6 @@ handle_start_fetch(void *cb_data, int shutdown)
 	sdr_lock(sdrs);
 	fetch_complete(sdrs, rv);
     }
-    return OPQ_HANDLER_STARTED;
 }
 
 static void
@@ -1793,7 +1812,22 @@ restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     }
     sdr_unlock(sdrs);
 
-    handle_start_fetch(sdrs, 0);
+    handle_start_fetch(sdrs);
+}
+
+static int
+initial_start_fetch(void *cb_data, int shutdown)
+{
+    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
+
+    DEBUG_INFO(sdrs);
+    if (shutdown)
+	return OPQ_HANDLER_STARTED;
+
+    sdrs->fetch_retry_count = 0;
+    handle_start_fetch(sdrs);
+
+    return OPQ_HANDLER_STARTED;
 }
 
 static void
@@ -1880,7 +1914,7 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 
     DEBUG_INFO(sdrs);
     if (! opq_new_op_with_done(sdrs->sdr_wait_q,
-			       handle_start_fetch,
+			       initial_start_fetch,
 			       sdrs,
 			       handle_fetch_done,
 			       elem))

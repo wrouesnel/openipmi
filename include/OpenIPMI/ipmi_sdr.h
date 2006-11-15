@@ -70,6 +70,10 @@ int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 /* Remove all the SDRs, but don't destroy the SDR repository. */
 void ipmi_sdr_clean_out_sdrs(ipmi_sdr_info_t *sdrs);
 
+/* Stop any timer operation; if the MC is in shutdown this should halt
+   any running operations. */
+void ipmi_sdr_cleanout_timer(ipmi_sdr_info_t *sdrs);
+
 /* Destroy an SDR.  Note that if the SDR is currently fetching SDRs,
    the destroy cannot complete immediatly, it will be marked for
    destruction later.  You can supply a callback that, if not NULL,

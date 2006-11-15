@@ -31,6 +31,12 @@
 	* lib/oem_atca.c: Fixed a possible memory leak in the LEDs if an
 	ATCA domain is shut down while it is coming up.
 
+	* lib/sdr.c: Fix a problem with the fetch retry count being reset
+	to zero sometimes on a restart.
+
+	* lib/sdr.c, lib/mc.c: Added a way to stop the SDR timer
+	operations during cleanup of an MC.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-13 Corey Minyard <cminyard@mvista.com>
