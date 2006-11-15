@@ -28,6 +28,9 @@
 	* lib/ipmi_lan.c: Fixed a missing shutdown check that could cause
 	a race at shutdown and a possible segv.
 
+	* lib/oem_atca.c: Fixed a possible memory leak in the LEDs if an
+	ATCA domain is shut down while it is coming up.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-13 Corey Minyard <cminyard@mvista.com>
