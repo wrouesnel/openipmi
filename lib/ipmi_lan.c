@@ -4164,7 +4164,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 unsigned int hacks,
 		 void         *cb_data)
 {
-    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t   *lan;
     unsigned int addr_num = (unsigned long) cb_data;
     unsigned int i;
 
@@ -4172,6 +4172,13 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 	handle_connected(ipmi, err, addr_num);
 	return;
     }
+
+    if (!ipmi) {
+	handle_connected(ipmi, ECANCELED, addr_num);
+	return;
+    }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (! ipmb_addr[i])

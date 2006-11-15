@@ -25,6 +25,9 @@
 	* cmdlang/os_debug.c: Can't use ipmi_mem_alloc any more to
 	allocate a lock, the locks are claimed too early.
 
+	* lib/ipmi_lan.c: Fixed a missing shutdown check that could cause
+	a race at shutdown and a possible segv.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-13 Corey Minyard <cminyard@mvista.com>
