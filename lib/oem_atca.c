@@ -1505,6 +1505,7 @@ get_led_capability_2(ipmi_mc_t  *mc,
     }
 
     if (check_for_msg_err(mc, NULL, rsp, 3, "get_led_capability_2")) {
+	linfo->op_in_progress = 0;
 	return;
     }
 
