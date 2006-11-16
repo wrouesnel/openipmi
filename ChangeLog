@@ -1,3 +1,11 @@
+2006-11-15 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain: Fix a problem with active/standby connections; now
+	force command rerouting when a connection goes inactive, as well
+	as when a connection goes active.
+
+	* configure.in: Move to version 2.0.9
+
 2006-11-14 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui.py: Rework the mouse wheel stuff so
@@ -36,8 +44,6 @@
 
 	* lib/sdr.c, lib/mc.c: Added a way to stop the SDR timer
 	operations during cleanup of an MC.
-
-	* configure.in: Move to version 2.0.9
 
 2006-11-13 Corey Minyard <cminyard@mvista.com>
 

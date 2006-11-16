@@ -4723,6 +4723,10 @@ ll_addr_changed(ipmi_con_t    *ipmi,
 			domain);
 		}
 	    }
+	} else {
+	    /* The connection went inactive, route message from it to
+	       the current working connection. */
+	    reroute_cmds(domain, domain->working_conn);
 	}
     } else if (active) {
         /* Always pick the last working active connection to use. */
