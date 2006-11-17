@@ -201,8 +201,9 @@ struct ipmi_domain_s
     ipmi_lock_t *cmds_lock;
     long        cmds_seq; /* Sequence number for messages to avoid
 			     reuse problems. */
-    long        conn_seq; /* Sequence number for connection switchovers
-			     to avoid handling old messages. */
+    long        conn_seq[MAX_CONS]; /* Sequence number for connection
+				       switchovers to avoid handling
+				       old messages. */
 
     locked_list_t            *event_handlers;
     ipmi_oem_event_handler_cb oem_event_handler;
@@ -1808,13 +1809,13 @@ static int cmp_nmsg(void *item, void *cb_data)
 	    && (nmsg1->domain == nmsg2->domain));
 }
 
+/* Must be called with the cmds_lock held. */
 static int
 find_and_remove_msg(ipmi_domain_t *domain, ll_msg_t *nmsg, long seq)
 {
     ilist_iter_t iter;
     int          rv = 0;
 
-    ipmi_lock(domain->cmds_lock);
     ilist_init_iter(&iter, domain->cmds);
     ilist_unpositioned(&iter);
     if ((ilist_search_iter(&iter, cmp_nmsg, nmsg) != NULL)
@@ -1823,7 +1824,6 @@ find_and_remove_msg(ipmi_domain_t *domain, ll_msg_t *nmsg, long seq)
 	ilist_delete(&iter);
 	rv = 1;
     }
-    ipmi_unlock(domain->cmds_lock);
     return rv;
 }
 
@@ -1844,13 +1844,18 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	   already been delivered in the cleanup code. */
 	return IPMI_MSG_ITEM_NOT_USED;
 
-    /* We don't protect this check with a lock, but it shouldn't matter. */
-    if (conn_seq != domain->conn_seq)
+    ipmi_lock(domain->cmds_lock);
+    if (conn_seq != domain->conn_seq[nmsg->con]) {
 	/* The message has been rerouted, just ignore this response. */
+	ipmi_unlock(domain->cmds_lock);
 	goto out_unlock;
+    }
 
-    if (!find_and_remove_msg(domain, nmsg, seq))
+    if (!find_and_remove_msg(domain, nmsg, seq)) {
+	ipmi_unlock(domain->cmds_lock);
 	goto out_unlock;
+    }
+    ipmi_unlock(domain->cmds_lock);
 
     rspi = nmsg->rsp_item;
     if (nmsg->rsp_handler) {
@@ -2031,7 +2036,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
     /* Have to delay this to here so we are holding the lock. */
     if (is_ipmb)
-	data4 = (void *) (long) domain->conn_seq;
+	data4 = (void *) (long) domain->conn_seq[u];
 
     rspi = ipmi_alloc_msg_item();
     if (!rspi) {
@@ -2072,7 +2077,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 /* Take all the commands for any inactive or down connection and
    resend them on another connection.  */
 static void
-reroute_cmds(ipmi_domain_t *domain, int new_con)
+reroute_cmds(ipmi_domain_t *domain, int old_con, int new_con)
 {
     ilist_iter_t iter;
     int          rv;
@@ -2081,12 +2086,10 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
     ipmi_lock(domain->cmds_lock);
     ilist_init_iter(&iter, domain->cmds);
     rv = ilist_first(&iter);
-    domain->conn_seq++;
+    (domain->conn_seq[old_con])++;
     while (rv) {
 	nmsg = ilist_get(&iter);
-	if ((!domain->con_active[nmsg->con])
-	    || (!domain->con_up[nmsg->con]))
-	{
+	if (nmsg->con == old_con) {
 	    ipmi_msgi_t *rspi;
 
 	    nmsg->seq = domain->cmds_seq;
@@ -2102,7 +2105,7 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
 	    rspi->data1 = domain;
 	    rspi->data2 = nmsg;
 	    rspi->data3 = (void *) nmsg->seq;
-	    rspi->data4 = (void *) domain->conn_seq;
+	    rspi->data4 = (void *) domain->conn_seq[new_con];
 	    rv = domain->conn[new_con]->send_command(domain->conn[new_con],
 						     &nmsg->rsp_item->addr,
 						     nmsg->rsp_item->addr_len,
@@ -4697,14 +4700,8 @@ ll_addr_changed(ipmi_con_t    *ipmi,
     if (domain->con_active[u] != active) {
 	domain->con_active[u] = active;
 	if (active) {
-	    /* It was active when it previously was not, switch over
-               to it. */
-	    if (domain->working_conn != u) {
-		reroute_cmds(domain, u);
-		domain->working_conn = u;
-	    }
-
-	    /* Deactivate all the other connections. */
+	    /* Deactivate all the other connections, if they support
+	       it. */
 	    for (u=0; u<MAX_CONS; u++) {
 		if (u == domain->working_conn
 		    || !domain->conn[u]
@@ -4726,7 +4723,7 @@ ll_addr_changed(ipmi_con_t    *ipmi,
 	} else {
 	    /* The connection went inactive, route message from it to
 	       the current working connection. */
-	    reroute_cmds(domain, domain->working_conn);
+	    reroute_cmds(domain, u, domain->working_conn);
 	}
     } else if (active) {
         /* Always pick the last working active connection to use. */
@@ -4834,7 +4831,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 		ll_addr_changed,
 		domain);
 	} else {
-	    reroute_cmds(domain, domain->working_conn);
+	    reroute_cmds(domain, u, domain->working_conn);
 	}
 	call_con_fails(domain, err, u, port_num, domain->connection_up);
     }

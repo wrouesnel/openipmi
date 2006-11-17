@@ -4,6 +4,12 @@
 	force command rerouting when a connection goes inactive, as well
 	as when a connection goes active.
 
+	* lib/domain.c: Modified command rerouting a little more.  The
+	send sequences are now per-connection instead of per-domain and
+	the routing is only done when a connection goes inactive or down.
+	This is more reliable and will make multiple active connections
+	work better.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-14 Corey Minyard <cminyard@mvista.com>
