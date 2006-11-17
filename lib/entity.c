@@ -5215,6 +5215,7 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
     info->cb_data = cb_data;
 
     /* fetch the FRU information. */
+    _ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
     rv = ipmi_fru_alloc_notrack(ent->domain,
 				ent->info.is_logical_fru,
 				ent->info.access_address,
@@ -5232,8 +5233,8 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
 		 "%sentity.c(ipmi_entity_fetch_frus_cb):"
 		 " Unable to allocate the FRU: %x",
 		 ENTITY_NAME(ent), rv);
-    } else
-	_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
+	_ipmi_put_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
+    }
 
     return rv;
 }
