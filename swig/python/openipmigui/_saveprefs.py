@@ -33,6 +33,9 @@
 import xml.dom
 import xml.dom.minidom
 import _oi_logging
+import os
+import stat
+import sys
 
 taghash = { }
 
@@ -57,14 +60,42 @@ def save(objlist, file):
         main.appendChild(elem)
         pass
     try:
+        info = os.stat(file)
+        pass
+    except:
+        # File doesn't exist, create it.
+        try:
+            fd = os.open(file, os.O_WRONLY | os.O_CREAT,
+                         stat.S_IRUSR | stat.S_IWUSR)
+            os.close(fd)
+            pass
+        except:
+            _oi_logging.error("Unable to create startup file " + file)
+            return
+        pass
+    try:
         f = open(file, 'w')
         doc.writexml(f, indent='', addindent='\t', newl='\n')
+        pass
     except:
         _oi_logging.error("Unable to save startup file " + file)
         pass
     return
 
 def restore(file):
+    info = None
+    try:
+        info = os.stat(file)
+    except:
+        pass
+    if (info):
+        if ((info.st_mode & (stat.S_IRWXG | stat.S_IRWXO)) != 0):
+            sys.exit("The file '" + file + "' is group or world"
+                     + " accessible.  It contains passwords, and"
+                     + " should be secure.  Not starting the GUI,"
+                     + " please fix the problem first.")
+            return
+        pass
     try:
         doc = xml.dom.minidom.parse(file).documentElement
     except:

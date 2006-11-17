@@ -4,6 +4,11 @@
 	returning an error and still calling the done handler (and it
 	didn't check the done handler for NULL).  Fix this problem.
 
+	* swig/python/openipmigui/_saveprefs.py: Make sure that the
+	startup file is only accessible by the user and refuse to start up
+	if it is world orgroup accessible.
+	* swig/python/openipmigui/_gui_cmdwin.py: Ditto for the history file.
+
 	* configure.in: Move to version 2.0.9
 
 2006-11-15 Corey Minyard <cminyard@mvista.com>
