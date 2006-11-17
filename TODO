@@ -1,5 +1,7 @@
 Add domain statistics to the GUI.
 
+Look at integrating ASF info OpenIPMI.
+
 Add handling of event data for sensors that have defined event data
 information specific to that sensor type.
 
