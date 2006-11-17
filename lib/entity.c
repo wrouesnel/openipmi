@@ -747,7 +747,8 @@ ipmi_entity_get_name(ipmi_entity_t *ent, char *name, int length)
 static void
 entity_report_fully_up(ipmi_entity_t *ent, void *cb_data)
 {
-    call_fully_up_handlers(ent);
+    if (ent)
+	call_fully_up_handlers(ent);
 }
 
 /* Must be called with the _ipmi_domain_entity_lock() held. */
@@ -764,6 +765,8 @@ _ipmi_entity_put(ipmi_entity_t *ent)
     ipmi_domain_t      *domain = ent->domain;
     int                entity_fru_fetch = 0;
     ipmi_entity_ptr_cb report_present = NULL;
+    int                rv;
+
     _ipmi_domain_entity_lock(domain);
  retry:
     if (ent->usecount == 1) {
@@ -854,7 +857,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	entity_fru_fetch = 0;
 	ent->usecount++;
 	_ipmi_domain_entity_unlock(domain);
-	ipmi_entity_fetch_frus_cb(ent, report_present, NULL);
+	rv = ipmi_entity_fetch_frus_cb(ent, report_present, NULL);
+	if (rv && report_present)
+	    report_present(ent, NULL);
 	_ipmi_domain_entity_lock(domain);
 	report_present = NULL;
 	goto repend;
@@ -1462,6 +1467,7 @@ presence_changed(ipmi_entity_t *ent, int present)
     ipmi_domain_t *domain = ent->domain;
     int           entity_fru_fetch = 0;
     int           was_present;
+    int           rv;
 
     ent->presence_event_count++;
 
@@ -1514,9 +1520,11 @@ presence_changed(ipmi_entity_t *ent, int present)
 	_ipmi_domain_entity_unlock(domain);
 	/* Wait till here to start fetching FRUs, as we want to report
 	   the entity first before we start the fetch. */
-	if (was_present && entity_fru_fetch)
-	    ipmi_entity_fetch_frus_cb(ent, entity_report_fully_up, NULL);
-	else if (was_present)
+	if (was_present && entity_fru_fetch) {
+	    rv = ipmi_entity_fetch_frus_cb(ent, entity_report_fully_up, NULL);
+	    if (rv)
+		entity_report_fully_up(ent, NULL);
+	} else if (was_present)
 	    entity_report_fully_up(ent, NULL);
 
 	/* If our presence changes, that can affect parents, too.  So we
@@ -5175,9 +5183,12 @@ fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
     info->err = err;
 
     rv = ipmi_entity_pointer_cb(info->ent_id, fru_fetched_ent_cb, info);
-    if (rv)
+    if (rv) {
 	/* If we can't put the fru someplace, just destroy it. */
 	ipmi_fru_destroy_internal(fru, NULL, NULL);
+	if (info->done)
+	    info->done(NULL, info->cb_data);
+    }
 
     ipmi_mem_free(info);
     if (domain)
@@ -5192,16 +5203,12 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
     fru_ent_info_t   *info;
     int              rv;
 
-    if (! ipmi_option_FRUs(ent->domain)) {
-	done(ent, cb_data);
-	return 0;
-    }
+    if (! ipmi_option_FRUs(ent->domain))
+	return ENOSYS;
 
     info = ipmi_mem_alloc(sizeof(*info));
-    if (!info) {
-	done(ent, cb_data);
+    if (!info)
 	return ENOMEM;
-    }
 
     info->ent_id = ipmi_entity_convert_to_id(ent);
     info->done = done;
@@ -5225,7 +5232,6 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
 		 "%sentity.c(ipmi_entity_fetch_frus_cb):"
 		 " Unable to allocate the FRU: %x",
 		 ENTITY_NAME(ent), rv);
-	done(ent, cb_data);
     } else
 	_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
 
