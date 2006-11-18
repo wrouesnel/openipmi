@@ -4054,6 +4054,9 @@ get_channels(ipmi_domain_t *domain)
 {
     int rv;
 
+    if (domain->in_shutdown)
+	return ECANCELED;
+
     if ((domain->major_version > 1)
 	|| ((domain->major_version == 1) && (domain->minor_version >= 5)))
     {

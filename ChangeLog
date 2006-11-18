@@ -4,6 +4,9 @@
 	returning an error and still calling the done handler (and it
 	didn't check the done handler for NULL).  Fix this problem.
 
+	* lib/domain.c: Fixed a problem when a shutdown occurred during
+	startup.
+
 	* swig/python/openipmigui/_saveprefs.py: Make sure that the
 	startup file is only accessible by the user and refuse to start up
 	if it is world orgroup accessible.
