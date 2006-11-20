@@ -1,3 +1,11 @@
+2006-11-20 Pierre Sangouard <psangouard@eso-tech.com>
+
+	* include/OpenIPMI/ipmi_picmg.h: I've found a small issue in
+	ipmi_picmg.h: Get Shelf Power Allocation command uses a wrong code
+	(0x19), it should be 0x22 instead. This was changed at the very
+	last minute before ECN-002 release since it conflicted with AMC.0
+	defined commands. The attached patch fixes this issue.
+
 2006-11-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: ipmi_entity_fetch_frus_cb() violated the rule of
