@@ -1,3 +1,11 @@
+2006-11-29 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_types.h: Increase the value of
+	MAX_IPMI_USED_CHANNELS to 14.  It was increased to 12 in the Feb
+	2006 markup of the spec, but just go all the way to 14; it doesn't
+	really matter.  We don't want to include 14, and 15, though, those
+	are special channels.
+
 2006-11-20 Pierre Sangouard <psangouard@eso-tech.com>
 
 	* include/OpenIPMI/ipmi_picmg.h: I've found a small issue in

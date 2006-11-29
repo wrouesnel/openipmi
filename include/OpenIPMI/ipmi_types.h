@@ -236,7 +236,7 @@ typedef struct ipmi_chan_info_s
     unsigned int aux_info : 16;
 } ipmi_chan_info_t;
 
-#define MAX_IPMI_USED_CHANNELS 8
+#define MAX_IPMI_USED_CHANNELS 14
 
 #ifdef __cplusplus
 }
