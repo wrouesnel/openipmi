@@ -109,7 +109,11 @@ struct ipmi_sensor_s
     unsigned char entity_id;
     unsigned char entity_instance;
 
-    unsigned char entity_instance_logical : 1;
+    /* Can the sensor be read?  Event-only sensors and sensors with
+       software ID owners cannot be read.  */
+    unsigned int  readable : 1;
+
+    unsigned int  entity_instance_logical : 1;
     unsigned int  sensor_init_scanning : 1;
     unsigned int  sensor_init_events : 1;
     unsigned int  sensor_init_thresholds : 1;
@@ -820,6 +824,7 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 
     sensor->hot_swap_requester = -1;
     sensor->usecount = 1;
+    sensor->readable = 1;
 
     *new_sensor = sensor;
     return 0;
@@ -1105,13 +1110,18 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     int           entity_instance_incr;
     int           id_string_modifier_offset;
     unsigned char *str;
-
+    unsigned int  str_len;
     
 
     rv = ipmi_get_sdr_count(sdrs, &count);
-    if (rv)
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%ssensor.c(get_sensors_from_sdrs):"
+		 " Could not fetch SDR count fron the SDR record.",
+		 MC_NAME(source_mc));
 	goto out_err;
-
+    }
+    
     /* Get a real count on the number of sensors, since a single SDR can
        contain multiple sensors. */
     p = 0;
@@ -1120,8 +1130,14 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	int lun;
 
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
-	if (rv)
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%ssensor.c(get_sensors_from_sdrs):"
+		     " SDR record %d could not be fetched from the SDR"
+		     " record: %d",
+		     MC_NAME(source_mc), i, rv);
 	    goto out_err;
+	}
 
 	lun = sdr.data[1] & 0x03;
 	if (sdr.type == 1) {
@@ -1144,43 +1160,42 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
     /* Setup memory to hold the sensors. */
     s = ipmi_mem_alloc(sizeof(*s) * p);
-    if (!s) {
-	rv = ENOMEM;
-	goto out_err;
-    }
+    if (!s)
+	goto out_err_enomem;
     s_size = p;
     memset(s, 0, sizeof(*s) * p);
 
     p = 0;
     for (i=0; i<count; i++) {
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
-	if (rv)
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%ssensor.c(get_sensors_from_sdrs):"
+		     " SDR record %d could not be fetched from the SDR"
+		     " record: %d (2)",
+		     MC_NAME(source_mc), i, rv);
 	    goto out_err;
+	}
 
 	if ((sdr.type != 1) && (sdr.type != 2) && (sdr.type != 3))
 	    continue;
 
 	s[p] = ipmi_mem_alloc(sizeof(*s[p]));
-	if (!s[p]) {
-	    rv = ENOMEM;
-	    goto out_err;
-	}
+	if (!s[p])
+	    goto out_err_enomem;
 	memset(s[p], 0, sizeof(*s[p]));
 
 	s[p]->source_recid = sdr.record_id;
 	s[p]->hot_swap_requester = -1;
 
 	s[p]->waitq = opq_alloc(ipmi_domain_get_os_hnd(domain));
-	if (!s[p]->waitq) {
-	    rv = ENOMEM;
-	    goto out_err;
-	}
+	if (!s[p]->waitq)
+	    goto out_err_enomem;
 
 	s[p]->handler_list = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
 	if (! s[p]->handler_list) {
 	    opq_destroy(s[p]->waitq);
-	    rv = ENOMEM;
-	    goto out_err;
+	    goto out_err_enomem;
 	}
 
 	s[p]->destroyed = 0;
@@ -1190,8 +1205,14 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 						   sdr.data[1] >> 4,
 						   sdr.data[0],
 						   &(s[p]->mc));
-	if (rv)
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%ssensor.c(get_sensors_from_sdrs):"
+		     " Could not create MC for SDR record %d, channel %d"
+		     " owner 0x%x: %d",
+		     MC_NAME(source_mc), i, sdr.data[1] >> 4, sdr.data[0], rv);
 	    goto out_err;
+	}
 
 	share_count = 0;
 	id_string_mod_type = 0;
@@ -1212,6 +1233,10 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->entity_instance_logical = sdr.data[4] >> 7;
 	s[p]->entity_instance = sdr.data[4] & 0x7f;
 	if ((sdr.type == 1) || (sdr.type == 2)) {
+	    /* If the lower bit is set, the owner is a system software
+	       id and it cannot be read. */
+	    s[p]->readable = (sdr.data[0] & 1) != 1;
+
 	    s[p]->sensor_init_scanning = (sdr.data[5] >> 6) & 1;
 	    s[p]->sensor_init_events = (sdr.data[5] >> 5) & 1;
 	    s[p]->sensor_init_thresholds = (sdr.data[5] >> 4) & 1;
@@ -1276,12 +1301,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->oem1 = sdr.data[41];
 
 	    str = sdr.data + 42;
-	    rv = ipmi_get_device_string(&str, sdr.length-42,
-					s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
-					&s[p]->id_type, SENSOR_ID_LEN,
-					&s[p]->id_len);
-	    if (rv)
-		goto out_err;
+	    str_len = sdr.length - 42;
+
 	    if (s[p]->entity)
 		sensor_set_name(s[p]);
 	} else if (sdr.type == 2) {
@@ -1296,12 +1317,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->oem1 = sdr.data[25];
 
 	    str = sdr.data + 26;
-	    rv = ipmi_get_device_string(&str, sdr.length-26,
-					s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
-					&s[p]->id_type, SENSOR_ID_LEN,
-					&s[p]->id_len);
-	    if (rv)
-		goto out_err;
+	    str_len = sdr.length - 26;
 
 	    share_count = sdr.data[18] & 0x0f;
 	    if (share_count == 0)
@@ -1310,19 +1326,14 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    entity_instance_incr = (sdr.data[19] >> 7) & 0x01;
 	    id_string_modifier_offset = sdr.data[19] & 0x7f;
 	} else {
-	    /* Event-only sensor */
+	    /* Event-only sensor.  It is not readable. */
 
 	    s[p]->sensor_type = sdr.data[5];
 	    s[p]->event_reading_type = sdr.data[6];
-	    s[p]->oem1 = sdr.data[10];
+	    s[p]->oem1 = sdr.data[9];
 
-	    str = sdr.data + 11;
-	    rv = ipmi_get_device_string(&str, sdr.length-11,
-					s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
-					&s[p]->id_type, SENSOR_ID_LEN,
-					&s[p]->id_len);
-	    if (rv)
-		goto out_err;
+	    str = sdr.data + 10;
+	    str_len = sdr.length - 10;
 
 	    share_count = sdr.data[7] & 0x0f;
 	    if (share_count == 0)
@@ -1330,6 +1341,18 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    id_string_mod_type = (sdr.data[7] >> 4) & 0x3;
 	    entity_instance_incr = (sdr.data[8] >> 7) & 0x01;
 	    id_string_modifier_offset = sdr.data[8] & 0x7f;
+	}
+
+	rv = ipmi_get_device_string(&str, str_len,
+				    s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
+				    &s[p]->id_type, SENSOR_ID_LEN,
+				    &s[p]->id_len);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%ssensor.c(get_sensors_from_sdrs):"
+		     " Error getting device ID string from SDR record %d: %d",
+		     MC_NAME(source_mc), i, rv);
+	    goto out_err;
 	}
 
 	if (share_count) {
@@ -1345,10 +1368,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
                        not necessary.  We still have to iterate the
                        first one to set its string name, though. */
 		    s[p+j] = ipmi_mem_alloc(sizeof(ipmi_sensor_t));
-		    if (!s[p+j]) {
-			rv = ENOMEM;
-			goto out_err;
-		    }
+		    if (!s[p+j])
+			goto out_err_enomem;
 		    memcpy(s[p+j], s[p], sizeof(ipmi_sensor_t));
 		    
 		    /* In case of error */
@@ -1364,17 +1385,13 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 							  &(s[p+j]->mc));
 
 		    s[p+j]->waitq = opq_alloc(ipmi_domain_get_os_hnd(domain));
-		    if (!s[p+j]->waitq) {
-			rv = ENOMEM;
-			goto out_err;
-		    }
+		    if (!s[p+j]->waitq)
+			goto out_err_enomem;
 
 		    s[p+j]->handler_list
 			= locked_list_alloc(ipmi_domain_get_os_hnd(domain));
-		    if (! s[p+j]->handler_list) {
-			rv = ENOMEM;
-			goto out_err;
-		    }
+		    if (! s[p+j]->handler_list)
+			goto out_err_enomem;
 
 		    s[p+j]->num += j;
 
@@ -1428,6 +1445,12 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     *sensor_count = s_size;
     return 0;
 
+ out_err_enomem:
+    rv = ENOMEM;
+    ipmi_log(IPMI_LOG_WARNING,
+	     "%ssensor.c(get_sensors_from_sdrs):"
+	     " Out of memory while processing the SDRS.",
+	     MC_NAME(source_mc));
  out_err:
     if (s) {
 	for (i=0; i<s_size; i++)
@@ -2563,6 +2586,14 @@ ipmi_sensor_get_sensor_direction(ipmi_sensor_t *sensor)
 }
 
 int
+ipmi_sensor_get_is_readable(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->readable;
+}
+
+int
 ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2934,6 +2965,13 @@ ipmi_sensor_set_direction(ipmi_sensor_t *sensor,
 			  int           direction)
 {
     sensor->sensor_direction = direction;
+}
+
+void
+ipmi_sensor_set_is_readable(ipmi_sensor_t *sensor,
+			    int           readable)
+{
+    sensor->readable = readable != 0;
 }
 
 void
@@ -4658,6 +4696,8 @@ stand_ipmi_sensor_get_reading(ipmi_sensor_t          *sensor,
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
+    if (!sensor->readable)
+	return ENOSYS;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4759,6 +4799,8 @@ stand_ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
     
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have states. */
+	return ENOSYS;
+    if (!sensor->readable)
 	return ENOSYS;
 
     info = ipmi_mem_alloc(sizeof(*info));

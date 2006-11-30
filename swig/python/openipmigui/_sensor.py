@@ -40,7 +40,8 @@ class SensorRefreshData:
         return
 
     def sensor_cb(self, sensor):
-        sensor.get_value(self.s)
+        if (sensor.is_readable()):
+            sensor.get_value(self.s)
         return
 
     pass
@@ -329,6 +330,8 @@ class SensorEventEnablesSet:
 
 class Sensor:
     def __init__(self, e, sensor):
+        if (e.ui.in_destroy):
+            return
         self.e = e
         self.name = sensor.get_name()
         e.sensors[self.name] = self
@@ -364,7 +367,12 @@ class Sensor:
             pass
 
         sensor.add_event_handler(self)
-        sensor.get_value(self)
+        if (sensor.is_readable()):
+            sensor.get_value(self)
+            pass
+        else:
+            self.ui.set_item_text(self.treeroot, "(not readable)")
+            pass
 
         self.auto_rearm = sensor.get_supports_auto_rearm()
 

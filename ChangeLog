@@ -1,3 +1,23 @@
+2006-11-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c, include/OpenIPMI/ipmiif.h.in: Some sensors are not
+	readable, specifically event-only sensors and sensors with system
+	software IDs as the owner.  Add a readable field to the sensor
+	object and check on read operations to make sure it is readable.
+	Technically, for SDRs with a system software ID owner, it might be
+	better to make sure that threadhold and event enables are not
+	done, but hopefully the SDRs are right.  Yeah, right, I know.
+	
+	* include/OpenIPMI/internal/ipmi_sensor.h: Add a function to set
+	the readable field for a sensor.
+
+	* swig/OpenIPMI.i: Add the readable method to the sensor object.
+
+	* swig/python/openipmigui/_sensor.py: Don't read the value for
+	unreadable sensors, instead put "(not readable)" in the value.
+
+	* lib/sensor.c: Fix some problems parsing type 3 SDRs.
+	
 2006-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_types.h: Increase the value of

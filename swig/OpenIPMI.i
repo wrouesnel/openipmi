@@ -8022,6 +8022,16 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     }
 
     /*
+     * Get whether the sensor's value can be read or not (with
+     * get_value()).  Sensors with system software owners and
+     * event-only sensors cannot be read.
+     */
+    int is_readable()
+    {
+	return ipmi_sensor_get_is_readable(self);
+    }
+
+    /*
      * Sets the second parameter to if an event is supported for this
      * particular threshold event on the sensor. The first parameter
      * is the event specifier string.  This will return 0 on success

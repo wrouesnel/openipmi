@@ -3130,6 +3130,10 @@ atca_mc_update_handler(enum ipmi_update_e op,
 {
     int rv;
 
+    if (ipmi_mc_get_address(mc) & 0x01)
+	/* Ignore MCs with system software ID addresses. */
+	return;
+
     switch (op) {
     case IPMI_ADDED:
 	rv = ipmi_mc_add_active_handler(mc, ipmc_active, cb_data);
