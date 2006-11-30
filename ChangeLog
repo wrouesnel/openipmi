@@ -16,8 +16,9 @@
 	* swig/python/openipmigui/_sensor.py: Don't read the value for
 	unreadable sensors, instead put "(not readable)" in the value.
 
-	* lib/sensor.c: Fix some problems parsing type 3 SDRs.
-
+	* lib/sensor.c: Fix some problems parsing type 3 SDRs.  Also added
+	some error logs and cleaned things up a bit.
+	
 	* configure.in: Move to version 2.0.10
 	
 2006-11-29 Corey Minyard <cminyard@mvista.com>
