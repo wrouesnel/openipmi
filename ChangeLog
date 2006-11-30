@@ -17,6 +17,8 @@
 	unreadable sensors, instead put "(not readable)" in the value.
 
 	* lib/sensor.c: Fix some problems parsing type 3 SDRs.
+
+	* configure.in: Move to version 2.0.10
 	
 2006-11-29 Corey Minyard <cminyard@mvista.com>
 
