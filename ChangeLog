@@ -1,3 +1,11 @@
+2006-12-04 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/gui.py: Made more reasonable defaults
+	for the initial window settings.
+
+	* doc/IPMI.ltx, doc/SimpleMonitoring.dia, doc/ipmi.bib: Add some
+	more docs and some use cases.
+
 2006-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, include/OpenIPMI/ipmiif.h.in: Some sensors are not

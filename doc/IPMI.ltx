@@ -266,6 +266,7 @@ generally the other management controllers forward their events to the
 \ac{BMC}.
 
 \section{System Types}
+\label{system-types}
 
 Although any arbitrary type of system may use \acs{IPMI} for platform
 management, systems generally fall into two categories: server systems
@@ -446,6 +447,7 @@ to read this.  Event-driven systems may seem a little unusual, but they
 are accepted practice and by far the best way to build control systems.
 
 \subsection{Event-Driven Systems}
+\label{event-driven-systems}
 
 In an event-driven system, you never stop and wait for something to
 happen.  If you are not used to this, you are probably used to writing
@@ -1538,14 +1540,166 @@ Table~\vref{domain-options} shows the options available.
 \end{table}
 
 %---------------------------------------------------------------------
+\chapter{Use Cases}
+\label{use-cases}
+\acs{IPMI} brings a lot of complexity, so it better be useful for
+something and we better know how to use it.  This chapter brings up
+several different ways it can be used to improve system reliability.
+
+\section{Simple Hardware Monitoring}
+\label{simple-hardware-monitoring}
+If you have a single system and wish to improve its reliability, you
+may use IPMI to monitor the hardware.  We know a few things about
+hardware:
+\begin{enumerate}
+\item Heat decreases the lifetime of silicon.
+\item As capacitors degrade, they tend to fail slowly.
+\item Fans tend to fail slowly.
+\item If something fails, you generally have some time to do something
+about it before the failure is catastrophic.
+\end{enumerate}
+By monitoring long-term trends of temperature, voltage, and fan speed
+we may accurately predict when certain system components are going to
+fail.  Then they can be replaced gracefully.
+
+In addition, if software fails, you want want some mechanism to
+automatically restart the failed software.
+
+To do this, you need a four-fold approach:
+\begin{itemize}
+\item Record and periodically analyze long-term trends of heat,
+voltage, and fan speed.  IPMI stores information about the limits of
+the various components.  Long-term trending will tell you when values
+of critical components are going to reach the limits.  It's a lot
+better to know that your power supply will probably fail in five days
+than to know that your power supply will fail in 30 seconds, or that
+your system is now dead and you don't know why.
+\item Monitor events coming from the system.  In the event of a sudden
+failure, the IPMI system event log may give you some warning that
+something is about to happen.  In the event of a catastrophic failure,
+it may give you useful information for post-mortem analysis.
+\item Use a watchdog timer to monitor for system software failures.
+It is especially useful if the watchdog timer has a pretimeout that
+says ``Hey, I'm going to reset you in a few seconds.'' that comes in
+via an NMI.  If you have this, you can panic the system and get useful
+information about what the system was doing when it failed.
+\item Create a software system to monitor the rest of your software
+and detect when it fails and restart the software.
+\end{itemize}
+
+OpenIPMI, of course, can be used to do a lot of this, but other useful
+tools exist for this.  \acs{HPI} can be used in many places where
+OpenIPMI can be used.  See chapter~\vref{comparison-with-hpi} for
+details on the differences between OpenIPMI and HPI.
+
+However, HPI and OpenIPMI can be overkill for this type of monitoring.
+Another tool, ipmitool\cite{ipmitool}, can provide a simple interface
+to the IPMI system.  It is easy to script and simple to use.
+
+For the watchdog timer, the operation system generally provides an
+abstract interface.  The OpenIPMI Linux device driver does this; it
+provides a watchdog timer with pretimeouts via an NMI.  In an
+operating system that does not have a nice interface to the watchdog
+timer, it is possible to talk directly to the IPMI system to do this,
+the NMI handling may be hard to do.
+
+Software monitoring is beyond the scope of this book.
+
+Figure~\vref{simple-monitoring} shows the pieces to accomplish this.
+
+\begin{figure}
+\includegraphics[width=\textwidth]{SimpleMonitoring.eps}
+\caption{\label{simple-monitoring}Simple Monitoring}
+\end{figure}
+
+\section{Redundant Systems}
+\label{redundant-systems}
+In this case, your application may consist of two systems so that is
+one fails, the other takes over.  In effect, these two systems are
+``mated''.  For this configuration, you generally want each system to
+monitor both itself (as described in
+section~\vref{simple-hardware-monitoring} and its mate.  This way,
+long-term trend data is held both in the local system and the mate so
+it is resiliant agains faults.  It is generally a good idea to monitor
+the mate's software.
+
+Note that to monitor another system via IPMI, the IPMI system to be
+monitored must have a LAN interface as described in
+section~\vref{interface-lan}.
+
+In addition to monitoring, it is generally necessary for a system to
+be able to reset it's mate to recover it to a known state.  You can do
+this over the IPMI LAN interface.
+
+Since you now have multiple things managing the SEL, some extra logic
+is required to coordinate their operation.
+Section~\vref{multiple-sel-users} describes methods to do this.
+
+In this situation, ipmitool becomes less attractive due to the polled
+nature of it's operation.  Setting up LAN connections is expensive.
+OpenIPMI and HPI tools will maintain a permanent connection to the
+mate and reduce the connection overhead.
+
+\section{Monitoring Clusters of Systems}
+In this situation, you have a number of systems that are monitored by
+a single management system\footnote{The management system may have
+multiple nodes for fault tolerance, but can generally be viewed as a
+single system}.  This is much like handling redundant systems as
+described in section~\vref{redundant-systems} but instead of
+monitoring one other system, the management system monitors a number
+of other systems.  The system may or may not need hardware monitoring
+on the individual monitored systems, as the management system can do
+all that.  Individual system will still need software monitoring, of
+course.
+
+In this situation, the overhead of ipmitool may become burdensome to
+the management systems.  Plus, these types of systems tend more toward
+having a continuously running system management application.  In these
+types of systems, something like OpenIPMI or HPI becomes even more
+attractive.
+
+\section{Bus Systems}
+Bussed systems (as described in section~\vref{system-types} generally
+have a number of computers plugged into and managed on a single
+backplane.  They have a central management interface (that may be
+redundant) that manages the system and communicates over a LAN to a
+remote management application\footnote{The management application may
+actually run on one or more of the computers on the bus, but is viewed
+as ``remote'' because it would come in over the LAN.}.
+
+In some ways these computers appear as individual systems and can be
+viewed as such with an extra ``hop'' over the bus to get to them.
+However, these systems have extra management capabilities and shared
+resources that make monitoring somewhat different.
+
+In a bussed system, cooling and power supply are shared.  In general
+the management controller on the bus handles cooling control and power
+management.  But if a power supply is about to fail or the cooling
+system fails, it affects all the computers on the bus, not just one.
+The management system must take this into account.
+
+Also, these systems generally support hot-swap of the computers.  This
+is generally done as a request mechanism where a maintenance person
+will request (via a switch or something of that nature) that the board
+be prepared for removal.  In general, the maintenance application must
+approve the request and may need to inform the software on the board
+what is happening.
+
+Because these types of systems require more monitoring and persistent
+state, ipmitool is not an option for maintaining a system like this.
+It can still be used for querying information, but it cannot handle
+the hot-swap operations.  OpenIPMI and/or HPI are needed for these
+types of systems.
+
+%---------------------------------------------------------------------
 \chapter{IPMI Interfaces}
 \label{ipmi-interfaces}
 
 \acs{IPMI} has a large number of interfaces for talking to management
 controllers.  They vary in performance and capability, but the same
 messages work over the top of all of them.  Generally, it does not
-matter how you interface to an \acs{IPMI} system, the messages will work the
-same.
+matter how you interface to an \acs{IPMI} system, the messages will
+work the same.
 
 \section{OpenIPMI Generic Interface}
 \label{openipmi-generic-interface}
@@ -2748,6 +2902,7 @@ TBD - write this.
 TBD - write this.
 
 \section{\acs{LAN}}
+\label{interface-lan}
 The \ac{IPMI} \acs{LAN} interface allows users to connect to \ac{IPMI}
 systems over an Ethernet interface.  This can generally even be done
 when the system is turned off, although it probably has to be plugged
@@ -8705,6 +8860,25 @@ WATCHDOG\_2 & all &
 Note there is a section in the MC chapter about this.
 
 \section{Coordinating Multiple Users of an \acs{SEL}}
+\label{multiple-sel-users}
+If multiple things are managing an SEL, such as two instances of a
+redundant LAN application, you generally want both applications to be
+able to see all events.  This means that they must coordinate deletion
+of logs from the SEL.  Generally, you want an application to be able
+to pull events from the SEL, store them in some other non-volatile
+storage, and then delete the events from the SEL.
+
+If two applications are doing this, you can have each application wait
+for twice at least twice the SEL polling time and delete the event.
+This give all applications a chance to polls the SEL and pull out the
+events.  OpenIPMI will correctly handle situations where another
+system has deleted an event from the SEL.
+
+It is also possible to send the events between the systems and use the
+timestamps and event numbers to detect redundant copies.  This is
+obviously more complex, but covers situations where one system may
+have been down for a time and needs copies of events it may have
+missed.
 
 %---------------------------------------------------------------------
 \chapter{Other OpenIPMI Concerns}
@@ -8824,6 +8998,51 @@ here in the future.
 \chapter{Comparison with \acs{SNMP}}
 
 \chapter{Comparison with \acs{HPI}}
+\label{comparison-with-hpi}
+OpenIPMI and HPI cover much of the same functionality.  Many of the
+concepts are similar.  OpenIPMI was designed so that HPI could be
+implemented on top of it, so they are not necessarily competing
+technologies.
+
+The only thing that HPI provides that OpenIPMI doesn't is a watchdog
+interface.  Since that's really more a function of the OS and not
+something useful for remote systems, OpenIPMI didn't implement this
+and left that to the OS.
+
+OpenIPMI provides access to the configuration information for LAN
+interfaces, channel management, and user management.  HPI doesn't
+provide this.  Indeed it couldn't because that type of thing is too
+hard to abstract and too specific to IPMI.  So even if you use HPI,
+you will need something like OpenIPMI to manage the IPMI-specific
+things in your system.
+
+Both HPI and OpenIPMI have the concept of a domain, entity, sensor,
+and control.  For the most part, they are the same.  In theory the
+domain concept of HPI is more general than OpenIPMI's.  In practice
+they are usually the same.  Entities do not differ in concept, but
+they are first-class objects in OpenIPMI.  In HPI they are a set of
+numbers that identify a ``path'', but don't have actual data
+associated with them and you cannot perform operations on them.
+
+HPI adds a ``resource'' object that OpenIPMI doesn't really have.  An
+RDR many of the things that entities do in OpenIPMI.  For instance,
+hot-swap is on entities in OpenIPMI, but is on RDRs in HPI.  In
+effect, HPI split the concept of an IPMI entity into two things, one
+for identifying the things sensors and controls are attached to, and
+one for the inventory data, hot-swap control, and some other things.
+This split is artifical from IPMI's point of view; it makes no such
+distinction.
+
+The biggest conceptual difference between OpenIPMI and HPI is that
+OpenIPMI is event-driven as described in
+section~/vref{event-driven-systems}.  This means that it is possible
+to create complex and live systems with OpenIPMI without using threads
+or low-level polling.  This is not possible with HPI.  Event-driven
+system are somewhat strange to use if you haven't used them before,
+though.
+
+HPI is a standard.  It can be used with non-IPMI systems.  These
+things count for a lot.
 
 %---------------------------------------------------------------------
 \chapter{\acs{ATCA}}

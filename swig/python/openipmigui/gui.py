@@ -40,11 +40,11 @@ import gui_list
 import gui_popup
 
 init_treenamewidth = 150
-init_sashposition = 500
-init_isashposition = 400
-init_bsashposition = 450
+init_sashposition = 400
+init_isashposition = 300
+init_bsashposition = 350
 init_windowwidth = 800
-init_windowheight = 500
+init_windowheight = 700
 init_logevents = False
 init_fullevents = False
 init_impt_objs = [ ]
