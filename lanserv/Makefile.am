@@ -32,11 +32,11 @@ libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
-ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la $(OPENSSLLIBS)
+ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la $(top_builddir)/utils/libOpenIPMIutils.la $(OPENSSLLIBS)
 ipmilan_LDFLAGS = -rdynamic
 
 lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
-lanserv_emu_LDADD = $(POPTLIBS) libIPMIlanserv.la $(OPENSSLLIBS)
+lanserv_emu_LDADD = $(POPTLIBS) libIPMIlanserv.la $(top_builddir)/utils/libOpenIPMIutils.la $(OPENSSLLIBS)
 lanserv_emu_LDFLAGS = -rdynamic
 
 EXTRA_DIST = atca.emu README.emulator
