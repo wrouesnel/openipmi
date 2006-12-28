@@ -98,7 +98,7 @@ class CommandWindow(Tix.ScrolledText):
     def HandleNewLines(self):
         lastline = int(self.text.index("end").split(".")[0]) - 1
         while (lastline > self.max_lines):
-            self.delete("1.0", "2.0")
+            self.text.delete("1.0", "2.0")
             lastline = int(self.text.index("end").split(".")[0]) - 1
             pass
         return
