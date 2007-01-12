@@ -1,3 +1,9 @@
+2007-01-10 Michael Chu <michaelychu@yahoo.com>
+
+	* sdr.c: Fix ipmi_sdr_save related issues: use standard fetch size,
+	correct offset and record id values, parameter checking and passing,
+	do sdr reservation and check status after sdr clear.
+
 2006-12-28 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/gui_cmdwin.py: Fix a problem

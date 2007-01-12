@@ -48,6 +48,7 @@
 /* Max bytes to try to get at a time, the minimum allowed, and the
    amount to decrement between tries. */
 #define MAX_SDR_FETCH_BYTES 28
+#define STD_SDR_FETCH_BYTES 16
 #define MIN_SDR_FETCH_BYTES 10
 #define SDR_FETCH_BYTES_DECR 6
 
@@ -414,7 +415,8 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     sdrs->lun = lun;
     sdrs->sensor = sensor;
     sdrs->sdr_wait_q = NULL;
-    sdrs->fetch_size = MAX_SDR_FETCH_BYTES;
+    /* use guaranteed size */
+    sdrs->fetch_size = STD_SDR_FETCH_BYTES;
 
     /* Assume we have a dynamic population until told otherwise. */
     sdrs->dynamic_population = 1;
@@ -2347,19 +2349,19 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
     cmd_msg.data[8] = sdr->major_version | (sdr->minor_version << 4);
     cmd_msg.data[9] = sdr->type;
     cmd_msg.data[10] = sdr->length;
-    if (sdr->length >= (sdrs->fetch_size - 5)) {
+    if (sdr->length <= (sdrs->fetch_size - 5)) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+11, sdr->data, sdr->length);
 	cmd_msg.data_len = 11 + sdr->length;
 	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				    handle_sdr_write_done, sdr);
+				    handle_sdr_write_done, sdrs);
     } else {
 	cmd_msg.data[5] = 0;
 	memcpy(cmd_msg.data+11, sdr->data, (sdrs->fetch_size - 5));
 	cmd_msg.data_len = 11 + (sdrs->fetch_size - 5);
 	sdrs->sdr_data_write = sdrs->fetch_size - 5;
 	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				    handle_sdr_write, sdr);
+				    handle_sdr_write, sdrs);
     }
 }
 
@@ -2425,19 +2427,23 @@ handle_sdr_write(ipmi_mc_t  *mc,
 	goto out;
     }
 
+    /* use the returned record id */
+    sdrs->curr_rec_id = ipmi_get_uint16(rsp->data+1);
+
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_PARTIAL_ADD_SDR_CMD;
     ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
-    cmd_msg.data[4] = sdrs->sdr_data_write;
+    /* offset = 5 more bytes for sensor record header from start_sdr_write */
+    cmd_msg.data[4] = 5 + sdrs->sdr_data_write;
     wleft = sdr->length - sdrs->sdr_data_write;
-    if (wleft >= sdrs->fetch_size) {
+    if (wleft <= sdrs->fetch_size) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write, wleft);
 	cmd_msg.data_len = 6 + wleft;
 	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				  handle_sdr_write_done, sdr);
+				  handle_sdr_write_done, sdrs);
     } else {
 	cmd_msg.data[5] = 0;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write,
@@ -2445,7 +2451,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
 	cmd_msg.data_len = 6 + sdrs->fetch_size;
 	sdrs->sdr_data_write += sdrs->fetch_size;
 	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				  handle_sdr_write, sdr);
+				  handle_sdr_write, sdrs);
     }
 
     if (rv) {
@@ -2543,13 +2549,78 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
 }
 
 static void
+handle_write_reservation(ipmi_mc_t  *mc,
+                         ipmi_msg_t *rsp,
+                         void       *rsp_data)
+{
+    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
+    int 	    rv;
+
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_write_reservation): "
+		 "SDR info was destroyed while an operation was in"
+		 " progress(9)", sdrs->name);
+	save_complete(sdrs, ECANCELED);
+	goto out;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_write_reservation): "
+		 "MC went away while SDR fetch was in progress(8)",
+		 sdrs->name);
+	save_complete(sdrs, ECANCELED);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_write_reservation): "
+		 "Error getting reservation: %x",
+		 sdrs->name, rsp->data[0]);
+	save_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	goto out;
+    }
+    if (rsp->data_len < 3) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_write_reservation): "
+		 "Reservation data not long enough", sdrs->name);
+	save_complete(sdrs, EINVAL);
+	goto out;
+    }
+
+    sdrs->reservation = ipmi_get_uint16(rsp->data+1);
+
+    sdrs->curr_rec_id = 0;
+    sdrs->write_sdr_num = 0;
+    sdrs->sdr_data_write = 0;
+
+    /* Save the first part of the SDR. */
+    rv = start_sdr_write(sdrs, &(sdrs->sdrs[0]), mc);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssdr.c(handle_sdr_clear): "
+		 "Could not send next write: %x", sdrs->name, rv);
+	save_complete(sdrs, rv);
+	goto out;
+    }
+    sdr_unlock(sdrs);
+ out:
+    return;
+}
+
+static void
 handle_sdr_clear(ipmi_mc_t  *mc,
 		 ipmi_msg_t *rsp,
 		 void       *rsp_data)
 {
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
+    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t      cmd_msg;
     int             rv;
-
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
@@ -2575,17 +2646,42 @@ handle_sdr_clear(ipmi_mc_t  *mc,
 	goto out;
     }
 
+    if ((rsp->data[1] & 0x0F) != 1) {
+	/* Check clear progress. */
+	cmd_msg.data = cmd_data;
+	cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	cmd_msg.cmd = IPMI_CLEAR_SDR_REPOSITORY_CMD;
+	ipmi_set_uint16(cmd_data, sdrs->reservation);
+	cmd_data[2] = 'C';
+	cmd_data[3] = 'L';
+	cmd_data[4] = 'R';
+	cmd_data[5] = 0x00;
+	cmd_msg.data_len = 6;
+	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				  handle_sdr_clear, sdrs);
+	if (rv) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%ssdr.c(handle_sdr_clear): "
+			 "Couldn't check SDR clear status: %x",
+			 sdrs->name, rv);
+		save_complete(sdrs, rv);
+		goto out;
+	}
+	goto out_unlock;
+    }
+
     if (sdrs->num_sdrs == 0) {
 	save_complete(sdrs, 0);
 	goto out;
     }
 
-    sdrs->curr_rec_id = 0;
-    sdrs->write_sdr_num = 0;
-    sdrs->sdr_data_write = 0;
-
-    /* Save the first part of the SDR. */
-    rv = start_sdr_write(sdrs, &(sdrs->sdrs[0]), mc);
+    /* Get a reservation again -- reservation is lost after clear. */
+    cmd_msg.data = cmd_data;
+    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+    cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
+    cmd_msg.data_len = 0;
+    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+                              handle_write_reservation, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssdr.c(handle_sdr_clear): "
@@ -2593,6 +2689,7 @@ handle_sdr_clear(ipmi_mc_t  *mc,
 	save_complete(sdrs, rv);
 	goto out;
     }
+ out_unlock:
     sdr_unlock(sdrs);
  out:
     return;
