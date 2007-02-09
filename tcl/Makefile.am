@@ -26,7 +26,7 @@ noinst_PROGRAMS = test_handlers
 
 test_handlers_SOURCES = test_handlers.c
 test_handlers_LDADD = libOpenIPMItcl.la \
-	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB)
+	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB) $(TCL_LIBS)
 
 TESTS = test_handlers
 

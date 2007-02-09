@@ -1,3 +1,7 @@
+2007-02-09 Corey Minyard <cminyard@mvista.com>
+
+	* tcl/Makefile.am: Add $(TCL_LIBS) to the test programs ld flags.
+
 2007-01-10 Michael Chu <michaelychu@yahoo.com>
 
 	* sdr.c: Fix ipmi_sdr_save related issues: use standard fetch size,
