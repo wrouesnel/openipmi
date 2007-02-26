@@ -443,8 +443,20 @@ TCL_CFLAGS=
 havetcl=no
 if test "x$trytcl" != "xno"; then
    FOUND_TCL_HEADER=no
+   ver=`echo 'puts \$tcl_version' | tclsh`
    if test "x$tclcflags" = "x"; then
       AC_CHECK_HEADER(tcl.h, FOUND_TCL_HEADER=yes; )
+      if test "x$FOUND_TCL_HEADER" != "xyes"; then
+         echo -n "checking for /usr/include/tcl$ver... "
+	 if test 'x$ver' != 'x' -a -d "/usr/include/tcl$ver"; then
+	    echo "yes"
+	    tclcflags="-I /usr/include/tcl$ver"
+            TCL_CFLAGS="$tclcflags"
+            FOUND_TCL_HEADER=yes
+         else
+	    echo "no"
+	 fi
+      fi
    else
       TCL_CFLAGS="$tclcflags"
       FOUND_TCL_HEADER=yes
@@ -452,6 +464,9 @@ if test "x$trytcl" != "xno"; then
    if test "x$tcllibs" = "x"; then
       if test "x$FOUND_TCL_HEADER" = "xyes"; then
          AC_CHECK_LIB(tcl, Tcl_DoOneEvent, TCL_LIBS=-ltcl)
+         if test "x$TCL_LIBS" = "x"; then
+            AC_CHECK_LIB(tcl$ver, Tcl_DoOneEvent, TCL_LIBS=-ltcl$ver)
+	 fi
       fi
    else
       TCL_LIBS="$tcllibs"
@@ -510,7 +525,10 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
 
       # Now find a proper installation location.
       if test "x$perlinstalldir" = "x"; then
-	 perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
+	 perlinstalldir=`(eval \`perl -V:installvendorarch\`; echo $installvendorarch)`
+	 if test "x$perlinstalldir" = "x" -o ! -d "$perlinstalldir"; then
+	    perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
+	 fi
 	 if test "x$perlinstalldir" = "x" -o ! -d "$perlinstalldir"; then
 	    perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /vendor_perl\/.+\/.+/) { print "$i"; last; } }'`
 	 fi

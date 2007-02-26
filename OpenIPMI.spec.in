@@ -1,3 +1,6 @@
+# For common adjustments that are needed for this file, search for
+# "USERFIX"
+
 Name: OpenIPMI
 Summary: %{name} - Library interface to IPMI
 Version: @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
@@ -13,8 +16,8 @@ BuildRequires: pkgconfig, perl >= 5, swig >= 1.3
 Summary: IPMI Library
 Group: Utilities
 
-# Perl is usually installed in /usr/lib, not /usr/lib64 on 64-bit platforms.
-%define perl_libdir %{_exec_prefix}/lib
+# Figure out if glib12 is installed
+%define glib12 %(if ls -l /usr/lib/libglib-1.2* >/dev/null 2>&1; then echo yes; else echo no; fi)
 
 %description 
 This package contains a shared library implementation of IPMI and the
@@ -77,6 +80,9 @@ This package contains a network IPMI listener.
 ###################################################
 %build
 ###################################################
+# USERFIX: Things you might have to add to configure:
+#  --with-tclcflags='-I /usr/include/tclN.M' --with-tcllibs=-ltclN.M
+#    Obviously, replace N.M with the version of tcl on your system.
 %configure
 make
 
@@ -116,7 +122,11 @@ fi
 %defattr(-,root,root)
 %{_libdir}/libOpenIPMIcmdlang.so.*
 %{_libdir}/libOpenIPMIglib.so.*
-%{_libdir}/libOpenIPMIglib12.so.*
+# USERFIX: You might need to modify the following if glib12 is not
+# handled properly by the autodetection
+%if %{glib12} != "no"
+  %{_libdir}/libOpenIPMIglib12.so.*
+%endif
 %{_libdir}/libOpenIPMItcl.so.*
 %{_libdir}/libOpenIPMIposix.so.*
 %{_libdir}/libOpenIPMIpthread.so.*
@@ -132,7 +142,7 @@ fi
 %files perl
 ###################################################
 %defattr(-,root,root)
-%{perl_libdir}/perl5
+%{perl_vendorarch}
 %doc swig/OpenIPMI.i swig/perl/sample swig/perl/ipmi_powerctl
 
 ###################################################
@@ -172,8 +182,7 @@ fi
 %{_bindir}/openipmish
 %{_bindir}/solterm
 %{_bindir}/rmcp_ping
-%{_libdir}/libOpenIPMIui.so*
-%{_libdir}/libOpenIPMIui.la
+%{_libdir}/libOpenIPMIui.so.*
 %doc %{_mandir}/man1/ipmi_ui.1*
 %doc %{_mandir}/man1/openipmicmd.1*
 %doc %{_mandir}/man1/openipmish.1*
@@ -188,7 +197,6 @@ fi
 ###################################################
 %defattr(-,root,root)
 %{_bindir}/ipmilan
-%{_libdir}/libIPMIlanserv.so*
-%{_libdir}/libIPMIlanserv.la
+%{_libdir}/libIPMIlanserv.so.*
 %doc %{_mandir}/man8/ipmilan.8*
 

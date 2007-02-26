@@ -1,3 +1,9 @@
+2007-02-25 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in, OpenIPMI.spec.in: Improve the handling of perl
+	installation.  Also improve the tcl and glib12 handling to make it
+	more automatic.
+
 2007-02-09 Corey Minyard <cminyard@mvista.com>
 
 	* tcl/Makefile.am: Add $(TCL_LIBS) to the test programs ld flags.
