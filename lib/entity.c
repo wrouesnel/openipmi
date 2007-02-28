@@ -1833,9 +1833,18 @@ control_detect_send(ipmi_entity_t  *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-    if (ipmi_control_get_ignore_if_no_entity(control))
+#if 0
+    /* I believe the following is strictly correct, we should not
+       consider a control/sensor for presence unless it is ignored if
+       the entity is not present.  Presumable, if it is not ignored if
+       the entity is not present, then it's always working even if the
+       entity is not present and thus useless for presence.  However,
+       this breaks all kinds of stuff as it seems to be set wrong
+       everywhere. */
+    if (! ipmi_control_get_ignore_if_no_entity(control))
 	/* Control should be ignored for presence. */
 	return;
+#endif
 
     info->try_count++;
     ipmi_unlock(info->lock);
@@ -1918,7 +1927,8 @@ detect_states_read(ipmi_sensor_t *sensor,
     ent_active_detect_t *info = cb_data;
 
     ipmi_lock(info->lock);
-    if (!err && ipmi_is_sensor_scanning_enabled(states))
+    if (!err && ipmi_is_sensor_scanning_enabled(states)
+        && !ipmi_is_initial_update_in_progress(states))
 	info->present = 1;
 
     info->done_count++;
@@ -1941,7 +1951,8 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     ent_active_detect_t *info = cb_data;
 
     ipmi_lock(info->lock);
-    if (!err && ipmi_is_sensor_scanning_enabled(states))
+    if (!err && ipmi_is_sensor_scanning_enabled(states)
+        && !ipmi_is_initial_update_in_progress(states))
 	info->present = 1;
 
     info->done_count++;
@@ -1960,9 +1971,18 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-    if (ipmi_sensor_get_ignore_if_no_entity(sensor))
+#if 0
+    /* I believe the following is strictly correct, we should not
+       consider a control/sensor for presence unless it is ignored if
+       the entity is not present.  Presumable, if it is not ignored if
+       the entity is not present, then it's always working even if the
+       entity is not present and thus useless for presence.  However,
+       this breaks all kinds of stuff as it seems to be set wrong
+       everywhere. */
+    if (! ipmi_sensor_get_ignore_if_no_entity(sensor))
 	/* Sensor should be ignored for presence. */
 	return;
+#endif
 
     info->try_count++;
     ipmi_unlock(info->lock);
@@ -2063,13 +2083,19 @@ states_read(ipmi_sensor_t *sensor,
 	return;
     }
 
-    rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
-    if (rv || !val)
-	/* The present bit is not supported, so use the not present bit. */
-	present = ! ipmi_is_state_set(states, 1);
-    else
-	/* The present bit is supported. */
-	present = ipmi_is_state_set(states, 0);
+    if (ipmi_is_initial_update_in_progress(states))
+	/* Sensor did not return valid values, the entity is probably
+	   not present. */
+	present = 0;
+    else {
+	rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
+	if (rv || !val)
+	    /* The present bit is not supported, so use the not present bit. */
+	    present = ! ipmi_is_state_set(states, 1);
+	else
+	    /* The present bit is supported. */
+	    present = ipmi_is_state_set(states, 0);
+    }
 
     presence_changed(ent, present);
     ent->in_presence_check = 0;
@@ -2094,7 +2120,13 @@ states_bit_read(ipmi_sensor_t *sensor,
 	return;
     }
 
-    present = ipmi_is_state_set(states, ent->presence_bit_offset);
+    if (ipmi_is_initial_update_in_progress(states))
+	/* Sensor did not return valid values, the entity is probably
+	   not present. */
+	present = 0;
+    else
+	present = ipmi_is_state_set(states, ent->presence_bit_offset);
+
     presence_changed(ent, present);
     ent->in_presence_check = 0;
     _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor),

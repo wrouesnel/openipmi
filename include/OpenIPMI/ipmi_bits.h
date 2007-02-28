@@ -487,6 +487,10 @@ enum ipmi_set_dest_e {
     IPMI_SET_DEST_VOLATILE = 2
 };
 
+/* Used for options on FRUs and strings. */
+#define IPMI_STRING_OPTION_NONE		0
+#define IPMI_STRING_OPTION_8BIT_ONLY	(1 << 0) /* Don't use 4/6 bit chars */
+
 #ifdef __cplusplus
 }
 #endif

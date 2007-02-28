@@ -139,6 +139,16 @@ void ipmi_set_device_string(const char           *input,
 			    int                  force_unicode,
 			    unsigned int         *out_len);
 
+/* Like ipmi_set_device_string, but include options.  See ipmi_bits.h
+   for IPMI_STRING_OPTION_xxx. */
+void ipmi_set_device_string2(const char           *input,
+			     enum ipmi_str_type_e type,
+			     unsigned int         in_len,
+			     unsigned char        *output,
+			     int                  force_unicode,
+			     unsigned int         *out_len,
+			     unsigned int         options);
+
 /* Generate a log.  Note that logs should not end in a newline, that
    will be automatically added as needed to the log.  */
 void ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)

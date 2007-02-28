@@ -134,6 +134,10 @@ unsigned int ipmi_fru_get_data_length(ipmi_fru_t *fru);
 void ipmi_fru_ref(ipmi_fru_t *fru);
 void ipmi_fru_deref(ipmi_fru_t *fru);
 
+/* Set options for the FRU.  See ipmi_bits.h for IPMI_STRING_OPTION_xxx. */
+void ipmi_fru_set_options(ipmi_fru_t *fru, unsigned int options);
+unsigned int ipmi_fru_get_options(ipmi_fru_t *fru);
+
 /*
  * The following is the node-based access to the FRU information.
  * This is an abstract, tree structured interface that lets you get at

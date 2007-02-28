@@ -247,8 +247,9 @@ fru_encode_fields(ipmi_fru_t        *fru,
 	    len = s->raw_len;
 	} else if (s->str) {
 	    len = IPMI_MAX_STR_LEN;
-	    ipmi_set_device_string(s->str, s->type, s->length,
-				   data+offset, 1, &len);
+	    ipmi_set_device_string2(s->str, s->type, s->length,
+				    data+offset, 1, &len,
+				    ipmi_fru_get_options(fru));
 	} else {
 	    data[offset] = 0xc0;
 	    len = 1;
@@ -317,7 +318,8 @@ fru_setup_min_field(ipmi_fru_record_t *rec, int area, int changed)
 }
 
 static int
-fru_string_set(enum ipmi_str_type_e type,
+fru_string_set(ipmi_fru_t           *fru,
+	       enum ipmi_str_type_e type,
 	       char                 *str,
 	       unsigned int         len,
 	       ipmi_fru_record_t    *rec,
@@ -338,7 +340,8 @@ fru_string_set(enum ipmi_str_type_e type,
 	/* Truncate if too long. */
 	if (len > 63)
 	    len = 63;
-	ipmi_set_device_string(str, type, len, tstr, 1, &raw_len);
+	ipmi_set_device_string2(str, type, len, tstr, 1, &raw_len,
+				ipmi_fru_get_options(fru));
 	raw_diff = raw_len - val->raw_len;
 	if ((raw_diff > 0) && (rec->used_length+raw_diff > rec->length))
 	    return ENOSPC;
@@ -481,7 +484,8 @@ fru_free_string(fru_string_t *str)
 
 
 static int
-fru_variable_string_set(ipmi_fru_record_t    *rec,
+fru_variable_string_set(ipmi_fru_t           *fru,
+			ipmi_fru_record_t    *rec,
 			fru_variable_t       *val,
 			unsigned int         first_custom,
 			unsigned int         num,
@@ -534,12 +538,13 @@ fru_variable_string_set(ipmi_fru_record_t    *rec,
 	val->next++;
     }
 
-    rv = fru_string_set(type, str, len, rec, val, num, is_custom);
+    rv = fru_string_set(fru, type, str, len, rec, val, num, is_custom);
     return rv;
 }
 
 static int
-fru_variable_string_ins(ipmi_fru_record_t    *rec,
+fru_variable_string_ins(ipmi_fru_t           *fru,
+			ipmi_fru_record_t    *rec,
 			fru_variable_t       *val,
 			unsigned int         first_custom,
 			unsigned int         num,
@@ -604,7 +609,7 @@ fru_variable_string_ins(ipmi_fru_record_t    *rec,
     val->strings[num].raw_len = 0;
     val->next++;
 
-    rv = fru_string_set(type, str, len, rec, val, num, 1);
+    rv = fru_string_set(fru, type, str, len, rec, val, num, 1);
     return rv;
 }
 
@@ -828,7 +833,7 @@ ipmi_fru_set_ ## lcname ## _ ## fname(ipmi_fru_t	   *fru,	\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_set(rec,					\
+    rv = fru_variable_string_set(fru, rec,				\
 				 &u->fields,				\
 				 0, ucname ## _ ## fname,		\
                                  type, str, len, 0);			\
@@ -886,7 +891,7 @@ ipmi_fru_set_ ## lcname ## _ ## custom(ipmi_fru_t	    *fru,	\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_set(rec,					\
+    rv = fru_variable_string_set(fru, rec,				\
 				 &u->fields,				\
 				 ucname ## _ ## custom_start, num,	\
                                  type, str, len, 1);			\
@@ -902,7 +907,7 @@ ipmi_fru_ins_ ## lcname ## _ ## custom(ipmi_fru_t	    *fru,	\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_ins(rec,					\
+    rv = fru_variable_string_ins(fru, rec,				\
 				 &u->fields,				\
 				 ucname ## _ ## custom_start, num,	\
                                  type, str, len);			\
@@ -6693,7 +6698,8 @@ ipmi_mr_str_set_field(ipmi_mr_getset_t          *getset,
     }
     memset(c, 0, getset->layout->length);
     len = getset->layout->length;
-    ipmi_set_device_string(data, stype, data_len, c, 0, &len);
+    ipmi_set_device_string2(data, stype, data_len, c, 0, &len,
+			    ipmi_fru_get_options(getset->finfo->fru));
     ipmi_fru_ovw_multi_record_data(getset->finfo->fru,
 				   getset->finfo->mr_rec_num, c,
 				   (ipmi_mr_full_offset(getset->offset)

@@ -181,6 +181,8 @@ struct ipmi_fru_s
     _ipmi_fru_complete_write_cb complete_write_cb;
 
     char iname[IPMI_FRU_NAME_LEN+1];
+
+    unsigned int options;
 };
 
 #define FRU_DOMAIN_NAME(fru) (fru ? fru->iname : "")
@@ -447,6 +449,18 @@ fru_normal_write(ipmi_fru_t      *fru,
 				  fru_normal_write_done,
 				  fru,
 				  done);
+}
+
+void
+ipmi_fru_set_options(ipmi_fru_t *fru, unsigned int options)
+{
+    fru->options = options;
+}
+
+unsigned int
+ipmi_fru_get_options(ipmi_fru_t *fru)
+{
+    return fru->options;
 }
 
 /***********************************************************************

@@ -519,12 +519,13 @@ ipmi_set_8_bit_ascii(const char    *input,
 }
 
 void
-ipmi_set_device_string(const char           *input,
-		       enum ipmi_str_type_e type,
-		       unsigned int         in_len,
-		       unsigned char        *output,
-		       int                  force_unicode,
-		       unsigned int         *out_len)
+ipmi_set_device_string2(const char           *input,
+			enum ipmi_str_type_e type,
+			unsigned int         in_len,
+			unsigned char        *output,
+			int                  force_unicode,
+			unsigned int         *out_len,
+			unsigned int         options)
 {
     const char   *s = input;
     int          bsize = 0; /* Start with 4-bit. */
@@ -538,15 +539,19 @@ ipmi_set_device_string(const char           *input,
 	in_len = 63;
 
     if (type == IPMI_ASCII_STR) {
-	for (i=0; i<in_len; i++) {
-	    if (table_4_bit[(int) *s] == 0) {
-		bsize |= 1;
-		if (table_6_bit[(int) *s] == 0) {
-		    bsize |= 2;
-		    break;
+	if (options && IPMI_STRING_OPTION_8BIT_ONLY)
+	    bsize = 2;
+	else {
+	    for (i=0; i<in_len; i++) {
+		if (table_4_bit[(int) *s] == 0) {
+		    bsize |= 1;
+		    if (table_6_bit[(int) *s] == 0) {
+			bsize |= 2;
+			break;
+		    }
 		}
+		s++;
 	    }
-	    s++;
 	}
 	if (bsize == 0) {
 	    /* We can encode it in 4-bit BCD+ */
@@ -568,6 +573,18 @@ ipmi_set_device_string(const char           *input,
 	memcpy(output+1, input, in_len);
 	*out_len = in_len + 1;
     }
+}
+
+void
+ipmi_set_device_string(const char           *input,
+		       enum ipmi_str_type_e type,
+		       unsigned int         in_len,
+		       unsigned char        *output,
+		       int                  force_unicode,
+		       unsigned int         *out_len)
+{
+    ipmi_set_device_string2(input, type, in_len, output, force_unicode,
+			    out_len, IPMI_STRING_OPTION_NONE);
 }
 
 static long seq = 0;
