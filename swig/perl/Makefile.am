@@ -20,7 +20,7 @@ OpenIPMI_OBJ = OpenIPMI_wrap.o OpenIPMI_perl.o
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS) \
-		-R/$(libdir)
+		-R$(libdir)
 	rm OpenIPMI.so
 	mv .libs/OpenIPMI.so .
 	rm -rf .libs

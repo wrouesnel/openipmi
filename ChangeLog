@@ -5,11 +5,24 @@
 	presence.  This is a replacement for the ignore_if_no_entity,
 	whose use is vague, and abstracts this operation a little better.
 	* lib/control.c, include/OpenIPMI/internal/ipmi_control.h: ditto
-	for controls
+	for controls.
 
 	* lib/entity.c, lib/oem_atca.c, lib/oem_motorola_mxp.c: Switch
 	over to the new presence ignore functions.
 	* lib/oem_test.c, sample/example_oem.c: ditto
+
+	* lib/entity.c: Other presence handling fixes.
+
+	* cmdlang/Makefile.am: Remove the -L$(DESTDIR)$libdir, it was
+	broken to add it.
+	* glib/Makefile.am: ditto
+	* lanserv/Makefile.am: ditto
+	* lib/Makefile.am: ditto
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+	* tcl/Makefile.am: ditto
+	* ui/Makefile.am: ditto
+	* unix/Makefile.am: ditto
 
 2007-03-05 David Greigo <dgriego@mvista.com>
 

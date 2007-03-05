@@ -22,7 +22,7 @@ EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS) \
-		-R/$(libdir)
+		-R$(libdir)
 	rm _OpenIPMI.so
 	mv .libs/_OpenIPMI.so .
 	rm -rf .libs
