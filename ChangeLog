@@ -1,3 +1,16 @@
+2007-03-05 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c, include/OpenIPMI/internal/ipmi_sensor.h: Added a
+	new function to get/set whether the sensor should be used for
+	presence.  This is a replacement for the ignore_if_no_entity,
+	whose use is vague, and abstracts this operation a little better.
+	* lib/control.c, include/OpenIPMI/internal/ipmi_control.h: ditto
+	for controls
+
+	* lib/entity.c, lib/oem_atca.c, lib/oem_motorola_mxp.c: Switch
+	over to the new presence ignore functions.
+	* lib/oem_test.c, sample/example_oem.c: ditto
+
 2007-03-05 David Greigo <dgriego@mvista.com>
 
 	* sample/ipmicmd.c: Fix problems with handling errors in

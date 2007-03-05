@@ -122,6 +122,11 @@ int ipmi_control_send_command_addr(ipmi_domain_t          *domain,
 				   ipmi_control_op_info_t *info,
 				   void                   *cb_data);
 
+/* Set this if the control should be ignored for presence handling. */
+void ipmi_control_set_ignore_for_presence(ipmi_control_t *control, int ignore);
+int ipmi_control_get_ignore_for_presence(ipmi_control_t *control);
+
+
 /* Allocate a control, it will not be associated with anything yet. */
 int ipmi_control_alloc_nonstandard(ipmi_control_t **new_control);
 

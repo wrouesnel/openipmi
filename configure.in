@@ -201,7 +201,6 @@ AC_ARG_WITH(perlusepthreads,
 )
 
 trypython=yes
-pythondir=
 AC_ARG_WITH(python,
 [  --with-python[[=yes|no|PATH]]     Look for python, with the optional path.],
     if test "x$withval" = "xyes"; then

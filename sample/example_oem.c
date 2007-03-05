@@ -364,7 +364,7 @@ oem_alloc_basic_sensor(
     ipmi_sensor_set_sensor_init_type(*sensor, 1);
     ipmi_sensor_set_sensor_init_pu_events(*sensor, 0);
     ipmi_sensor_set_sensor_init_pu_scanning(*sensor, 1);
-    ipmi_sensor_set_ignore_if_no_entity(*sensor, 1);
+    ipmi_sensor_set_ignore_for_presence(*sensor, 1);
     ipmi_sensor_set_supports_auto_rearm(*sensor, 1);
     if (assert_events || deassert_events)
         ipmi_sensor_set_event_support(*sensor, 
@@ -778,7 +778,7 @@ oem_alloc_control(ipmi_mc_t               *mc,
     ipmi_control_set_oem_info(*control, hdr, oem_cleanup_control_oem_info);
     ipmi_control_set_type(*control, control_type);
     ipmi_control_set_id(*control, id);
-    ipmi_control_set_ignore_if_no_entity(*control, 1);
+    ipmi_control_set_ignore_for_presence(*control, 1);
 
     /* Assume we can read and set the value. */
     ipmi_control_set_settable(*control, 1);

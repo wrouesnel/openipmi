@@ -1833,18 +1833,9 @@ control_detect_send(ipmi_entity_t  *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-#if 0
-    /* I believe the following is strictly correct, we should not
-       consider a control/sensor for presence unless it is ignored if
-       the entity is not present.  Presumable, if it is not ignored if
-       the entity is not present, then it's always working even if the
-       entity is not present and thus useless for presence.  However,
-       this breaks all kinds of stuff as it seems to be set wrong
-       everywhere. */
-    if (! ipmi_control_get_ignore_if_no_entity(control))
+    if (ipmi_control_get_ignore_for_presence(control))
 	/* Control should be ignored for presence. */
 	return;
-#endif
 
     info->try_count++;
     ipmi_unlock(info->lock);
@@ -1971,18 +1962,9 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-#if 0
-    /* I believe the following is strictly correct, we should not
-       consider a control/sensor for presence unless it is ignored if
-       the entity is not present.  Presumable, if it is not ignored if
-       the entity is not present, then it's always working even if the
-       entity is not present and thus useless for presence.  However,
-       this breaks all kinds of stuff as it seems to be set wrong
-       everywhere. */
-    if (! ipmi_sensor_get_ignore_if_no_entity(sensor))
+    if (ipmi_sensor_get_ignore_for_presence(sensor))
 	/* Sensor should be ignored for presence. */
 	return;
-#endif
 
     info->try_count++;
     ipmi_unlock(info->lock);

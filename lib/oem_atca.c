@@ -2566,7 +2566,7 @@ add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
     }
 
     /* Ignore the address control for presence. */
-    ipmi_control_set_ignore_if_no_entity(ipmc->address_control, 1);
+    ipmi_control_set_ignore_for_presence(ipmc->address_control, 1);
     
     rv = atca_add_control(si_mc,
 			  &ipmc->address_control,

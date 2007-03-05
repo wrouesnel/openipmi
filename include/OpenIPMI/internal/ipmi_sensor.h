@@ -95,6 +95,11 @@ int ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 /* Destroy the sensor from the internal data. */
 int ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 
+/* Set this if the sensor should be ignored for presence handling. */
+void ipmi_sensor_set_ignore_for_presence(ipmi_sensor_t *sensor, int ignore);
+int ipmi_sensor_get_ignore_for_presence(ipmi_sensor_t *sensor);
+
+
 /* Called by when an event occurs for the given sensor.  This may be use
    by OEM code to deliver non-standard events to sensors. */
 int ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event);

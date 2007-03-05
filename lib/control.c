@@ -103,7 +103,8 @@ struct ipmi_control_s
 
     int has_events;
 
-    int ignore_if_no_entity;
+    int ignore_if_no_entity : 1;
+    int ignore_for_presence : 1;
 
     /* A list of handlers to call when an event for the control comes
        in. */
@@ -1954,6 +1955,20 @@ ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 				     int            ignore_if_no_entity)
 {
     control->ignore_if_no_entity = ignore_if_no_entity;
+}
+
+int
+ipmi_control_get_ignore_for_presence(ipmi_control_t *control)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return control->ignore_for_presence;
+}
+
+void
+ipmi_control_set_ignore_for_presence(ipmi_control_t *control, int ignore)
+{
+    control->ignore_for_presence = ignore;
 }
 
 ipmi_domain_t *

@@ -129,6 +129,8 @@ struct ipmi_sensor_s
 
     unsigned int sensor_direction : 2;
 
+    unsigned int  ignore_for_presence : 1;
+
     int          hot_swap_requester;
     int          hot_swap_requester_val;
 
@@ -2530,6 +2532,14 @@ ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor)
 }
 
 int
+ipmi_sensor_get_ignore_for_presence(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->ignore_for_presence;
+}
+
+int
 ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2920,6 +2930,12 @@ ipmi_sensor_set_ignore_if_no_entity(ipmi_sensor_t *sensor,
 				    int           ignore_if_no_entity)
 {
     sensor->ignore_if_no_entity = ignore_if_no_entity;
+}
+
+void
+ipmi_sensor_set_ignore_for_presence(ipmi_sensor_t *sensor, int ignore)
+{
+    sensor->ignore_for_presence = ignore;
 }
 
 void
