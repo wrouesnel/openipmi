@@ -1,3 +1,8 @@
+2007-03-05 David Greigo <dgriego@mvista.com>
+
+	* sample/ipmicmd.c: Fix problems with handling errors in
+	non-interactive mode.
+
 2007-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, OpenIPMI.spec.in: Improve the handling of perl
