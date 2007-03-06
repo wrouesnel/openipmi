@@ -24,6 +24,12 @@
 	* ui/Makefile.am: ditto
 	* unix/Makefile.am: ditto
 
+	* lib/domain.c, lib/entity.c: Found some minor bugs pointed out
+	by new compilers.
+
+	* swig/python/Makefile.am: Create lib-dynload before installing
+	into it.
+
 2007-03-05 David Greigo <dgriego@mvista.com>
 
 	* sample/ipmicmd.c: Fix problems with handling errors in

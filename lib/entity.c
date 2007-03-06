@@ -6451,7 +6451,7 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
     ent_lock(ent);
     if (present) {
 	if ((!ent->hot_swap_power)
-	    || (hot_swap_act_timeout == IPMI_TIMEOUT_NOW))
+	    || (ent->hot_swap_act_timeout == IPMI_TIMEOUT_NOW))
 	{
 	    /* No power control or immediate timeout, it goes straight
 	       to active. */

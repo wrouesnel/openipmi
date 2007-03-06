@@ -44,6 +44,7 @@ CLEANFILES = $(OpenIPMI_OBJ) _OpenIPMI.so OpenIPMI_wrap.c \
 
 install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
+	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload
 	$(LIBTOOL) --mode=install $(INSTALL_PROGRAM) _OpenIPMI.so "$(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload"
 	$(INSTALL_PROGRAM) OpenIPMI.py "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
 	$(INSTALL_PROGRAM) OpenIPMI.pyc "$(DESTDIR)$(PYTHON_INSTALL_DIR)"

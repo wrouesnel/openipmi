@@ -5785,7 +5785,7 @@ _ipmi_domain_init(void)
 	return ENOMEM;
 
     domains_list = locked_list_alloc(ipmi_get_global_os_handler());
-    if (!domains) {
+    if (!domains_list) {
 	locked_list_destroy(domain_change_handlers);
 	return ENOMEM;
     }
