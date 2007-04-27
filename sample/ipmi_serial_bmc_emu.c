@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include <errno.h>
 #include <malloc.h>
@@ -1406,6 +1408,13 @@ main(int argc, char *argv[])
 	usage();
     }
 
+    i = 1;
+    if (setsockopt(mi->sock, IPPROTO_TCP, TCP_NODELAY,
+		   (char *) &i, sizeof(i)) == -1) {
+	perror("setsockopt TCP_NODELAY");
+	usage();
+    }
+
     mi->info = mi->codec->setup();
     if (!mi->info) {
 	fprintf(stderr, "Out of memory\n");
@@ -1447,6 +1456,18 @@ main(int argc, char *argv[])
 		perror("read");
 		usage();
 	    }
+
+	    if (mi->debug > 1) {
+		printf("recv:");
+		for (i=0; i<rv; i++) {
+		    if ((i % 16) == 0)
+			printf("\n  ");
+		    printf(" %2.2x(%c)", buf[i],
+			   isprint(buf[i]) ? buf[i] : ' ');
+		}
+		printf("\n");
+	    }
+
 	    for (i=0; i<rv; i++) {
 		/*
 		 * Echo one at a time in case the echo gets turned off
