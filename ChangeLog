@@ -1,3 +1,13 @@
+2007-05-22 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/openipmigui/gui_SoL.py: Add dumping useful
+	information if data processing for terminal input raises an
+	exception.
+
+	* swig/python/openipmigui/_term.py: Add some missed range checking
+	to make sure Y values are within range with vt100 H and f
+	commands.
+	
 2007-03-05 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, include/OpenIPMI/internal/ipmi_sensor.h: Added a

@@ -455,7 +455,14 @@ class SoL(Tix.Toplevel):
         if (not self.take_input):
             self.nack_count += 1
             return 1
-        self.term.ProcessInput(string)
+        try:
+            self.term.ProcessInput(string)
+        except Exception, e:
+            import sys
+            t, v, b = sys.exc_info()
+            sys.excepthook(t, v, b)
+            del b
+            pass
         return 0
     
     def sol_break_detected(self, conn):

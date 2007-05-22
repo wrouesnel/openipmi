@@ -898,8 +898,10 @@ vswig_call_cb_rv(char rv_type, void *rv,
 	if (o) {
 	    Py_DECREF(o);
 	}
-	if (PyErr_Occurred())
+	if (PyErr_Occurred()) {
+	    fprintf(stderr, "Error from %s\n", method_name);
 	    PyErr_Print();
+	}
     }
     Py_DECREF(args);
 

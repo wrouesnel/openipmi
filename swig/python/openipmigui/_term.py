@@ -290,7 +290,7 @@ class TerminalEmulator:
                 pass
             elif ((y1 > y2) or (y1 < 1) or (y2 < 1)
                   or (y1 >= (self.height+1)) or (y2 >= (self.height+1))):
-                # Bogus values, just ignre them.
+                # Bogus values, just ignore them.
                 pass
             else:
                 self.scroll_region[0] = y1 - 1
@@ -302,8 +302,15 @@ class TerminalEmulator:
             x = self.GetParm(1)
             if (x < 1):
                 x = 1
+                pass
             elif (x > self.width):
                 x = self.width
+                pass
+            if (y < 1):
+                y = 1
+                pass
+            if (y > self.height):
+                y = self.height
                 pass
             self.restore_cursor()
             self.x = x - 1
