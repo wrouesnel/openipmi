@@ -7,6 +7,9 @@
 	* swig/python/openipmigui/_term.py: Add some missed range checking
 	to make sure Y values are within range with vt100 H and f
 	commands.
+
+	* swig/python/OpenIPMI_lang.i: If a method raises an exception,
+	print the method name.
 	
 2007-03-05 Corey Minyard <cminyard@mvista.com>
 
