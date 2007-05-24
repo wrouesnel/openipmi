@@ -7058,6 +7058,8 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     full_screen = do_full_screen;
 
+    ipmi_init(&ipmi_ui_cb_handlers);
+
     rv = sel_alloc_selector(&ipmi_ui_cb_handlers, &ui_sel);
     if (rv) {
 	fprintf(stderr, "Could not allocate selector\n");
@@ -7066,8 +7068,6 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
-
-    ipmi_init(&ipmi_ui_cb_handlers);
 
     /* This is a dummy allocation just to make sure that the malloc
        debugger is working. */

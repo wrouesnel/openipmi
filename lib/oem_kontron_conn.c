@@ -5,7 +5,7 @@
 
   This file reuse parts of the code from ipmi_oem_force.c source 
   from OpenIPMI library. 
-  
+
   Modified by: T.Smolinski, M.Ptak, Gerhard Obrecht
   Kontron Modular Computers
 
@@ -14,7 +14,8 @@
   v03 2006 Jul 19: Added Corey's patch to avoid wrong ipmb addressing.
   v04 2006 Jul 20: Reduced the number of IPMB channels for AMC modules to 1
                    cPCI modules have 2 IPMB channels.
-  
+  v05 2007 Mar 21: Added support for AM4100 and CP6001
+
 */
 
 /*
@@ -287,6 +288,20 @@ ipmi_oem_kontron_conn_init(void)
 		 rv);
     }
 
+    /* The AM4100 card */
+    rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
+					0x1004,
+					kontron_oem_conn_handler_amc,
+					NULL);
+    if (rv)
+    {
+	retrv = rv;
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
+		 "Unable to initialize the Kontron AM4100 OEM handler: %x",
+		 rv);
+    }
+
     /* The CP604 card */
     rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
 					0x025c,
@@ -326,6 +341,20 @@ ipmi_oem_kontron_conn_init(void)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
 		 "Unable to initialize the Kontron CCP6000 OEM handler: %x",
+		 rv);
+    }
+
+    /* The CP6001 card */
+    rv = ipmi_register_oem_conn_handler(KONTRON_MANUFACTURER_ID,
+					0x1771,
+					kontron_oem_conn_handler,
+					NULL);
+    if (rv)
+    {
+	retrv = rv;
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_kontron_conn.c(ipmi_oem_kontron_conn_init): "
+		 "Unable to initialize the Kontron CP6001 OEM handler: %x",
 		 rv);
     }
 
@@ -394,9 +423,11 @@ ipmi_oem_kontron_conn_shutdown(void)
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0fa1);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0fa2);/* AM4002 */
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x0faa);/* AM4010 */
+    ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1004);/* AM4100 */
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x025c);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x025d);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1770);
+    ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1771);/* CP60001 */
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x1776);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x177A);
     ipmi_deregister_oem_handler(KONTRON_MANUFACTURER_ID, 0x177B);
