@@ -1,3 +1,9 @@
+2007-05-25 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Fix the domain fully up get/put operations to
+	work properly.  Before, the fully up could come early in
+	some situations.
+
 2007-05-24 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Move the call to ipmi_init() to before where things

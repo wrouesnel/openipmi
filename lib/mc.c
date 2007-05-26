@@ -2259,7 +2259,6 @@ mc_startup(ipmi_mc_t *mc)
     msg.data_len = 0;
     msg.data = NULL;
 
-    _ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
     rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, mc);
     if (rv) {
 	DEBUG_INFO(mc->sel_timer_info);
@@ -2405,9 +2404,11 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
     ipmi_lock(mc->lock);
     switch (mc->state) {
     case MC_INACTIVE:
+	_ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
 	mc->state = MC_INACTIVE_PEND_STARTUP;
 	break;
     case MC_ACTIVE_PEND_CLEANUP:
+	_ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
 	mc->state = MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP;
 	break;
     default:
@@ -2423,6 +2424,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     ipmi_lock(mc->lock);
     switch (mc->state) {
     case MC_INACTIVE_PEND_STARTUP:
+	_ipmi_put_domain_fully_up(mc->domain, "_ipmi_cleanup_mc");
 	mc->state = MC_INACTIVE;
 	break;
     case MC_ACTIVE_IN_STARTUP:
@@ -2438,6 +2440,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	ipmi_sdr_cleanout_timer(mc->sdrs);
 	goto out;
     case MC_ACTIVE_PEND_CLEANUP_PEND_STARTUP:
+	_ipmi_put_domain_fully_up(mc->domain, "_ipmi_cleanup_mc");
 	mc->state = MC_ACTIVE_PEND_CLEANUP;
 	break;
     default:

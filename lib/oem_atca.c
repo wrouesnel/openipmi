@@ -4244,7 +4244,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     if (get_properties->data_len < 5) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(set_up_atca_domain): "
-		 "ATCA get address response not long enough",
+		 "ATCA get properties response not long enough",
 		 DOMAIN_NAME(domain));
 	done(domain, EINVAL, done_cb_data);
 	goto out;
