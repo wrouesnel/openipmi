@@ -503,6 +503,61 @@ noipmb_handler(ipmi_mc_t *mc,
     return 0;
 }
 
+static unsigned char se7520_bad_cpu2_vrd_temp[] = 
+{
+    0x20, 0x00, 0xc9, 0x03, 0x01, 0x67, 0x40, 0x01,
+    0x07, 0x02, 0x00, 0x02, 0x00, 0x02, 0x00, 0xc0,
+    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xcd, 0x43, 0x50, 0x55, 0x32, 0x20,
+    0x56, 0x52, 0x44, 0x20, 0x54, 0x65, 0x6d, 0x70
+};
+
+static void
+se7520_sdrs_fixup(ipmi_domain_t   *domain,
+		  ipmi_sdr_info_t *sdrs,
+		  void            *cb_data)
+{
+    int          rv;
+    unsigned int i;
+    unsigned int count;
+    ipmi_sdr_t   sdr;
+
+    rv = ipmi_get_sdr_count(sdrs, &count);
+    if (rv)
+	return;
+
+    for (i=0; i<count; i++) {
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv)
+	    break;
+
+	switch (sdr.type) {
+	case IPMI_SDR_COMPACT_SENSOR_RECORD:
+	    if ((sdr.length == sizeof(se7520_bad_cpu2_vrd_temp))
+		&& (memcmp(sdr.data, se7520_bad_cpu2_vrd_temp,
+			   sizeof(se7520_bad_cpu2_vrd_temp)) == 0))
+	    {
+		/* The CPU2 VRD Temp0 sensor has the wrong entity, move
+		   it over to CPU 2 where it belongs. */
+		sdr.data[4] = 2;
+		ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    }
+	    break;
+
+	default:
+	    break;
+	}
+    }
+}
+
+static int
+se7520_handler(ipmi_domain_t *domain,
+	       void          *cb_data)
+{
+    ipmi_domain_set_sdrs_fixup_handler(domain, se7520_sdrs_fixup, NULL);
+    return 0;
+}
+
 int
 ipmi_oem_intel_init(void)
 {
@@ -549,6 +604,15 @@ ipmi_oem_intel_init(void)
     if (rv)
 	return rv;
 
+    /* SE7520 main SDRs are broken,  */
+    rv = ipmi_domain_register_oem_handler(INTEL_MANUFACTURER_ID,
+					  0x23,
+					  se7520_handler,
+					  NULL,
+					  NULL);
+    if (rv)
+	return rv;
+
     return 0;
 }
 
@@ -559,5 +623,6 @@ ipmi_oem_intel_shutdown(void)
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x001b);
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0103);
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0023);
+    ipmi_domain_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0023);
     ipmi_deregister_oem_handler(NSC_MANUFACTURER_ID, 0x4311);
 }

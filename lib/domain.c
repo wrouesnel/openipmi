@@ -285,6 +285,10 @@ struct ipmi_domain_s
     ipmi_domain_ptr_cb con_up_handler;
     void               *con_up_handler_cb_data;
 
+    /* Fixups for SDRs. */
+    ipmi_domain_oem_fixup_sdrs_cb fixup_sdrs_handler;
+    void                          *fixup_sdrs_cb_data;
+
     unsigned int       fully_up_count;
     ipmi_domain_ptr_cb domain_fully_up;
     void               *domain_fully_up_cb_data;
@@ -3706,6 +3710,190 @@ ipmi_domain_id_is_invalid(const ipmi_domain_id_t *id)
 
 /***********************************************************************
  *
+ * Handle global OEM callbacks for new domain MCs.
+ *
+ **********************************************************************/
+
+typedef struct mc_oem_handlers_s {
+    unsigned int                 manufacturer_id;
+    unsigned int                 first_product_id;
+    unsigned int                 last_product_id;
+    ipmi_oem_domain_match_handler_cb handler;
+    ipmi_oem_domain_shutdown_handler_cb shutdown;
+    void                         *cb_data;
+} mc_oem_handlers_t;
+
+static locked_list_t *mc_oem_handlers;
+
+int
+ipmi_domain_register_oem_handler(unsigned int                 manufacturer_id,
+				 unsigned int                 product_id,
+				 ipmi_oem_domain_match_handler_cb handler,
+				 ipmi_oem_domain_shutdown_handler_cb shutdown,
+				 void                         *cb_data)
+{
+    mc_oem_handlers_t *new_item;
+    int               rv;
+
+    /* This might be called before initialization, so be 100% sure. */
+    rv = _ipmi_domain_init();
+    if (rv)
+	return rv;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->manufacturer_id = manufacturer_id;
+    new_item->first_product_id = product_id;
+    new_item->last_product_id = product_id;
+    new_item->handler = handler;
+    new_item->shutdown = shutdown;
+    new_item->cb_data = cb_data;
+
+    if (! locked_list_add(mc_oem_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+int
+ipmi_domain_register_oem_handler_range(unsigned int           manufacturer_id,
+				       unsigned int           first_product_id,
+				       unsigned int           last_product_id,
+				       ipmi_oem_domain_match_handler_cb handler,
+				       ipmi_oem_domain_shutdown_handler_cb shutdown,
+				       void                         *cb_data)
+{
+    mc_oem_handlers_t *new_item;
+    int               rv;
+
+    /* This might be called before initialization, so be 100% sure. */
+    rv = _ipmi_mc_init();
+    if (rv)
+	return rv;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->manufacturer_id = manufacturer_id;
+    new_item->first_product_id = first_product_id;
+    new_item->last_product_id = last_product_id;
+    new_item->handler = handler;
+    new_item->shutdown = shutdown;
+    new_item->cb_data = cb_data;
+
+    if (! locked_list_add(mc_oem_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+typedef struct handler_cmp_s
+{
+    int           rv;
+    unsigned int  manufacturer_id;
+    unsigned int  first_product_id;
+    unsigned int  last_product_id;
+    ipmi_domain_t *domain;
+} handler_cmp_t;
+
+static int
+mc_oem_handler_cmp_dereg(void *cb_data, void *item1, void *item2)
+{
+    mc_oem_handlers_t *hndlr = item1;
+    handler_cmp_t     *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->first_product_id <= cmp->first_product_id)
+	&& (hndlr->last_product_id >= cmp->last_product_id))
+    {
+	cmp->rv = 0;
+	locked_list_remove(mc_oem_handlers, item1, item2);
+	ipmi_mem_free(hndlr);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_domain_deregister_oem_handler(unsigned int manufacturer_id,
+				   unsigned int product_id)
+{
+    handler_cmp_t  tmp;
+
+    tmp.rv = ENOENT;
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.first_product_id = product_id;
+    tmp.last_product_id = product_id;
+    locked_list_iterate(mc_oem_handlers, mc_oem_handler_cmp_dereg, &tmp);
+    return tmp.rv;
+}
+
+int
+ipmi_domain_deregister_oem_handler_range(unsigned int manufacturer_id,
+					 unsigned int first_product_id,
+					 unsigned int last_product_id)
+{
+    handler_cmp_t  tmp;
+
+    tmp.rv = ENOENT;
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.first_product_id = first_product_id;
+    tmp.last_product_id = last_product_id;
+    locked_list_iterate(mc_oem_handlers, mc_oem_handler_cmp_dereg, &tmp);
+    return tmp.rv;
+}
+
+static int
+mc_oem_handler_call(void *cb_data, void *item1, void *item2)
+{
+    mc_oem_handlers_t *hndlr = item1;
+    handler_cmp_t     *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->first_product_id <= cmp->first_product_id)
+	&& (hndlr->last_product_id >= cmp->last_product_id))
+    {
+	cmp->rv = hndlr->handler(cmp->domain, hndlr->cb_data);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+check_mc_oem_handlers(ipmi_domain_t *domain)
+{
+    handler_cmp_t  tmp;
+
+    tmp.rv = 0;
+    tmp.manufacturer_id = ipmi_mc_manufacturer_id(domain->si_mc);
+    tmp.first_product_id = ipmi_mc_product_id(domain->si_mc);
+    tmp.last_product_id = tmp.first_product_id;
+    tmp.domain = domain;
+    locked_list_iterate(mc_oem_handlers, mc_oem_handler_call, &tmp);
+    return tmp.rv;
+}
+
+int
+ipmi_domain_set_sdrs_fixup_handler(ipmi_domain_t                 *domain,
+				   ipmi_domain_oem_fixup_sdrs_cb handler,
+				   void                          *cb_data)
+{
+    CHECK_DOMAIN_LOCK(domain);
+    domain->fixup_sdrs_handler = handler;
+    domain->fixup_sdrs_cb_data = cb_data;
+    return 0;
+}
+
+
+/***********************************************************************
+ *
  * Connection setup and handling
  *
  **********************************************************************/
@@ -4138,6 +4326,10 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 		 DOMAIN_NAME(domain), err);
     }
 
+    if (domain->fixup_sdrs_handler)
+	domain->fixup_sdrs_handler(domain, domain->main_sdrs,
+				   domain->fixup_sdrs_cb_data);
+
     rv = get_channels(domain);
     if (rv)
 	call_con_fails(domain, rv, 0, 0, 0);
@@ -4260,6 +4452,9 @@ got_dev_id(ipmi_mc_t  *mc,
 
     if (ipmi_option_OEM_init(domain)) {
 	rv = check_oem_handlers(domain, domain_oem_handlers_checked, NULL);
+	if (rv)
+	    call_con_fails(domain, rv, 0, 0, 0);
+	rv = check_mc_oem_handlers(domain);
 	if (rv)
 	    call_con_fails(domain, rv, 0, 0, 0);
     } else {
@@ -5779,6 +5974,13 @@ int
 _ipmi_domain_init(void)
 {
     int rv;
+
+    if (domains_initialized)
+	return 0;
+
+    mc_oem_handlers = locked_list_alloc(ipmi_get_global_os_handler());
+    if (!mc_oem_handlers)
+	return ENOMEM;
 
     domain_change_handlers = locked_list_alloc(ipmi_get_global_os_handler());
     if (!domain_change_handlers)

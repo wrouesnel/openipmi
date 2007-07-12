@@ -1,3 +1,11 @@
+2007-07-11 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, include/OpenIPMI/internal/ipmi_oem.h:
+	Added infrastructure for fixups for main SDRs.
+
+	* lib/oem_intel.c: Add main SDR fixups for Intel SE7520
+	motherboards.
+
 2007-05-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fix the domain fully up get/put operations to

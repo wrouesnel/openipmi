@@ -71,6 +71,29 @@ int ipmi_deregister_oem_handler_range(unsigned int manufacturer_id,
 				      unsigned int first_product_id,
 				      unsigned int last_product_id);
 
+/* Register an OEM handler for domains, based upon the main connection's
+   MC info. */
+typedef int (*ipmi_oem_domain_match_handler_cb)(ipmi_domain_t *domain,
+						void *cb_data);
+typedef int (*ipmi_oem_domain_shutdown_handler_cb)(void *cb_data);
+int ipmi_domain_register_oem_handler(unsigned int             manufacturer_id,
+				     unsigned int             product_id,
+				     ipmi_oem_domain_match_handler_cb handler,
+				     ipmi_oem_domain_shutdown_handler_cb shutdown,
+				     void                         *cb_data);
+int ipmi_domain_register_oem_handler_range
+(unsigned int           manufacturer_id,
+ unsigned int           first_product_id,
+ unsigned int           last_product_id,
+ ipmi_oem_domain_match_handler_cb handler,
+ ipmi_oem_domain_shutdown_handler_cb shutdown,
+ void                         *cb_data);
+int ipmi_domain_deregister_oem_handler(unsigned int manufacturer_id,
+				       unsigned int product_id);
+int ipmi_domain_deregister_oem_handler_range(unsigned int manufacturer_id,
+					     unsigned int first_product_id,
+					     unsigned int last_product_id);
+
 /* Register an OEM handler for connections, based upon MC.  This is
    primarily so that a connection handler can register a way to get
    the connections slave address, but it may have other uses. */
@@ -111,6 +134,16 @@ typedef void (*ipmi_mc_oem_fixup_sdrs_cb)(ipmi_mc_t       *mc,
 int ipmi_mc_set_sdrs_fixup_handler(ipmi_mc_t                 *mc,
 				   ipmi_mc_oem_fixup_sdrs_cb handler,
 				   void                      *cb_data);
+
+/* This is called right after the SDRs are fetched before they are
+   processed, like the above but for the domain.  It lets the OEM code
+   clean up and SDR problems. */
+typedef void (*ipmi_domain_oem_fixup_sdrs_cb)(ipmi_domain_t   *domain,
+					      ipmi_sdr_info_t *sdrs,
+					      void            *cb_data);
+int ipmi_domain_set_sdrs_fixup_handler(ipmi_domain_t                 *mc,
+				       ipmi_domain_oem_fixup_sdrs_cb handler,
+				       void                          *cb_data);
 
 /* A new sensor has been added, the OEM handlers get first access at
    it.  The new sensor handler is called before the sensor is added to
