@@ -1,3 +1,7 @@
+2007-07-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/conn.c: Fix a possible race if an OEM check fails.
+
 2007-07-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/internal/ipmi_oem.h:

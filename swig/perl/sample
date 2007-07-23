@@ -87,6 +87,7 @@ use OpenIPMI;
 	    printf " %2.2x", $val;
 	}
 	print "\n";
+	$event->call_handler($self)
     }
 
     sub entity_presence_cb {

@@ -250,10 +250,13 @@ conn_handler_call(void *cb_data, void *ihandler, void *data2)
     ipmi_conn_oem_check check_cb = ihandler;
     int                 rv;
 
+    ipmi_lock(check->lock);
+    check->count++;
+    ipmi_unlock(check->lock);
     rv = check_cb(check->conn, data2, conn_oem_check_done, check);
-    if (!rv) {
+    if (rv) {
 	ipmi_lock(check->lock);
-	check->count++;
+	check->count--;
 	ipmi_unlock(check->lock);
     }
     return LOCKED_LIST_ITER_CONTINUE;
