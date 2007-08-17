@@ -3,7 +3,8 @@ AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
 bin_PROGRAMS = openipmicmd solterm rmcp_ping
 
-noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3 ipmi_serial_bmc_emu
+noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3 ipmi_serial_bmc_emu \
+		  ipmi_dump_sensors
 
 ipmisample_SOURCES = sample.c
 ipmisample_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
@@ -19,6 +20,12 @@ ipmisample2_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 
 ipmisample3_SOURCES = sample3.c
 ipmisample3_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
+		$(top_builddir)/lib/libOpenIPMI.la \
+		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(OPENSSLLIBS)
+
+ipmi_dump_sensors_SOURCES = dump_sensors.c
+ipmi_dump_sensors_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)

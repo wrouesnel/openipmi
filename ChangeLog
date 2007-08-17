@@ -1,3 +1,8 @@
+2007-08-17 Corey Minyard <cminyard@mvista.com>
+
+	* sample/dump_sensors.c, sample/Makefile.am: Added a little
+	program to just dump all the sensors.
+
 2007-07-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/conn.c: Fix a possible race if an OEM check fails.
