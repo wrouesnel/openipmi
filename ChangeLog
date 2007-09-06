@@ -1,3 +1,9 @@
+2007-09-06 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c, lib/entity.c: Don't abort SDR handling if the
+	device string is invalid.  Just go on and set the id to
+	"**INVALID**"
+
 2007-08-17 Corey Minyard <cminyard@mvista.com>
 
 	* sample/dump_sensors.c, sample/Makefile.am: Added a little

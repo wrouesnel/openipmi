@@ -1174,7 +1174,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%ssensor.c(get_sensors_from_sdrs):"
 		     " SDR record %d could not be fetched from the SDR"
-		     " record: %d (2)",
+		     " record index: %d (2)",
 		     MC_NAME(source_mc), i, rv);
 	    goto out_err;
 	}
@@ -1352,9 +1352,12 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%ssensor.c(get_sensors_from_sdrs):"
-		     " Error getting device ID string from SDR record %d: %d",
-		     MC_NAME(source_mc), i, rv);
-	    goto out_err;
+		     " Error getting device ID string from SDR record %d: %d,"
+		     " this sensor will be named **INVALID**",
+		     MC_NAME(source_mc), sdr.record_id, rv);
+	    strncpy(s[p]->id, "**INVALID**", sizeof(s[p]->id));
+	    s[p]->id_len = strlen(s[p]->id);
+	    s[p]->id_type = IPMI_ASCII_STR;
 	}
 
 	if (share_count) {

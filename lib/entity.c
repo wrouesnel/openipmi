@@ -2962,8 +2962,7 @@ ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
  **********************************************************************/
 
 static int
-decode_ear(ipmi_sdr_t *sdr,
-	   dlr_info_t *info)
+decode_ear(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 {
     int i;
     int pos;
@@ -2990,8 +2989,7 @@ decode_ear(ipmi_sdr_t *sdr,
 }
 
 static int
-decode_drear(ipmi_sdr_t *sdr,
-	   dlr_info_t *info)
+decode_drear(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 {
     int i;
     int pos;
@@ -3060,8 +3058,7 @@ gdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 }
 
 static int
-decode_gdlr(ipmi_sdr_t         *sdr,
-	    dlr_info_t         *info)
+decode_gdlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 {
     unsigned char *str;
     int           rv;
@@ -3094,6 +3091,17 @@ decode_gdlr(ipmi_sdr_t         *sdr,
     rv = ipmi_get_device_string(&str, sdr->length-10,
 				info->id, IPMI_STR_SDR_SEMANTICS, 0,
 				&info->id_type, ENTITY_ID_LEN, &info->id_len);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(decode_gdlr):"
+		 " Error getting device ID string from SDR record %d: %d,"
+		 " this entity will be named **INVALID**",
+		 MC_NAME(mc), sdr->record_id, rv);
+	strncpy(info->id, "**INVALID**", sizeof(info->id));
+	info->id_len = strlen(info->id);
+	info->id_type = IPMI_ASCII_STR;
+	rv = 0;
+    }
 
     return rv;
 }
@@ -3134,8 +3142,7 @@ frudlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 }
 
 static int
-decode_frudlr(ipmi_sdr_t         *sdr,
-	      dlr_info_t         *info)
+decode_frudlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 {
     unsigned char *str;
     int           rv;
@@ -3167,6 +3174,17 @@ decode_frudlr(ipmi_sdr_t         *sdr,
 				sdr->length-10,
 				info->id, IPMI_STR_SDR_SEMANTICS, 0,
 				&info->id_type, ENTITY_ID_LEN, &info->id_len);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(decode_frudlr):"
+		 " Error getting device ID string from SDR record %d: %d,"
+		 " this entity will be named **INVALID**",
+		 MC_NAME(mc), sdr->record_id, rv);
+	strncpy(info->id, "**INVALID**", sizeof(info->id));
+	info->id_len = strlen(info->id);
+	info->id_type = IPMI_ASCII_STR;
+	rv = 0;
+    }
 
     return rv;
 }
@@ -3216,8 +3234,7 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 }
 
 static int
-decode_mcdlr(ipmi_sdr_t *sdr,
-	     dlr_info_t *info)
+decode_mcdlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 {
     unsigned char *data;
     unsigned char *str;
@@ -3275,7 +3292,17 @@ decode_mcdlr(ipmi_sdr_t *sdr,
 				sdr->length-10,
 				info->id, IPMI_STR_SDR_SEMANTICS, 0,
 				&info->id_type, ENTITY_ID_LEN, &info->id_len);
-
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(decode_frudlr):"
+		 " Error getting device ID string from SDR record %d: %d,"
+		 " this entity will be named **INVALID**",
+		 MC_NAME(mc), sdr->record_id, rv);
+	strncpy(info->id, "**INVALID**", sizeof(info->id));
+	info->id_len = strlen(info->id);
+	info->id_type = IPMI_ASCII_STR;
+	rv = 0;
+    }
 
     /* Make sure the FRU fetch stuff works. */
     info->access_address = info->slave_address;
@@ -3601,31 +3628,31 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	switch (sdr.type) {
 	    case IPMI_SDR_ENITY_ASSOCIATION_RECORD:
-		rv = decode_ear(&sdr, &dlr);
+		rv = decode_ear(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
 	    case IPMI_SDR_DR_ENITY_ASSOCIATION_RECORD:
-		rv = decode_drear(&sdr, &dlr);
+		rv = decode_drear(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
 	    case IPMI_SDR_GENERIC_DEVICE_LOCATOR_RECORD:
-		rv = decode_gdlr(&sdr, &dlr);
+		rv = decode_gdlr(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
 	    case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
-		rv = decode_frudlr(&sdr, &dlr);
+		rv = decode_frudlr(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
 	    case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
-		rv = decode_mcdlr(&sdr, &dlr);
+		rv = decode_mcdlr(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
