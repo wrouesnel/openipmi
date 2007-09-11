@@ -169,6 +169,13 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
    is not used. */
 #define IPMI_LANP_BMC_KEY			11
 
+/* Allow the maximum outstanding message count to be set.  Normally
+   this is 2, but 2 may even be too much for some systems.  A larger
+   number may improve performance for systems that can handle it.  The
+   maximum value is 63, but that's way bigger than anyone should need.
+   5-6 should be enough for anything.  The value is set in parm_val */
+#define IPMI_LANP_MAX_OUTSTANDING_MSG_COUNT	12
+
 /*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
  *

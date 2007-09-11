@@ -4225,6 +4225,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     mc->sel.time_offset = -t.tv_sec;
     mc->main_sdrs.time_offset = -t.tv_sec;
     mc->main_sdrs.next_entry = 1;
+    mc->main_sdrs.flags |= IPMI_SDR_RESERVE_SDR_SUPPORTED;
     for (i=0; i<4; i++) {
 	mc->device_sdrs[i].time_offset = -t.tv_sec;
 	mc->device_sdrs[i].next_entry = 1;

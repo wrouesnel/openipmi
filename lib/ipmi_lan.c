@@ -91,6 +91,7 @@ dump_hex(void *vdata, int len)
 /* The default for the maximum number of messages that are allowed to be
    outstanding.  This is a pretty conservative number. */
 #define DEFAULT_MAX_OUTSTANDING_MSG_COUNT 2
+#define MAX_POSSIBLE_OUTSTANDING_MSG_COUNT 63
 
 typedef struct lan_data_s lan_data_t;
 
@@ -5363,6 +5364,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     char               *tports[MAX_IP_ADDR];
     char               **ports = NULL;
     lan_conn_parms_t   cparm;
+    int max_outstanding_msg_count = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
 
     memset(&cparm, 0, sizeof(cparm));
 
@@ -5464,6 +5466,13 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    cparm.bmc_key_len = parms[i].parm_data_len;
 	    break;
 
+	case IPMI_LANP_MAX_OUTSTANDING_MSG_COUNT:
+	    if ((parms[i].parm_val < 1)
+		|| (parms[i].parm_val > MAX_POSSIBLE_OUTSTANDING_MSG_COUNT))
+		return EINVAL;
+	    max_outstanding_msg_count = parms[i].parm_val;
+	    break;
+		
 	default:
 	    return EINVAL;
 	}
@@ -5595,7 +5604,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     lan->initialized = 0;
 
     lan->outstanding_msg_count = 0;
-    lan->max_outstanding_msg_count = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
+    lan->max_outstanding_msg_count = max_outstanding_msg_count;
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 
@@ -5819,6 +5828,7 @@ typedef struct lan_args_s
     unsigned int    bmc_key_len;
 
     unsigned int    hacks;		/* parms 13, 14 */
+    unsigned int    max_outstanding_msgs;/* parm 15 */
 } lan_args_t;
 
 static const char *auth_range[] = { "default", "none", "md2", "md5",
@@ -5916,6 +5926,9 @@ static struct lan_argnum_info_s
     { "RMCP_Integ_SIK",		"bool",
       "The IPMI 2.0 Spec was unclear which integrity key to use",
       NULL, NULL },
+    { "Max Outstanding Msgs",	"int",
+      "How many outstanding messages on the connection, range 1-63",
+      NULL, NULL },
 
     { NULL },
 };
@@ -5991,6 +6004,7 @@ get_startup_args(ipmi_con_t *ipmi)
 	memcpy(largs->bmc_key, cparm->bmc_key, cparm->bmc_key_len);
 	largs->bmc_key_set = 1;
     }
+    largs->max_outstanding_msgs = lan->max_outstanding_msg_count;
     return args;
 
  out_err:
@@ -6006,7 +6020,7 @@ lan_connect_args(ipmi_args_t  *args,
 {
     lan_args_t       *largs = _ipmi_args_get_extra_data(args);
     int              i;
-    ipmi_lanp_parm_t parms[11];
+    ipmi_lanp_parm_t parms[12];
     int              rv;
 
     i = 0;
@@ -6054,6 +6068,9 @@ lan_connect_args(ipmi_args_t  *args,
 	parms[i].parm_data_len = largs->bmc_key_len;
 	i++;
     }
+    parms[i].parm_id = IPMI_LANP_MAX_OUTSTANDING_MSG_COUNT;
+    parms[i].parm_val = largs->max_outstanding_msgs;
+    i++;
     rv = ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
     if (!rv)
 	(*con)->hacks = largs->hacks;
@@ -6130,6 +6147,23 @@ get_bool_val(char **dest, int data, unsigned int bit)
 	rval = ipmi_strdup("false");
     if (!rval)
 	return ENOMEM;
+    *dest = rval;
+    return 0;
+}
+
+static int
+get_int_val(char **dest, int data)
+{
+    char *rval = NULL;
+    int len;
+
+    if (!dest)
+	return 0;
+    len = snprintf(NULL, 0, "%d", data);
+    rval = malloc(len+1);
+    if (!rval)
+	return ENOMEM;
+    snprintf(rval, len+1, "%d", data);
     *dest = rval;
     return 0;
 }
@@ -6218,6 +6252,10 @@ lan_args_get_val(ipmi_args_t  *args,
 			  IPMI_CONN_HACK_RMCPP_INTEG_SIK);
 	break;
 
+    case 15:
+	rv = get_int_val(value, largs->max_outstanding_msgs);
+	break;
+
     default:
 	return E2BIG;
     }
@@ -6300,6 +6338,24 @@ set_bool_val(unsigned int *dest, const char *value, unsigned int bit)
 	*dest &= ~bit;
     else
 	return EINVAL;
+    return 0;
+}
+
+static int
+set_int_val(int *dest, const char *value)
+{
+    int val;
+    char *end;
+
+    if (! value)
+	return EINVAL;
+    if (*value == '\0')
+	return EINVAL;
+
+    val = strtol(value, &end, 0);
+    if (*end != '\0')
+	return EINVAL;
+    *dest = val;
     return 0;
 }
 
@@ -6404,6 +6460,10 @@ lan_args_set_val(ipmi_args_t  *args,
     case 14:
 	rv = set_bool_val(&largs->hacks, value,
 			  IPMI_CONN_HACK_RMCPP_INTEG_SIK);
+	break;
+
+    case 15:
+	rv = set_int_val(&largs->max_outstanding_msgs, value);
 	break;
 
     default:
@@ -6630,6 +6690,20 @@ lan_parse_args(int         *curr_arg,
 	    memcpy(largs->bmc_key, args[*curr_arg], len);
 	    largs->bmc_key_set = 1;
 	    largs->bmc_key_len = len;
+	} else if (strcmp(args[*curr_arg], "-M") == 0) {
+	    char *end;
+	    int val;
+	    (*curr_arg)++; CHECK_ARG;
+	    if (args[*curr_arg][0] == '\0') {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    val = strtol(args[*curr_arg], &end, 0);
+	    if (*end != '\0') {
+		rv = EINVAL;
+		goto out_err;
+	    }
+	    largs->max_outstanding_msgs = val;
 	}
 	(*curr_arg)++;
     }
@@ -6691,7 +6765,8 @@ lan_parse_help(void)
 	"names by the name and the privilege level (allowing the same name with\n"
 	"different privileges and different passwords), the default is straight\n"
 	"name lookup.  -Rk sets the BMC key, needed if the system does two-key\n"
-	"lookups.\n"
+	"lookups.  The -M option sets the maximum outstanding messages.\n"
+	"The default is 2, ranges 1-63.\n"
 	"The -H option enables certain hacks for broken platforms.  This may\n"
 	"be listed multiple times to enable multiple hacks.  The currently\n"
 	"available hacks are:\n"
@@ -6724,6 +6799,7 @@ lan_con_alloc_args(void)
     largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
     largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
     largs->name_lookup_only = 1;
+    largs->max_outstanding_msgs = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
     /* largs->hacks = IPMI_CONN_HACK_RAKP3_WRONG_ROLEM; */
     return args;
 }

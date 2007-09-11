@@ -1,3 +1,18 @@
+2007-09-11 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c, include/OpenIPMI/ipmi_lan.h: Add support for a
+	parameter to set the maximum number of outstanding messages on a
+	LAN connection.  This used to be fixed to 2, but now can range
+	from 1 to 63.
+
+	* swig/python/openipmigui/gui_domainDialog.py: Remove some unused
+	definitions.  Add support for "int" types of parameters, like the
+	new maximum outstanding message count.  Fix a bug if the parm type
+	is not supported.
+
+	* lanserv/emu.c: Enable support for the reserve SDR commands.  Not
+	having this confuses ipmitool.
+
 2007-09-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, lib/entity.c: Don't abort SDR handling if the

@@ -34,12 +34,6 @@ import OpenIPMI
 import _domain
 import gui_errstr
 
-authtypes = [ 'default', 'none', 'md2', 'md5', 'straight', 'rmcp+' ]
-privileges = [ 'default', 'callback', 'user', 'operator', 'admin', 'oem' ]
-auth_algs = [ 'default', 'rakp_none', 'rakp_hmac_sha1', 'rakp_hmac_md5' ]
-integ_algs = [ 'default', 'none', 'hmac_sha1', 'hmac_md5', 'md5' ]
-conf_algs = [ 'default', 'none', 'aes_cbc_128', 'xrc4_128', 'xrc4_40' ]
-
 class EnumHolder:
     def __init__(self):
         self.value = ""
@@ -130,7 +124,7 @@ class ConnTypeInfo(Tix.Frame):
                     w.invoke(fw.get())
                     w.pack()
                     pass
-                elif (vtype[0] == "str"):
+                elif (vtype[0] == "str") or (vtype[0] == "int"):
                     if (frame == None):
                         didframe = True
                         frame = Tix.Frame(self)
@@ -154,6 +148,7 @@ class ConnTypeInfo(Tix.Frame):
                     fw = w.entry
                     pass
                 else:
+                    i += 1
                     continue
                 frame = newframe
                 self.fields.append( (i, name[0], vtype[0], fw) )
@@ -180,7 +175,7 @@ class ConnTypeInfo(Tix.Frame):
             elif (vtype == "enum"):
                 val = str(fw.get())
                 pass
-            elif (vtype == "str"):
+            elif ((vtype == "str") or (vtype == "int")):
                 val = str(fw.get())
                 if (val == ""):
                     val = None
