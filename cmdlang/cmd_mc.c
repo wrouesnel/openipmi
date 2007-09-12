@@ -1592,7 +1592,7 @@ got_users(ipmi_mc_t        *mc,
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     ipmi_user_t     *user;
     char            mc_name[IPMI_MC_NAME_LEN];
-    unsigned int    i, j, k;
+    int		    i, j, k;
     char            str[17];
     unsigned int    count;
     unsigned int    channel;
@@ -1628,7 +1628,7 @@ got_users(ipmi_mc_t        *mc,
     rv = ipmi_user_list_get_fixed_users(list, &val);
     if (!rv)
 	ipmi_cmdlang_out_int(cmd_info, "Fixed Users", val);
-    for (i=0; i<count; i++) {
+    for (i=0; i<(int)count; i++) {
 	user = ipmi_user_list_get_user(list, i);
 	if (!user)
 	    continue;

@@ -1,3 +1,8 @@
+2007-09-12 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/cmd_mc.c: Fix an unsigned problem pointed out by Phil
+	Estes.
+
 2007-09-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c, include/OpenIPMI/ipmi_lan.h: Add support for a
