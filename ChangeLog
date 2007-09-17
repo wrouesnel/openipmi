@@ -1,3 +1,9 @@
+2007-09-15 Corey Minyard <cminyard@mvista.com>
+
+	* ui/ui_os.c: This file shouldn't use the ipmi_mem_alloc and
+	ipmi_mem_free calls, as that introduces a circular dependency.
+	Only use malloc and free here.
+
 2007-09-12 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_mc.c: Fix an unsigned problem pointed out by Phil
