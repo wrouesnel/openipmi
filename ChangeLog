@@ -1,5 +1,9 @@
 2007-10-02 Corey Minyard <cminyard@mvista.com>
 
+	* lib/ipmi_lan.c: Fixed a problem where the LAN code would pick
+	rmcp+ defaults that might not be available.  Instead, pick the
+	most secure available default.
+
 	* configure.in: Move to version 2.0.12.
 
 2007-09-15 Corey Minyard <cminyard@mvista.com>

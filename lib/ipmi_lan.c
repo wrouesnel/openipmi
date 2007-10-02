@@ -5347,6 +5347,61 @@ lan_unregister_stat_handler(ipmi_con_t          *ipmi,
 
 static ipmi_args_t *get_startup_args(ipmi_con_t *ipmi);
 
+static unsigned int conf_order[] = {
+    IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128
+};
+
+static unsigned int
+most_secure_lanp_conf(void)
+{
+    unsigned int i, v;
+    for (i=0; i<(sizeof(conf_order)/sizeof(unsigned int)); i++) {
+	v = conf_order[i];
+	if (confs[v])
+	    return v;
+    }
+
+    return IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
+}
+
+static unsigned int integ_order[] = {
+    IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+    IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128,
+    IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128
+};
+
+static unsigned int
+most_secure_lanp_integ(void)
+{
+    unsigned int i, v;
+    for (i=0; i<(sizeof(integ_order)/sizeof(unsigned int)); i++) {
+	v = integ_order[i];
+	if (integs[v])
+	    return v;
+    }
+
+    return IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
+}
+
+static unsigned int auth_order[] = {
+    IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1,
+    IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5
+};
+
+static unsigned int
+most_secure_lanp_auth(void)
+{
+    unsigned int i, v;
+    for (i=0; i<(sizeof(auth_order)/sizeof(unsigned int)); i++) {
+	v = auth_order[i];
+	if (auths[v])
+	    return v;
+    }
+
+    return IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE;
+}
+
+
 int
 ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		    unsigned int     num_parms,
@@ -5371,9 +5426,9 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     /* Pick some secure defaults. */
     cparm.authtype = IPMI_AUTHTYPE_DEFAULT;
     cparm.privilege = IPMI_PRIVILEGE_ADMIN;
-    cparm.conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
-    cparm.integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-    cparm.auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
+    cparm.conf = most_secure_lanp_conf();
+    cparm.integ = most_secure_lanp_integ();
+    cparm.auth = most_secure_lanp_auth();
     cparm.name_lookup_only = 1;
 
     for (i=0; i<num_parms; i++) {
@@ -6795,9 +6850,9 @@ lan_con_alloc_args(void)
     /* Set defaults */
     largs->authtype = IPMI_AUTHTYPE_DEFAULT;
     largs->privilege = IPMI_PRIVILEGE_ADMIN;
-    largs->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
-    largs->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-    largs->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
+    largs->conf_alg = most_secure_lanp_conf();
+    largs->integ_alg = most_secure_lanp_integ();
+    largs->auth_alg = most_secure_lanp_auth();
     largs->name_lookup_only = 1;
     largs->max_outstanding_msgs = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
     /* largs->hacks = IPMI_CONN_HACK_RAKP3_WRONG_ROLEM; */
