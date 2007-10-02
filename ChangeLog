@@ -1,3 +1,7 @@
+2007-10-02 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 2.0.12.
+
 2007-09-15 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui_os.c: This file shouldn't use the ipmi_mem_alloc and
