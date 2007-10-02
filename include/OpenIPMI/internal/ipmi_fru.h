@@ -622,7 +622,7 @@ int ipmi_mr_bitint_get_field(ipmi_mr_getset_t          *getset,
    structure. */
 typedef struct ipmi_mr_tab_item_s {
     unsigned int count;
-    const char   *table[];
+    const char   *table[0];
 } ipmi_mr_tab_item_t;
 int ipmi_mr_bitvaltab_set_field(ipmi_mr_getset_t          *getset,
 				enum ipmi_fru_data_type_e dtype,
@@ -657,7 +657,7 @@ typedef struct ipmi_mr_floattab_item_s {
 	float      nominal;
 	float      high;
 	const char *nominal_str;
-    } table[];
+    } table[0];
 } ipmi_mr_floattab_item_t;
 int ipmi_mr_bitfloatvaltab_set_field(ipmi_mr_getset_t          *getset,
 				     enum ipmi_fru_data_type_e dtype,

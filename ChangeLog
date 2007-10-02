@@ -1,5 +1,9 @@
 2007-10-02 Corey Minyard <cminyard@mvista.com>
 
+	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Fix
+	problems compiling with older compilers.
+	* lib/oem_atca_fru.c: ditto
+
 	* lib/ipmi_lan.c: Fixed a problem where the LAN code would pick
 	rmcp+ defaults that might not be available.  Instead, pick the
 	most secure available default.
