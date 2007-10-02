@@ -21,8 +21,7 @@ OpenIPMI_OBJ = OpenIPMI_wrap.o
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS) \
-		-R$(libdir)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS)
 	rm _OpenIPMI.so
 	mv .libs/_OpenIPMI.so .
 	rm -rf .libs
@@ -46,9 +45,9 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload
 	$(LIBTOOL) --mode=install $(INSTALL_PROGRAM) _OpenIPMI.so "$(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload"
-	$(INSTALL_PROGRAM) OpenIPMI.py "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
-	$(INSTALL_PROGRAM) OpenIPMI.pyc "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
-	$(INSTALL_PROGRAM) OpenIPMI.pyo "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
+	$(INSTALL_DATA) OpenIPMI.py "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
+	$(INSTALL_DATA) OpenIPMI.pyc "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
+	$(INSTALL_DATA) OpenIPMI.pyo "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
 	if test "x$(PYTHON_GUI_DIR)" = "xopenipmigui"; then \
 	    $(INSTALL) -d $(DESTDIR)$(bindir); \
 	    $(INSTALL_PROGRAM) openipmigui.py "$(DESTDIR)$(bindir)/openipmigui";\

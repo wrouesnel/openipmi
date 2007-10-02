@@ -19,8 +19,7 @@ OpenIPMI_SRC = OpenIPMI_wrap.c OpenIPMI_perl.c
 OpenIPMI_OBJ = OpenIPMI_wrap.o OpenIPMI_perl.o
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS) \
-		-R$(libdir)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS)
 	rm OpenIPMI.so
 	mv .libs/OpenIPMI.so .
 	rm -rf .libs

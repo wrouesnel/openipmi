@@ -4,7 +4,7 @@
 rmcp_ping \- IPMI RMCP Ping program
 
 .SH SYNOPSIS
-.B ipmilan
+.B rmcp_ping
 .RB [ \-p
 .IR port ]
 .RB [ \-t
@@ -12,6 +12,7 @@ rmcp_ping \- IPMI RMCP Ping program
 .RB [ \-s
 .IR starttag ]
 .RB [ \-d ]
+.I destination
 
 .SH DESCRIPTION
 The
@@ -35,6 +36,9 @@ starttag.  This is zero by default
 .TP
 .B \-d
 Turns on debugging to standard output.
+.TP
+.I destination
+The target address, default is the boradcast address (default 255.255.255.255)
 
 .SH AUTHOR
 .PP

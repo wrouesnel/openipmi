@@ -27,7 +27,7 @@ all-local: $(PYC_FILES) $(PYO_FILES)
 
 install-exec-local: $(EXTRA_DIST) $(PYC_FILES) $(PYO_FILES)
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui
-	$(INSTALL_PROGRAM) $^ $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui
+	$(INSTALL_DATA) $^ $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui
 
 uninstall-local:
 	(for i in $(EXTRA_DIST) $(PYC_FILES) $(PYO_FILES); do \

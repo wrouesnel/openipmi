@@ -10,6 +10,14 @@
 
 	* lib/domain.c: Free mc_oem_handlers when shutting down.
 
+	* */Makefile.am: Removed -R and -rpath from everything, per
+	a bug report from Debian.
+
+	* swig/python/Makefile.am, swig/python/openipmigui/Makefile.am:
+	Use INSTALL_DATA, not INSTALL_PROGRAM, to install python code.
+
+	* man/rmcp_ping.1: Some minor manpage fixups.
+
 	* configure.in: Move to version 2.0.12.
 
 2007-09-15 Corey Minyard <cminyard@mvista.com>
