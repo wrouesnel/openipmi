@@ -6021,6 +6021,7 @@ _ipmi_domain_shutdown(void)
     domains_initialized = 0;
 
     locked_list_destroy(domain_change_handlers);
+    locked_list_destroy(mc_oem_handlers);
     locked_list_destroy(domains_list);
     domains_list = NULL;
     free_ilist(oem_handlers);

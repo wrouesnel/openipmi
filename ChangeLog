@@ -8,6 +8,8 @@
 	rmcp+ defaults that might not be available.  Instead, pick the
 	most secure available default.
 
+	* lib/domain.c: Free mc_oem_handlers when shutting down.
+
 	* configure.in: Move to version 2.0.12.
 
 2007-09-15 Corey Minyard <cminyard@mvista.com>
