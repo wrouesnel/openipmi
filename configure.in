@@ -218,6 +218,12 @@ AC_ARG_WITH(pythoninstall,
     pythoninstalldir="$withval",
 )
 
+pythoninstalllibdir=
+AC_ARG_WITH(pythoninstalllib,
+[  --with-pythoninstalllib=PATH       Install python libraries in the given location.],
+    pythoninstalllibdir="$withval",
+)
+
 pythoncflags=
 AC_ARG_WITH(pythoncflags,
 [  --with-pythoncflags=PATH        Use the given flags when compiling python parts.],
@@ -618,20 +624,29 @@ if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
    fi
 
    if test "x$pythoninstalldir" != "x"; then
+      if test "x$pythoninstalllibdir" = "x"; then
+	 pythoninstalllibdir=$pythoninstalldir
+      fi
       AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
       PYTHON_DIR=python
       PYTHON_CFLAGS="$pythoncflags"
       PYTHON_INSTALL_DIR="$pythoninstalldir"
+      PYTHON_INSTALL_LIB_DIR="$pythoninstalllibdir"
    else
       PYTHON_DIR=
       PYTHON_CFLAGS=
       PYTHON_INSTALL_DIR=
+      PYTHON_INSTALL_LIB_DIR=
    fi
 else
+   if test "x$pythoninstalllibdir" = "x"; then
+      pythoninstalllibdir=$pythoninstalldir
+   fi
    AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
    PYTHON_DIR=python
    PYTHON_CFLAGS="$pythoncflags"
    PYTHON_INSTALL_DIR="$pythoninstalldir"
+   PYTHON_INSTALL_LIB_DIR="$pythoninstalllibdir"
 fi
 if test "x$pythonprog" != "x"; then
    if test "x$pythonusepthreads" = "x"; then
@@ -651,6 +666,7 @@ fi
 AC_SUBST(PYTHON_DIR)
 AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_INSTALL_DIR)
+AC_SUBST(PYTHON_INSTALL_LIB_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
 AC_SUBST(PYTHON_POSIX_SO)

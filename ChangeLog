@@ -7,6 +7,20 @@
 	problems with older compilers had bad side effects; it resulted
 	in corrupt data in some cases.  Change it back.
 
+	* tcl/Makefile.am, glib/Makefile.am: I was instructed by the
+	Debian maintainer that -rpath is a bad idea, and Debian had a
+	writeup.  However, the automake documentation says that if you use
+	EXTRA_LTLIBRARIES for optional libraries, you must use -rpath.  So
+	change the files back that use EXTRA_LTLIBRARIES.
+
+	* glib/Makefile.am: Add an pythoninstalllib option to instruct
+	where to install the shared libraries for python.  Also install
+	the library directly in the install location and not in
+	lib-dynload.
+
+	* swig/OpenIPMI.i: Fixed a refcounting problem with
+	parse_args_iter_help().
+
 	* configure.in: Since one of the changes fixed a critical bug,
 	move to version 2.0.13.
 	

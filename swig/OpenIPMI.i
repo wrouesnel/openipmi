@@ -541,7 +541,6 @@ parse_args_iter_help_hnd(const char *name, const char *help, void *cb_data)
     swig_cb_val cb = cb_data;
 
     swig_call_cb(cb, "parse_args_iter_help_cb", "%s%s", name, help);
-    deref_swig_cb_val(cb);
 }
 
 static void

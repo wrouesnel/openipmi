@@ -43,8 +43,8 @@ CLEANFILES = $(OpenIPMI_OBJ) _OpenIPMI.so OpenIPMI_wrap.c \
 
 install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
-	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload
-	$(LIBTOOL) --mode=install $(INSTALL_PROGRAM) _OpenIPMI.so "$(DESTDIR)$(PYTHON_INSTALL_DIR)/lib-dynload"
+	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_LIB_DIR)
+	$(LIBTOOL) --mode=install $(INSTALL_PROGRAM) _OpenIPMI.so "$(DESTDIR)$(PYTHON_INSTALL_LIB_DIR)/"
 	$(INSTALL_DATA) OpenIPMI.py "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
 	$(INSTALL_DATA) OpenIPMI.pyc "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
 	$(INSTALL_DATA) OpenIPMI.pyo "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
@@ -54,7 +54,7 @@ install-exec-local: _OpenIPMI.so OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 	fi
 
 uninstall-local:
-	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/_OpenIPMI.so"
+	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(PYTHON_INSTALL_LIB_DIR)/_OpenIPMI.so"
 	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.py"
 	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.pyc"
 	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.pyo"
@@ -63,4 +63,4 @@ uninstall-local:
 PYPATH=$(top_builddir)/swig/python:$(srcdir)/openipmigui
 
 rungui:
-	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO) PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
