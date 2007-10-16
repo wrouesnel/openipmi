@@ -1,3 +1,15 @@
+2007-10-16 Corey Minyard <cminyard@mvista.com>
+	* swig/python/openipmigui/gui_domainDialog.py: Insert the default
+	value into string and integer values, primarily so the "Max
+	Outstanding Msgs" field has a proper default value.
+
+	* include/OpenIPMI/internal/ipmi_fru.h: One of the changes for
+	problems with older compilers had bad side effects; it resulted
+	in corrupt data in some cases.  Change it back.
+
+	* configure.in: Since one of the changes fixed a critical bug,
+	move to version 2.0.13.
+	
 2007-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Fix

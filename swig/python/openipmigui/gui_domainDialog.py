@@ -144,6 +144,7 @@ class ConnTypeInfo(Tix.Frame):
                         options="entry.width 20"
                         pass
                     w = Tix.LabelEntry(frame, label=name[0], options=options)
+                    w.entry.insert(Tix.END, value[0])
                     w.pack(side=Tix.LEFT, padx=10)
                     fw = w.entry
                     pass
