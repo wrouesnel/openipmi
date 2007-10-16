@@ -5981,7 +5981,7 @@ static struct lan_argnum_info_s
     { "RMCP_Integ_SIK",		"bool",
       "The IPMI 2.0 Spec was unclear which integrity key to use",
       NULL, NULL },
-    { "Max Outstanding Msgs",	"int",
+    { "Max_Outstanding_Msgs",	"int",
       "How many outstanding messages on the connection, range 1-63",
       NULL, NULL },
 
@@ -6397,7 +6397,7 @@ set_bool_val(unsigned int *dest, const char *value, unsigned int bit)
 }
 
 static int
-set_int_val(int *dest, const char *value)
+set_uint_val(unsigned int *dest, const char *value)
 {
     int val;
     char *end;
@@ -6407,7 +6407,7 @@ set_int_val(int *dest, const char *value)
     if (*value == '\0')
 	return EINVAL;
 
-    val = strtol(value, &end, 0);
+    val = strtoul(value, &end, 0);
     if (*end != '\0')
 	return EINVAL;
     *dest = val;
@@ -6518,7 +6518,7 @@ lan_args_set_val(ipmi_args_t  *args,
 	break;
 
     case 15:
-	rv = set_int_val(&largs->max_outstanding_msgs, value);
+	rv = set_uint_val(&largs->max_outstanding_msgs, value);
 	break;
 
     default:
