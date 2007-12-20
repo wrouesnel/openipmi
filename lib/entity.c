@@ -850,7 +850,6 @@ _ipmi_entity_put(ipmi_entity_t *ent)
     }
  out:
     ent->usecount--;
- out2:
     /* Wait till here to start fetching FRUs, as we want to report the
        entity first before we start the fetch. */
     if (ent->present && entity_fru_fetch) {
@@ -863,7 +862,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	_ipmi_domain_entity_lock(domain);
 	report_present = NULL;
 	goto repend;
-    } else if (report_present) {
+    } else if (!ent->destroyed && report_present) {
 	ent->usecount++;
 	_ipmi_domain_entity_unlock(domain);
 	report_present(ent, NULL);
@@ -871,6 +870,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	report_present = NULL;
 	goto repend;
     }
+ out2:
     _ipmi_domain_entity_unlock(domain);
 }
 

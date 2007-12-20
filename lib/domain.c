@@ -5059,6 +5059,8 @@ ipmi_option_FRUs(ipmi_domain_t *domain)
 int
 ipmi_option_IPMB_scan(ipmi_domain_t *domain)
 {
+    if (domain->option_local_only)
+	return 0;
     return domain->option_all || domain->option_IPMB_scan;
 }
 
@@ -5071,6 +5073,8 @@ ipmi_option_OEM_init(ipmi_domain_t *domain)
 int
 ipmi_option_set_event_rcvr(ipmi_domain_t *domain)
 {
+    if (domain->option_local_only)
+	return 0;
     return domain->option_set_event_rcvr;
 }
 

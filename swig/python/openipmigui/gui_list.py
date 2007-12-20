@@ -144,7 +144,7 @@ class List(Tix.Toplevel):
                                     + str(len(columns)))
                                  + " hlist.selectForeground black"
                                  + " hlist.selectBackground beige"),
-                        width=500, height=500)
+                        width=600, height=500)
         slist.pack(side=Tix.TOP, fill=Tix.BOTH, expand=1)
         self.slist = slist
         

@@ -93,7 +93,7 @@ class SELDisplay(gui_list.List):
         self.numevents = 0
         gui_list.List.__init__(self, "SEL for " + o.get_name(),
                                [ ("RecNum", 64), ("Type", 40),
-                                 ("Time/Sensor", 200), ("Data", 400) ])
+                                 ("Time/Sensor", 300), ("Data", 400) ])
 
         self.events = [ ]
         
