@@ -38,6 +38,12 @@
 AWK=awk
 USAGE="Usage: $0 -h|-e|-fc|-fh|-bc|-bh|-m <filenames>"
 
+# Avoid locale dependent case conversions and always use ascii.
+# (for example the script won't work in Turkish locale without this setting)
+LC_ALL=C; LANG=C
+export LC_ALL LANG
+
+
 if [ "x$1" = "x" ]
 then
     echo $USAGE 1>&2

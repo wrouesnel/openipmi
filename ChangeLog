@@ -1,3 +1,13 @@
+2008-01-22 Serkan Calis <>
+
+	* libedit/makelist: When we try to compile OpenIMPI (2.0.11 or
+	previous versions) under Turkish locale, we get some erors like
+	 chared.c:442: error: 'ED_UNASSIGNED' undeclared (first use in
+	 this function) 
+	This is because Turkish character i. Using ASCII could solve the
+	problem. I am attaching a patch for makelist, so we can compile
+	it.
+
 2007-12-20 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/_sel.py, swig/python/openipmigui/gui_list.py:
