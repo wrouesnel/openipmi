@@ -1,4 +1,4 @@
-2008-01-22 Serkan Calis <>
+2008-01-22 Serkan Calis <adresimeyaz (at) gmail (dot) com>
 
 	* libedit/makelist: When we try to compile OpenIMPI (2.0.11 or
 	previous versions) under Turkish locale, we get some erors like
