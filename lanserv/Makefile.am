@@ -24,19 +24,20 @@ noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c lanserv_config.c
-libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la \
-	 $(OPENSSLLIBS)
+nodist_libIPMIlanserv_la_SOURCES = ../utils/ipmi_auth.c ../utils/md2.c \
+	../utils/md5.c
+libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS)
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
 
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
-ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la $(top_builddir)/utils/libOpenIPMIutils.la $(OPENSSLLIBS)
+ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmilan_LDFLAGS = -rdynamic
 
 lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
-lanserv_emu_LDADD = $(POPTLIBS) libIPMIlanserv.la $(top_builddir)/utils/libOpenIPMIutils.la $(OPENSSLLIBS)
+lanserv_emu_LDADD = $(POPTLIBS) libIPMIlanserv.la
 lanserv_emu_LDFLAGS = -rdynamic
 
 EXTRA_DIST = atca.emu README.emulator

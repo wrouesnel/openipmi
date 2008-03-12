@@ -8,6 +8,10 @@
 	Required changes to move lanserv.h.
 	* include/OpenIPMI/Makefile.am: ditto
 
+	* lanserve/Makefile.am: Remove the dependency on OpenIPMIutils by
+	directly handling the source files from that directory and not
+	linking the utils library.
+
 2008-01-22 Serkan Çalış <adresimeyaz (at) gmail (dot) com>
 
 	* libedit/makelist: When we try to compile OpenIMPI (2.0.11 or
