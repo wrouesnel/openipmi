@@ -953,6 +953,8 @@ ipmi_init(os_handler_t *handler)
     if (rv)
 	return rv;
 
+    ipmi_initialized = 1;
+
     if (handler->create_lock) {
 	rv = handler->create_lock(handler, &seq_lock);
 	if (rv)
@@ -1012,28 +1014,10 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_atca_init();
     init_oem_test();
 
-    ipmi_initialized = 1;
-
     return 0;
 
  out_err:
-    _ipmi_sol_shutdown();
-#ifdef HAVE_OPENIPMI_SMI
-    _ipmi_smi_shutdown();
-#endif
-    _ipmi_lan_shutdown();
-    ipmi_oem_intel_shutdown();
-    ipmi_oem_kontron_conn_shutdown();
-    _ipmi_mc_shutdown();
-    _ipmi_domain_shutdown();
-    _ipmi_fru_spd_decoder_shutdown();
-    _ipmi_normal_fru_shutdown();
-    _ipmi_fru_shutdown();
-    if (seq_lock)
-	handler->destroy_lock(ipmi_os_handler, seq_lock);
-    if (con_type_list)
-	locked_list_destroy(con_type_list);
-    ipmi_os_handler = NULL;
+    ipmi_shutdown();
     return rv;
 }
 
@@ -1054,6 +1038,7 @@ ipmi_shutdown(void)
     ipmi_oem_kontron_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
+    _ipmi_fru_spd_decoder_shutdown();
     _ipmi_conn_shutdown();
     _ipmi_normal_fru_shutdown();
     _ipmi_fru_shutdown();
@@ -1061,6 +1046,8 @@ ipmi_shutdown(void)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     if (con_type_list)
 	locked_list_destroy(con_type_list);
+
+    ipmi_os_handler = NULL;
 
     ipmi_initialized = 0;
 }

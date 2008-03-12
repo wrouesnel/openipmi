@@ -902,6 +902,7 @@ AC_OUTPUT(Makefile
 	  tcl/Makefile
 	  ui/Makefile
 	  lanserv/Makefile
+	  lanserv/OpenIPMI/Makefile
 	  sample/Makefile
 	  doc/Makefile
 	  man/Makefile

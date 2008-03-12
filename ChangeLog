@@ -1,3 +1,13 @@
+2008-03-12 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/lanserv.h, lanserv/OpenIPMI/lanserv.h: Move
+	lanserv.h into the lanserv directory.  It still installs in
+	OpenIPMI as before.
+
+	* configure.in, lanserv/Makefile.am, lanserv/OpenIPMI/Makefile.am:
+	Required changes to move lanserv.h.
+	* include/OpenIPMI/Makefile.am: ditto
+
 2008-01-22 Serkan Çalış <adresimeyaz (at) gmail (dot) com>
 
 	* libedit/makelist: When we try to compile OpenIMPI (2.0.11 or

@@ -42,3 +42,5 @@ lanserv_emu_LDFLAGS = -rdynamic
 EXTRA_DIST = atca.emu README.emulator
 
 CLEANFILES = libIPMIlanserv.map
+
+SUBDIRS = OpenIPMI
