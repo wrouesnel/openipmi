@@ -1826,6 +1826,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 		     "Unable to set the SEL time due to error: %x, aborting",
 		     mc->name, rsp->data[0]);
 	    mc->startup_SEL_time = 0;
+	    info->sel_time_set = 1;
 	    sels_restart(info);
 	} else {
 	    DEBUG_INFO(mc->sel_timer_info);
@@ -1982,9 +1983,10 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	/* Time is current or in the future, don't move it backwards
 	   as that may mess other things up. */
 	DEBUG_INFO(mc->sel_timer_info);
-        tv.tv_sec = time;
-        tv.tv_usec = 0;
-        mc->startup_SEL_time = ipmi_timeval_to_time(tv);
+	tv.tv_sec = time;
+	tv.tv_usec = 0;
+	mc->startup_SEL_time = ipmi_timeval_to_time(tv);
+	info->sel_time_set = 1;
 
 	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
 			  mc->sel_timer_info);

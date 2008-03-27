@@ -1,3 +1,10 @@
+2008-03-27 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Fixed a rather serious bug in event handling, in some
+	cases it would never properly deliver events.
+
+	* configure.in: Move to version 2.0.14.
+	
 2008-03-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/lanserv.h, lanserv/OpenIPMI/lanserv.h: Move
