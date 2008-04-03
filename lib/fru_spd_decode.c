@@ -312,17 +312,27 @@ process_fru_spd_info(ipmi_fru_t *fru)
  *
  ************************************************************************/
 
+static int spd_initialized;
+
 int
 _ipmi_fru_spd_decoder_init (void)
 {
     int rv;
 
+    if (spd_initialized)
+	return 0;
+
     rv = _ipmi_fru_register_decoder (process_fru_spd_info);
+    if (!rv)
+	spd_initialized = 1;
     return rv;
 }
 
 void
 _ipmi_fru_spd_decoder_shutdown (void)
 {
+    if (!spd_initialized)
+	return;
     _ipmi_fru_deregister_decoder (process_fru_spd_info);
+    spd_initialized = 0;
 }

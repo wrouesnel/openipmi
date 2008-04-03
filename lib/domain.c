@@ -812,7 +812,7 @@ static void con_unregister_stat(ipmi_ll_stat_info_t *info,
 }
 
 static int
-setup_domain(char          *name,
+setup_domain(const char    *name,
 	     ipmi_con_t    *ipmi[],
 	     int           num_con,
 	     ipmi_domain_t **new_domain)
@@ -5155,7 +5155,7 @@ process_options(ipmi_domain_t      *domain,
 }
 
 int
-ipmi_open_domain(char               *name,
+ipmi_open_domain(const char         *name,
 		 ipmi_con_t         *con[],
 		 unsigned int       num_con,
 		 ipmi_domain_con_cb con_change_handler,

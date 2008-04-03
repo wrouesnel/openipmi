@@ -1870,7 +1870,7 @@ typedef struct ipmi_open_option_s
 	void *pval;
     };
 } ipmi_open_option_t;
-int ipmi_open_domain(char               *name,
+int ipmi_open_domain(const char         *name,
 		     ipmi_con_t         *con[],
 		     unsigned int       num_con,
 		     ipmi_domain_con_cb con_change_handler,
