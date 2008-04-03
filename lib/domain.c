@@ -117,6 +117,8 @@ typedef struct ll_msg_s
 
     long                         seq;
 
+    int                          side_effects;
+
     ilist_item_t link;
 } ll_msg_t;
 
@@ -1938,14 +1940,15 @@ matching_domain_sysaddr(ipmi_domain_t *domain, const ipmi_addr_t *addr,
     return 0;
 }
 
-int
-ipmi_send_command_addr(ipmi_domain_t                *domain,
-		       const ipmi_addr_t	    *addr,
-		       unsigned int                 addr_len,
-		       const ipmi_msg_t             *msg,
-		       ipmi_addr_response_handler_t rsp_handler,
-		       void                         *rsp_data1,
-		       void                         *rsp_data2)
+static int
+send_command_addr(ipmi_domain_t                *domain,
+		  const ipmi_addr_t            *addr,
+		  unsigned int                 addr_len,
+		  const ipmi_msg_t             *msg,
+		  ipmi_addr_response_handler_t rsp_handler,
+		  void                         *rsp_data1,
+		  void                         *rsp_data2,
+		  int			       side_effects)
 {
     int                          rv;
     int                          u;
@@ -1955,6 +1958,8 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     void                         *data4 = NULL;
     int                          is_ipmb = 0;
     ipmi_msgi_t                  *rspi;
+    ipmi_con_option_t            opt_data[2];
+    ipmi_con_option_t		 *options = NULL;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
@@ -1964,6 +1969,13 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
     if (domain->in_shutdown)
 	return EINVAL;
+
+    if (side_effects) {
+	options = opt_data;
+	options[0].option = IPMI_CON_MSG_OPTION_SIDE_EFFECTS;
+	options[0].ival = 1;
+	options[1].option = IPMI_CON_OPTION_LIST_END;
+    }
 
     CHECK_DOMAIN_LOCK(domain);
 
@@ -2034,6 +2046,8 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     nmsg->rsp_item->data1 = rsp_data1;
     nmsg->rsp_item->data2 = rsp_data2;
 
+    nmsg->side_effects = side_effects;
+
     ipmi_lock(domain->cmds_lock);
     nmsg->seq = domain->cmds_seq;
     domain->cmds_seq++;
@@ -2052,11 +2066,12 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     rspi->data2 = nmsg;
     rspi->data3 = (void *) nmsg->seq;
     rspi->data4 = data4;
-    rv = domain->conn[u]->send_command(domain->conn[u],
-				       addr, addr_len,
-				       msg,
-				       handler,
-				       rspi);
+    rv = domain->conn[u]->send_command_option(domain->conn[u],
+					      addr, addr_len,
+					      msg,
+					      options,
+					      handler,
+					      rspi);
 
     if (rv) {
 	ipmi_free_msg_item(rspi);
@@ -2078,6 +2093,32 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     return rv;
 }
 
+int
+ipmi_send_command_addr(ipmi_domain_t                *domain,
+		       const ipmi_addr_t	    *addr,
+		       unsigned int                 addr_len,
+		       const ipmi_msg_t             *msg,
+		       ipmi_addr_response_handler_t rsp_handler,
+		       void                         *rsp_data1,
+		       void                         *rsp_data2)
+{
+    return send_command_addr(domain, addr, addr_len, msg, rsp_handler,
+			     rsp_data1, rsp_data2, 0);
+}
+
+int
+ipmi_send_command_addr_sideeff(ipmi_domain_t                *domain,
+			       const ipmi_addr_t	    *addr,
+			       unsigned int                 addr_len,
+			       const ipmi_msg_t             *msg,
+			       ipmi_addr_response_handler_t rsp_handler,
+			       void                         *rsp_data1,
+			       void                         *rsp_data2)
+{
+    return send_command_addr(domain, addr, addr_len, msg, rsp_handler,
+			     rsp_data1, rsp_data2, 1);
+}
+
 /* Take all the commands for any inactive or down connection and
    resend them on another connection.  */
 static void
@@ -2094,7 +2135,9 @@ reroute_cmds(ipmi_domain_t *domain, int old_con, int new_con)
     while (rv) {
 	nmsg = ilist_get(&iter);
 	if (nmsg->con == old_con) {
-	    ipmi_msgi_t *rspi;
+	    ipmi_msgi_t       *rspi;
+	    ipmi_con_option_t opt_data[2];
+	    ipmi_con_option_t *options = NULL;
 
 	    nmsg->seq = domain->cmds_seq;
 	    domain->cmds_seq++; /* Make the message unique so a
@@ -2106,16 +2149,25 @@ reroute_cmds(ipmi_domain_t *domain, int old_con, int new_con)
 	    if (!rspi)
 		goto send_err;
 
+	    if (nmsg->side_effects) {
+		options = opt_data;
+		options[0].option = IPMI_CON_MSG_OPTION_SIDE_EFFECTS;
+		options[0].ival = 1;
+		options[1].option = IPMI_CON_OPTION_LIST_END;
+	    }
+
 	    rspi->data1 = domain;
 	    rspi->data2 = nmsg;
 	    rspi->data3 = (void *) nmsg->seq;
 	    rspi->data4 = (void *) domain->conn_seq[new_con];
-	    rv = domain->conn[new_con]->send_command(domain->conn[new_con],
-						     &nmsg->rsp_item->addr,
-						     nmsg->rsp_item->addr_len,
-						     &nmsg->msg,
-						     ll_rsp_handler,
-						     rspi);
+	    rv = domain->conn[new_con]->send_command_option
+		(domain->conn[new_con],
+		 &nmsg->rsp_item->addr,
+		 nmsg->rsp_item->addr_len,
+		 &nmsg->msg,
+		 options,
+		 ll_rsp_handler,
+		 rspi);
 	    if (rv) {
 		ipmi_free_msg_item(rspi);
 	    send_err:

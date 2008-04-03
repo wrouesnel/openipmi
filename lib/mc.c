@@ -2653,6 +2653,34 @@ ipmi_mc_send_command(ipmi_mc_t                  *mc,
     return rv;
 }
 
+int
+ipmi_mc_send_command_sideeff(ipmi_mc_t                  *mc,
+			     unsigned int               lun,
+			     const ipmi_msg_t           *msg,
+			     ipmi_mc_response_handler_t rsp_handler,
+			     void                       *rsp_data)
+{
+    int           rv;
+    ipmi_addr_t   addr = mc->addr;
+    ipmi_domain_t *domain;
+
+    CHECK_MC_LOCK(mc);
+
+    rv = ipmi_addr_set_lun(&addr, lun);
+    if (rv)
+	return rv;
+
+    domain = ipmi_mc_get_domain(mc);
+
+    rv = ipmi_send_command_addr_sideeff(domain,
+					&addr, mc->addr_len,
+					msg,
+					addr_rsp_handler,
+					rsp_data,
+					rsp_handler);
+    return rv;
+}
+
 /***********************************************************************
  *
  * Handle global OEM callbacks for new MCs.

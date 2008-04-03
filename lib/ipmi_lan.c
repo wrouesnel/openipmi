@@ -74,8 +74,10 @@ dump_hex(void *vdata, int len)
 
 #define LAN_AUDIT_TIMEOUT 10000000
 
-/* Timeout to wait for IPMI responses, in microseconds. */
+/* Timeout to wait for IPMI responses, in microseconds.  For commands
+   with side effects, we wait 5 seconds, not one. */
 #define LAN_RSP_TIMEOUT 1000000
+#define LAN_RSP_TIMEOUT_SIDEEFF 5000000
 
 /* # of times to try a message before we fail it. */
 #define LAN_RSP_RETRIES 6
@@ -118,6 +120,7 @@ typedef struct lan_wait_queue_s
     unsigned char         data[IPMI_MAX_MSG_LENGTH];
     ipmi_ll_rsp_handler_t rsp_handler;
     ipmi_msgi_t           *rsp_item;
+    int                   side_effects;
 
     struct lan_wait_queue_s *next;
 } lan_wait_queue_t;
@@ -363,6 +366,7 @@ struct lan_data_s
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
 	int                   retries_left;
+	int                   side_effects;
 
 	/* If -1, just use the normal algorithm.  If not -1, force to
            this address. */
@@ -2415,7 +2419,9 @@ rsp_timeout_handler(void              *cb_data,
 		}
 		lan->ip[ip_num].consecutive_failures = 1;
 		ipmi_unlock(lan->ip_lock);
-	    } else {
+	    } else if (!lan->seq_table[seq].side_effects) {
+		/* Don't use messages with side effects for failure
+		   detection. */
 		lan->ip[ip_num].consecutive_failures++;
 		if (lan->ip[ip_num].consecutive_failures >= IP_FAIL_COUNT) {
 		    struct timeval now;
@@ -2471,8 +2477,13 @@ rsp_timeout_handler(void              *cb_data,
 	       error. */
 	    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
 	} else {
-	    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
-	    timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
+	    if (!lan->seq_table[seq].side_effects) {
+		timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
+		timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
+	    } else {
+		timeout.tv_sec = LAN_RSP_TIMEOUT_SIDEEFF / 1000000;
+		timeout.tv_usec = LAN_RSP_TIMEOUT_SIDEEFF % 1000000;
+	    }
 	    ipmi->os_hnd->start_timer(ipmi->os_hnd,
 				      id,
 				      &timeout,
@@ -2626,7 +2637,8 @@ handle_msg_send(lan_timer_info_t      *info,
 		unsigned int          addr_len,
 		const ipmi_msg_t      *msg,
 		ipmi_ll_rsp_handler_t rsp_handler,
-		ipmi_msgi_t           *rspi)
+		ipmi_msgi_t           *rspi,
+		int                   side_effects)
 {
     ipmi_con_t        *ipmi = info->ipmi;
     lan_data_t        *lan = ipmi->con_data;
@@ -2702,6 +2714,7 @@ handle_msg_send(lan_timer_info_t      *info,
 
     info->seq = seq;
     lan->seq_table[seq].inuse = 1;
+    lan->seq_table[seq].side_effects = side_effects;
     lan->seq_table[seq].addr_num = addr_num;
     lan->seq_table[seq].rsp_handler = rsp_handler;
     lan->seq_table[seq].rsp_item = rspi;
@@ -2726,8 +2739,13 @@ handle_msg_send(lan_timer_info_t      *info,
 	lan->seq_table[seq].use_orig_addr = 0;
     }
 
-    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
-    timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
+    if (!side_effects) {
+	timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
+	timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
+    } else {
+	timeout.tv_sec = LAN_RSP_TIMEOUT_SIDEEFF / 1000000;
+	timeout.tv_usec = LAN_RSP_TIMEOUT_SIDEEFF % 1000000;
+    }
     lan->seq_table[seq].timer = info->timer;
     rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
 				   lan->seq_table[seq].timer,
@@ -2792,7 +2810,7 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 
 	rv = handle_msg_send(q_item->info, -1, &q_item->addr, q_item->addr_len,
 			     &(q_item->msg), q_item->rsp_handler,
-			     q_item->rsp_item);
+			     q_item->rsp_item, q_item->side_effects);
 	if (rv) {
 	    ipmi_unlock(lan->seq_num_lock);
 
@@ -3570,7 +3588,7 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 
     rspi->data4 = (void *) (long) addr_num;
     rv = handle_msg_send(info, addr_num, addr, addr_len, msg,
-			 rsp_handler, rspi);
+			 rsp_handler, rspi, 0);
     /* handle_msg_send handles freeing the timer and info on an error */
     info = NULL;
     if (! rv)
@@ -3603,6 +3621,8 @@ lan_send_command_option(ipmi_con_t              *ipmi,
     lan_data_t       *lan;
     int              rv;
     ipmi_msgi_t      *rspi = trspi;
+    int              side_effects = 0;
+    int              i;
 
 
     if (addr_len > sizeof(ipmi_addr_t))
@@ -3618,6 +3638,13 @@ lan_send_command_option(ipmi_con_t              *ipmi,
     if (msg->netfn & 1) {
 	int dummy_send_ip;
 	return lan_send(lan, addr, addr_len, msg, 0, &dummy_send_ip, options);
+    }
+
+    if (options) {
+	for (i=0; options[i].option != IPMI_CON_OPTION_LIST_END; i++) {
+	    if (options[i].option == IPMI_CON_MSG_OPTION_SIDE_EFFECTS)
+		side_effects = options[i].ival;
+	}
     }
 
     if (!rspi) {
@@ -3661,6 +3688,7 @@ lan_send_command_option(ipmi_con_t              *ipmi,
 	memcpy(q_item->data, msg->data, msg->data_len);
 	q_item->rsp_handler = rsp_handler;
 	q_item->rsp_item = rspi;
+	q_item->side_effects = side_effects;
 
 	/* Add it to the end of the queue. */
 	q_item->next = NULL;
@@ -3675,7 +3703,7 @@ lan_send_command_option(ipmi_con_t              *ipmi,
     }
 
     rv = handle_msg_send(info, -1, addr, addr_len, msg,
-			 rsp_handler, rspi);
+			 rsp_handler, rspi, side_effects);
     /* handle_msg_send handles freeing the timer and info on an error */
     info = NULL;
     if (!rv)
@@ -6797,7 +6825,7 @@ lan_parse_help(void)
 	" lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
 	"     [-L <privilege>] [-s] [-Ra <auth alg>] [-Ri <integ alg>]\n"
 	"     [-Rc <conf algo>] [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
-	"     <host1> [<host2>]\n"
+	"     [-M <max outstanding msgs>] <host1> [<host2>]\n"
 	"If -s is supplied, then two host names are taken (the second port\n"
 	"may be specified with -p2).  Otherwise, only one hostname is\n"
 	"taken.  The defaults are an empty username and password (anonymous),\n"

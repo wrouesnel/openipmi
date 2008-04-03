@@ -394,7 +394,8 @@ Domain Created: <domain>
 lan [-U \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP]
   [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP]
   [-Ra \fI<auth alg>\fP] [-Ri \fI<integ alg>\fP] [-Rc \fI<conf algo>\fP]
-  [-Rl] [-Rk \fI<bmc key>\fP] [-H <hackname>] \fI<IP>\fP [\fI<IP>\fP]
+  [-Rl] [-Rk \fI<bmc key>\fP] [-H \fI<hackname>\fP]
+  [-M \fI<max oustanding msgs\fP>] \fI<IP>\fP [\fI<IP>\fP]
 .RE
 for a RMCP/RMCP+ LAN connection or
 .RS
@@ -456,6 +457,9 @@ available hacks are:
 .B rmcpp_integ_sik
 - For systems that use SIK instead of K(1) for integrity.
 .PD
+
+The -M option sets the maximum outstanding messages.  The default is
+2, ranges 1-63.
 
 Options enable and disable various automitic processing and are:
 .PD 0

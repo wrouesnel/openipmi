@@ -1668,8 +1668,8 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	}
 	cmd_msg.data = NULL;
 	cmd_msg.data_len = 0;
-	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				  handle_reservation, sdrs);
+	rv = ipmi_mc_send_command_sideeff(mc, sdrs->lun, &cmd_msg,
+					  handle_reservation, sdrs);
 	if (rv) {
 	    DEBUG_INFO(sdrs);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -2680,8 +2680,8 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
     cmd_msg.data_len = 0;
-    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-                              handle_write_reservation, sdrs);
+    rv = ipmi_mc_send_command_sideeff(mc, sdrs->lun, &cmd_msg,
+				      handle_write_reservation, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssdr.c(handle_sdr_clear): "
@@ -2781,8 +2781,8 @@ start_save(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
     cmd_msg.data_len = 0;
-    return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				handle_save_reservation, sdrs);
+    return ipmi_mc_send_command_sideeff(mc, sdrs->lun, &cmd_msg,
+					handle_save_reservation, sdrs);
 }
 
 static void

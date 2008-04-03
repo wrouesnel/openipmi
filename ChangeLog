@@ -5,6 +5,25 @@
 
 	* lib/fru_spd_decode.c: Made the initialization reentrant.
 
+	* lib/ipmi_lan.c: Use IPMI_CON_OPTION_LIST_END instead of "0".
+	Also add -M to the option list
+
+	* include/OpenIPMI/ipmi_conn.h, lib/ipmi_lan.c: Added a connection
+	option specifying that a message has side effects.  For messages
+	with side effects, increase the retry timeout to 5 seconds.  This
+	is for reservation messages; on a slow link a reservation would be
+	resent, then the first response would be received and the old
+	reservation was being returned.
+	
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a side-effect send
+	command function.
+	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: ditto
+
+	* lib/sel.c, lib/sdr.c: Switch over to using the side effect
+	functions for doing reservations.
+
+	* man/ipmi_cmdlang.7: Add the -M option.
+
 2008-03-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed a rather serious bug in event handling, in some
@@ -46,6 +65,7 @@
 	* lib/domain.c: Make the localonly option actually work.
 
 2007-10-16 Corey Minyard <cminyard@mvista.com>
+
 	* swig/python/openipmigui/gui_domainDialog.py: Insert the default
 	value into string and integer values, primarily so the "Max
 	Outstanding Msgs" field has a proper default value.

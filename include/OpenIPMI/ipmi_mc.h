@@ -132,7 +132,11 @@ int ipmi_mc_remove_fully_up_handler(ipmi_mc_t      *mc,
    response handler, it may contain anything the user likes.  Note
    that if the mc goes away between the time the command is sent and
    the response comes back, this callback WILL be called, but the MC
-   value will be NULL.  You must handle that. */
+   value will be NULL.  You must handle that.
+
+   The sideeff version is for commands that have side effects.  This
+   is primarily reserve commands, where if a link is slow a retransmit
+   can cause problems. */
 typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
 					   ipmi_msg_t *msg,
 					   void       *rsp_data);
@@ -141,6 +145,11 @@ int ipmi_mc_send_command(ipmi_mc_t                  *mc,
 			 const ipmi_msg_t           *cmd,
 			 ipmi_mc_response_handler_t rsp_handler,
 			 void                       *rsp_data);
+int ipmi_mc_send_command_sideeff(ipmi_mc_t                  *mc,
+				 unsigned int               lun,
+				 const ipmi_msg_t           *cmd,
+				 ipmi_mc_response_handler_t rsp_handler,
+				 void                       *rsp_data);
 
 /* Reset the MC, either a cold or warm reset depending on the type.
    Note that the effects of a reset are not defined by IPMI, so this

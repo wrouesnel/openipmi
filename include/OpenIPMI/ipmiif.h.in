@@ -293,7 +293,7 @@ int ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 				ipmi_domain_iterate_mcs_cb handler,
 				void                       *cb_data);
 
-/* Like ipmi_send_command, but sends it directly to the address
+/* Like ipmi_mc_send_command, but sends it directly to the address
    specified, not to an MC. */
 typedef int (*ipmi_addr_response_handler_t)(ipmi_domain_t *domain,
 					    ipmi_msgi_t   *rspi);
@@ -305,6 +305,14 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 		       ipmi_addr_response_handler_t rsp_handler,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2);
+int
+ipmi_send_command_addr_sideeff(ipmi_domain_t                *domain,
+			       const ipmi_addr_t            *addr,
+			       unsigned int                 addr_len,
+			       const ipmi_msg_t             *msg,
+			       ipmi_addr_response_handler_t rsp_handler,
+			       void                         *rsp_data1,
+			       void                         *rsp_data2);
 
 /* Rescan the entities for possible presence changes.  "force" causes
    a full rescan even if nothing on an entity has changed. */

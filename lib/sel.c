@@ -1110,8 +1110,8 @@ start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	cmd_msg.netfn = IPMI_STORAGE_NETFN;
 	cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
 	cmd_msg.data_len = 0;
-	rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg,
-				  sel_handle_reservation, elem);
+	rv = ipmi_mc_send_command_sideeff(mc, sel->lun, &cmd_msg,
+					  sel_handle_reservation, elem);
     } else {
 	/* Bypass the reservation, it's not supported. */
 	sel->reservation = 0;
@@ -1740,8 +1740,8 @@ send_reserve_sel_for_delete(sel_del_handler_data_t *data, ipmi_mc_t *mc)
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
     cmd_msg.data_len = 0;
-    rv = ipmi_mc_send_command(mc, data->lun,
-			      &cmd_msg, sel_reserved_for_delete, data);
+    rv = ipmi_mc_send_command_sideeff(mc, data->lun,
+				      &cmd_msg, sel_reserved_for_delete, data);
 
     return rv;
 }

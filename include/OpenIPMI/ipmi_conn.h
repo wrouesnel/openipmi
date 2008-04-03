@@ -175,6 +175,13 @@ typedef struct ipmi_con_option_s
    ival).  Default is enabled. */
 #define IPMI_CON_MSG_OPTION_CONF		2
 
+/* The command has side effects.  Handle this command
+   specially to avoid side effects.  Primarily used for reserve
+   commands, where on a slow link a command may be retransmitted
+   but the previous response is received.  If not implemented,
+   this is ignored.*/
+#define IPMI_CON_MSG_OPTION_SIDE_EFFECTS	3
+
 
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
