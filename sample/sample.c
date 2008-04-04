@@ -418,8 +418,21 @@ main(int argc, char *argv[])
     /* Override the default log handler (just to show how). */
     os_hnd->set_log_handler(os_hnd, my_vlog);
 
-    /* Initialize the OpenIPMI library. */
-    ipmi_init(os_hnd);
+    /* Initialize the OpenIPMI library.  Do a double one to look for
+       init/shutdown bugs. */
+    rv = ipmi_init(os_hnd);
+    if (rv) {
+	fprintf(stderr, "Error in ipmi initialization %d: %s\n",
+		curr_arg, strerror(rv));
+	exit(1);
+    }
+    ipmi_shutdown();
+    rv = ipmi_init(os_hnd);
+    if (rv) {
+	fprintf(stderr, "Error in ipmi initialization(2) %d: %s\n",
+		curr_arg, strerror(rv));
+	exit(1);
+    }
 
 #if 0
     /* If all you need is an SMI connection, this is all the code you

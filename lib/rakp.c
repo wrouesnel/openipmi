@@ -747,6 +747,23 @@ static ipmi_payload_t rakp_payload =
 { rakp_format_msg, rakp_get_recv_seq, rakp_handle_recv,
   rakp_handle_recv_async, rakp_get_msg_tag };
 
+void
+_ipmi_rakp_shutdown(void)
+{
+    ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4, NULL);
+    ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3, NULL);
+    ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_2, NULL);
+    ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1, NULL);
+#ifdef HAVE_OPENSSL
+    ipmi_rmcpp_register_authentication
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5, NULL);
+    ipmi_rmcpp_register_authentication
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1, NULL);
+#endif
+    ipmi_rmcpp_register_authentication
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE, NULL);
+}
+
 int
 _ipmi_rakp_init(void)
 {
@@ -762,32 +779,47 @@ _ipmi_rakp_init(void)
     rv = ipmi_rmcpp_register_authentication
 	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1,
 	 &rakp_hmac_sha1_auth);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
 
     rv = ipmi_rmcpp_register_authentication
 	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5,
 	 &rakp_hmac_md5_auth);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
 #endif
 
     rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1,
 				     &rakp_payload);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
+
     rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_2,
 				     &rakp_payload);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
+
     rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3,
 				     &rakp_payload);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
+
     rv = ipmi_rmcpp_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4,
 				     &rakp_payload);
-    if (rv)
+    if (rv) {
+	_ipmi_rakp_shutdown();
 	return rv;
+    }
 
     return 0;
 }

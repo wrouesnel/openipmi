@@ -224,3 +224,12 @@ _ipmi_md5_init(void)
 
     return 0;
 }
+
+void
+_ipmi_md5_shutdown(void)
+{
+#ifdef HAVE_OPENSSL
+    ipmi_rmcpp_register_integrity
+	(IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128, NULL);
+#endif
+}

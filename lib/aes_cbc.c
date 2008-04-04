@@ -260,3 +260,12 @@ _ipmi_aes_cbc_init(void)
 
     return 0;
 }
+
+void
+_ipmi_aes_cbc_shutdown(void)
+{
+#ifdef HAVE_OPENSSL
+    ipmi_rmcpp_register_confidentiality
+	(IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128, NULL);
+#endif
+}

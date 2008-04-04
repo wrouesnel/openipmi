@@ -1956,6 +1956,9 @@ _ipmi_fru_set_is_normal_fru(ipmi_fru_t *fru, int val)
 int
 _ipmi_fru_init(void)
 {
+    if (fru_decode_handlers)
+	return 0;
+
     fru_decode_handlers = locked_list_alloc(ipmi_get_global_os_handler());
     if (!fru_decode_handlers)
 	return ENOMEM;
@@ -1965,5 +1968,8 @@ _ipmi_fru_init(void)
 void
 _ipmi_fru_shutdown(void)
 {
-    locked_list_destroy(fru_decode_handlers);
+    if (fru_decode_handlers) {
+	locked_list_destroy(fru_decode_handlers);
+	fru_decode_handlers = NULL;
+    }
 }

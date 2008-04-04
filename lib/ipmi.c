@@ -919,6 +919,10 @@ void _ipmi_normal_fru_shutdown(void);
 void _ipmi_fru_spd_decoder_shutdown(void);
 int _ipmi_sol_init(void);
 
+void _ipmi_rakp_shutdown(void);
+void _ipmi_aes_cbc_shutdown(void);
+void _ipmi_hmac_shutdown(void);
+void _ipmi_md5_shutdown(void);
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_kontron_conn_shutdown(void);
@@ -1027,6 +1031,10 @@ ipmi_shutdown(void)
     if (! ipmi_initialized)
 	return;
 
+    _ipmi_rakp_shutdown();
+    _ipmi_aes_cbc_shutdown();
+    _ipmi_hmac_shutdown();
+    _ipmi_md5_shutdown();
     _ipmi_sol_shutdown();
     _ipmi_lan_shutdown();
 #ifdef HAVE_OPENIPMI_SMI

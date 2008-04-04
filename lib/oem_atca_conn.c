@@ -956,33 +956,54 @@ handle_intel_atca(ipmi_con_t *conn, void *cb_data)
     return 0;
 }
 
+static int atca_conn_initialized;
+
 int
 ipmi_oem_atca_conn_init(void)
 {
     int rv;
+
+    if (atca_conn_initialized)
+	return 0;
 
     rv = ipmi_create_global_lock(&fd_lock);
     if (rv)
 	return rv;
 
     rv = ipmi_register_conn_oem_check(atca_oem_check, NULL);
-    if (rv)
+    if (rv) {
+	ipmi_destroy_lock(fd_lock);
 	return rv;
+    }
 
     rv = ipmi_register_oem_conn_handler(0x000157, 0x0841,
 					handle_intel_atca, NULL);
-    if (rv)
+    if (rv) {
+	ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
+	ipmi_destroy_lock(fd_lock);
 	return rv;
+    }
 
     rv = ipmi_register_oem_conn_handler(0x000157, 0x080b,
 					handle_intel_atca, NULL);
-    if (rv)
+    if (rv) {
+	ipmi_deregister_oem_conn_handler(0x000157, 0x080b);
+	ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
+	ipmi_destroy_lock(fd_lock);
 	return rv;
+    }
 
     rv = ipmi_register_oem_conn_handler(0x000157, 0x080c,
 					handle_intel_atca, NULL);
-    if (rv)
+    if (rv) {
+	ipmi_deregister_oem_conn_handler(0x000157, 0x0841);
+	ipmi_deregister_oem_conn_handler(0x000157, 0x080b);
+	ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
+	ipmi_destroy_lock(fd_lock);
 	return rv;
+    }
+
+    atca_conn_initialized = 1;
 
     return 0;
 }
@@ -996,11 +1017,14 @@ ipmi_oem_atca_conn_shutdown(void)
 	close(fd_sock);
 	fd_sock = -1;
     }
-	
-    ipmi_destroy_lock(fd_lock);
-    fd_lock = NULL;
-    ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
-    ipmi_deregister_oem_conn_handler(0x000157, 0x0841);
-    ipmi_deregister_oem_conn_handler(0x000157, 0x080c);
-    ipmi_deregister_oem_conn_handler(0x000157, 0x080b);
+
+    if (atca_conn_initialized) {
+	ipmi_destroy_lock(fd_lock);
+	fd_lock = NULL;
+	ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
+	ipmi_deregister_oem_conn_handler(0x000157, 0x0841);
+	ipmi_deregister_oem_conn_handler(0x000157, 0x080c);
+	ipmi_deregister_oem_conn_handler(0x000157, 0x080b);
+	atca_conn_initialized = 0;
+    }
 }

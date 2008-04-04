@@ -226,6 +226,17 @@ static ipmi_rmcpp_integrity_t hmac_md5_integ =
 };
 #endif /* HAVE_OPENSSL */
 
+void
+_ipmi_hmac_shutdown(void)
+{
+#ifdef HAVE_OPENSSL
+    ipmi_rmcpp_register_integrity
+	(IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96, NULL);
+    ipmi_rmcpp_register_integrity
+	(IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128, NULL);
+#endif
+}
+
 int
 _ipmi_hmac_init(void)
 {
@@ -239,8 +250,10 @@ _ipmi_hmac_init(void)
 
     rv = ipmi_rmcpp_register_integrity
 	(IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128, &hmac_md5_integ);
-    if (rv)
+    if (rv) {
+	_ipmi_hmac_shutdown();
 	return rv;
+    }
 #endif
 
     return 0;

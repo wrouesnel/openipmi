@@ -4918,12 +4918,15 @@ int _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
 			       const char          **name,
 			       ipmi_fru_node_t     **node);
 
+static int atca_initialized;
+
 int
 ipmi_oem_atca_init(void)
 {
     int rv;
 
-    atca_register_fixups();
+    if (atca_initialized)
+	return 0;
 
     rv = ipmi_register_domain_oem_check(check_if_atca, NULL);
     if (rv)
@@ -4933,8 +4936,14 @@ ipmi_oem_atca_init(void)
 						     0xc0,
 						     _ipmi_atca_fru_get_mr_root,
 						     NULL);
-    if (rv)
+    if (rv) {
+	ipmi_deregister_domain_oem_check(check_if_atca, NULL);
         return rv;
+    }
+
+    atca_register_fixups();
+
+    atca_initialized = 1;
 
     return 0;
 }
@@ -4942,6 +4951,9 @@ ipmi_oem_atca_init(void)
 void
 ipmi_oem_atca_shutdown(void)
 {
-    ipmi_deregister_domain_oem_check(check_if_atca, NULL);
-    _ipmi_fru_deregister_multi_record_oem_handler(PICMG_MFG_ID, 0xc0);
+    if (atca_initialized) {
+	ipmi_deregister_domain_oem_check(check_if_atca, NULL);
+	_ipmi_fru_deregister_multi_record_oem_handler(PICMG_MFG_ID, 0xc0);
+	atca_initialized = 0;
+    }
 }

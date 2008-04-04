@@ -24,6 +24,21 @@
 
 	* man/ipmi_cmdlang.7: Add the -M option.
 
+	* lib/ipmi.c: Fix init/shutdown problems to allow init to be
+	called after a shutdown.
+	* lib/aes_cbc.c: ditto
+	* lib/hmac.c: ditto
+	* lib/md5.c: ditto
+	* lib/rakp.c: ditto
+	* lib/normal_fru.c: ditto
+	* lib/fru_spd_decode.c: ditto
+	* lib/fru.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_atca_conn.c: ditto
+
+	* sample/sample.c: Add test code for multiple init/shutdown.
+	
+
 2008-03-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed a rather serious bug in event handling, in some

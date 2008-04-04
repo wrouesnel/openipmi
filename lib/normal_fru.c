@@ -4859,10 +4859,15 @@ process_fru_info(ipmi_fru_t *fru)
  *
  ************************************************************************/
 
+static int fru_initialized;
+
 int
 _ipmi_normal_fru_init(void)
 {
     int rv;
+
+    if (fru_initialized)
+	return 0;
 
     fru_multi_record_oem_handlers = locked_list_alloc
 	(ipmi_get_global_os_handler());
@@ -4873,24 +4878,46 @@ _ipmi_normal_fru_init(void)
 						     0x00,
 						     std_get_mr_root,
 						     NULL);
-    if (rv)
+    if (rv) {
+	locked_list_destroy(fru_multi_record_oem_handlers);
+	fru_multi_record_oem_handlers = NULL;
 	return rv;
+    }
+
     rv = _ipmi_fru_register_multi_record_oem_handler(0,
 						     0x01,
 						     std_get_mr_root,
 						     NULL);
-    if (rv)
+    if (rv) {
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
+	locked_list_destroy(fru_multi_record_oem_handlers);
+	fru_multi_record_oem_handlers = NULL;
 	return rv;
+    }
+
     rv = _ipmi_fru_register_multi_record_oem_handler(0,
 						     0x02,
 						     std_get_mr_root,
 						     NULL);
-    if (rv)
+    if (rv) {
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x01);
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
+	locked_list_destroy(fru_multi_record_oem_handlers);
+	fru_multi_record_oem_handlers = NULL;
 	return rv;
+    }
 
     rv = _ipmi_fru_register_decoder(process_fru_info);
-    if (rv)
+    if (rv) {
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x02);
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x01);
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
+	locked_list_destroy(fru_multi_record_oem_handlers);
+	fru_multi_record_oem_handlers = NULL;
 	return rv;
+    }
+
+    fru_initialized = 1;
 
     return 0;
 }
@@ -4898,13 +4925,14 @@ _ipmi_normal_fru_init(void)
 void
 _ipmi_normal_fru_shutdown(void)
 {
-    _ipmi_fru_deregister_decoder(process_fru_info);
-    if (fru_multi_record_oem_handlers) {
+    if (fru_initialized) {
+	_ipmi_fru_deregister_decoder(process_fru_info);
 	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
 	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x01);
 	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x02);
 	locked_list_destroy(fru_multi_record_oem_handlers);
 	fru_multi_record_oem_handlers = NULL;
+	fru_initialized = 0;
     }
 }
 
