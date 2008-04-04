@@ -1941,6 +1941,31 @@ matching_domain_sysaddr(ipmi_domain_t *domain, const ipmi_addr_t *addr,
 }
 
 static int
+send_command_option(ipmi_domain_t           *domain,
+		    int                     conn,
+		    const ipmi_addr_t       *addr,
+		    unsigned int            addr_len,
+		    const ipmi_msg_t        *msg,
+		    const ipmi_con_option_t *options,
+		    ipmi_ll_rsp_handler_t   handler,
+		    void		    *handler_data)
+{
+    if (domain->conn[conn]->send_command_option)
+	return domain->conn[conn]->send_command_option(domain->conn[conn],
+						       addr, addr_len,
+						       msg,
+						       options,
+						       handler,
+						       handler_data);
+    else
+	return domain->conn[conn]->send_command(domain->conn[conn],
+						addr, addr_len,
+						msg,
+						handler,
+						handler_data);
+}
+
+static int
 send_command_addr(ipmi_domain_t                *domain,
 		  const ipmi_addr_t            *addr,
 		  unsigned int                 addr_len,
@@ -2066,12 +2091,8 @@ send_command_addr(ipmi_domain_t                *domain,
     rspi->data2 = nmsg;
     rspi->data3 = (void *) nmsg->seq;
     rspi->data4 = data4;
-    rv = domain->conn[u]->send_command_option(domain->conn[u],
-					      addr, addr_len,
-					      msg,
-					      options,
-					      handler,
-					      rspi);
+    rv = send_command_option(domain, u, addr, addr_len,
+			     msg, options, handler, rspi);
 
     if (rv) {
 	ipmi_free_msg_item(rspi);
@@ -2160,14 +2181,13 @@ reroute_cmds(ipmi_domain_t *domain, int old_con, int new_con)
 	    rspi->data2 = nmsg;
 	    rspi->data3 = (void *) nmsg->seq;
 	    rspi->data4 = (void *) domain->conn_seq[new_con];
-	    rv = domain->conn[new_con]->send_command_option
-		(domain->conn[new_con],
-		 &nmsg->rsp_item->addr,
-		 nmsg->rsp_item->addr_len,
-		 &nmsg->msg,
-		 options,
-		 ll_rsp_handler,
-		 rspi);
+	    rv = send_command_option(domain, new_con,
+				     &nmsg->rsp_item->addr,
+				     nmsg->rsp_item->addr_len,
+				     &nmsg->msg,
+				     options,
+				     ll_rsp_handler,
+				     rspi);
 	    if (rv) {
 		ipmi_free_msg_item(rspi);
 	    send_err:
