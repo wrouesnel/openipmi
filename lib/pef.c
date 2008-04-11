@@ -337,6 +337,8 @@ handle_pef_capabilities(ipmi_mc_t  *mc,
 
     if (pef->ready_cb)
 	pef->ready_cb(pef, rv, pef->ready_cb_data);
+
+    pef_put(pef);
 }
 
 static int
@@ -349,12 +351,15 @@ pef_start_capability_fetch(ipmi_pef_t *pef, ipmi_mc_t *mc)
     msg.cmd = IPMI_GET_PEF_CAPABILITIES_CMD;
     msg.data_len = 0;
     msg.data = NULL;
+    pef_get(pef);
     rv = ipmi_mc_send_command(mc, 0,
 			      &msg, handle_pef_capabilities, pef);
-    if (rv)
+    if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "pef_start_capability_fetch: could not send cmd: %x",
 		 rv);
+	pef_put(pef);
+    }
 
     return rv;
 }

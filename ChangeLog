@@ -1,3 +1,23 @@
+2008-04-10 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Don't mark a connection as started unless it
+	starts up completely.
+
+	* lib/ipmi.c: Fixed a log race that was caused by the shutdown
+	changes.
+
+	* lib/pet.c: Fix some refcounting problems, make sure the pet
+	object exists while callbacks are in progress.
+
+	* swig/OpenIPMI.i: Clean up refcount handling for PEF, PET, and
+	LANPARM objects to avoid race conditions and problems on errors.
+
+	* swig/perl/Makefile.am: Set the proper glib patch so that perl
+	can pick it up when running tests.
+
+	* lib/pef.c: Make sure the PEF object stays around during the
+	capabilities check.
+	
 2008-04-04 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: The send_command_option function of a connection

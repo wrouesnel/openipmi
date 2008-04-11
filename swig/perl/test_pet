@@ -63,7 +63,16 @@ sub get_errcount {
     sub domain_cb {
 	my $self = shift;
 	my $domain = shift;
+	my $rv;
 
+	$rv = $domain->remove_mc_update_handler($$self);
+	if ($rv) {
+	    print "Error removing event handler\n";
+	}
+	$rv = $domain->remove_connect_change_handler($$self);
+	if ($rv) {
+	    print "Error removing connect change handler\n";
+	}
 	$domain->close($$self);
     }
 
@@ -971,7 +980,7 @@ sub get_errcount {
 	$mcid = $pef->get_mc_id();
 	$rv = $mcid->to_mc($get);
 	if ($rv) {
-	    main::reg_err("Unable to convert mcid to md: $rv\n");
+	    main::reg_err("Unable to convert mcid to mc: $rv\n");
 	    $self->close();
 	    return;
 	}

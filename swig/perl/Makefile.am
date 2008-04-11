@@ -45,7 +45,7 @@ uninstall-local:
 	rm -f "$(DESTDIR)$(PERL_INSTALL_DIR)/OpenIPMI.pm"
 	-rmdir "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
 
-TESTS_ENVIRONMENT = LD_PRELOAD="$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/perl/OpenIPMI.so" PERLLIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
+TESTS_ENVIRONMENT = LD_PRELOAD="$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/perl/OpenIPMI.so" LD_LIBRARY_PATH=$(top_builddir)/glib/.libs PERLLIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
 TESTS = test_fru test_chan test_lanparm test_pet test_pef
 
 EXTRA_DIST = OpenIPMI_perl.c OpenIPMI_lang.i OpenIPMI.h \

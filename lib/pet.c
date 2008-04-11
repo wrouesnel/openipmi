@@ -213,10 +213,34 @@ internal_pet_destroy(ipmi_pet_t *pet)
 }
 
 static void
+pet_get_nolock(ipmi_pet_t *pet)
+{
+    pet->refcount++;
+}
+
+static void
 pet_get(ipmi_pet_t *pet)
 {
     pet_lock(pet);
-    pet->refcount++;
+    pet_get_nolock(pet);
+    pet_unlock(pet);
+}
+
+/* Be very careful, only call this when the refcount cannot go to zero. */
+static void
+pet_put_nolock(ipmi_pet_t *pet)
+{
+    pet->refcount--;
+}
+
+static void
+pet_put_locked(ipmi_pet_t *pet)
+{
+    pet->refcount--;
+    if (pet->refcount == 0) {
+	internal_pet_destroy(pet);
+	return;
+    }
     pet_unlock(pet);
 }
 
@@ -224,12 +248,7 @@ static void
 pet_put(ipmi_pet_t *pet)
 {
     pet_lock(pet);
-    pet->refcount--;
-    if (pet->refcount == 0) {
-	internal_pet_destroy(pet);
-	return;
-    }
-    pet_unlock(pet);
+    pet_put_locked(pet);
 }
 
 void
@@ -301,11 +320,6 @@ pet_op_done(ipmi_pet_t *pet)
 	    pet_lock(pet);
 	}
 
-	if (pet->destroyed) {
-	    internal_pet_destroy(pet);
-	    return;
-	}
-
 	/* Restart the timer */
 	timeout.tv_sec = PET_TIMEOUT_SEC;
 	timeout.tv_usec = 0;
@@ -315,7 +329,7 @@ pet_op_done(ipmi_pet_t *pet)
 
     }
 
-    pet_unlock(pet);
+    pet_put_locked(pet);
 }
 
 static void
@@ -350,7 +364,7 @@ lanparm_commited(ipmi_lanparm_t *lanparm,
 
     data[0] = 0; /* clear lock */
     rv = ipmi_lanparm_set_parm(pet->lanparm, 0, data, 1,
-			   lanparm_unlocked, pet);
+			       lanparm_unlocked, pet);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(lanparm_commited): error clearing lock: 0x%x", rv);
@@ -886,9 +900,11 @@ start_pet_setup(ipmi_mc_t  *mc,
 
     pet->pef_check_pos = 0;
     pet->in_progress++;
+    pet_get_nolock(pet);
     rv = ipmi_pef_alloc(mc, pef_alloced, pet, &pet->pef);
     if (rv) {
 	pet->in_progress--;
+	pet_put_nolock(pet);
 	ipmi_log(IPMI_LOG_WARNING,
 		 "start_pet_setup: Unable to allocate pef: 0x%x", rv);
 	goto out;
@@ -903,6 +919,7 @@ start_pet_setup(ipmi_mc_t  *mc,
 		 rv);
     } else {
 	pet->in_progress++;
+	pet_get_nolock(pet);
 	rv = ipmi_lanparm_get_parm(pet->lanparm,
 				   IPMI_LANPARM_DEST_TYPE,
 				   pet->lan_dest_sel,
@@ -911,6 +928,7 @@ start_pet_setup(ipmi_mc_t  *mc,
 				   pet);
 	if (rv) {
 	    pet->in_progress--;
+	    pet_put_nolock(pet);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "start_pet_setup: Unable to get dest type: 0x%x",
 		     rv);

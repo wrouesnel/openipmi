@@ -5170,8 +5170,6 @@ lan_start_con(ipmi_con_t *ipmi)
 	    ipmi_unlock(lan->ip_lock);
 	return 0;
     }
-    lan->started = 1;
-    ipmi_unlock(lan->ip_lock);
 
     /* Start the timer to audit the connections. */
     lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
@@ -5200,13 +5198,14 @@ lan_start_con(ipmi_con_t *ipmi)
 	goto out_err;
     }
 
-    for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	rv = send_auth_cap(ipmi, lan, i, 0);
-	if (rv)
-	    goto out_err;
-    }
+    for (i=0; i<lan->cparm.num_ip_addr; i++)
+	/* Ignore failures, this gets retried. */
+	send_auth_cap(ipmi, lan, i, 0);
+
+    lan->started = 1;
 
  out_err:
+    ipmi_unlock(lan->ip_lock);
     return rv;
 }
 

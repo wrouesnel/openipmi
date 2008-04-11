@@ -2360,6 +2360,7 @@ get_pef(ipmi_pef_t *pef, int err, void *cb_data)
     swig_ref    pef_ref;
 
     pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
+    ipmi_pef_ref(pef);
     swig_call_cb(cb, "got_pef_cb", "%p%d", &pef_ref, err);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -2402,10 +2403,10 @@ pef_set_parm(ipmi_pef_t *pef,
 }
 
 static void
-pef_get_config(ipmi_pef_t    *pef,
-		   int               err,
-		   ipmi_pef_config_t *config,
-		   void              *cb_data)
+pef_get_config(ipmi_pef_t        *pef,
+	       int               err,
+	       ipmi_pef_config_t *config,
+	       void              *cb_data)
 {
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
@@ -2461,12 +2462,11 @@ get_pet(ipmi_pet_t *pet, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    pet_ref;
 
-    if (cb) {
-	pet_ref = swig_make_ref_destruct(pet, ipmi_pet_t);
-	swig_call_cb(cb, "got_pet_cb", "%p%d", &pet_ref, err);
-	/* One-time call, get rid of the CB. */
-	deref_swig_cb_val(cb);
-    }
+    pet_ref = swig_make_ref_destruct(pet, ipmi_pet_t);
+    ipmi_pet_ref(pet);
+    swig_call_cb(cb, "got_pet_cb", "%p%d", &pet_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
     swig_free_ref(pet_ref);
 }
 
@@ -4443,6 +4443,7 @@ char *get_error_string(unsigned int val);
 	swig_cb_val      handler_val = NULL;
 	struct in_addr   ip;
 	unsigned char    mac[6];
+	ipmi_pet_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
         rv = parse_ip_addr(ip_addr, &ip);
@@ -4457,15 +4458,13 @@ char *get_error_string(unsigned int val);
 	    if (!valid_swig_cb(handler, got_pet_cb))
 		goto out_err;
 	    handler_val = ref_swig_cb(handler, got_pet_cb);
+	    done = get_pet;
 	}
-	ipmi_pet_ref(pet);
 	rv = ipmi_pet_create(self, connection, channel, ip, mac, eft_sel,
 			     policy_num, apt_sel, lan_dest_sel, get_pet,
 			     handler_val, &pet);
-	if (rv) {
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
-	    ipmi_pet_deref(pet);
-	}
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return pet;
@@ -6599,11 +6598,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    done = get_pef;
 	}
 	rv = ipmi_pef_alloc(self, done, handler_val, &pef);
-	if (rv)
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
-	else if (done)
-	    /* Only ref the value if we have a callback. */
-	    ipmi_pef_ref(pef);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return pef;
@@ -6643,6 +6639,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	swig_cb_val      handler_val = NULL;
 	struct in_addr   ip;
 	unsigned char    mac[6];
+	ipmi_pet_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
         rv = parse_ip_addr(ip_addr, &ip);
@@ -6657,14 +6654,13 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    if (!valid_swig_cb(handler, got_pet_cb))
 		goto out_err;
 	    handler_val = ref_swig_cb(handler, got_pet_cb);
+	    done = get_pet;
 	}
 	rv = ipmi_pet_create_mc(self, channel, ip, mac, eft_sel, policy_num,
-				apt_sel, lan_dest_sel, get_pet, handler_val,
+				apt_sel, lan_dest_sel, done, handler_val,
 				&pet);
-	if (rv)
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
-	else
-	    ipmi_pet_ref(pet);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return pet;

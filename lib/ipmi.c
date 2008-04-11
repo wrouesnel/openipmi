@@ -94,10 +94,18 @@ ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    if (ipmi_os_handler->vlog)
+    if (ipmi_os_handler && ipmi_os_handler->vlog)
 	ipmi_os_handler->vlog(ipmi_os_handler, log_type, format, ap);
-    else
+    else {
 	vfprintf(stderr, format, ap);
+	switch (log_type) {
+	case IPMI_LOG_DEBUG_START:
+	case IPMI_LOG_DEBUG_CONT:
+	    break;
+	default:
+	    fprintf(stderr, "\n");
+	}
+    }
     va_end(ap);
 }
 
