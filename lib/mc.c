@@ -373,10 +373,10 @@ struct ipmi_mc_s
     locked_list_t *removed_handlers;
 
     /* Call these when the MC changes from active to inactive. */
-    locked_list_t *active_handlers;
+    locked_list_t *active_handlers, *active_handlers_cl;
 
     /* Called after going active when the MC is fully up. */
-    locked_list_t *fully_up_handlers;
+    locked_list_t *fully_up_handlers, *fully_up_handlers_cl;
 
     /* Set if we are treating main SDRs like device SDRs. */
     int treat_main_as_device_sdrs;
@@ -486,6 +486,62 @@ mc_get_os_hnd(ipmi_mc_t *mc)
     return ipmi_domain_get_os_hnd(domain);
 }
 
+typedef struct fully_up_cl_info_s
+{
+    ipmi_mc_ptr_cb handler;
+    void           *handler_data;
+} fully_up_cl_info_t;
+
+static int
+iterate_fully_up_cl(void *cb_data, void *item1, void *item2)
+{
+    fully_up_cl_info_t     *info = cb_data;
+    ipmi_mc_fully_up_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+fully_up_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_mc_t *mc = cb_data;
+    fully_up_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(mc->fully_up_handlers_cl, iterate_fully_up_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct active_cl_info_s
+{
+    ipmi_mc_active_cb handler;
+    void              *handler_data;
+} active_cl_info_t;
+
+static int
+iterate_active_cl(void *cb_data, void *item1, void *item2)
+{
+    active_cl_info_t     *info = cb_data;
+    ipmi_mc_active_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+active_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_mc_t *mc = cb_data;
+    active_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(mc->active_handlers_cl, iterate_active_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 static int
 check_mc_destroy(ipmi_mc_t *mc)
 {
@@ -543,10 +599,18 @@ check_mc_destroy(ipmi_mc_t *mc)
 
 	if (mc->removed_handlers)
 	    locked_list_destroy(mc->removed_handlers);
-    	if (mc->active_handlers)
+    	if (mc->active_handlers) {
+	    locked_list_iterate(mc->active_handlers, active_cleanup, mc);
 	    locked_list_destroy(mc->active_handlers);
-    	if (mc->fully_up_handlers)
+	}
+    	if (mc->active_handlers_cl)
+	    locked_list_destroy(mc->active_handlers_cl);
+    	if (mc->fully_up_handlers) {
+	    locked_list_iterate(mc->fully_up_handlers, fully_up_cleanup, mc);
 	    locked_list_destroy(mc->fully_up_handlers);
+	}
+    	if (mc->fully_up_handlers_cl)
+	    locked_list_destroy(mc->fully_up_handlers_cl);
 	if (mc->sensors)
 	    ipmi_sensors_destroy(mc->sensors);
 	if (mc->controls)
@@ -608,8 +672,21 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 	rv = ENOMEM;
 	goto out_err;
     }
+
+    mc->active_handlers_cl = locked_list_alloc(os_hnd);
+    if (!mc->active_handlers_cl) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     mc->active_handlers = locked_list_alloc(os_hnd);
     if (!mc->active_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    mc->fully_up_handlers_cl = locked_list_alloc(os_hnd);
+    if (!mc->fully_up_handlers_cl) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -618,6 +695,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 	rv = ENOMEM;
 	goto out_err;
     }
+
     mc->sel = NULL;
     mc->sel_scan_interval = ipmi_domain_get_sel_rescan_time(domain);
 
@@ -3289,6 +3367,32 @@ ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
 }
 
 int
+ipmi_mc_add_active_handler_cl(ipmi_mc_t            *mc,
+			      ipmi_mc_active_cl_cb handler,
+			      void                 *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_add(mc->active_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_mc_remove_active_handler_cl(ipmi_mc_t            *mc,
+				 ipmi_mc_active_cl_cb handler,
+				 void                 *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_remove(mc->active_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
 ipmi_mc_is_active(ipmi_mc_t *mc)
 {
     return mc->active;
@@ -3339,6 +3443,32 @@ ipmi_mc_remove_fully_up_handler(ipmi_mc_t      *mc,
     CHECK_MC_LOCK(mc);
 
     if (locked_list_remove(mc->fully_up_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_mc_add_fully_up_handler_cl(ipmi_mc_t              *mc,
+				ipmi_mc_fully_up_cl_cb handler,
+				void                   *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_add(mc->fully_up_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_mc_remove_fully_up_handler_cl(ipmi_mc_t              *mc,
+				   ipmi_mc_fully_up_cl_cb handler,
+				   void                   *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (locked_list_remove(mc->fully_up_handlers_cl, handler, cb_data))
 	return 0;
     else
 	return EINVAL;

@@ -158,6 +158,12 @@ int ipmi_entity_info_add_update_handler(ipmi_entity_info_t    *ents,
 int ipmi_entity_info_remove_update_handler(ipmi_entity_info_t    *ent,
 					   ipmi_domain_entity_cb handler,
 					   void                  *cb_data);
+int ipmi_entity_info_add_update_handler_cl(ipmi_entity_info_t       *ents,
+					   ipmi_domain_entity_cl_cb handler,
+					   void                     *cb_data);
+int ipmi_entity_info_remove_update_handler_cl(ipmi_entity_info_t       *ent,
+					      ipmi_domain_entity_cl_cb handler,
+					      void                   *cb_data);
 
 /* Iterate over all the entities in the entity info. */
 void ipmi_entities_iterate_entities(ipmi_entity_info_t *ent,

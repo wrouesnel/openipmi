@@ -113,6 +113,15 @@ int ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
 int ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
 				  ipmi_mc_active_cb handler,
 				  void              *cb_data);
+typedef void (*ipmi_mc_active_cl_cb)(ipmi_mc_active_cb handler,
+				     void              *handler_data,
+				     void              *cb_data);
+int ipmi_mc_add_active_handler_cl(ipmi_mc_t            *mc,
+				  ipmi_mc_active_cl_cb handler,
+				  void                 *event_data);
+int ipmi_mc_remove_active_handler_cl(ipmi_mc_t            *mc,
+				     ipmi_mc_active_cl_cb handler,
+				     void                 *event_data);
 
 /* Used to tell when an MC goes "fully up" meaning that all its SDRs
    have been read, etc. */
@@ -122,6 +131,15 @@ int ipmi_mc_add_fully_up_handler(ipmi_mc_t      *mc,
 int ipmi_mc_remove_fully_up_handler(ipmi_mc_t      *mc,
 				    ipmi_mc_ptr_cb handler,
 				    void           *cb_data);
+typedef void (*ipmi_mc_fully_up_cl_cb)(ipmi_mc_ptr_cb handler,
+				       void           *handler_data,
+				       void           *cb_data);
+int ipmi_mc_add_fully_up_handler_cl(ipmi_mc_t              *mc,
+				    ipmi_mc_fully_up_cl_cb handler,
+				    void                   *event_data);
+int ipmi_mc_remove_fully_up_handler_cl(ipmi_mc_t              *mc,
+				       ipmi_mc_fully_up_cl_cb handler,
+				       void                  *event_data);
 
 /* Send the command in "msg" and register a handler to handle the
    response.  This will return without blocking; when the response

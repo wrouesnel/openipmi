@@ -465,6 +465,17 @@ domain_connect_change_handler(ipmi_domain_t *domain,
 }
 
 static void
+domain_connect_change_handler_cl(ipmi_domain_con_cb handler,
+				 void               *handler_data,
+				 void               *cb_data)
+{
+    if (handler != domain_connect_change_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 domain_iterate_connections_handler(ipmi_domain_t *domain, int conn,
 				   void *cb_data)
 {
@@ -491,6 +502,17 @@ domain_event_handler(ipmi_domain_t *domain, ipmi_event_t *event, void *cb_data)
 }
 
 static void
+domain_event_handler_cl(ipmi_event_handler_cb handler,
+			void                  *handler_data,
+			void                  *cb_data)
+{
+    if (handler != domain_event_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 domain_mc_updated_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 			  ipmi_mc_t *mc, void *cb_data)
 {
@@ -507,6 +529,17 @@ domain_mc_updated_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 }
 
 static void
+domain_mc_updated_handler_cl(ipmi_domain_mc_upd_cb handler,
+			     void                  *handler_data,
+			     void                  *cb_data)
+{
+    if (handler != domain_mc_updated_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 domain_entity_update_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 			      ipmi_entity_t *entity, void *cb_data)
 {
@@ -520,6 +553,17 @@ domain_entity_update_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 		 ipmi_update_e_string(op), &domain_ref, &entity_ref);
     swig_free_ref_check(domain_ref, ipmi_domain_t);
     swig_free_ref_check(entity_ref, ipmi_entity_t);
+}
+
+static void
+domain_entity_update_handler_cl(ipmi_domain_entity_cb handler,
+				void                  *handler_data,
+				void                  *cb_data)
+{
+    if (handler != domain_entity_update_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static void
@@ -748,6 +792,17 @@ entity_presence_handler(ipmi_entity_t *entity,
 }
 
 static void
+entity_presence_handler_cl(ipmi_entity_presence_change_cb handler,
+			   void                           *handler_data,
+			   void                           *cb_data)
+{
+    if (handler != entity_presence_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 entity_sensor_update_handler(enum ipmi_update_e op,
 			     ipmi_entity_t      *entity,
 			     ipmi_sensor_t      *sensor,
@@ -763,6 +818,17 @@ entity_sensor_update_handler(enum ipmi_update_e op,
 		 ipmi_update_e_string(op), &entity_ref, &sensor_ref);
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref_check(sensor_ref, ipmi_sensor_t);
+}
+
+static void
+entity_sensor_update_handler_cl(ipmi_entity_sensor_cb handler,
+				 void                  *handler_data,
+				 void                  *cb_data)
+{
+    if (handler != entity_sensor_update_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static void
@@ -784,6 +850,17 @@ entity_control_update_handler(enum ipmi_update_e op,
 }
 
 static void
+entity_control_update_handler_cl(ipmi_entity_control_cb handler,
+				 void                  *handler_data,
+				 void                  *cb_data)
+{
+    if (handler != entity_control_update_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 entity_fru_update_handler(enum ipmi_update_e op,
 			  ipmi_entity_t      *entity,
 			  void               *cb_data)
@@ -802,6 +879,17 @@ entity_fru_update_handler(enum ipmi_update_e op,
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(fru_ref);
+}
+
+static void
+entity_fru_update_handler_cl(ipmi_entity_fru_cb handler,
+			     void               *handler_data,
+			     void               *cb_data)
+{
+    if (handler != entity_fru_update_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static int
@@ -826,6 +914,17 @@ entity_hot_swap_handler(ipmi_entity_t             *entity,
     swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(event_ref);
     return rv;
+}
+
+static void
+entity_hot_swap_handler_cl(ipmi_entity_hot_swap_cb handler,
+			   void                    *handler_data,
+			   void                    *cb_data)
+{
+    if (handler != entity_hot_swap_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static void
@@ -917,6 +1016,17 @@ mc_active_handler(ipmi_mc_t  *mc,
 }
 
 static void
+mc_active_handler_cl(ipmi_mc_active_cb handler,
+		     void              *handler_data,
+		     void              *cb_data)
+{
+    if (handler != mc_active_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
 mc_fully_up_handler(ipmi_mc_t *mc, void *cb_data)
 {
     swig_cb_val cb = cb_data;
@@ -925,6 +1035,17 @@ mc_fully_up_handler(ipmi_mc_t *mc, void *cb_data)
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_fully_up_cb", "%p", &mc_ref);
     swig_free_ref_check(mc_ref, ipmi_mc_t);
+}
+
+static void
+mc_fully_up_handler_cl(ipmi_mc_ptr_cb handler,
+		       void           *handler_data,
+		       void           *cb_data)
+{
+    if (handler != mc_fully_up_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static void
@@ -1763,6 +1884,17 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     return rv;
 }
 
+static void
+sensor_threshold_event_handler_cl(ipmi_sensor_threshold_event_cb handler,
+				  void                           *handler_data,
+				  void                           *cb_data)
+{
+    if (handler != sensor_threshold_event_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
 static int
 sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      enum ipmi_event_dir_e dir,
@@ -1787,6 +1919,17 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     swig_free_ref(event_ref);
     return rv;
+}
+
+static void
+sensor_discrete_event_handler_cl(ipmi_sensor_discrete_event_cb handler,
+				 void                          *handler_data,
+				 void                          *cb_data)
+{
+    if (handler != sensor_discrete_event_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 /*
@@ -2262,6 +2405,17 @@ control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
     swig_free_ref_check(control_ref, ipmi_control_t);
     swig_free_ref(event_ref);
     return rv;
+}
+
+static void
+control_val_event_handler_cl(ipmi_control_val_event_cb handler,
+			     void                      *handler_data,
+			     void                      *cb_data)
+{
+    if (handler != control_val_event_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
 }
 
 static void
@@ -3105,6 +3259,13 @@ wait_io(int timeout)
  * to have to not be in an inline and done the hard way.
  */
 %{
+static void
+domain_cleanup_add(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_domain_add_connect_change_handler_cl
+	(domain, domain_connect_change_handler_cl, NULL);
+}
+
 static ipmi_domain_id_t *
 open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
 {
@@ -3204,7 +3365,10 @@ open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
 	    con[i]->close_connection(con[i]);
 	free(nd);
 	nd = NULL;
+	goto out;
     }
+
+    ipmi_domain_pointer_cb(*nd, domain_cleanup_add, NULL);
 
  out:
     for (i=0; i<set; i++)
@@ -3314,7 +3478,10 @@ open_domain2(char *name, argarray *args, swig_cb done, swig_cb up)
 	    con[i]->close_connection(con[i]);
 	free(nd);
 	nd = NULL;
+	goto out;
     }
+
+    ipmi_domain_pointer_cb(*nd, domain_cleanup_add, NULL);
 
  out:
     for (i=0; i<set; i++)
@@ -3406,7 +3573,10 @@ open_domain3(char *name, argarray *ioptions, iargarray *args,
 	    con[i]->close_connection(con[i]);
 	free(nd);
 	nd = NULL;
+	goto out;
     }
+
+    ipmi_domain_pointer_cb(*nd, domain_cleanup_add, NULL);
 
  out:
 
@@ -3900,6 +4070,7 @@ char *get_error_string(unsigned int val);
      */
     int add_connect_change_handler(swig_cb handler)
     {
+	/* cleanup handler is added when the domain is added. */
 	cb_add(domain, connect_change, conn_change_cb);
     }
 
@@ -4022,6 +4193,8 @@ char *get_error_string(unsigned int val);
      */
     int add_entity_update_handler(swig_cb handler)
     {
+	ipmi_domain_add_entity_update_handler_cl
+	    (self, domain_entity_update_handler_cl, NULL);
 	cb_add(domain, entity_update, entity_update_cb);
     }
 
@@ -4064,6 +4237,8 @@ char *get_error_string(unsigned int val);
      */
     int add_mc_update_handler(swig_cb handler)
     {
+	ipmi_domain_add_mc_updated_handler_cl
+	    (self, domain_mc_updated_handler_cl, NULL);
 	cb_add(domain, mc_updated, mc_update_cb);
     }
 
@@ -4249,6 +4424,8 @@ char *get_error_string(unsigned int val);
      */
     int add_event_handler(swig_cb handler)
     {
+	ipmi_domain_add_event_handler_cl
+	    (self, domain_event_handler_cl, NULL);
 	cb_add(domain, event, event_cb);
     }
 
@@ -4889,6 +5066,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_presence_handler(swig_cb handler)
     {
+	ipmi_entity_add_presence_handler_cl
+	    (self, entity_presence_handler_cl, NULL);
 	cb_add(entity, presence, entity_presence_cb);
     }
 
@@ -4909,6 +5088,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_sensor_update_handler(swig_cb handler)
     {
+	ipmi_entity_add_sensor_update_handler_cl
+	    (self, entity_sensor_update_handler_cl, NULL);
 	cb_add(entity, sensor_update, entity_sensor_update_cb);
     }
 
@@ -4929,6 +5110,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_control_update_handler(swig_cb handler)
     {
+	ipmi_entity_add_control_update_handler_cl
+	    (self, entity_control_update_handler_cl, NULL);
 	cb_add(entity, control_update, entity_control_update_cb);
     }
 
@@ -4949,6 +5132,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_fru_update_handler(swig_cb handler)
     {
+	ipmi_entity_add_fru_update_handler_cl
+	    (self, entity_fru_update_handler_cl, NULL);
 	cb_add(entity, fru_update, entity_fru_update_cb);
     }
 
@@ -5364,6 +5549,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_hot_swap_handler(swig_cb handler)
     {
+	ipmi_entity_add_hot_swap_handler_cl
+	    (self, entity_hot_swap_handler_cl, NULL);
 	cb_add(entity, hot_swap, entity_hot_swap_update_cb);
     }
 
@@ -5921,6 +6108,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_active_handler(swig_cb handler)
     {
+	ipmi_mc_add_active_handler_cl
+	    (self, mc_active_handler_cl, NULL);
 	cb_add(mc, active, mc_active_cb);
     }
 
@@ -5940,6 +6129,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_fully_up_handler(swig_cb handler)
     {
+	ipmi_mc_add_fully_up_handler_cl
+	    (self, mc_fully_up_handler_cl, NULL);
 	cb_add(mc, fully_up, mc_fully_up_cb);
     }
 
@@ -7148,8 +7339,12 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	if (ipmi_sensor_get_event_reading_type(self)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
+	    ipmi_sensor_add_threshold_event_handler_cl
+		(self, sensor_threshold_event_handler_cl, NULL);
 	    cb_add(sensor, threshold_event, threshold_event_cb);
 	} else {
+	    ipmi_sensor_add_discrete_event_handler_cl
+		(self, sensor_discrete_event_handler_cl, NULL);
 	    cb_add(sensor, discrete_event, discrete_event_cb);
 	}
     }
@@ -8498,6 +8693,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int add_event_handler(swig_cb handler)
     {
+	ipmi_control_add_val_event_handler_cl
+	    (self, control_val_event_handler_cl, NULL);
 	cb_add(control, val_event, control_event_val_cb);
     }
 

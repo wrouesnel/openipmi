@@ -240,7 +240,7 @@ struct ipmi_entity_s
     int            hot_swap_ind_inact;
 
     /* A handler for hot-swap. */
-    locked_list_t *hot_swap_handlers;
+    locked_list_t *hot_swap_handlers, *hot_swap_handlers_cl;
 
     ipmi_entity_info_t *ents;
 
@@ -251,11 +251,11 @@ struct ipmi_entity_s
     ipmi_entity_hot_swap_t hs_cb;
 
     /* Callbacks for various events on an entity. */
-    locked_list_t *fru_handlers;
-    locked_list_t *sensor_handlers;
-    locked_list_t *control_handlers;
-    locked_list_t *presence_handlers;
-    locked_list_t *fully_up_handlers;
+    locked_list_t *fru_handlers, *fru_handlers_cl;
+    locked_list_t *sensor_handlers, *sensor_handlers_cl;
+    locked_list_t *control_handlers, *control_handlers_cl;
+    locked_list_t *presence_handlers, *presence_handlers_cl;
+    locked_list_t *fully_up_handlers, *fully_up_handlers_cl;
 
     /* Used for SDR output (not currently supported). */
     entity_sdr_add_cb  sdr_gen_output;
@@ -297,6 +297,7 @@ struct ipmi_entity_s
 struct ipmi_entity_info_s
 {
     locked_list_t         *update_handlers;
+    locked_list_t         *update_cl_handlers;
     ipmi_domain_t         *domain;
     ipmi_domain_id_t      domain_id;
     locked_list_t         *entities;
@@ -433,6 +434,15 @@ ipmi_entity_info_alloc(ipmi_domain_t *domain, ipmi_entity_info_t **new_info)
 	return ENOMEM;
     }
 
+    ents->update_cl_handlers
+	= locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (! ents->update_cl_handlers) {
+	locked_list_destroy(ents->update_handlers);
+	locked_list_destroy(ents->entities);
+	ipmi_mem_free(ents);
+	return ENOMEM;
+    }
+
     *new_info = ents;
 
     return 0;
@@ -516,6 +526,174 @@ entity_destroy_timer(ent_timer_info_t *info)
     ipmi_mem_free(info);
 }
 
+typedef struct hot_swap_cl_info_s
+{
+    ipmi_entity_hot_swap_cb handler;
+    void                    *handler_data;
+} hot_swap_cl_info_t;
+
+static int
+iterate_hot_swap_cl(void *cb_data, void *item1, void *item2)
+{
+    hot_swap_cl_info_t  *info = cb_data;
+    ipmi_entity_hot_swap_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+hot_swap_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    hot_swap_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->hot_swap_handlers_cl, iterate_hot_swap_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct presence_cl_info_s
+{
+    ipmi_entity_presence_change_cb handler;
+    void                           *handler_data;
+} presence_cl_info_t;
+
+static int
+iterate_presence_cl(void *cb_data, void *item1, void *item2)
+{
+    presence_cl_info_t  *info = cb_data;
+    ipmi_entity_presence_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+presence_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    presence_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->presence_handlers_cl, iterate_presence_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct fully_up_cl_info_s
+{
+    ipmi_entity_ptr_cb handler;
+    void               *handler_data;
+} fully_up_cl_info_t;
+
+static int
+iterate_fully_up_cl(void *cb_data, void *item1, void *item2)
+{
+    fully_up_cl_info_t  *info = cb_data;
+    ipmi_entity_fully_up_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+fully_up_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    fully_up_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->fully_up_handlers_cl, iterate_fully_up_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct fru_cl_info_s
+{
+    ipmi_entity_fru_cb handler;
+    void                    *handler_data;
+} fru_cl_info_t;
+
+static int
+iterate_fru_cl(void *cb_data, void *item1, void *item2)
+{
+    fru_cl_info_t  *info = cb_data;
+    ipmi_entity_fru_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+fru_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    fru_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->fru_handlers_cl, iterate_fru_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct control_cl_info_s
+{
+    ipmi_entity_control_cb handler;
+    void                    *handler_data;
+} control_cl_info_t;
+
+static int
+iterate_control_cl(void *cb_data, void *item1, void *item2)
+{
+    control_cl_info_t  *info = cb_data;
+    ipmi_entity_control_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+control_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    control_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->control_handlers_cl, iterate_control_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct sensor_cl_info_s
+{
+    ipmi_entity_sensor_cb handler;
+    void                    *handler_data;
+} sensor_cl_info_t;
+
+static int
+iterate_sensor_cl(void *cb_data, void *item1, void *item2)
+{
+    sensor_cl_info_t  *info = cb_data;
+    ipmi_entity_sensor_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+sensor_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    sensor_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->sensor_handlers_cl, iterate_sensor_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 static int
 destroy_entity(void *cb_data, void *item1, void *item2)
 {
@@ -546,12 +724,24 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     locked_list_destroy(ent->child_entities);
     locked_list_destroy(ent->sensors);
     locked_list_destroy(ent->controls);
+    locked_list_iterate(ent->hot_swap_handlers, hot_swap_cleanup, ent);
     locked_list_destroy(ent->hot_swap_handlers);
+    locked_list_destroy(ent->hot_swap_handlers_cl);
+    locked_list_iterate(ent->presence_handlers, presence_cleanup, ent);
     locked_list_destroy(ent->presence_handlers);
+    locked_list_destroy(ent->presence_handlers_cl);
+    locked_list_iterate(ent->fully_up_handlers, fully_up_cleanup, ent);
     locked_list_destroy(ent->fully_up_handlers);
+    locked_list_destroy(ent->fully_up_handlers_cl);
+    locked_list_iterate(ent->fru_handlers, fru_cleanup, ent);
     locked_list_destroy(ent->fru_handlers);
+    locked_list_destroy(ent->fru_handlers_cl);
+    locked_list_iterate(ent->control_handlers, control_cleanup, ent);
     locked_list_destroy(ent->control_handlers);
+    locked_list_destroy(ent->control_handlers_cl);
+    locked_list_iterate(ent->sensor_handlers, sensor_cleanup, ent);
     locked_list_destroy(ent->sensor_handlers);
+    locked_list_destroy(ent->sensor_handlers_cl);
 
     ipmi_destroy_lock(ent->elock);
 
@@ -560,10 +750,42 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
+typedef struct entity_update_cl_info_s
+{
+    ipmi_domain_entity_cb handler;
+    void                  *handler_data;
+} entity_update_cl_info_t;
+
+
+static int
+iterate_entity_update_cl(void *cb_data, void *item1, void *item2)
+{
+    entity_update_cl_info_t  *info = cb_data;
+    ipmi_domain_entity_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+entity_update_cleanup(void *cb_data, void *item1, void *item2)
+{
+    entity_update_cl_info_t info;
+    ipmi_entity_info_t      *ents = cb_data;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ents->update_cl_handlers, iterate_entity_update_cl,
+			&info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 int
 ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 {
+    locked_list_iterate(ents->update_handlers, entity_update_cleanup, ents);
     locked_list_destroy(ents->update_handlers);
+    locked_list_destroy(ents->update_cl_handlers);
     locked_list_iterate(ents->entities, destroy_entity, NULL);
     locked_list_destroy(ents->entities);
     ipmi_mem_free(ents);
@@ -914,6 +1136,28 @@ ipmi_entity_info_remove_update_handler(ipmi_entity_info_t    *ents,
 	return EINVAL;
 }
 
+int
+ipmi_entity_info_add_update_handler_cl(ipmi_entity_info_t       *ents,
+				       ipmi_domain_entity_cl_cb handler,
+				       void                     *cb_data)
+{
+    if (locked_list_add(ents->update_cl_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_info_remove_update_handler_cl(ipmi_entity_info_t       *ents,
+					  ipmi_domain_entity_cl_cb handler,
+					  void                     *cb_data)
+{
+    if (locked_list_remove(ents->update_cl_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 typedef struct search_info_s {
     dlr_ref_t         key;
     ipmi_entity_t     *ent;
@@ -1061,14 +1305,23 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent->controls)
 	goto out_err;
 
+    ent->hot_swap_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->hot_swap_handlers_cl)
+	goto out_err;
     ent->hot_swap_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->hot_swap_handlers)
 	goto out_err;
 
+    ent->presence_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->presence_handlers_cl)
+	goto out_err;
     ent->presence_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->presence_handlers)
 	goto out_err;
 
+    ent->fully_up_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->fully_up_handlers_cl)
+	goto out_err;
     ent->fully_up_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->fully_up_handlers)
 	goto out_err;
@@ -1077,14 +1330,23 @@ entity_add(ipmi_entity_info_t *ents,
     if (! ent->waitq)
 	return ENOMEM;
 
+    ent->fru_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->fru_handlers_cl)
+	goto out_err;
     ent->fru_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->fru_handlers)
 	goto out_err;
 
+    ent->sensor_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->sensor_handlers_cl)
+	goto out_err;
     ent->sensor_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->sensor_handlers)
 	goto out_err;
 
+    ent->control_handlers_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->control_handlers_cl)
+	goto out_err;
     ent->control_handlers = locked_list_alloc(ent->os_hnd);
     if (!ent->control_handlers)
 	goto out_err;
@@ -1146,18 +1408,30 @@ entity_add(ipmi_entity_info_t *ents,
 	ipmi_destroy_lock(ent->elock);
     if (ent->presence_handlers)
 	locked_list_destroy(ent->presence_handlers);
+    if (ent->presence_handlers_cl)
+	locked_list_destroy(ent->presence_handlers_cl);
     if (ent->fully_up_handlers)
 	locked_list_destroy(ent->fully_up_handlers);
+    if (ent->fully_up_handlers_cl)
+	locked_list_destroy(ent->fully_up_handlers_cl);
     if (ent->waitq)
 	opq_destroy(ent->waitq);
     if (ent->fru_handlers)
 	locked_list_destroy(ent->fru_handlers);
+    if (ent->fru_handlers_cl)
+	locked_list_destroy(ent->fru_handlers_cl);
     if (ent->control_handlers)
 	locked_list_destroy(ent->control_handlers);
+    if (ent->control_handlers_cl)
+	locked_list_destroy(ent->control_handlers_cl);
     if (ent->sensor_handlers)
 	locked_list_destroy(ent->sensor_handlers);
+    if (ent->sensor_handlers_cl)
+	locked_list_destroy(ent->sensor_handlers_cl);
     if (ent->hot_swap_handlers)
 	locked_list_destroy(ent->hot_swap_handlers);
+    if (ent->hot_swap_handlers_cl)
+	locked_list_destroy(ent->hot_swap_handlers_cl);
     if (ent->controls)
 	locked_list_destroy(ent->controls);
     if (ent->sensors)
@@ -1406,6 +1680,30 @@ ipmi_entity_remove_presence_handler(ipmi_entity_t                  *ent,
 {
     CHECK_ENTITY_LOCK(ent);
     if (locked_list_remove(ent->presence_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_entity_add_presence_handler_cl(ipmi_entity_t              *ent,
+				    ipmi_entity_presence_cl_cb handler,
+				    void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->presence_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_presence_handler_cl(ipmi_entity_t              *ent,
+				       ipmi_entity_presence_cl_cb handler,
+				       void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->presence_handlers_cl, handler, cb_data))
 	return 0;
     else
 	return EINVAL;
@@ -2363,6 +2661,30 @@ ipmi_entity_remove_fully_up_handler(ipmi_entity_t      *ent,
 	return EINVAL;
 }
 
+int
+ipmi_entity_add_fully_up_handler_cl(ipmi_entity_t              *ent,
+				    ipmi_entity_fully_up_cl_cb handler,
+				    void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->fully_up_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_fully_up_handler_cl(ipmi_entity_t              *ent,
+				       ipmi_entity_fully_up_cl_cb handler,
+				       void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->fully_up_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 static int
 call_fully_up_handler(void *cb_data, void *item1, void *item2)
 {
@@ -2386,9 +2708,9 @@ call_fully_up_handlers(ipmi_entity_t *ent)
  **********************************************************************/
 
 int
-ipmi_entity_add_sensor_update_handler(ipmi_entity_t      *ent,
+ipmi_entity_add_sensor_update_handler(ipmi_entity_t         *ent,
 				      ipmi_entity_sensor_cb handler,
-				      void               *cb_data)
+				      void                  *cb_data)
 {
     CHECK_ENTITY_LOCK(ent);
     if (locked_list_add(ent->sensor_handlers, handler, cb_data))
@@ -2398,12 +2720,36 @@ ipmi_entity_add_sensor_update_handler(ipmi_entity_t      *ent,
 }
 
 int
-ipmi_entity_remove_sensor_update_handler(ipmi_entity_t      *ent,
+ipmi_entity_remove_sensor_update_handler(ipmi_entity_t         *ent,
 					 ipmi_entity_sensor_cb handler,
-					 void               *cb_data)
+					 void                  *cb_data)
 {
     CHECK_ENTITY_LOCK(ent);
     if (locked_list_remove(ent->sensor_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_entity_add_sensor_update_handler_cl(ipmi_entity_t            *ent,
+					 ipmi_entity_sensor_cl_cb handler,
+					 void                     *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->sensor_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_sensor_update_handler_cl(ipmi_entity_t            *ent,
+					    ipmi_entity_sensor_cl_cb handler,
+					    void                     *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->sensor_handlers_cl, handler, cb_data))
 	return 0;
     else
 	return EINVAL;
@@ -2465,6 +2811,30 @@ int
 ipmi_entity_remove_control_update_handler(ipmi_entity_t      *ent,
 					  ipmi_entity_control_cb handler,
 					  void               *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->control_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_entity_add_control_update_handler_cl(ipmi_entity_t             *ent,
+					  ipmi_entity_control_cl_cb handler,
+					  void                      *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->control_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_control_update_handler_cl(ipmi_entity_t             *ent,
+					     ipmi_entity_control_cl_cb handler,
+					     void                     *cb_data)
 {
     CHECK_ENTITY_LOCK(ent);
     if (locked_list_remove(ent->control_handlers, handler, cb_data))
@@ -5140,6 +5510,30 @@ ipmi_entity_remove_fru_update_handler(ipmi_entity_t      *ent,
 	return EINVAL;
 }
 
+int
+ipmi_entity_add_fru_update_handler_cl(ipmi_entity_t         *ent,
+				      ipmi_entity_fru_cl_cb handler,
+				      void                  *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->fru_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_fru_update_handler_cl(ipmi_entity_t         *ent,
+					 ipmi_entity_fru_cl_cb handler,
+					 void                  *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->fru_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 typedef struct fru_handler_s
 {
     enum ipmi_update_e op;
@@ -5363,6 +5757,30 @@ ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
 {
     CHECK_ENTITY_LOCK(ent);
     if (locked_list_remove(ent->hot_swap_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_entity_add_hot_swap_handler_cl(ipmi_entity_t              *ent,
+				    ipmi_entity_hot_swap_cl_cb handler,
+				    void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->hot_swap_handlers_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_hot_swap_handler_cl(ipmi_entity_t              *ent,
+				       ipmi_entity_hot_swap_cl_cb handler,
+				       void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->hot_swap_handlers_cl, handler, cb_data))
 	return 0;
     else
 	return EINVAL;

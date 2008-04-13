@@ -108,7 +108,7 @@ struct ipmi_control_s
 
     /* A list of handlers to call when an event for the control comes
        in. */
-    locked_list_t *handler_list;
+    locked_list_t *handler_list, *handler_list_cl;
 
     /* For light types. */
 #define MAX_LIGHTS 10
@@ -377,6 +377,36 @@ control_ok_to_use(ipmi_control_t *control)
 	    && !_ipmi_domain_in_shutdown(control->domain));
 }
 
+typedef struct handler_cl_info_s
+{
+    ipmi_control_val_event_cb handler;
+    void                      *handler_data;
+} handler_cl_info_t;
+
+static int
+iterate_handler_cl(void *cb_data, void *item1, void *item2)
+{
+    handler_cl_info_t            *info = cb_data;
+    ipmi_control_val_event_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+handler_list_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_control_t    *control = cb_data;
+    handler_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(control->handler_list_cl,
+			iterate_handler_cl,
+			&info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 static void
 control_final_destroy(ipmi_control_t *control)
 {
@@ -389,8 +419,14 @@ control_final_destroy(ipmi_control_t *control)
 	control->destroy_handler(control,
 				 control->destroy_handler_cb_data);
 
-    if (control->handler_list)
+    if (control->handler_list) {
+	locked_list_iterate(control->handler_list_cl, handler_list_cleanup,
+			    control);
 	locked_list_destroy(control->handler_list);
+    }
+
+    if (control->handler_list_cl)
+	locked_list_destroy(control->handler_list_cl);
 
     if (control->waitq)
 	opq_destroy(control->waitq);
@@ -863,9 +899,17 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	goto out_err;
     }
 
+    control->handler_list_cl = locked_list_alloc(os_hnd);
+    if (! control->handler_list_cl) {
+	opq_destroy(control->waitq);
+	err = ENOMEM;
+	goto out_err;
+    }
+
     control->handler_list = locked_list_alloc(os_hnd);
     if (! control->handler_list) {
 	opq_destroy(control->waitq);
+	locked_list_destroy(control->handler_list_cl);
 	err = ENOMEM;
 	goto out_err;
     }
@@ -875,6 +919,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	opq_destroy(control->waitq);
 	control->waitq = NULL;
 	locked_list_destroy(control->handler_list);
+	locked_list_destroy(control->handler_list_cl);
 	control->handler_list = NULL;
 	err = ENOMEM;
 	goto out_err;
@@ -1306,6 +1351,31 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
     CHECK_CONTROL_LOCK(control);
 
     if (! locked_list_remove(control->handler_list, handler, cb_data))
+	return ENOENT;
+
+    return 0;
+}
+
+int
+ipmi_control_add_val_event_handler_cl(ipmi_control_t            *control,
+				      ipmi_control_val_event_cl_cb handler,
+				      void                      *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (! locked_list_add(control->handler_list_cl, handler, cb_data))
+	return ENOMEM;
+
+    return 0;
+}
+
+int ipmi_control_remove_val_event_handler_cl(ipmi_control_t         *control,
+					  ipmi_control_val_event_cl_cb handler,
+					  void                      *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (! locked_list_remove(control->handler_list_cl, handler, cb_data))
 	return ENOENT;
 
     return 0;

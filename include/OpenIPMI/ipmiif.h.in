@@ -256,6 +256,17 @@ int ipmi_domain_add_connect_change_handler(ipmi_domain_t      *domain,
 int ipmi_domain_remove_connect_change_handler(ipmi_domain_t      *domain,
 					      ipmi_domain_con_cb handler,
 					      void               *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_domain_con_cl_cb)(ipmi_domain_con_cb handler,
+				      void               *handler_val,
+				      void               *cb_data);
+int ipmi_domain_add_connect_change_handler_cl(ipmi_domain_t         *domain,
+					      ipmi_domain_con_cl_cb handler,
+					      void                  *cb_data);
+int ipmi_domain_remove_connect_change_handler_cl(ipmi_domain_t         *domain,
+						 ipmi_domain_con_cl_cb handler,
+						 void                  *cb_data);
 
 /* Scan a set of addresses on the bmc for mcs.  This can be used by OEM
    code to add an MC if it senses that one has become present. */
@@ -278,9 +289,20 @@ typedef void (*ipmi_domain_mc_upd_cb)(enum ipmi_update_e op,
 int ipmi_domain_add_mc_updated_handler(ipmi_domain_t         *domain,
 				       ipmi_domain_mc_upd_cb handler,
 				       void                  *cb_data);
-int ipmi_domain_remove_mc_updated_handler(ipmi_domain_t        *domain,
+int ipmi_domain_remove_mc_updated_handler(ipmi_domain_t         *domain,
 					  ipmi_domain_mc_upd_cb handler,
 					  void                  *cb_data);
+/* Called for each handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_domain_mc_upd_cl_cb)(ipmi_domain_mc_upd_cb handler,
+					 void                  *handler_data,
+					 void                  *cb_data);
+int ipmi_domain_add_mc_updated_handler_cl(ipmi_domain_t            *domain,
+					  ipmi_domain_mc_upd_cl_cb handler,
+					  void                     *cb_data);
+int ipmi_domain_remove_mc_updated_handler_cl(ipmi_domain_t            *domain,
+					     ipmi_domain_mc_upd_cl_cb handler,
+					     void                    *cb_data);
 
 /* Iterate over all the mc's that the given domain represents. */
 typedef void (*ipmi_domain_iterate_mcs_cb)(ipmi_domain_t *domain,
@@ -359,6 +381,17 @@ int ipmi_domain_add_event_handler(ipmi_domain_t           *domain,
 int ipmi_domain_remove_event_handler(ipmi_domain_t           *domain,
 				     ipmi_event_handler_cb   handler,
 				     void                    *event_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_event_handler_cl_cb)(ipmi_event_handler_cb handler,
+					 void                  *handler_data,
+					 void                  *cb_data);
+int ipmi_domain_add_event_handler_cl(ipmi_domain_t            *domain,
+				     ipmi_event_handler_cl_cb handler,
+				     void                     *event_data);
+int ipmi_domain_remove_event_handler_cl(ipmi_domain_t            *domain,
+					ipmi_event_handler_cl_cb handler,
+					void                     *event_data);
 
 /* Globally enable or disable events on the domain's interfaces. */
 int ipmi_domain_enable_events(ipmi_domain_t *domain);
@@ -419,6 +452,17 @@ int ipmi_domain_add_entity_update_handler(ipmi_domain_t         *domain,
 int ipmi_domain_remove_entity_update_handler(ipmi_domain_t         *domain,
 					     ipmi_domain_entity_cb handler,
 					     void                  *cb_data);
+/* Called for each handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_domain_entity_cl_cb)(ipmi_domain_entity_cb handler,
+					 void                  *handler_data,
+					 void                  *cb_data);
+int ipmi_domain_add_entity_update_handler_cl(ipmi_domain_t            *domain,
+					     ipmi_domain_entity_cl_cb handler,
+					     void                    *cb_data);
+int ipmi_domain_remove_entity_update_handler_cl(ipmi_domain_t          *domain,
+					     ipmi_domain_entity_cl_cb handler,
+					     void                    *cb_data);
 
 /* Iterate over all the entities in the domain, calling the given
    function with each entity.  The entities will not change while this
@@ -738,6 +782,18 @@ int ipmi_entity_remove_presence_handler
 (ipmi_entity_t                  *ent,
  ipmi_entity_presence_change_cb handler,
  void                           *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_presence_cl_cb)
+       (ipmi_entity_presence_change_cb handler,
+	void                           *handler_data,
+	void                           *cb_data);
+int ipmi_entity_add_presence_handler_cl(ipmi_entity_t              *entity,
+					ipmi_entity_presence_cl_cb handler,
+					void                      *event_data);
+int ipmi_entity_remove_presence_handler_cl(ipmi_entity_t              *entity,
+					   ipmi_entity_presence_cl_cb handler,
+					   void                   *event_data);
 
 /* Detect if the presence of an entity has changed.  If "force" is zero,
    then it will only do this if OpenIPMI has some reason to think the
@@ -751,8 +807,19 @@ int ipmi_entity_add_fully_up_handler(ipmi_entity_t      *ent,
 				     ipmi_entity_ptr_cb handler,
 				     void               *cb_data);
 int ipmi_entity_remove_fully_up_handler(ipmi_entity_t      *ent,
-					    ipmi_entity_ptr_cb handler,
-					    void               *cb_data);
+					ipmi_entity_ptr_cb handler,
+					void               *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_fully_up_cl_cb)(ipmi_entity_ptr_cb handler,
+					   void               *handler_data,
+					   void               *cb_data);
+int ipmi_entity_add_fully_up_handler_cl(ipmi_entity_t              *entity,
+					ipmi_entity_fully_up_cl_cb handler,
+					void                      *event_data);
+int ipmi_entity_remove_fully_up_handler_cl(ipmi_entity_t              *entity,
+					   ipmi_entity_fully_up_cl_cb handler,
+					   void                   *event_data);
 
 /* Type of entities.  Note that you will never see EAR and DREAR
    entities, so don't worry about those. */
@@ -879,6 +946,17 @@ int ipmi_entity_add_fru_update_handler(ipmi_entity_t     *ent,
 int ipmi_entity_remove_fru_update_handler(ipmi_entity_t     *ent,
 					  ipmi_entity_fru_cb handler,
 					  void              *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_fru_cl_cb)(ipmi_entity_fru_cb handler,
+				      void               *handler_data,
+				      void               *cb_data);
+int ipmi_entity_add_fru_update_handler_cl(ipmi_entity_t         *entity,
+					  ipmi_entity_fru_cl_cb handler,
+					  void                  *event_data);
+int ipmi_entity_remove_fru_update_handler_cl(ipmi_entity_t         *entity,
+					     ipmi_entity_fru_cl_cb handler,
+					     void                 *event_data);
 
 /* Register a handler that will be called when a sensor that monitors
    this entity is added, deleted, or modified.  If you call this in
@@ -895,6 +973,18 @@ int ipmi_entity_add_sensor_update_handler(ipmi_entity_t         *ent,
 int ipmi_entity_remove_sensor_update_handler(ipmi_entity_t         *ent,
 					     ipmi_entity_sensor_cb handler,
 					     void                  *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_sensor_cl_cb)(ipmi_entity_sensor_cb handler,
+					 void                  *handler_data,
+					 void                  *cb_data);
+int ipmi_entity_add_sensor_update_handler_cl(ipmi_entity_t            *entity,
+					     ipmi_entity_sensor_cl_cb handler,
+					     void                 *event_data);
+int ipmi_entity_remove_sensor_update_handler_cl
+(ipmi_entity_t            *entity,
+ ipmi_entity_sensor_cl_cb handler,
+ void                     *event_data);
 
 /* Register a handler that will be called when an control on this
    entity is added, deleted, or modified.  If you call this in the
@@ -911,6 +1001,18 @@ int ipmi_entity_add_control_update_handler(ipmi_entity_t          *ent,
 int ipmi_entity_remove_control_update_handler(ipmi_entity_t          *ent,
 					      ipmi_entity_control_cb handler,
 					      void                   *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_control_cl_cb)(ipmi_entity_control_cb handler,
+					  void                   *handler_data,
+					  void                   *cb_data);
+int ipmi_entity_add_control_update_handler_cl(ipmi_entity_t            *entity,
+					     ipmi_entity_control_cl_cb handler,
+					     void                 *event_data);
+int ipmi_entity_remove_control_update_handler_cl
+(ipmi_entity_t             *entity,
+ ipmi_entity_control_cl_cb handler,
+ void                      *event_data);
 
 /* Hot-swap is done on entities.  We have a hot-swap model defined
    here that controls basic hot-swap operation on an entity. */
@@ -987,6 +1089,17 @@ int ipmi_entity_add_hot_swap_handler(ipmi_entity_t           *ent,
 int ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
 					ipmi_entity_hot_swap_cb handler,
 					void                    *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_hot_swap_cl_cb)(ipmi_entity_hot_swap_cb handler,
+					   void                  *handler_data,
+					   void                  *cb_data);
+int ipmi_entity_add_hot_swap_handler_cl(ipmi_entity_t              *entity,
+					ipmi_entity_hot_swap_cl_cb handler,
+					void                      *event_data);
+int ipmi_entity_remove_hot_swap_handler_cl(ipmi_entity_t              *entity,
+					   ipmi_entity_hot_swap_cl_cb handler,
+					   void                   *event_data);
 
 /* Get the current hot-swap state. */
 typedef void (*ipmi_entity_hot_swap_state_cb)(ipmi_entity_t             *ent,
@@ -1123,6 +1236,20 @@ int ipmi_sensor_remove_threshold_event_handler(
     ipmi_sensor_t                  *sensor,
     ipmi_sensor_threshold_event_cb handler,
     void                           *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_sensor_threshold_event_cl_cb)
+       (ipmi_sensor_threshold_event_cb handler,
+	void                           *handler_data,
+	void                           *cb_data);
+int ipmi_sensor_add_threshold_event_handler_cl
+(ipmi_sensor_t                     *sensor,
+ ipmi_sensor_threshold_event_cl_cb handler,
+ void                              *event_data);
+int ipmi_sensor_remove_threshold_event_handler_cl
+(ipmi_sensor_t                     *sensor,
+ ipmi_sensor_threshold_event_cl_cb handler,
+ void                              *event_data);
 
 /* Register a handler to be called for incoming events on the
    sensor. This call allows multiple handlers to be added to a sensor.
@@ -1142,6 +1269,20 @@ int ipmi_sensor_remove_discrete_event_handler(
     ipmi_sensor_t                 *sensor,
     ipmi_sensor_discrete_event_cb handler,
     void                          *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_sensor_discrete_event_cl_cb)
+       (ipmi_sensor_discrete_event_cb handler,
+	void                          *handler_data,
+	void                          *cb_data);
+int ipmi_sensor_add_discrete_event_handler_cl
+(ipmi_sensor_t                    *sensor,
+ ipmi_sensor_discrete_event_cl_cb handler,
+ void                             *event_data);
+int ipmi_sensor_remove_discrete_event_handler_cl
+(ipmi_sensor_t                    *sensor,
+ ipmi_sensor_discrete_event_cl_cb handler,
+ void                             *event_data);
 
 /* The event state is which events are set and cleared for the given
    sensor.  Events are enumerated for threshold events and numbered
@@ -1650,6 +1791,20 @@ int ipmi_control_add_val_event_handler(ipmi_control_t            *control,
 int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
 					  ipmi_control_val_event_cb handler,
 					  void                      *cb_data);
+/* Called for updated handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_control_val_event_cl_cb)
+       (ipmi_control_val_event_cb handler,
+	void                           *handler_data,
+	void                           *cb_data);
+int ipmi_control_add_val_event_handler_cl
+(ipmi_control_t               *control,
+ ipmi_control_val_event_cl_cb handler,
+ void                         *event_data);
+int ipmi_control_remove_val_event_handler_cl
+(ipmi_control_t               *control,
+ ipmi_control_val_event_cl_cb handler,
+ void                         *event_data);
 
 /* For LIGHT types.  */
 

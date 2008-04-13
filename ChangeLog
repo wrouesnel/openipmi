@@ -1,3 +1,28 @@
+2008-04-12 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_mc.h: Added
+	handlers that can be called when a registered handlers is removed
+	(cleaned up) automatically (usually when an object is destroyed).
+	This sounds kind of weird, perhaps, but object referenced as
+	callback data can be refcounted by perl and Python (and maybe
+	other things).  If an object gets destroyed, there was no easy way
+	(besides keeping a list yourself and watching for object
+	destruction) to detect this.  To avoid burdening the user with
+	having to watch that stuff, provide an easy way for them to know
+	when a callback handler is automatically removed.
+	
+	* include/OpenIPMI/internal/ipmi_entity.h: Added helper functions
+	for the callback cleanup.
+
+	* lib/control.c, lib/domain.c, lib/entity.c, lib/mc.c,
+	lib/sensor.c: Actually implement the callback cleanup handlers.
+
+	* swig/OpenIPMI.i: Use the callback cleanup handlers to clean
+	things up properly and avoid memory leaks.
+
+	* swig/perl/test_pet: Remove the now-unneeded cleanup of the
+	update handlers.
+
 2008-04-10 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Don't mark a connection as started unless it

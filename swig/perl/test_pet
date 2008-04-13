@@ -65,14 +65,6 @@ sub get_errcount {
 	my $domain = shift;
 	my $rv;
 
-	$rv = $domain->remove_mc_update_handler($$self);
-	if ($rv) {
-	    print "Error removing event handler\n";
-	}
-	$rv = $domain->remove_connect_change_handler($$self);
-	if ($rv) {
-	    print "Error removing connect change handler\n";
-	}
 	$domain->close($$self);
     }
 
