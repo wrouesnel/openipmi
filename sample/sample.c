@@ -214,14 +214,14 @@ traverse_fru_node_tree(int indent, ipmi_fru_node_t *node)
 	case IPMI_FRU_DATA_BINARY:
 	    printf("(binary)");
 	    for (j=0; j<data_len; j++)
-		printf(" %2.2x", data[i]);
+		printf(" %2.2x", data[j]);
 	    printf("\n");
 	    break;
 
 	case IPMI_FRU_DATA_UNICODE:
 	    printf("(unicode)");
 	    for (j=0; j<data_len; j++)
-		printf(" %2.2x", data[i]);
+		printf(" %2.2x", data[j]);
 	    printf("\n");
 	    break;
 
