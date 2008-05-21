@@ -1,3 +1,17 @@
+2008-05-21 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Don't remove everything from the IPMB scan if
+	all the get channel commands fail.  There may still be something
+	on IPMB 0.
+
+	* lib/domain.c: Fix an overflow problem dealing with IPMB
+	addresses.  If the IPMB ignores list covered all addresses, the
+	scan code would go into an infinite loop.
+
+	* lib/domain.c, include/OpenIPMI/ipmi_mc.h: Cleaned up the
+	defaulting of the channel to IPMB, including using defines instead
+	of constants.
+
 2008-04-21 Corey Minyard <cminyard@mvista.com>
 
 	* sample/sample.c: Fixed some array index errors that Nancy

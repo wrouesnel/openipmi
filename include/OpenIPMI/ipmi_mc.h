@@ -361,6 +361,9 @@ void ipmi_channel_info_free(ipmi_channel_info_t *info);
 int ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
 				  unsigned int        *channel);
 
+/* IANA-assigned number for IPMI, used for some defaults */
+#define IPMI_ENTERPRISE_NUMBER		0x001bf2
+
 #define IPMI_CHANNEL_MEDIUM_IPMB	1
 #define IPMI_CHANNEL_MEDIUM_ICMB_V10	2
 #define IPMI_CHANNEL_MEDIUM_ICMB_V09	3

@@ -262,6 +262,7 @@ struct ipmi_domain_s
     mc_ipmb_scan_info_t *bus_scans_running;
 
     ipmi_chan_info_t chan[MAX_IPMI_USED_CHANNELS];
+    char             chan_set[MAX_IPMI_USED_CHANNELS];
     unsigned char    msg_int_type;
     unsigned char    event_msg_int_type;
 
@@ -2690,22 +2691,28 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (rv)
 	goto out_err;
 
+    rv = ENOSYS; /* Return err if no scans done */
+
     /* Skip addresses we must ignore. */
-    while ((in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
-	   && (ipmb->slave_addr <= end_addr))
-    {
+    while (in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr)) {
+	/* ipmb->slave_addr is 8 bits, so we can't do a <= comparison as it
+	   will overflow after 254. */
+	if (ipmb->slave_addr == end_addr)
+	    goto out_err;
 	ipmb->slave_addr += 2;
     }
-    rv = ENOSYS; /* Return err if no scans done */
-    while ((rv) && (ipmb->slave_addr <= end_addr)) {
+    while (rv) {
 	rv = ipmi_send_command_addr(domain,
 				    &info->addr,
 				    info->addr_len,
 				    &(info->msg),
 				    devid_bc_rsp_handler,
 				    info, NULL);
-	if (rv)
+	if (rv) {
+	    if (ipmb->slave_addr == end_addr)
+		goto out_err;
 	    ipmb->slave_addr += 2;
+	}
     }
 
     if (rv)
@@ -4439,18 +4446,22 @@ con_up_complete(ipmi_domain_t *domain)
 	return;
 
     /* This is an unusual looking piece of code, but is required for
-       systems that do not have an IPMB.  If they don't have an IPMB,
-       then we won't scan them and thus won't find anything.  So we
-       force scanning just the BMC if no IPMBs are present. */
+       systems that do not implement the get channel command.  For
+       those, it is required that channel 0 be an IPMB channel.
+       Basically, if all of the channel info commands failed, set
+       channel 0 to IPMB. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
-	if (domain->chan[i].medium == 1)
+	if (domain->chan_set[i])
 	    break;
     }
     if (i == MAX_IPMI_USED_CHANNELS) {
-	domain->chan[0].medium = 1;
-	/* If these fail it's really no big deal. */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, 0x1e);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x22, 0xfe);
+	domain->chan[0].medium = IPMI_CHANNEL_MEDIUM_IPMB;
+	domain->chan[0].xmit_support = 1;
+	domain->chan[0].recv_lun = 0;
+	domain->chan[0].protocol = IPMI_CHANNEL_PROTOCOL_IPMB;
+	domain->chan[0].session_support = IPMI_CHANNEL_SESSION_LESS;
+	domain->chan[0].vendor_id = IPMI_ENTERPRISE_NUMBER;
+	domain->chan[0].aux_info = 0;
     }
 
     domain->connection_up = 1;
@@ -4514,6 +4525,8 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 	memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
 	/* Keep going, there may be more channels. */
     } else {
+	domain->chan_set[curr] = 1;
+
         /* Get the info from the channel info response. */
         domain->chan[curr].medium = rsp->data[2] & 0x7f;
 	domain->chan[curr].xmit_support = rsp->data[2] >> 7;
@@ -4587,13 +4600,15 @@ get_channels(ipmi_domain_t *domain)
 	/* Get the channel info record. */
 	rv = ipmi_get_sdr_by_type(domain->main_sdrs, 0x14, &sdr);
 	if (rv) {
+	    domain->chan_set[0] = 1;
+
 	    /* Add a dummy channel zero and finish. */
-	    domain->chan[0].medium = 1; /* IPMB */
+	    domain->chan[0].medium = IPMI_CHANNEL_MEDIUM_IPMB;
 	    domain->chan[0].xmit_support = 1;
 	    domain->chan[0].recv_lun = 0;
-	    domain->chan[0].protocol = 1; /* IPMB */
-	    domain->chan[0].session_support = 0; /* Session-less */
-	    domain->chan[0].vendor_id = 0x001bf2;
+	    domain->chan[0].protocol = IPMI_CHANNEL_PROTOCOL_IPMB;
+	    domain->chan[0].session_support = IPMI_CHANNEL_SESSION_LESS;
+	    domain->chan[0].vendor_id = IPMI_ENTERPRISE_NUMBER;
 	    domain->chan[0].aux_info = 0;
 	    domain->msg_int_type = 0xff;
 	    domain->event_msg_int_type = 0xff;
@@ -4607,12 +4622,14 @@ get_channels(ipmi_domain_t *domain)
 		int protocol = sdr.data[i] & 0xf;
 		
 		if (protocol != 0) {
-		    domain->chan[i].medium = 1; /* IPMB */
+		    domain->chan_set[i] = 1;
+
+		    domain->chan[i].medium = IPMI_CHANNEL_MEDIUM_IPMB;
 		    domain->chan[i].xmit_support = 1;
 		    domain->chan[i].recv_lun = 0;
 		    domain->chan[i].protocol = protocol;
-		    domain->chan[i].session_support = 0; /* Session-less */
-		    domain->chan[i].vendor_id = 0x001bf2;
+		    domain->chan[i].session_support= IPMI_CHANNEL_SESSION_LESS;
+		    domain->chan[i].vendor_id = IPMI_ENTERPRISE_NUMBER;
 		    domain->chan[i].aux_info = 0;
 		}
 	    }
