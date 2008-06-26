@@ -1,3 +1,7 @@
+2008-06-26 Corey Minyard <cminyard@mvista.com>
+
+	* lib/strings.c: Fix a typo noticed by Nancy Nichols.
+
 2008-05-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Don't remove everything from the IPMB scan if
@@ -11,6 +15,8 @@
 	* lib/domain.c, include/OpenIPMI/ipmi_mc.h: Cleaned up the
 	defaulting of the channel to IPMB, including using defines instead
 	of constants.
+
+	* configure.in: Move to version 2.0.15.
 
 2008-04-21 Corey Minyard <cminyard@mvista.com>
 

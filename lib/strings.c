@@ -457,7 +457,7 @@ static char *event_reading_states[256][16] =
     { "limit not exceeded", "limit exceeded" },
     { "performance met", "performance lags" },
     { "transition to ok",
-      "transition to non-cricital from ok",
+      "transition to non-critical from ok",
       "transition to critical from ok",
       "transition to non-recoverable from less severe",
       "transition to non-critical from more severe",
