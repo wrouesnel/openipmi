@@ -2,6 +2,8 @@
 
 	* lib/strings.c: Fix a typo noticed by Nancy Nichols.
 
+	* configure.in: Fixed the dia test to work with 3-level version.
+
 2008-05-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Don't remove everything from the IPMB scan if

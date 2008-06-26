@@ -348,7 +348,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
     if (addr2.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	addr2.addr_type = IPMI_IPMB_ADDR_TYPE;
 
-    /* Validate that this response if for this command. */
+    /* Validate that this response is for this command. */
     if (((orig_msg->netfn | 1) != msg->netfn)
 	|| (orig_msg->cmd != msg->cmd)
 	|| (! ipmi_addr_equal(&addr2, orig_addr_len, addr, addr_len)))
