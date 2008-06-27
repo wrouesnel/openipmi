@@ -4,6 +4,14 @@
 
 	* configure.in: Fixed the dia test to work with 3-level version.
 
+	* lib/hmac.c: A variable in the SHA1 init function was declared
+	static instead of const.  This means that in a multi-threaded
+	program, it is possibly (though quite unlikely) that the data
+	could get corrupted.
+
+	* swig/python/openipmiguid/gui_domainDialog.py: Improve the error
+	handling to make it easier to track down problems.
+
 2008-05-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Don't remove everything from the IPMB scan if

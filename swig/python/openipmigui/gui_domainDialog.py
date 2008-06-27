@@ -186,9 +186,10 @@ class ConnTypeInfo(Tix.Frame):
                 continue
             rv = args.set_val(idx, None, val);
             if (rv != 0):
-                self.errstr.SetError("Error setting field " + f[1] + ": "
-                                     + OpenIPMI.get_error_string(rv))
-                raise Exception()
+                err = ("Error setting field " + f[1] + ": "
+                       + OpenIPMI.get_error_string(rv))
+                self.errstr.SetError(err)
+                raise Exception(err)
             pass
         return args
 
@@ -329,8 +330,16 @@ class OpenDomainDialog(Tix.Toplevel):
                 args.append(arg);
                 pass
             pass
-        except:
+        except Exception, e:
             self.status.SetError("Error handling connection arguments")
+            import sys, traceback
+            t, v, b = sys.exc_info()
+            bl = traceback.format_tb(b)
+            b = ""
+            for x in bl:
+                b += "\n" + x
+            self.mainhandler.log("EINF", "Connection Argument Handling error: "
+                                 + str(t) + ":" + str(v) + ":" + b)
             return
         domain_id = OpenIPMI.open_domain3(name, [], args, None, None)
         if (domain_id == None):

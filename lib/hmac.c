@@ -54,9 +54,9 @@ hmac_sha1_init(ipmi_con_t       *ipmi,
 	       ipmi_rmcpp_auth_t *ainfo,
 	       void             **integ_data)
 {
-    hmac_info_t          *info;
-    static unsigned char *k;
-    unsigned int         klen;
+    hmac_info_t         *info;
+    const unsigned char *k;
+    unsigned int        klen;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
