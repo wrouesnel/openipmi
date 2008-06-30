@@ -94,7 +94,7 @@ hmac_md5_init(ipmi_con_t       *ipmi,
     if (!info)
 	return ENOMEM;
 
-    if (ipmi_rmcpp_auth_get_sik_len(ainfo) < 20)
+    if (ipmi_rmcpp_auth_get_sik_len(ainfo) < 16)
 	return EINVAL;
 
     k = ipmi_rmcpp_auth_get_sik(ainfo, &klen);
