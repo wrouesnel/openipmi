@@ -1,3 +1,9 @@
+2008-06-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/hmac.c: Someone named "Sia" reported on Sourceforge that
+	OpenIPMI was using the wrong key for HMAC-MD5-128.  And they were
+	right.  Problem is now fixed.
+
 2008-06-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/strings.c: Fix a typo noticed by Nancy Nichols.
