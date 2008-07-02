@@ -420,8 +420,10 @@ os_handler_waiter_wait(os_handler_waiter_t *waiter, struct timeval *timeout)
 
 	    rv = os_hnd->cond_timedwait(os_hnd, waiter->cond,
 					waiter->lock, timeout);
-
-	    /* single_thread_use_count is decremented by the waker. */
+	    /* single_thread_use_count is decremented by the waker
+	       unless it failes to receive the wakeup. */
+	    if (rv)
+		factory->single_thread_use_count--;
 	}
 	os_hnd->unlock(os_hnd, waiter->lock);
     } else {
