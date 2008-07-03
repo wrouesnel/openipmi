@@ -516,7 +516,7 @@ static char *sensor_states[256][16] =
     },
     { /* 0x07 */
 	"IERR",
-	"Termal Trip",
+	"Thermal Trip",
 	"FRB1/BIST failure",
 	"FRB2/Hand in POST failure",
 	"FRB3/Processor startup/initialization failure",

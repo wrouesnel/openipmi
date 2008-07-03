@@ -3,6 +3,8 @@
 	* utils/os_handler.c: Fixed a messed up refcount when a waiter
 	times out.
 
+	* lib/strings.c: Fixed another typo noticed by Nancy Nichols.
+
 2008-06-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/hmac.c: Someone named "Sia" reported on Sourceforge that
