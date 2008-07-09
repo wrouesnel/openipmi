@@ -346,11 +346,11 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 	len += 6;
 	pos[0] = msg->rq_addr;
 	pos[1] = ((msg->netfn | 1) << 2) | msg->rq_lun;
-	pos[2] = ipmb_checksum(pos, 2, 0);
+	pos[2] = -ipmb_checksum(pos, 2, 0);
 	pos[3] = msg->rs_addr;
 	pos[4] = (msg->rq_seq << 2) | msg->rs_lun;
 	pos[5] = msg->cmd;
-	pos[len] = ipmb_checksum(pos+3, len-3, 0);
+	pos[len] = -ipmb_checksum(pos+3, len-3, 0);
 	len++;
     }
 
