@@ -1,3 +1,7 @@
+2008-07-14 Corey Minyard <cminyard@mvista.com>
+
+	* unix/selector.c: Fixed handling of waking up threads.
+
 2008-07-02 Corey Minyard <cminyard@mvista.com>
 
 	* utils/os_handler.c: Fixed a messed up refcount when a waiter

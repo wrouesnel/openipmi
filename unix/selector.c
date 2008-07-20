@@ -132,6 +132,10 @@ typedef struct sel_wait_list_s
     /* The thread to wake up. */
     long            thread_id;
 
+    /* How to wake it. */
+    sel_send_sig_cb send_sig;
+    void            *send_sig_cb_data;
+
     /* This is the memory used to hold the timeout for select
        operation. */
     volatile struct timeval *timeout;
@@ -164,10 +168,6 @@ struct selector_s
     os_hnd_lock_t *timer_lock;
     int           have_timer_lock;
 
-    /* The timeout */
-    sel_send_sig_cb send_sig;
-    void            *send_sig_cb_data;
-
     /* Handlers to allow other code to work with the select. */
     ipmi_sel_add_read_fds_cb   add_read;
     ipmi_sel_check_read_fds_cb check_read;
@@ -198,14 +198,12 @@ wake_sel_thread(selector_t *sel)
 {
     sel_wait_list_t *item;
 
-    if (sel->send_sig) {
-	item = sel->wait_list.next;
-	while (item != &sel->wait_list) {
-	    item->timeout->tv_sec = 0;
-	    item->timeout->tv_usec = 0;
-	    sel->send_sig(item->thread_id, sel->send_sig_cb_data);
-	    item = item->next;
-	}
+    item = sel->wait_list.next;
+    while (item != &sel->wait_list) {
+	item->timeout->tv_sec = 0;
+	item->timeout->tv_usec = 0;
+	item->send_sig(item->thread_id, item->send_sig_cb_data);
+	item = item->next;
     }
 }
 
@@ -214,10 +212,14 @@ wake_sel_thread(selector_t *sel)
    list. */
 static void
 add_sel_wait_list(selector_t *sel, sel_wait_list_t *item,
+		  sel_send_sig_cb send_sig,
+		  void            *cb_data,
 		  long thread_id, volatile struct timeval *timeout)
 {
     item->thread_id = thread_id;
     item->timeout = timeout;
+    item->send_sig = send_sig;
+    item->send_sig_cb_data = cb_data;
     item->next = sel->wait_list.next;
     item->prev = &sel->wait_list;
     sel->wait_list.next->prev = item;
@@ -471,12 +473,10 @@ sel_start_timer(sel_timer_t    *timer,
     theap_add(&timer->val.sel->timer_heap, timer);
     timer->val.in_heap = 1;
 
-    if (timer->val.sel->send_sig
-	&& (top != theap_get_top(&timer->val.sel->timer_heap)))
-    {
+    if (top != theap_get_top(&timer->val.sel->timer_heap))
 	/* If the top value changed, restart the waiting thread. */
 	wake_sel_thread(timer->val.sel);
-    }
+
     if (sel->have_timer_lock)
 	sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
     return 0;
@@ -501,12 +501,10 @@ sel_stop_timer(sel_timer_t *timer)
     theap_remove(&timer->val.sel->timer_heap, timer);
     timer->val.in_heap = 0;
 
-    if (timer->val.sel->send_sig
-	&& (top != theap_get_top(&timer->val.sel->timer_heap)))
-    {
+    if (top != theap_get_top(&timer->val.sel->timer_heap))
 	/* If the top value changed, restart the waiting thread. */
 	wake_sel_thread(timer->val.sel);
-    }
+
     if (sel->have_timer_lock)
 	sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
 
@@ -733,7 +731,8 @@ sel_select(selector_t      *sel,
 	if (cmp_timeval((struct timeval *)(&loc_timeout), timeout) >= 0)
 	    memcpy(&loc_timeout, timeout, sizeof(loc_timeout));
     }
-    add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
+    add_sel_wait_list(sel, &wait_entry, send_sig, cb_data, thread_id,
+		      &loc_timeout);
     if (sel->have_timer_lock)
 	sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
 
@@ -764,7 +763,8 @@ sel_select_loop(selector_t      *sel,
 	if (sel->have_timer_lock)
 	    sel->os_hnd->lock(sel->os_hnd, sel->timer_lock);
     	process_timers(sel, &loc_timeout);
-	add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
+	add_sel_wait_list(sel, &wait_entry, send_sig, cb_data, thread_id,
+			  &loc_timeout);
 	if (sel->have_timer_lock)
 	    sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
 	
