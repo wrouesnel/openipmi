@@ -285,7 +285,10 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	    && (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 		 && (tmsg[3] == 0x20))
 		|| ((! (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		    && (tmsg[3] == ipmi->ipmb_addr[chan]))))
+		    && ((tmsg[3] == ipmi->ipmb_addr[chan])
+			/* Some systems don't swap rq and rs addresses :( */
+			|| ((tmsg[3] == 0x81)
+			    && (tmsg[0] == ipmi->ipmb_addr[chan]))))))
 	{
 	    /* In some cases, a message from the IPMB looks like it came
 	       from the BMC itself, IMHO a misinterpretation of the
@@ -309,7 +312,10 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	    if (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 		 && (tmsg[3] == 0x20))
 		|| ((!(ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		    && (tmsg[3] == ipmi->ipmb_addr[chan])))
+		    && ((tmsg[3] == ipmi->ipmb_addr[chan])
+			/* Some systems don't swap rq and rs addresses :( */
+			|| ((tmsg[3] == 0x81)
+			    && (tmsg[0] == ipmi->ipmb_addr[chan])))))
 	    {
 		ipmi_system_interface_addr_t *si_addr
 		    = (ipmi_system_interface_addr_t *) addr;

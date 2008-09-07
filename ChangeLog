@@ -1,3 +1,8 @@
+2008-09-05 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_payload.c: Work around a bug in some systems that
+	switch the request and response address in IPMI LAN messages.
+
 2008-07-14 Corey Minyard <cminyard@mvista.com>
 
 	* unix/selector.c: Fixed handling of waking up threads.
