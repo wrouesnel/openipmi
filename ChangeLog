@@ -1,3 +1,11 @@
+2008-09-07 Corey Minyard <cminyard@mvista.com>
+
+	* unix/selector.c: Fixed a problem with a missing NULL check
+	on sending a signal.
+
+	* sample/Makefile.am, sample/waiter_sample.c: Add a sample that
+	does waiting using the OS handler waiter.
+
 2008-09-05 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_payload.c: Work around a bug in some systems that

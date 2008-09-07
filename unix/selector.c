@@ -202,7 +202,8 @@ wake_sel_thread(selector_t *sel)
     while (item != &sel->wait_list) {
 	item->timeout->tv_sec = 0;
 	item->timeout->tv_usec = 0;
-	item->send_sig(item->thread_id, item->send_sig_cb_data);
+	if (item->send_sig)
+	    item->send_sig(item->thread_id, item->send_sig_cb_data);
 	item = item->next;
     }
 }
