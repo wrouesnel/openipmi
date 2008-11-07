@@ -1349,13 +1349,13 @@ static ipmi_lock_t *lan_list_lock = NULL;
 static lan_link_t lan_list[LAN_HASH_SIZE];
 static lan_link_t lan_ip_list[LAN_HASH_SIZE];
 
-static int
+static unsigned int
 hash_lan(const ipmi_con_t *ipmi)
 {
-    int idx;
+    unsigned int idx;
 
     idx = (((unsigned long) ipmi)
-	   >> (sizeof(unsigned long) >> LAN_HASH_SHIFT));
+	   >> (sizeof(unsigned long) + LAN_HASH_SHIFT));
     idx %= LAN_HASH_SIZE;
     return idx;
 }
@@ -1392,7 +1392,7 @@ hash_lan_addr(const struct sockaddr *addr)
 static void
 lan_add_con(lan_data_t *lan)
 {
-    int          idx;
+    unsigned int idx;
     lan_link_t   *head;
     unsigned int i;
 
@@ -1441,8 +1441,8 @@ lan_remove_con_nolock(lan_data_t *lan)
 static lan_data_t *
 lan_find_con(ipmi_con_t *ipmi)
 {
-    int        idx;
-    lan_link_t *l;
+    unsigned int idx;
+    lan_link_t   *l;
 
     ipmi_lock(lan_list_lock);
     idx = hash_lan(ipmi);
@@ -5292,9 +5292,9 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 static lan_data_t *
 find_matching_lan(lan_conn_parms_t *cparm)
 {
-    lan_link_t *l;
-    lan_data_t *lan;
-    int        idx;
+    lan_link_t   *l;
+    lan_data_t   *lan;
+    unsigned int idx;
 
     /* Look in the first IP addresses list. */
     idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_addr);
@@ -5807,7 +5807,7 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
     lan_link_t   *l;
     lan_data_t   *lan;
     unsigned int i;
-    int          idx;
+    unsigned int idx;
     lan_do_evt_t *found = NULL;
     lan_do_evt_t *next = NULL;
 

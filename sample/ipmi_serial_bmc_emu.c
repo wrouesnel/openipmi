@@ -89,6 +89,11 @@ struct oem_handler {
     void (*init)(struct msg_info *mi);
 };
 
+#define EVENT_BUFFER_GLOBAL_ENABLE	(1 << 2)
+#define EVENT_LOG_GLOBAL_ENABLE		(1 << 3)
+#define SUPPORTED_GLOBAL_ENABLES	(EVENT_BUFFER_GLOBAL_ENABLE | \
+					 EVENT_LOG_GLOBAL_ENABLE)
+
 struct msg_info {
     /* General info, set by main code, not formatters. */
     void          *info;
@@ -109,6 +114,7 @@ struct msg_info {
     int           do_attn;
     unsigned char attn_chars[8];
     int           attn_chars_len;
+    char          global_enables;
 
     /* Info from the recv message. */
     unsigned char netfn;
@@ -795,6 +801,8 @@ socket_send(const unsigned char *data, unsigned int len, struct msg_info *mi)
 #define IPMI_APP_NETFN	6
 #define IPMI_GET_DEV_ID_CMD	0x01
 #define IPMI_GET_DEVICE_GUID_CMD 0x08
+#define IPMI_SET_BMC_GLOBAL_ENABLES_CMD	0x2e
+#define IPMI_GET_BMC_GLOBAL_ENABLES_CMD	0x2f
 #define IPMI_GET_MSG_FLAGS_CMD	0x31
 #define IPMI_GET_MSG_CMD	0x33
 #define IPMI_SEND_MSG_CMD	0x34
@@ -909,6 +917,8 @@ handle_msg(const unsigned char *msg, unsigned int len, struct msg_info *mi)
 	case IPMI_GET_MSG_FLAGS_CMD:
 	    rsp[0] = 0;
 	    rsp[1] = 0;
+	    if (mi->event_q)
+		rsp[1] |= 2;
 	    if (mi->ipmb_q)
 		rsp[1] |= 1;
 	    rsp_len = 2;
@@ -957,6 +967,31 @@ handle_msg(const unsigned char *msg, unsigned int len, struct msg_info *mi)
 	    handle_ipmb_msg(msg+p, len, &nmi, mi);
 	    rsp[0] = 0;
 	    rsp_len = 1;
+	    break;
+
+	case IPMI_SET_BMC_GLOBAL_ENABLES_CMD:
+	    if (len < 1) {
+		rsp[0] = 0xcc;
+		rsp_len = 1;
+		break;
+	    }
+
+	    if ((msg[0] & ~SUPPORTED_GLOBAL_ENABLES) != 0) {
+		rsp[0] = 0xcc;
+		rsp_len = 1;
+		break;
+	    }
+
+	    mi->global_enables = msg[0];
+
+	    rsp[0] = 0;
+	    rsp_len = 1;
+	    break;
+
+	case IPMI_GET_BMC_GLOBAL_ENABLES_CMD:
+	    rsp[0] = 0;
+	    rsp[1] = mi->global_enables;
+	    rsp_len = 2;
 	    break;
 
 	case IPMI_READ_EVENT_MSG_CMD:
