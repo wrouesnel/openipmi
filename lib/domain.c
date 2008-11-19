@@ -2659,7 +2659,9 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (channel > MAX_IPMI_USED_CHANNELS)
 	return EINVAL;
 
-    if (domain->chan[channel].medium != 1) /* Make sure it is IPMB */
+    if ((domain->chan[channel].medium != 1)
+	&& !(start_addr == 0x20 || end_addr == 0x20))
+	/* Make sure it is IPMB, or the BMC address. */
 	return ENOSYS;
 
     info = ipmi_mem_alloc(sizeof(*info));

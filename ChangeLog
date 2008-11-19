@@ -1,3 +1,10 @@
+2008-11-19 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Allow scanning IPMB address 0x20 even if the the
+	channel medium is not IPMB.  This helps fake out things where
+	there is no IPMB channel but an MC at 0x20 is still reported
+	in the SDRs.
+
 2008-11-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fix some bugs notices by Stephane Blain
