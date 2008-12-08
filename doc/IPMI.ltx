@@ -399,7 +399,7 @@ OpenIPMI takes care of detecting the entities in the system and
 reporting them to you.  You may register to be told when entities are
 added or removed from the local database.  Note that an entity may be
 in the \acs{SDR}s but not physically present in the system; the
-reporting from only gives the existance in the \acs{SDR}s, not
+reporting from OpenIPMI only gives the existance in the \acs{SDR}s, not
 physical presence in the system.  Physical presence it handled through
 a separate interface.
 
@@ -407,10 +407,10 @@ The user must know about two other OpenIPMI concepts: connections and
 domains.  A connection provides the interface to the \acs{IPMI}
 system.  In essence, it is the \ac{BMC} connection.  You must allocate
 one or more connections and create a domain with them.  OpenIPMI
-supports multple connections to a domain in some cases, but currently
+supports multiple connections to a domain in some cases, but currently
 it requires some \acs{OEM} support for this.  A domain represents a
 set of devices on a bus (like \ac{IPMB}) whose entities will be
-unique.  For instance, a chassis with a lot of cards plugged could be
+unique.  For instance, a chassis with a lot of cards plugged in could be
 a domain, each card could be an entity and then create it's own
 sub-entities, but they will be designed so the entity id's don't
 collide.
@@ -423,7 +423,7 @@ Though the user doesn't have know the inner details of \acs{IPMI} addressing
 and messaging, they do need to know about entities and sensors.
 OpenIPMI mainly focuses on representing the entities and sensors in
 convenient ways.  The user still needs to understand the capabilities of
-sensors, how the sensors advertise those capabilties, and the things
+sensors, how the sensors advertise those capabilities, and the things
 that can be done to the sensors.
 
 You may register with an entity to be told when its physical presence
@@ -576,7 +576,7 @@ OS handler may implement their own conventions for these numbers.  This
 provides a way for OpenIPMI to register to receive input from devices.
 
 \item[Timers]
-OpenIPMI times everthing (as it should), thus it needs timers.
+OpenIPMI times everything (as it should), thus it needs timers.
 
 \item[Locks] OpenIPMI does not require locks, you may leave the
 operations NULL and they won't be used.  However, if you are doing
@@ -770,7 +770,7 @@ that take ids that do this for you (such as
 functions, and a few others); these are provided for your convenience.
 Almost all sensor, control, and entity functions that you would
 generally call asynchronously support these \verb=ipmi_xxx_id=
-function.  The operation is exactly the same as the same operation
+functions.  The operation is exactly the same as the same operation
 without the \verb=_id=, it simply takes the id instead of the direct
 pointer.  See the \verb=ipmiif.h= include file to see if the function
 you desire exists.
@@ -865,13 +865,13 @@ check_if_my_entity_present(my_data_t *data)
 Most of the data about the various OpenIPMI objects is static, so you
 can pre-collect the information about the objects in the callback
 where there existance is reported.  Some local information, such as
-entity presence, whether and MC is active, and entity hot-swap state
+entity presence, whether a MC is active, and entity hot-swap state
 is dynamic, but the vast majority of information is not.  So, it is
 recommended that you collect all the static information that you need
 from an object when it is reported to you.
 
-Many operation require a message to the remote system; the ones that
-take callbacks.  For these operation, functions that directly take the
+Many operations require a message to the remote system; the ones that
+take callbacks.  For these operations, functions that directly take the
 id are available.
 
 Use of the id-base functions is recommended.  The entity presence code
@@ -1053,7 +1053,7 @@ required by telephony specs.  They are simple on/off devices.
 Displays are two-dimensional arrays of characters.  OpenIPMI allows you
 to change individual characters at will.
 
-Alarms are bells, whistles, gongs, or anything to alert the user that
+Alarms are bells, whistles, gongs, or anything that can alert the user that
 something is wrong.
 
 Reset controls are used to reset the entity to which they are attached.
@@ -1132,7 +1132,7 @@ are somewhat fined grained; you register for exactly what you want to
 see on individual objects.  This is not as bad as you might imagine
 (even though it may seem somewhat strange).  It does mean that you
 have to do a lot of registering in all the right places, though.
-\acs{IPMI} has a large number of asyncronous things that it has to
+\acs{IPMI} has a large number of asynchronous things that it has to
 inform you about.  If it delivered all these through one interface,
 you would have to look at each call and try to figure out what type of
 things was being reported, what object is was associated, etc.  In
@@ -1199,7 +1199,7 @@ value of a sensor, you call call \verb=ipmi_reading_get()= and you
 give it a handler to call when the reading has been fetched.
 
 This is always done for things that OpenIPMI might have to send a
-message to do.  If it is a result of OpenIPMI's requirement to be able to
+message to do.  It is a result of OpenIPMI's requirement to be able to
 work in non-threaded systems and still be responsive to operations
 while waiting.
 
@@ -1243,8 +1243,8 @@ The os-specific handler types are defined here.  You must implement this
 and supply it to the IPMI code.\\
 
 \texttt{selector.h} &
-For *nix systems, This file a default mechanism for handling many of the
-os-specific handler operations.\\
+For *nix systems, This file provides a default mechanism for handling many of
+the os-specific handler operations.\\
 
 \texttt{ipmi\_posix.h} &
 This defines some POSIX OS handlers.\\
@@ -1496,7 +1496,7 @@ Table~\vref{domain-options} shows the options available.
 \hline
 \texttt{IPMI\_OPEN\_OPTION\_SDRS} & Uses the \texttt{ival} value as a boolean.
         The all option overrides this.
-        This enables or disables fetching SDRs.  This is false by default.
+        This enables or disables fetching SDRs.
         This is false by default.\\
 \hline
 \texttt{IPMI\_OPEN\_OPTION\_FRUS} & Uses the \texttt{ival} value as a boolean.
@@ -1799,7 +1799,7 @@ at the same time; you would increment the number to get to successive
 devices.  However, most systems only have one.
 
 The primary interface to the driver is through \verb=ioctl= calls.
-\verb=read= and\verb=write= calls will not work because the \acs{IPMI}
+\verb=read= and \verb=write= calls will not work because the \acs{IPMI}
 driver separates the addressing and data for an \acs{IPMI} message.
 
 The core description of an \acs{IPMI} message is:
@@ -1929,7 +1929,7 @@ The \verb=recv_type= field can be one of the following values:
 \begin{description}
 \item[IPMI\_RESPONSE\_RECV\_TYPE] A response to a sent command.
 \item[IPMI\_ASYNC\_EVENT\_RECV\_TYPE] An asyncronous event.
-\item[IPMI\_CMD\_RECV\_TYPE] A command was recevied for the system
+\item[IPMI\_CMD\_RECV\_TYPE] A command was received for the system
 software.
 \item[IPMI\_RESPONSE\_RESPONSE\_TYPE] Responses sent by this
 interface get acked using one of these.  This way you can tell if
@@ -1974,7 +1974,7 @@ and odd \acs{NetFN}s are always responses.
 For responses, the address will always be the same as the sent
 address.
 
-A interface will not receive events by default.  You must register to
+An interface will not receive events by default.  You must register to
 receive them with the following:
 
 \begin{verbatim}
@@ -2025,7 +2025,7 @@ rv = ioctl(fd, IPMICTL_UNREGISTER_FOR_CMD, &cmdspec);
 If you receive a message, you must send a response.  The driver makes
 this easy, you can always use the received address to send the
 response to.  The program in Appendix \ref{recv-cmd-prog} receives one
-message, sends a response, and exits.  When you response, you must
+message, sends a response, and exits.  When you respond, you must
 supply the \verb=msgid= that came into the command.
 
 \subsubsection{Overriding Default Timing Values}
@@ -2091,11 +2091,11 @@ rv = ioctl(fd, IPMICTL_SEND_COMMAND_SETTIME, &req_time);
 
 \subsubsection{Setting Your Local \ac{IPMB} Address}
 Unfortunately, \acs{IPMI} has no standard way to determing your local \ac{IPMB}
-address.  It is usually set to 20h, but especially in bussed systems,
+address.  It is usually set to 20h but, especially in bussed systems,
 the local management controller may have a different address.
 
-If you do not set your \ac{IPMB} address properly, messages out on the \ac{IPMB}
-will not have the proper source address and thus the response will go
+If you do not set your \ac{IPMB} address properly, messages sent out on the
+\ac{IPMB} will not have the proper source address and thus the response will go
 to the wrong place.  To avoid this problem, the OpenIPMI allows the
 user to set the local \ac{IPMB} address and the local \ac{LUN}.  The following
 shows how to get and set the \ac{IPMB} address:
@@ -2164,7 +2164,7 @@ configuration information such as users and passwords.
 0h & Primary \acs{IPMB} & Channel 0 is the primary \acs{IPMB} bus on the
 system.\\
 \hline
-1h-7h & \parbox{1in}{Implementation-specific} & These channel may be any
+1h-7h & \parbox{1in}{Implementation-specific} & This channel may be any
 type of channel, including \acs{IPMB}, and \acs{LAN} interfaces.\\
 \hline
 8h-Dh & & Reserved\\
@@ -2198,7 +2198,7 @@ this information is required even with OpenIPMI.
 \subsection{Channels}
 
 An interface has the concept of a ``channel''.  A channel is an
-indepedent communication interface.  Each \ac{LAN} interface, serial
+independent communication interface.  Each \ac{LAN} interface, serial
 interface, \ac{IPMB} interface, and system interface has its own
 channel number.  Messages are bridged to specific channels.
 
@@ -2206,7 +2206,7 @@ There are 16 specified channels.  Channel 0 is always the primary
 \ac{IPMB} channel.  Channels 1-7 are for general use, like for
 \ac{LAN}, secondary \ac{IPMB}, \ac{ICMB}, etc.  Channels 8-Dh are
 reserved.  Channel Fh is for the system interface.  Channel Eh is used
-for whatever the present interface.  This is useful because some
+for whatever the present interface is.  This is useful because some
 commands take a channel as one of their fields, if you just want to
 use the current channel you can put Eh here.
 
@@ -2311,7 +2311,7 @@ possible channel.
   NetFN App (06h), Cmd 42h}
 \end{showmsg}
 
-\subsection{Sending Bridged Message}
+\subsection{Sending Bridged Messages}
 
 Table \ref{send-msg-cmd} shows the format of a Send Message command.
 Note that the spec says the response can have response data for
@@ -2374,7 +2374,7 @@ destination channel.
 \subsection{Receiving Asynchronous Messages on the System Interface}
 \label{sec-recv-async-msg}
 
-Asyncronous messages to the system interfaces (ones with the
+Asynchronous messages to the system interfaces (ones with the
 destination \ac{LUN} set to 2), both commands and responses, have no
 direct route to be sent up the system interface.  Instead, they go
 into the receive message queue and the software is informed
@@ -2422,7 +2422,7 @@ Message command described in table \ref{get-msg-cmd}.
   NetFN App (06h), Cmd 33h}
 \end{showmsg}
 
-To know if a message is waiting in the asyncronous queue, the
+To know if a message is waiting in the asynchronous queue, the
 interface will generally set some flag so that the user may
 immediately know.  The software will then send a Get Message Flags
 command (table \ref{get-msg-flags}) to know find out what is up.  A
@@ -2468,7 +2468,7 @@ The response data will be in the same \ac{IPMB} format.
 
 Unfortunately, the description in the spec of the LAN protocol is very
 confusing.  An errata was introduced that, instead of clearing things
-up, added another possibile interpretation.  Four popular
+up, added another possible interpretation.  Four popular
 interpretations are common.  Fortunately, one piece of software can be
 written to work with three of these possibilities, and the fourth
 possibility is rather broken.  The three main possibilities are:
@@ -2500,7 +2500,7 @@ with the \ac{IPMI} message.  The sent data is always the same, and is:
 \hline
 2 & C8h & Checksum for the previous two bytes\\
 \hline
-3 & 81h & \acs{LAN} Requester address (this is the value for system managmenet
+3 & 81h & \acs{LAN} Requester address (this is the value for system management
         software)\\
 \hline
 4 & B8h & Requester LUN in bits 0-1 (0 in this case), Sequence number
@@ -2870,7 +2870,7 @@ message is exactly like a normal \ac{IPMB} message, but it has a 0 byte
 prepended to the message.  This can only be a \textit{Get Device Id}
 command.  It is used to discover management controllers in the system.
 Broadcast is a really bad name, because it will not actually
-broadcast, it will go to the \ac{IPMB} address is the second byte of the
+broadcast, it will go to the \ac{IPMB} address in the second byte of the
 message.  This is used for discovery because it will not have any
 effect on \acs{I$^2$C} devices on the bus, but \acs{IPMI} devices will
 do a normal response.
@@ -2880,8 +2880,8 @@ an oft ignored part of the spec.
 
 \subsection{OpenIPMI and \acs{IPMB}}
 The OpenIPMI driver and library handle the details of IPMB for the
-user.  To send a message over IPMB, the user create and OpenIPMI
-\ac{IPMB} address as described in section\ref{openipmi-addressing} and
+user.  To send a message over IPMB, the user creates an OpenIPMI
+\ac{IPMB} address as described in section \ref{openipmi-addressing} and
 sends a normal OpenIPMI message.  The library and driver take care of
 selecting the sequence numbers, formatting the messages, tracking and
 decoding the response, and resending messages.
@@ -3048,7 +3048,7 @@ Authentication Type Enables & 2 &
 \acs{IP} Address & 3 &
         A 4 byte field holding the \acs{IP} address, in network order.  This
         is the local \acs{IP} address used for this particular channel.  You
-        only need to set this is parameter 4 is set to ``static address''.\\
+        only need to set this if parameter 4 is set to ``static address''.\\
 \hline
 \acs{IP} Address Source & 4 &
         One byte field telling the BMC where to get its IP address. Bits 4-7
@@ -3407,7 +3407,7 @@ IPMI uses users for access control on IPMI systems with LAN or serial
 interfaces.  The local system interface has no access controls, but
 the more external interfaces require authentication to be able to use
 the interface.  Users may be able to authenticate links and send and
-recieve IPMI messages.  
+receive IPMI messages.  
 
 Users have a defined maximum privilege level.  They may not negotiate
 a connection with a higher privilege level than that.  The privilege
@@ -4122,10 +4122,10 @@ do event filtering, but ones that do will work as this section
 describes.
 
 The \ac{PEF} configuration allows several different actions to be
-perform when an IPMI event comes in (or when the BMC powers up and
+performed when an IPMI event comes in (or when the BMC powers up and
 there are pending events in its event queue).  Except for sending an
 alert, if multiple event filters match, the higher priority action
-will be done and the lower priority action will be ignores.  The
+will be done and the lower priority action will be ignored.  The
 actions are:
 
 \noindent\begin{tabularx}{\textwidth}{|p{0.2\textwidth}|l|X|}
@@ -4887,7 +4887,7 @@ the proper \acs{SEL}.
 OpenIPMI will automatically send the \acs{PET} Acknowledge command
 described in Table \ref{pet-ack-cmd}.
 
-Note that \acs{SNMP} traps can only be recieved on one port, and that
+Note that \acs{SNMP} traps can only be received on one port, and that
 port is privileged, so you must run as root to receive SNMP traps.
 
 \subsection{The Alert Immediate Command}
@@ -5343,7 +5343,7 @@ CFh & Duplicate Request & A duplicate request was received and ignored.
         return the response that was returned for the original instance of
         the request.  Such devices should provide separate commands that
         allow the completion status of the original request to be determined.
-        An Event Reciever does not use this completion code, but returns
+        An Event Receiver does not use this completion code, but returns
         the 00h completion code in response to (valid) duplicate requests.''
         The meaning of this statement is unknown.  However, in general IPMI
         should be stateless because reponses can be lost and commands

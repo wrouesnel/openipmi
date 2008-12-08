@@ -1,3 +1,7 @@
+2008-12-08 Dann Frazier
+
+	* doc/IPMI.ltx: Fix some typos.
+
 2008-11-19 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Allow scanning IPMB address 0x20 even if the the
