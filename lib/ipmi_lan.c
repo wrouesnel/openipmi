@@ -3469,7 +3469,7 @@ data_handler(int            fd,
     sockaddr_ip_t      ipaddrd;
     socklen_t          from_len;
     int                len;
-    int                addr_num;
+    int                addr_num = 0; /* Keep gcc happy and initialize */
 
     from_len = sizeof(ipaddrd);
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 

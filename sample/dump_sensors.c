@@ -264,4 +264,6 @@ main(int argc, char *argv[])
 	os_hnd->perform_one_op(os_hnd, NULL);
 
     os_hnd->free_os_handler(os_hnd);
+
+    return 0;
 }

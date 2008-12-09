@@ -4177,7 +4177,7 @@ atca_event_handler(ipmi_domain_t *domain,
 	old_state = data[10] & 0xf;
 	new_state = data[11] & 0xf;
 	if ((old_state == 0) || (new_state == 0)) {
-	    if (data[13] != 0) {
+	    if (data[12] != 0) {
 		/* FRU id is not 0, it's an AMC module (or something else the
 		   IPMC manages).  If the device has gone away or is newly
 		   inserted, rescan the SDRs on the IPMC. */
