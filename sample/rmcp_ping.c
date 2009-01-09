@@ -85,9 +85,9 @@ usage(void)
     exit(1);
 }
 
-unsigned int port = 0x26f;
-unsigned int waittime = 10;
-unsigned int starttag = 0;
+int port = 0x26f;
+int waittime = 10;
+int starttag = 0;
 int debug_packet = 0;
 
 struct socklist
@@ -141,6 +141,7 @@ main(int argc, char *argv[])
     char               *addrname;
     int                send_next;
     int                i;
+    char               *end;
 
 
     progname = argv[0];
@@ -159,22 +160,30 @@ main(int argc, char *argv[])
 		fprintf(stderr, "No parameter given for -p\n\n");
 		usage();
 	    }
-	    port = strtoul(argv[i], NULL, 0);
+	    port = strtoul(argv[i], &end, 0);
+	    if (port < 0 || port > 65535 || *end != '\0') {
+		fprintf(stderr, "Wrong port specified for -p\n\n");
+		usage();
+	    }
 	} else if (strcmp(argv[i], "-t") == 0) {
 	    i++;
 	    if (i >= argc) {
 		fprintf(stderr, "No parameter given for -t\n\n");
 		usage();
 	    }
-	    waittime = strtoul(argv[i], NULL, 0);
+	    waittime = strtoul(argv[i], &end, 0);
+	    if (waittime < 0 || *end != '\0') {
+		fprintf(stderr, "Wrong waittime specified for -t\n\n");
+		usage();
+	    }
 	} else if (strcmp(argv[i], "-s") == 0) {
 	    i++;
 	    if (i >= argc) {
 		fprintf(stderr, "No parameter given for -s\n\n");
 		usage();
 	    }
-	    starttag = strtoul(argv[i], NULL, 0);
-	    if (starttag > 254) {
+	    starttag = strtoul(argv[i], &end, 0);
+	    if (starttag < 0 || starttag > 254 || *end != '\0') {
 		fprintf(stderr, "Invalid start tag for -s\n\n");
 		usage();
 	    }
