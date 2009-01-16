@@ -4764,8 +4764,14 @@ process_fru_info(ipmi_fru_t *fru)
 	return EBADF;
 
     version = *data;
-    if (version != 1)
+    if ((version != 1) && (version != 2))
 	/* Only support version 1 */
+	/* The IPMI 0.9 to IPMI 1.0 Change Summary and Porting Considerations
+	 * from October 1, 1998 mention under FRU changes (Pg. 4)
+	 * "The FRU format version has been updated to 02h from 01h"
+	 * Unfortunately, some companies (such as Fujitsu Siemens Computers)
+	 * used this information for production tools.
+	 */
 	return EBADF;
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
