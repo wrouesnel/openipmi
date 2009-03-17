@@ -1,4 +1,9 @@
-2008-01-16 Corey Minyard <cminyard@mvista.com>
+2009-03-16 Corey Minyard <cminyard@mvista.com>
+	
+	* configure.in: Move to version 2.0.16.  It's been a while and
+	a release is a good idea, I think.
+	
+2009-01-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: An Intel document (IPMI 0.9 to IPMI 1.0 Change
 	Summary and Porting Considerations from October 1, 1998) mentioned
