@@ -142,6 +142,7 @@ typedef struct atca_conn_info_s
     unsigned int        hacks;
 
     int                 supports_ip_addr_checking;
+    int                 ip_addr_checking_disabled;
     uint32_t            last_ip_change_time;
     unsigned int        num_ip_addr;
     atca_ip_addr_info_t *ip_addrs;
@@ -319,6 +320,10 @@ atca_check_and_ping(ipmi_con_t *ipmi, atca_conn_info_t *info)
     unsigned char  data[12];
     struct timeval now;
     unsigned int   i;
+
+    if (!info->supports_ip_addr_checking)
+	/* No support for this for some reason. */
+	return;
 
     gettimeofday(&now, NULL);
 
@@ -652,8 +657,7 @@ atca_oem_ip_start(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	/* Error checking the IP.  It may have timed out, and we want
 	   to go ahead and ping everything even if we have previously
 	   determined that address checking works. */
-	if (info->supports_ip_addr_checking)
-	    atca_check_and_ping(ipmi, info);
+	atca_check_and_ping(ipmi, info);
 	goto out;
     }
 
@@ -663,7 +667,7 @@ atca_oem_ip_start(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if (!info->supports_ip_addr_checking) {
+    if (!info->supports_ip_addr_checking && !info->ip_addr_checking_disabled) {
 	info->supports_ip_addr_checking = 1;
 
 	rv = register_atca_conn(info);
@@ -885,6 +889,7 @@ atca_oem_finish_check(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 		     " ATCA connection done with more than one IP port;"
 		     " this is not allowed.  Disabling IP address"
 		     " scanning.");
+	    info->ip_addr_checking_disabled = 1;
 	    goto out;
 	}
 
@@ -893,6 +898,7 @@ atca_oem_finish_check(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "oem_atca_conn.c(atca_oem_finish_check):"
 		     " Unable to allocate connection lock: 0x%x", rv);
+	    info->ip_addr_checking_disabled = 1;
 	    goto out;
 	}
 

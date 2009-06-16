@@ -1,3 +1,8 @@
+2009-06-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca_conn.c: Fix a problem where the ATCA address
+	checking code could be called even if it was disabled.
+	
 2009-03-16 Corey Minyard <cminyard@mvista.com>
 	
 	* configure.in: Move to version 2.0.16.  It's been a while and
