@@ -1,3 +1,8 @@
+2009-06-15 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca_conn.c: Fix a logic problem in the disabling
+	of ATCA address checking.
+	
 2009-06-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Fix a problem where the ATCA address

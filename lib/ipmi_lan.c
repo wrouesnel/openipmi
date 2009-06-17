@@ -5198,11 +5198,14 @@ lan_start_con(ipmi_con_t *ipmi)
 	goto out_err;
     }
 
+    lan->started = 1;
+    ipmi_unlock(lan->ip_lock);
+
     for (i=0; i<lan->cparm.num_ip_addr; i++)
 	/* Ignore failures, this gets retried. */
 	send_auth_cap(ipmi, lan, i, 0);
 
-    lan->started = 1;
+    return 0;
 
  out_err:
     ipmi_unlock(lan->ip_lock);

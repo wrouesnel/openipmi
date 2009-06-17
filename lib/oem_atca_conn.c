@@ -807,7 +807,7 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
     /* Do an IP address check as part of the audit. */
     info->ipmb_call_count++;
     if (info->supports_ip_addr_checking
-	|| ((info->ipmb_call_count % 128) == 0))
+	&& ((info->ipmb_call_count % 128) == 0))
     {
 	start_ip_addr_check(conn);
     }
