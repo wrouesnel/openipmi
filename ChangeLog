@@ -1,3 +1,20 @@
+2009-06-17 Eric J. Bowersox" <ericb@aspsys.com>
+
+	* lib/ipmi_lan.c: Two more null-pointer fixes to ipmi_lan.c, found
+	in 2.0.16.  The first is in a debugging message in
+	rmcpp_find_ipmi, which was using the IPMI_CONN_NAME(ipmi) macro in
+	a scenario in which the pointer it was passing would always be
+	NULL, causing a segfault.  I modified the debug message to remove
+	the connection name, as none of the other debug messages in that
+	function use the connection name anyway.
+
+	The second is in lan_oem_done, which may be called with a NULL
+	"ipmi" parameter (such as, indirectly, via lan_cleanup at line
+	4030).  It contains recovery code for that purpose, but the
+	initialization of "lan" at line 4308 causes a segfault before the
+	code gets to that point.  I moved the initialization to after the
+	test for NULL.
+
 2009-06-15 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Fix a logic problem in the disabling

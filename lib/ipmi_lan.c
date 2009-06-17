@@ -3417,8 +3417,7 @@ rmcpp_find_ipmi(lan_fd_t      *item,
     if (lan && addr_match_lan(lan, sid, addr, addr_num))
 	ipmi = lan->ipmi;
     else if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	ipmi_log(IPMI_LOG_DEBUG, "%stag doesn't match: %d",
-		 IPMI_CONN_NAME(ipmi), tag);
+	ipmi_log(IPMI_LOG_DEBUG, "tag doesn't match: %d", tag);
     ipmi_unlock(item->con_lock);
 
     return ipmi;
@@ -4305,7 +4304,7 @@ send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 static void
 lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
 {
-    lan_data_t  *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t  *lan;
     int         rv;
     ipmi_msgi_t *rspi = cb_data;
     int         addr_num = (long) rspi->data4;
@@ -4315,6 +4314,7 @@ lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
 	return;
     }
 
+    lan = (lan_data_t *) ipmi->con_data;
     rv = send_get_dev_id(ipmi, lan, addr_num, rspi);
     if (rv) {
         handle_connected(ipmi, rv, addr_num);
