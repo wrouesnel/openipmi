@@ -1,4 +1,14 @@
-2009-06-17 Eric J. Bowersox" <ericb@aspsys.com>
+2009-09-14 Jan Safranek <jsafrane@redhat.com>
+
+	* ipmi.init: On certain HW (e.g. IBM HS20 blade) the /dev/watchdog
+	is created by kernel during boot (provided by i6300esb
+	driver). /etc/init.d/ipmi script then does not recognize the
+	device is already there and tries to configure new one, which
+	obviously fails. The init script does not show any error and
+	pretends everything is OK.  So modify the init script to detect
+	that another watchdog is registered and print a failure message.
+	
+2009-06-17 Eric J. Bowersox <ericb@aspsys.com>
 
 	* lib/ipmi_lan.c: Two more null-pointer fixes to ipmi_lan.c, found
 	in 2.0.16.  The first is in a debugging message in

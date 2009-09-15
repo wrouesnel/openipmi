@@ -205,7 +205,12 @@ load_hw_modules()
 
 start_watchdog_common()
 {
-	load_hw_modules
+
+	if [ -e /dev/watchdog ]; then
+		log_failure_msg "/dev/watchdog already exists "
+		RETVAL=$((RETVAL | 8))
+		return
+	fi	load_hw_modules
 	modprobe ipmi_watchdog ${IPMI_WATCHDOG_OPTIONS} > /dev/null 2>&1
 	modules_loaded ipmi_watchdog
 	[ ${OnePlusUnloaded} -ne 0 ] &&
