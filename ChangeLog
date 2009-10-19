@@ -1,3 +1,11 @@
+2009-10-19 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/os_debug.c, glib/glib_os_hnd.c, tcl/tcl_os_hnd.c,
+	  unix/posix_os_hnd.c, unix/posix_thread_os_hnd.c: Fix a bug filed
+	  by dcb on SourceForce, modify set_gdbm_filename() in all these
+	  files to properly use the allocated name instead of the passed
+	  in name.
+
 2009-09-14 Jan Safranek <jsafrane@redhat.com>
 
 	* ipmi.init: On certain HW (e.g. IBM HS20 blade) the /dev/watchdog

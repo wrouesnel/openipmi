@@ -496,7 +496,7 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 	return ENOMEM;
     if (gdbm_filename)
 	free(gdbm_filename);
-    gdbm_filename = name;
+    gdbm_filename = nname;
     return 0;
 }
 #endif
