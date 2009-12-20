@@ -28,6 +28,17 @@ policy, power cycle interval, restart cause)
 
 Boot option configuration
 
+Implement set channel security keys command
+
+Implement a way to get the channel cipher suites for an MC
+
+Implement direct serial port interface, including the ability to have
+disconnected operation.
+
+Implement payload control
+
+Dynamic address setting for IPMI LAN
+
 Settable sensor support (errata E372)
 
 Channel forwarding (errata E379)
