@@ -1,3 +1,10 @@
+2010-01-04 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_smi.c: Fix a bug noticed by a user who filed
+	Sourceforge bug 2924182 on this, error cleanup in the case of an
+	SMI setup failure would crash in some cases, and I noticed a
+	use of freed data in the same routine and fixed that, too.
+
 2009-10-19 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/os_debug.c, glib/glib_os_hnd.c, tcl/tcl_os_hnd.c,
