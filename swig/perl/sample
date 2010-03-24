@@ -300,7 +300,7 @@ use OpenIPMI;
 			    my $s = 0;
 			    $rv = $sensor->threshold_event_supported($e, \$s);
 			    if ($rv) {
-				print "***Error getting ev support for event",
+				print "***Error getting ev support for event ",
 				      "$e: $rv\n";
 			    } elsif ($s) {
 				print " $e";
@@ -408,7 +408,7 @@ use OpenIPMI;
     sub control_event_val_cb {
 	my $self = shift;
 	my $control = shift;
-	my $err = shift;
+	my $event = shift;
 	my $num = $control->get_num_vals();
 	my $i;
 	my @valids = ();
@@ -464,7 +464,7 @@ use OpenIPMI;
 		print "  Colors: ";
 		for $i (0 .. $OpenIPMI::CONTROL_NUM_COLORS) {
 		    if ($control->light_is_color_supported($i)) {
-			print " ", OpenIPMI::color_string($i), "($i)";
+			print " ", $OpenIPMI::color_string($i), "($i)";
 		    }
 		}
 		print "\n";
@@ -493,7 +493,7 @@ use OpenIPMI;
 				my $v;
 				print "    Transition $k:";
 				$v = $control->get_light_color($i, $j, $k);
-				print " ", OpenIPMI::color_string($v);
+				print " ", $OpenIPMI::color_string($v);
 				$v = $control->get_light_color_time
 				    ($i, $j, $k);
 				print " time(", $v, ")\n";

@@ -1,3 +1,11 @@
+2010-03-24 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/sample.py, swig/python/Makefile.am: Added a python
+	sample program, converted from the perl sample program.
+
+	* swig/perl/sample: Fixed a few bugs notices in the conversion
+	to python.
+
 2010-01-04 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_smi.c: Fix a bug noticed by a user who filed

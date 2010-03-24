@@ -18,7 +18,7 @@ all-local: _OpenIPMI.so
 OpenIPMI_SRC = OpenIPMI_wrap.c
 OpenIPMI_OBJ = OpenIPMI_wrap.o
 
-EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py
+EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py sample.py
 
 _OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS)
