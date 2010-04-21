@@ -1,3 +1,14 @@
+
+2010-04-21 Alex Deiter <alex.deiter@gmail.com>
+	
+	* cmdlang/ipmish.c, cmdlang/out_fru.c, configure.in,
+	lanserv/OpenIPMI/lanserv.h, lanserv/emu.h, lanserv/lanserv.c,
+	lanserv/lanserv_emu.c, lib/fru_spd_decode.c, lib/oem_intel.c,
+	sample/dump_sensors.c, sample/ipmi_serial_bmc_emu.c,
+	sample/sample.c, sample/sample2.c, sample/sample3.c
+	sample/solterm.c, unix/selector.c, unix/test_heap.c:
+	Get OpenIPMI to compile under FreeBSD.
+
 2010-03-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/sample.py, swig/python/Makefile.am: Added a python

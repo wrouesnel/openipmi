@@ -652,7 +652,9 @@ setup_term(os_handler_t *os_hnd)
     signal(SIGPIPE, cleanup_sig);
     signal(SIGUSR1, cleanup_sig);
     signal(SIGUSR2, cleanup_sig);
+#ifdef SIGPWR
     signal(SIGPWR, cleanup_sig);
+#endif
 
     stifle_history(500);
     rl_callback_handler_install("> ", rl_ipmish_cb_handler);

@@ -36,7 +36,6 @@
 #include <signal.h>
 #include <string.h>
 #include <time.h>
-#include <malloc.h>
 
 #define HEAP_EXPORT_NAME(s) test_ ## s
 typedef struct heap_val_s { int a; } heap_val_t;

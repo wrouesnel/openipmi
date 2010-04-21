@@ -2,6 +2,7 @@
 #ifndef __EMU_IPMI_
 #define __EMU_IPMI_
 
+#include <sys/time.h>
 #include <OpenIPMI/ipmi_types.h>
 
 typedef struct emu_data_s emu_data_t;

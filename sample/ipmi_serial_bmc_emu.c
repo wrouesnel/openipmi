@@ -37,7 +37,6 @@
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <errno.h>
-#include <malloc.h>
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>

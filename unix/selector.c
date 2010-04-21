@@ -49,7 +49,6 @@
 #include <syslog.h>
 #include <signal.h>
 #include <string.h>
-#include <malloc.h>
 
 typedef struct fd_state_s
 {
@@ -809,7 +808,7 @@ int
 sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
 {
     selector_t *sel;
-    int        i;
+    unsigned int        i;
     int        rv;
 
     sel = malloc(sizeof(*sel));

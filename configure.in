@@ -22,9 +22,6 @@ esac
 
 AC_SUBST(OPENIPMI_SMI)
 
-# Check for execinfo.h
-AC_CHECK_HEADERS(execinfo.h)
-
 SNMPLIBS=
 
 # Where do we find the UCD SNMP includes and libs

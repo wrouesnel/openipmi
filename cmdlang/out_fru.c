@@ -33,7 +33,7 @@
 
 #include <errno.h>
 #include <string.h>
-#include <values.h>
+#include <limits.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
@@ -120,7 +120,7 @@ traverse_fru_node_tree(ipmi_cmd_info_t *cmd_info,
 	    if (intval != -1)
 		ipmi_cmdlang_out_int(cmd_info, "Element Count", intval);
 	    else
-		intval = MAXINT;
+		intval = INT_MAX;
 	    traverse_fru_node_tree(cmd_info, sub_node, intval);
 	    ipmi_cmdlang_up(cmd_info);
 	    break;
@@ -157,7 +157,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     rv = ipmi_fru_get_root_node(fru, &type, &node);
     if (!rv) {
 	ipmi_cmdlang_out(cmd_info, "Type", type);
-	rv = traverse_fru_node_tree(cmd_info, node, MAXINT);
+	rv = traverse_fru_node_tree(cmd_info, node, INT_MAX);
 	if (rv)
 	    cmdlang->errstr = "Error traversing FRU node tree";
     } else {

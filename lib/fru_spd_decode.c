@@ -39,7 +39,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <errno.h>
-#include <values.h>
+#include <limits.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_fru.h>
