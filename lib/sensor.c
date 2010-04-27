@@ -4763,7 +4763,7 @@ typedef struct reading_get_info_s
     void                       *cb_data;
     ipmi_states_t              states;
     enum ipmi_value_present_e  value_present;
-    double                     raw_val;
+    unsigned int               raw_val;
     double                     cooked_val;
 } reading_get_info_t;
 

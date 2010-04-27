@@ -1,4 +1,12 @@
 
+2010-04-27 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Use unsigned int, not double, to hold the raw
+	sensor value.
+
+	* lib/ipmi_lan.c: Pass in the correct socket length to sendto,
+	not just the maximum possible size.
+	
 2010-04-21 Alex Deiter <alex.deiter@gmail.com>
 	
 	* cmdlang/ipmish.c, cmdlang/out_fru.c, configure.in,

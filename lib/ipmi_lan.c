@@ -142,6 +142,7 @@ typedef struct sockaddr_ip_s {
             struct sockaddr_in6 s_addr6;
 #endif
         } s_ipsock;
+    socklen_t ip_addr_len;
 } sockaddr_ip_t;
 
 struct ipmi_rmcpp_auth_s
@@ -1107,6 +1108,9 @@ static void data_handler(int            fd,
 static int
 lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 {
+    if (a1->ip_addr_len != a2->ip_addr_len)
+	return 0;
+
     if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
@@ -1913,11 +1917,11 @@ lan_send_addr(lan_data_t              *lan,
 	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
-   add_stat(lan->ipmi, STAT_XMIT_PACKETS, 1);
+    add_stat(lan->ipmi, STAT_XMIT_PACKETS, 1);
 
     rv = sendto(lan->fd->fd, tmsg, pos, 0,
-		(struct sockaddr *) &(lan->cparm.ip_addr[addr_num]),
-		sizeof(sockaddr_ip_t));
+		(struct sockaddr *) &(lan->cparm.ip_addr[addr_num].s_ipsock),
+		lan->cparm.ip_addr[addr_num].ip_addr_len);
     if (rv == -1)
 	rv = errno;
     else
@@ -3470,7 +3474,7 @@ data_handler(int            fd,
     int                len;
     int                addr_num = 0; /* Keep gcc happy and initialize */
 
-    from_len = sizeof(ipaddrd);
+    from_len = sizeof(ipaddrd.s_ipsock);
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
 		   &from_len);
 
@@ -3478,6 +3482,7 @@ data_handler(int            fd,
 	/* Got an error, probably no data, just return. */
 	return;
 
+    ipaddrd.ip_addr_len = from_len;
     if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
@@ -5608,7 +5613,9 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    return EINVAL;
 
 	/* Only get the first choices */
-	memcpy(&(cparm.ip_addr[count]), res0->ai_addr, res0->ai_addrlen);
+	memcpy(&(cparm.ip_addr[count].s_ipsock), res0->ai_addr,
+	       res0->ai_addrlen);
+	cparm.ip_addr[count].ip_addr_len = res0->ai_addrlen;
 	count++;
 	freeaddrinfo(res0);
     }
@@ -5624,6 +5631,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
         paddr->sin_family = AF_INET;
         paddr->sin_port = htons(atoi(ports[i]));
 	memcpy(&(paddr->sin_addr), ent->h_addr_list[0], ent->h_length);
+	cparm.ip_addr[count].ip_addr_len = ent->h_length;
 	count++;
     }
 #endif
