@@ -35,12 +35,12 @@ uninstall-local:
 	done)
 	-rmdir "$(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui"
 
-PYPATH=$(top_builddir)/swig/python:$(srcdir)
+PYPATH=$(top_builddir)/swig/python:$(top_builddir)/swig/python/.libs:$(srcdir)
 
 .py.pyc:
-	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) -c 'import $*'
+	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/.libs/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) -c 'import $*'
 
 .py.pyo:
-	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) -O -c 'import $*'
+	LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/.libs/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) -O -c 'import $*'
 
 CLEANFILES = $(PYC_FILES) $(PYO_FILES)
