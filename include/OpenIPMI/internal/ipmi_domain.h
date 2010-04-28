@@ -272,6 +272,7 @@ int ipmi_option_set_event_rcvr(ipmi_domain_t *domain);
 int ipmi_option_set_sel_time(ipmi_domain_t *domain);
 int ipmi_option_activate_if_possible(ipmi_domain_t *domain);
 int ipmi_option_local_only(ipmi_domain_t *domain);
+int ipmi_option_use_cache(ipmi_domain_t *domain);
 
 void _ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain,
 						  int           val);

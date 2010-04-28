@@ -345,6 +345,7 @@ struct ipmi_domain_s
     unsigned int option_activate_if_possible : 1;
     unsigned int option_local_only : 1;
     unsigned int option_local_only_set : 1;
+    unsigned int option_use_cache : 1;
 };
 
 /* A list of all domains in the system. */
@@ -862,16 +863,71 @@ static void con_unregister_stat(ipmi_ll_stat_info_t *info,
 }
 
 static int
-setup_domain(const char    *name,
-	     ipmi_con_t    *ipmi[],
-	     int           num_con,
-	     ipmi_domain_t **new_domain)
+process_options(ipmi_domain_t      *domain, 
+		ipmi_open_option_t *options,
+		unsigned int       num_options)
+{
+    unsigned int i;
+
+    /* Option processing. */
+    for (i=0; i<num_options; i++) {
+	switch (options[i].option) {
+	case IPMI_OPEN_OPTION_ALL:
+	    domain->option_all = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SDRS:
+	    domain->option_SDRs = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_FRUS:
+	    domain->option_FRUs = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SEL:
+	    domain->option_SEL = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_IPMB_SCAN:
+	    domain->option_IPMB_scan = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_OEM_INIT:
+	    domain->option_OEM_init = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SET_EVENT_RCVR:
+	    domain->option_set_event_rcvr = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SET_SEL_TIME:
+	    domain->option_set_sel_time = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_USE_CACHE:
+	    domain->option_use_cache = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE:
+	    domain->option_activate_if_possible = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_LOCAL_ONLY:
+	    domain->option_local_only = options[i].ival != 0;
+	    domain->option_local_only_set = 1;
+	    break;
+	default:
+	    return EINVAL;
+	}
+    }
+
+    return 0;
+}
+
+static int
+setup_domain(const char         *name,
+	     ipmi_con_t         *ipmi[],
+	     int                num_con,
+	     ipmi_open_option_t *options,
+	     unsigned int       num_options,
+	     ipmi_domain_t      **new_domain)
 {
     struct timeval               timeout;
     ipmi_domain_t                *domain;
     int                          rv;
     ipmi_system_interface_addr_t si;
     int                          i, j;
+    unsigned int                 priv;
 
     /* Don't allow '(' in the domain name, as that messes up the
        naming.  That is the only restriction. */
@@ -890,6 +946,23 @@ setup_domain(const char    *name,
     domain->option_activate_if_possible = 1;
     domain->option_local_only = 0;
     domain->option_local_only_set = 0;
+    domain->option_use_cache = 1;
+
+    priv = IPMI_PRIVILEGE_ADMIN;
+    for (i=0; i<num_con; i++) {
+	/* Find the least-common demominator privilege for the
+	   connections. */
+	if ((ipmi[i]->priv_level != 0) && (ipmi[i]->priv_level < priv))
+	    priv = ipmi[i]->priv_level;
+    }
+
+    /* Enable setting the event receiver (by default) if the privilege
+       is admin or greater. */
+    domain->option_set_event_rcvr = (priv >= IPMI_PRIVILEGE_ADMIN);
+    domain->option_set_sel_time = (priv >= IPMI_PRIVILEGE_ADMIN);
+
+    if (options)
+	process_options(domain, options, num_options);
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -5423,6 +5496,12 @@ ipmi_option_set_sel_time(ipmi_domain_t *domain)
 }
 
 int
+ipmi_option_use_cache(ipmi_domain_t *domain)
+{
+    return domain->option_use_cache;
+}
+
+int
 ipmi_option_activate_if_possible(ipmi_domain_t *domain)
 {
     return domain->option_activate_if_possible;
@@ -5443,55 +5522,6 @@ _ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain, int val)
 }
 
 
-static int
-process_options(ipmi_domain_t      *domain, 
-		ipmi_open_option_t *options,
-		unsigned int       num_options)
-{
-    unsigned int i;
-
-    /* Option processing. */
-    for (i=0; i<num_options; i++) {
-	switch (options[i].option) {
-	case IPMI_OPEN_OPTION_ALL:
-	    domain->option_all = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_SDRS:
-	    domain->option_SDRs = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_FRUS:
-	    domain->option_FRUs = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_SEL:
-	    domain->option_SEL = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_IPMB_SCAN:
-	    domain->option_IPMB_scan = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_OEM_INIT:
-	    domain->option_OEM_init = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_SET_EVENT_RCVR:
-	    domain->option_set_event_rcvr = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_SET_SEL_TIME:
-	    domain->option_set_sel_time = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE:
-	    domain->option_activate_if_possible = options[i].ival != 0;
-	    break;
-	case IPMI_OPEN_OPTION_LOCAL_ONLY:
-	    domain->option_local_only = options[i].ival != 0;
-	    domain->option_local_only_set = 1;
-	    break;
-	default:
-	    return EINVAL;
-	}
-    }
-
-    return 0;
-}
-
 int
 ipmi_open_domain(const char         *name,
 		 ipmi_con_t         *con[],
@@ -5507,12 +5537,11 @@ ipmi_open_domain(const char         *name,
     int           rv;
     ipmi_domain_t *domain = NULL;
     unsigned int  i;
-    unsigned int  priv;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
 
-    rv = setup_domain(name, con, num_con, &domain);
+    rv = setup_domain(name, con, num_con, options, num_options, &domain);
     if (rv)
 	return rv;
 
@@ -5520,12 +5549,7 @@ ipmi_open_domain(const char         *name,
     domain->domain_fully_up_cb_data = domain_fully_up_cb_data;
     domain->fully_up_count = 1;
 
-    priv = IPMI_PRIVILEGE_ADMIN;
     for (i=0; i<num_con; i++) {
-	/* Find the least-common demominator privilege for the
-	   connections. */
-	if ((con[i]->priv_level != 0) && (con[i]->priv_level < priv))
-	    priv = con[i]->priv_level;
 	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
 	if (rv)
 	    goto out_err;
@@ -5533,13 +5557,6 @@ ipmi_open_domain(const char         *name,
 	if (rv)
 	    goto out_err;
     }
-
-    /* Enable setting the event receiver (by default) if the privilege
-       is admin or greater. */
-    domain->option_set_event_rcvr = (priv >= IPMI_PRIVILEGE_ADMIN);
-    domain->option_set_sel_time = (priv >= IPMI_PRIVILEGE_ADMIN);
-
-    process_options(domain, options, num_options);
 
     add_known_domain(domain);
 
@@ -6571,7 +6588,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
 
-    rv = setup_domain("", con, num_con, &domain);
+    rv = setup_domain("", con, num_con, NULL, 0, &domain);
     if (rv)
 	return rv;
 

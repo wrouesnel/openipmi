@@ -1520,6 +1520,12 @@ ipmi_parse_options(ipmi_open_option_t *option,
     } else if (strcmp(arg, "-localonly") == 0) {
 	option->option = IPMI_OPEN_OPTION_LOCAL_ONLY;
 	option->ival = 1;
+    } else if (strcmp(arg, "-nocache") == 0) {
+	option->option = IPMI_OPEN_OPTION_USE_CACHE;
+	option->ival = 0;
+    } else if (strcmp(arg, "-cache") == 0) {
+	option->option = IPMI_OPEN_OPTION_USE_CACHE;
+	option->ival = 1;
     } else
 	return EINVAL;
 
@@ -1537,8 +1543,10 @@ ipmi_parse_options_help(void)
 	"-[no]ipmbscan - IPMB bus scanning\n"
 	"-[no]oeminit - special OEM processing (like ATCA)\n"
 	"-[no]seteventrcvr - setting event receivers\n"
+	"-[no]setseltime - setting the SEL clock\n"
 	"-[no]activate - connection activation\n"
 	"-[no]localonly - Just talk to the local BMC, (ATCA-only, for blades)\n"
+        "-[no]cache - use the local cache for SDRs.  On by default."
 	"-wait_til_up - wait until the domain is up before returning";
 }
 

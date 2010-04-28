@@ -118,6 +118,7 @@ struct ipmi_sdr_info_s
     unsigned int supports_partial_add_sdr : 1;
     unsigned int supports_reserve_sdr : 1;
     unsigned int supports_get_sdr_repository_allocation : 1;
+    unsigned int use_cache : 1;
 
     /* Information from the GET DEVICE SDR INFO command, sensor mode
        only. */
@@ -420,6 +421,8 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 
     /* Assume we have a dynamic population until told otherwise. */
     sdrs->dynamic_population = 1;
+
+    sdrs->use_cache = ipmi_option_use_cache(domain);
 
     rv = ipmi_create_lock(domain, &sdrs->sdr_lock);
     if (rv)
@@ -1891,7 +1894,7 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     DEBUG_INFO(sdrs);
 
     sdr_lock(sdrs);
-    if (!sdrs->fetched && (sdrs->fetch_state == IDLE)) {
+    if (!sdrs->fetched && (sdrs->fetch_state == IDLE) && sdrs->use_cache) {
 	/* Look in the database before the first fetch. */
 	if (ipmi_mc_get_guid(mc, guid) == 0) {
 	    char *s;
@@ -1911,6 +1914,12 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	    DEBUG_INFO(sdrs);
 	    sdrs->db_fetching = 0;
 	}
+	/*
+	 * Note that we go ahead and do a fetch, anyway, even if we
+	 * find a database item, in case the data has changed.  We
+	 * should detect the data change via timestamp before really
+	 * fetching the data.
+	 */
     } else
 	sdr_unlock(sdrs);
 
