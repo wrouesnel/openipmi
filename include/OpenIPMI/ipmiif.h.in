@@ -2098,6 +2098,13 @@ int ipmi_open_domain(const char         *name,
    external connections. */
 #define IPMI_OPEN_OPTION_LOCAL_ONLY 10
 
+/*
+ * Use or don't use the local cache for SDRs and other things.  This
+ * is not affected by the "all" option above, cache use is always
+ * enabled unless disabled by this option.
+ */
+#define IPMI_OPEN_OPTION_USE_CACHE 11
+
 
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.

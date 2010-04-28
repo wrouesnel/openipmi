@@ -3,7 +3,8 @@
 	* include/OpenIPMI/ipmiif.h, lib/ipmi.c:  Add a cache option
 	to allow using the local cache to be enabled or disabled.
 	
-	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c:
+	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c,
+	include/OpenIPMI/ipmiif.h.in:
 	Add support for the cache option.  Also rearrange the handling
 	of options to parse them before the domain is setup, otherwise
 	the SDR allocation would be done before the cache option is
