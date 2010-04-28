@@ -1,4 +1,15 @@
 
+2010-04-27 Alex Deiter <alex.deiter@gmail.com>
+
+	* configure.in, cmdlang/Makefile.am, sample/Makefile.am: Properly
+	handle the terminal library.
+
+	* swig/perl/Makefile.am: Clean up compile issues.
+
+	* swig/python/Makefile.i, swig/OpenIPMI.i,
+	swig/python/openipmigui/Makefile.am:
+	Clean up various compile issues with the python sources.
+	
 2010-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Use unsigned int, not double, to hold the raw
