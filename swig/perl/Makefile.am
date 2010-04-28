@@ -16,19 +16,19 @@ COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
 all: OpenIPMI.so
 
 OpenIPMI_SRC = OpenIPMI_wrap.c OpenIPMI_perl.c
-OpenIPMI_OBJ = OpenIPMI_wrap.o OpenIPMI_perl.o
+OpenIPMI_OBJ = OpenIPMI_wrap.lo OpenIPMI_perl.lo
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
-	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OPENIPMI_SWIG_LIBS)
-	rm OpenIPMI.so
+	$(LIBTOOL) --mode=link $(CC) -shared -module -avoid-version -o $(@:.so=.la) $^ $(OPENIPMI_SWIG_LIBS) $(PERL_POSIX_LIB) -rpath $(PERL_INSTALL_DIR)/auto/OpenIPMI
+	rm -f OpenIPMI.so
 	mv .libs/OpenIPMI.so .
 	rm -rf .libs
 
-OpenIPMI_wrap.o: OpenIPMI_wrap.c OpenIPMI.h
-	$(COMPILE) -c $<
+OpenIPMI_wrap.lo: OpenIPMI_wrap.c OpenIPMI.h
+	$(LIBTOOL) --mode=compile $(COMPILE) -c $<
 
-OpenIPMI_perl.o: OpenIPMI_perl.c OpenIPMI.h
-	$(COMPILE) -c $<
+OpenIPMI_perl.lo: OpenIPMI_perl.c OpenIPMI.h
+	$(LIBTOOL) --mode=compile $(COMPILE) -c $<
 
 OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 	$(SWIG) $(DEFS) -perl5 -o $@ -I$(top_srcdir)/swig/perl $<
@@ -38,7 +38,7 @@ CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
 install-exec-local: OpenIPMI.so OpenIPMI.pm
 	$(INSTALL) -d "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
 	$(INSTALL_PROGRAM) OpenIPMI.so "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
-	$(INSTALL_PROGRAM) OpenIPMI.pm "$(DESTDIR)$(PERL_INSTALL_DIR)"
+	$(INSTALL_DATA) OpenIPMI.pm "$(DESTDIR)$(PERL_INSTALL_DIR)"
 
 uninstall-local:
 	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI/OpenIPMI.so"

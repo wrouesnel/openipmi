@@ -849,8 +849,8 @@ case $host in
    *-sun-*) AC_DEFINE([_SUNOS], [], [Solaris's term.h does horrid things.]);;
 esac
 
-AC_CHECK_LIB(curses, tgetent,,
-   [AC_CHECK_LIB(ncurses, tgetent,,
+AC_CHECK_LIB(curses, tgetent, TERM_LIBS=-lcurses,
+   [AC_CHECK_LIB(ncurses, tgetent, TERM_LIBS=-lncurses,
       [AC_MSG_ERROR([libtermcap, libcurses or libncurses are required!])] )] )
 
 # Checks for header files.
@@ -888,6 +888,7 @@ AC_FUNC_STAT
 AC_CHECK_FUNCS([endpwent isascii memchr memset re_comp regcomp strcasecmp strchr strcspn strdup strerror strrchr strstr strtol issetugid])
 EL_GETPW_R_POSIX
 EL_GETPW_R_DRAFT
+AC_SUBST(TERM_LIBS)
 
 # End of libedit inclusions
 

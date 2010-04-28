@@ -52,7 +52,7 @@ solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
 rmcp_ping_SOURCES = rmcp_ping.c
 
 ipmi_serial_bmc_emu_SOURCES = ipmi_serial_bmc_emu.c
-ipmi_serial_bmc_emu_LDADD = $(top_builddir)/libedit/libedit.a
+ipmi_serial_bmc_emu_LDADD = $(top_builddir)/libedit/libedit.a $(TERM_LIBS)
 ipmi_serial_bmc_emu_CFLAGS = -I $(top_srcdir)/libedit
 
 EXTRA_DIST = example_oem.c
