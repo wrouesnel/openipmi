@@ -1,3 +1,13 @@
+2010-05-03 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/Makefile.am, swig/perl/Makefile.am: The swig command
+	could possibly get the wrong target, and the OpenIPMI_wrap.c file
+	was being included in the distribution, which could cause the
+	OpenIPMI.py and OpenIPMI.pm files to not be properly generated.
+	Fix those problems.
+
+	* configure.in: Move to version 2.0.18.
+	
 2010-04-29 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 2.0.17.

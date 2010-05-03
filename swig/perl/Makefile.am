@@ -15,7 +15,8 @@ COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
 
 all: OpenIPMI.so
 
-OpenIPMI_SRC = OpenIPMI_wrap.c OpenIPMI_perl.c
+nodist_OpenIPMI_SRC = OpenIPMI_wrap.c
+OpenIPMI_SRC = OpenIPMI_perl.c
 OpenIPMI_OBJ = OpenIPMI_wrap.lo OpenIPMI_perl.lo
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
@@ -31,7 +32,7 @@ OpenIPMI_perl.lo: OpenIPMI_perl.c OpenIPMI.h
 	$(LIBTOOL) --mode=compile $(COMPILE) -c $<
 
 OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
-	$(SWIG) $(DEFS) -perl5 -o $@ -I$(top_srcdir)/swig/perl $<
+	$(SWIG) $(DEFS) -perl5 -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/perl $<
 
 CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
 

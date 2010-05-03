@@ -13,7 +13,7 @@ PYPATH=$(top_builddir)/swig/python:$(top_builddir)/swig/python/.libs:$(srcdir)/o
 
 pythonlib_LTLIBRARIES = _OpenIPMI.la
 
-_OpenIPMI_la_SOURCES = OpenIPMI_wrap.c
+nodist__OpenIPMI_la_SOURCES = OpenIPMI_wrap.c
 _OpenIPMI_la_LDFLAGS = -module -avoid-version
 _OpenIPMI_la_LIBADD = $(OPENIPMI_SWIG_LIBS) $(PYTHON_POSIX_LIB)
 
@@ -26,7 +26,7 @@ OpenIPMI.pyo: OpenIPMI.py _OpenIPMI.la
 	-PYTHONPATH=$(PYPATH) $(pythonprog) -O -c 'import OpenIPMI.py'
 
 OpenIPMI_wrap.c OpenIPMI.py: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
-	$(SWIG) $(DEFS) -python -o $@ -I$(top_srcdir)/swig/python $<
+	$(SWIG) $(DEFS) -python -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/python $<
 
 CLEANFILES = OpenIPMI_wrap.c OpenIPMI.py OpenIPMI.pyo OpenIPMI.pyc
 
