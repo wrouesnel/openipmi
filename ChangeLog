@@ -1,3 +1,10 @@
+2010-05-28 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Change the "share count" checking to check if
+	share count is > 1, not > 0, because some silly machines set the
+	value to one when they should set it to zero, and one is a silly
+	setting.
+
 2010-05-03 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/Makefile.am, swig/perl/Makefile.am: The swig command

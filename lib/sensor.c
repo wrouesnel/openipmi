@@ -1438,7 +1438,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->id_type = IPMI_ASCII_STR;
 	}
 
-	if (share_count) {
+	if (share_count > 1) {
 	    /* Duplicate the sensor records for each instance.  Go
 	       backwards to avoid destroying the first one until we
 	       finish the others. */
