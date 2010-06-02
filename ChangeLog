@@ -1,3 +1,19 @@
+2010-06-02 Dann Frazier <dannf at sourceforge.net>
+	
+	* ipmi.init - Initscripts should be idempotent, meaning you can
+	safely call "start" multiple times in a row and receive a success
+	each time if the service is running. This requirement is mentioned
+	in the LSB Spec, version 3.1, section 20.2.
+
+	The openipmi initscript does not meet this requirement when the
+	ipmi watchdog option is enabled. The 'start' method will return an
+	error if /dev/watchdog already exists. But, if /dev/watchdog is
+	there because ipmi_watchdog is already loaded, we should not
+	receive an error.
+
+	This change fixes this. It also includes a fix for a syntax error
+	that prevents start_watchdog_common() from working at all.
+	
 2010-05-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Change the "share count" checking to check if
