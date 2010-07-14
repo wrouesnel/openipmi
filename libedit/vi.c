@@ -1002,6 +1002,7 @@ vi_histedit(EditLine *el, int c)
 	int st;
 	char tempfile[] = "/tmp/histedit.XXXXXXXXXX";
 	char *cp;
+	int rv;
 
 	if (el->el_state.doingarg) {
 		if (vi_to_history_line(el, 0) == CC_ERROR)
@@ -1012,8 +1013,12 @@ vi_histedit(EditLine *el, int c)
 	if (fd < 0)
 		return CC_ERROR;
 	cp = el->el_line.buffer;
-	write(fd, cp, el->el_line.lastchar - cp +0u);
-	write(fd, "\n", 1);
+	rv = write(fd, cp, el->el_line.lastchar - cp +0u);
+	if (rv < 0)
+		return CC_ERROR;
+	rv = write(fd, "\n", 1);
+	if (rv < 0)
+		return CC_ERROR;
 	pid = fork();
 	switch (pid) {
 	case -1:

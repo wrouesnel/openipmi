@@ -112,7 +112,7 @@ struct msg_info {
     int           debug;
     int           do_attn;
     unsigned char attn_chars[8];
-    int           attn_chars_len;
+    unsigned int  attn_chars_len;
     char          global_enables;
 
     /* Info from the recv message. */
@@ -252,8 +252,8 @@ struct ra_data {
 static void ra_format_msg(const unsigned char *msg, unsigned int msg_len,
 			  struct msg_info *mi)
 {
-    int i;
-    int len;
+    unsigned int i;
+    unsigned int len;
     unsigned char c[RA_MAX_CHARS_SIZE];
 
     len = 0;
@@ -571,8 +571,8 @@ struct tm_data {
 static void tm_format_msg(const unsigned char *msg, unsigned int msg_len,
 			  struct msg_info *mi)
 {
-    int i;
-    int len;
+    unsigned int i;
+    unsigned int len;
     unsigned char c[TM_MAX_CHARS_SIZE];
     unsigned char t;
 
@@ -773,7 +773,7 @@ static void
 socket_send(const unsigned char *data, unsigned int len, struct msg_info *mi)
 {
     int rv;
-    int i;
+    unsigned int i;
 
     if (mi->debug > 0) {
 	printf("Sock send:");
@@ -790,7 +790,7 @@ socket_send(const unsigned char *data, unsigned int len, struct msg_info *mi)
     if (rv < 0) {
 	perror("write");
 	return;
-    } else if (rv < len) {
+    } else if (((unsigned int) rv) < len) {
 	len -= rv;
 	data += rv;
 	goto restart;
@@ -820,7 +820,7 @@ handle_ipmb_msg(const unsigned char *msg, unsigned int len,
     struct msg *imsg;
     unsigned char rsp[IPMI_MAX_MSG_LENGTH];
     unsigned int rsp_len;
-    int          i;
+    unsigned int i;
 
     imsg = malloc(sizeof(*imsg));
     if (!imsg)
@@ -875,7 +875,7 @@ static unsigned char guid_data[] = {
 static void
 handle_msg(const unsigned char *msg, unsigned int len, struct msg_info *mi)
 {
-    int i;
+    unsigned int i;
     unsigned char rsp[IPMI_MAX_MSG_LENGTH];
     unsigned int rsp_len;
     struct msg *m;
@@ -1326,7 +1326,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-    int i;
+    unsigned int i;
     struct addrinfo hints, *res0;
     sockaddr_ip_t addr;
     struct msg_info *mi = &main_mi;
@@ -1414,7 +1414,7 @@ main(int argc, char *argv[])
     }
 
     i = optind;
-    if (i+2 < argc) {
+    if (i+2 < ((unsigned int) argc)) {
 	fprintf(stderr, "Host and/or port not supplied\n");
 	usage();
     }
@@ -1471,6 +1471,7 @@ main(int argc, char *argv[])
 	unsigned char buf[128];
 	int i;
 	fd_set readfds;
+	int rv2;
 
 	FD_ZERO(&readfds);
 	FD_SET(0, &readfds);
@@ -1507,8 +1508,13 @@ main(int argc, char *argv[])
 		 * Echo one at a time in case the echo gets turned off
 		 * in the middle of this data.
 		 */
-		if (mi->echo)
-		    write(mi->sock, buf+i, 1);
+		if (mi->echo) {
+		    rv2 = write(mi->sock, buf+i, 1);
+		    if (rv2 < 0) {
+			perror("write");
+			usage();
+		    }
+		}
 		mi->codec->handle_char(buf[i], mi);
 	    }
 	}

@@ -2637,7 +2637,7 @@ handle_async_event(ipmi_con_t        *ipmi,
 static int
 handle_msg_send(lan_timer_info_t      *info,
 		int                   addr_num,
-		const ipmi_addr_t     *addr,
+		const ipmi_addr_t     *iaddr,
 		unsigned int          addr_len,
 		const ipmi_msg_t      *msg,
 		ipmi_ll_rsp_handler_t rsp_handler,
@@ -2649,9 +2649,13 @@ handle_msg_send(lan_timer_info_t      *info,
     unsigned int      seq;
     struct timeval    timeout;
     int               rv;
-    ipmi_addr_t       tmp_addr;
+    char              addr_data[sizeof(ipmi_addr_t)];
+    char              addr_data2[sizeof(ipmi_addr_t)];
+    ipmi_addr_t       *addr = (ipmi_addr_t *) addr_data;
     const ipmi_addr_t *orig_addr = NULL;
     unsigned int      orig_addr_len = 0;
+
+    *addr = *iaddr;
 
     seq = (lan->last_seq + 1) % 64;
     if (seq == 0)
@@ -2702,7 +2706,7 @@ handle_msg_send(lan_timer_info_t      *info,
 	}
 
 	if (ipmb->slave_addr == lan->slave_addr[ipmb->channel]) {
-	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
+	    ipmi_system_interface_addr_t *si = (void *) addr_data2;
 	    /* Most systems don't handle sending to your own slave
                address, so we have to translate here. */
 
@@ -2711,7 +2715,7 @@ handle_msg_send(lan_timer_info_t      *info,
 	    si->lun = ipmb->lun;
 	    orig_addr = addr;
 	    orig_addr_len = addr_len;
-	    addr = &tmp_addr;
+	    addr = (ipmi_addr_t *) si;
 	    addr_len = sizeof(*si);
 	}
     }

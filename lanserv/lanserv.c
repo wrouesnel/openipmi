@@ -188,14 +188,15 @@ static int
 smi_send_dev(lan_data_t *lan, msg_t *msg)
 {
     struct ipmi_req  req;
-    struct ipmi_addr addr;
+    char             addr_data[sizeof(struct ipmi_addr)];
+    struct ipmi_addr *addr = (struct ipmi_addr *) addr_data;
     misc_data_t      *info = lan->user_info;
     int              rv;
 
-    req.addr = (unsigned char *) &addr;
+    req.addr = (unsigned char *) addr;
     
     if (msg->cmd == IPMI_SEND_MSG_CMD) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
+	struct ipmi_ipmb_addr *ipmb = (void *) addr;
 	int                   pos;
 	/* Send message has special handling */
 	
@@ -220,7 +221,7 @@ smi_send_dev(lan_data_t *lan, msg_t *msg)
 	req.msg.data_len = msg->len-(pos + 7); /* Subtract last checksum, too */
     } else {
 	/* Normal message to the BMC. */
-	struct ipmi_system_interface_addr *si = (void *) &addr;
+	struct ipmi_system_interface_addr *si = (void *) addr;
 
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si->channel = 0xf;
@@ -281,15 +282,16 @@ static void
 handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 {
     struct ipmi_recv rsp;
-    struct ipmi_addr addr;
+    char             addr_data[sizeof(struct ipmi_addr)];
+    struct ipmi_addr *addr = (struct ipmi_addr *) addr_data;
     unsigned char    data[IPMI_MAX_MSG_LENGTH+8];
     unsigned char    rdata[IPMI_MAX_MSG_LENGTH];
     int              rv;
     msg_t            *msg;
     misc_data_t      *info = lan->user_info;
 
-    rsp.addr = (unsigned char *) &addr;
-    rsp.addr_len = sizeof(addr);
+    rsp.addr = (unsigned char *) addr;
+    rsp.addr_len = sizeof(struct ipmi_addr);
     rsp.msg.data = rdata;
     rsp.msg.data_len = sizeof(rdata);
 
@@ -316,10 +318,10 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 
     msg = (msg_t *) rsp.msgid;
 
-    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* Nothing to do. */
-    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr; 
+    } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	struct ipmi_ipmb_addr *ipmb = (void *) addr; 
 
 	data[0] = 0; /* return code. */
 	data[1] = info->bmc_ipmb;

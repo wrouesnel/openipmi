@@ -5,6 +5,12 @@
 	ui/Makefile.am, unix/Makefile.am, utils/Makefile.am: Remove all
 	gnu make specific constructs and make automake happy.
 
+	* sample/ipmi_serial_bmc_emu, sample/ipmicmd.c, sample/rmcp_ping.c,
+	libedit/read.c, libedit/readline.c, libedit/vi.c, lib/mc.c,
+	lib/lanparm.c, lib/ipmi_smi.c, lib/ipmi_payload.c, lib/ipmi_lan.c,
+	lib/domain.c, lanserv/lanserv.c: Cleaned up some pointer aliasing
+	problems and some signed/unsigned compare problems.
+
 2010-06-02 Dann Frazier <dannf at sourceforge.net>
 
 	* ipmi.init - Initscripts should be idempotent, meaning you can

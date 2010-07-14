@@ -411,7 +411,8 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
 		       unsigned char *tmsg,
 		       unsigned int  data_len)
 {
-    ipmi_addr_t  addr;
+    char         addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t  *addr = (ipmi_addr_t *) addr_data;
     unsigned int addr_len;
     ipmi_msg_t   msg;
 
@@ -420,7 +421,7 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
     {
 	/* It is an event from the event buffer. */
 	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) &addr;
+	    = (ipmi_system_interface_addr_t *) addr;
 
 	if (tmsg[6] != 0) {
 	    /* An error getting the events, just ignore it. */
@@ -441,7 +442,7 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
         if (DEBUG_MSG) {
 	    char buf1[32], buf2[32], buf3[32];
 	    ipmi_log(IPMI_LOG_DEBUG_START, "incoming async event\n addr =");
-	    dump_hex((unsigned char *) &addr, addr_len);
+	    dump_hex((unsigned char *) addr, addr_len);
             ipmi_log(IPMI_LOG_DEBUG_CONT,
 		     "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
 		     ipmi_get_netfn_string(msg.netfn, buf1, 32),
@@ -456,7 +457,7 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
 	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
         }
 	if (ipmi->handle_async_event)
-	    ipmi->handle_async_event(ipmi, &addr, addr_len, &msg);
+	    ipmi->handle_async_event(ipmi, addr, addr_len, &msg);
     } else {
 	ipmi_log(IPMI_LOG_SEVERE, "ipmi_lan.c(ipmi_handle_recv_async): "
 		 "Got an invalid async event, shouldn't happen");

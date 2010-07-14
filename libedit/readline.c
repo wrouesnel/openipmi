@@ -676,7 +676,7 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 	if (aptr)
 		free(aptr);
 
-	if (*cmd == 0 || (cmd - (command + offs) >= cmdlen)) {
+	if (*cmd == 0 || (cmd - (command + offs) >= ((unsigned int) cmdlen))) {
 		*result = tmp;
 		return(1);
 	}
@@ -936,8 +936,8 @@ loop:
 char *
 history_arg_extract(int start, int end, const char *str)
 {
-	size_t  i, len, max;
-	char	**arr, *result;
+	int  i, len, max;
+	char **arr, *result;
 
 	arr = history_tokenize(str);
 	if (!arr)
@@ -1608,7 +1608,7 @@ int
 rl_add_defun(const char *name, Function *fun, int c)
 {
 	char dest[8];
-	if (c >= sizeof(map) / sizeof(map[0]) || c < 0)
+	if (((unsigned int) c) >= sizeof(map) / sizeof(map[0]) || c < 0)
 		return -1;
 	map[(unsigned char)c] = fun;
 	el_set(e, EL_ADDFN, name, name, rl_bind_wrapper);

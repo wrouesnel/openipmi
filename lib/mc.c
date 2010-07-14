@@ -2558,19 +2558,20 @@ static void
 mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 {
     mc_ptr_info_t *info = cb_data;
-    ipmi_addr_t   addr;
+    char          addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t   *addr = (ipmi_addr_t *) addr_data;
     unsigned int  addr_len;
     ipmi_mc_t     *mc;
 
     if (info->id.channel == IPMI_BMC_CHANNEL) {
-	ipmi_system_interface_addr_t *si = (void *) &addr;
+	ipmi_system_interface_addr_t *si = (void *) addr;
 
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si->channel = info->id.mc_num;
 	si->lun = 0;
 	addr_len = sizeof(*si);
     } else {
-	ipmi_ipmb_addr_t *ipmb = (void *) &addr;
+	ipmi_ipmb_addr_t *ipmb = (void *) addr;
 
 	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
 	ipmb->channel = info->id.channel;
@@ -2579,7 +2580,7 @@ mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 	addr_len = sizeof(*ipmb);
     }
 
-    mc = _ipmi_find_mc_by_addr(domain, &addr, addr_len);
+    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (mc) {
 	if (info->cmp_seq && (mc->seq != info->id.seq)) {
 	    _ipmi_mc_put(mc);

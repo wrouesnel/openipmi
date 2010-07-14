@@ -2137,14 +2137,15 @@ int
 ipmi_lanconfig_get_port_rmcp_primary(ipmi_lan_config_t *lanc,
 				     unsigned int      *val)
 {
-    unsigned char data[2];
-    int           rv;
-    unsigned int  len = 2;
+    uint16_t     data;
+    int          rv;
+    unsigned int len = 2;
 
-    rv = ipmi_lanconfig_get_primary_rmcp_port(lanc, data, &len);
+    rv = ipmi_lanconfig_get_primary_rmcp_port(lanc, (unsigned char *) &data,
+					      &len);
     if (rv)
 	return rv;
-    *val = ntohs(*((uint16_t *) data));
+    *val = ntohs(data);
     return 0;
 }
 
@@ -2152,11 +2153,11 @@ int
 ipmi_lanconfig_set_port_rmcp_primary(ipmi_lan_config_t *lanc,
 				     unsigned int      val)
 {
-    unsigned char data[2];
-    int           rv;
+    uint16_t data;
+    int      rv;
 
-    *((uint16_t *) data) = htons(val);
-    rv = ipmi_lanconfig_set_primary_rmcp_port(lanc, data, 2);
+    data = htons(val);
+    rv = ipmi_lanconfig_set_primary_rmcp_port(lanc, (unsigned char *) &data, 2);
     return rv;
 }
 
@@ -2164,14 +2165,15 @@ int
 ipmi_lanconfig_get_port_rmcp_secondary(ipmi_lan_config_t *lanc,
 				       unsigned int      *val)
 {
-    unsigned char data[2];
-    int           rv;
-    unsigned int  len = 2;
+    uint16_t     data;
+    int          rv;
+    unsigned int len = 2;
 
-    rv = ipmi_lanconfig_get_secondary_rmcp_port(lanc, data, &len);
+    rv = ipmi_lanconfig_get_secondary_rmcp_port(lanc, (unsigned char *) &data,
+						&len);
     if (rv)
 	return rv;
-    *val = ntohs(*((uint16_t *) data));
+    *val = ntohs(data);
     return 0;
 }
 
@@ -2179,11 +2181,12 @@ int
 ipmi_lanconfig_set_port_rmcp_secondary(ipmi_lan_config_t *lanc,
 				       unsigned int      val)
 {
-    unsigned char data[2];
-    int           rv;
+    uint16_t data;
+    int      rv;
 
-    *((uint16_t *) data) = htons(val);
-    rv = ipmi_lanconfig_set_secondary_rmcp_port(lanc, data, 2);
+    data = htons(val);
+    rv = ipmi_lanconfig_set_secondary_rmcp_port(lanc, (unsigned char *) &data,
+						2);
     return rv;
 }
 

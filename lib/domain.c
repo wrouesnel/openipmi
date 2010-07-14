@@ -1746,24 +1746,25 @@ iterate_mc_upds(void *cb_data, void *item1, void *item2)
 static int
 add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    ipmi_addr_t  addr;
+    char         addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t  *addr = (ipmi_addr_t *) addr_data;
     unsigned int addr_len;
     int          rv = 0;
 
     CHECK_DOMAIN_LOCK(domain);
     CHECK_MC_LOCK(mc);
 
-    ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
+    ipmi_mc_get_ipmi_address(mc, addr, &addr_len);
     
     ipmi_lock(domain->mc_lock);
 
-    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	if (addr.channel >= MAX_CONS)
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	if (addr->channel >= MAX_CONS)
 	    rv = EINVAL;
 	else
-	    domain->sys_intf_mcs[addr.channel] = mc;
-    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) &addr;
+	    domain->sys_intf_mcs[addr->channel] = mc;
+    } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 	int              idx;
 	mc_table_t       *tab;
 	int              i;
@@ -1895,21 +1896,22 @@ ipmi_domain_remove_mc_updated_handler_cl(ipmi_domain_t            *domain,
 int
 _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    ipmi_addr_t  addr;
+    char         addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t  *addr = (ipmi_addr_t *) addr_data;
     unsigned int addr_len;
     int          found = 0;
 
-    ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
+    ipmi_mc_get_ipmi_address(mc, addr, &addr_len);
     
-    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	if ((addr.channel < MAX_CONS)
-	    && (mc == domain->sys_intf_mcs[addr.channel]))
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	if ((addr->channel < MAX_CONS)
+	    && (mc == domain->sys_intf_mcs[addr->channel]))
 	{
-	    domain->sys_intf_mcs[addr.channel] = NULL;
+	    domain->sys_intf_mcs[addr->channel] = NULL;
 	    found = 1;
 	}
-    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) &addr;
+    } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 	int              idx;
 	mc_table_t       *tab;
 	int              i;
@@ -1941,18 +1943,19 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 				      ipmi_mc_t     **new_mc)
 {
     ipmi_mc_t   *mc;
-    ipmi_addr_t addr;
+    char        addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t *addr = (ipmi_addr_t *) addr_data;
     int         addr_size;
     int         rv;
 
     if (channel == IPMI_BMC_CHANNEL) {
-	ipmi_system_interface_addr_t *saddr = (void *) &addr;
+	ipmi_system_interface_addr_t *saddr = (void *) addr;
 	saddr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	saddr->channel = slave_addr;
 	saddr->lun = 0;
 	addr_size = sizeof(*saddr);
     } else {
-	ipmi_ipmb_addr_t *iaddr = (void *) &addr;
+	ipmi_ipmb_addr_t *iaddr = (void *) addr;
 	iaddr->addr_type = IPMI_IPMB_ADDR_TYPE;
 	iaddr->channel = channel;
 	iaddr->lun = 0;
@@ -1960,14 +1963,14 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 	addr_size = sizeof(*iaddr);
     }
 
-    mc = _ipmi_find_mc_by_addr(domain, &addr, addr_size);
+    mc = _ipmi_find_mc_by_addr(domain, addr, addr_size);
     if (mc) {
 	if (new_mc)
 	    *new_mc = mc;
 	return 0;
     }
 
-    rv = _ipmi_create_mc(domain, &addr, addr_size, &mc);
+    rv = _ipmi_create_mc(domain, addr, addr_size, &mc);
     if (rv)
 	return rv;
 

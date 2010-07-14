@@ -365,7 +365,8 @@ process_input_line(char *buf)
     char               *v = strtok_r(buf, " \t\r\n,.\"", &strtok_data);
     unsigned int       pos = 0;
     int                start;
-    ipmi_addr_t        addr;
+    char               addr_data[sizeof(ipmi_addr_t)];
+    ipmi_addr_t        *addr = (ipmi_addr_t *) addr_data;
     unsigned int       addr_len;
     ipmi_msg_t         msg;
     unsigned char      outbuf[MAX_IPMI_DATA_SIZE];
@@ -497,7 +498,7 @@ process_input_line(char *buf)
     channel = outbuf[start]; start++;
 
     if (channel == IPMI_BMC_CHANNEL) {
-	struct ipmi_system_interface_addr *si = (void *) &addr;
+	struct ipmi_system_interface_addr *si = (void *) addr;
 	if ((pos-start) < 1) {
 	    fprintf(stderr, "No LUN specified\n");
 	    return -1;
@@ -508,7 +509,7 @@ process_input_line(char *buf)
 	si->channel = IPMI_BMC_CHANNEL;
 	addr_len = sizeof(*si);
     } else if (lan_addr) {
-	struct ipmi_lan_addr *lan = (void *) &addr;
+	struct ipmi_lan_addr *lan = (void *) addr;
 
 	if ((pos-start) < 3) {
 	    fprintf(stderr, "No LAN address specified\n");
@@ -524,7 +525,7 @@ process_input_line(char *buf)
 	msg.netfn = outbuf[start]; start++;
 	addr_len = sizeof(*lan);
     } else {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
+	struct ipmi_ipmb_addr *ipmb = (void *) addr;
 
 	if ((pos-start) < 2) {
 	    fprintf(stderr, "No IPMB address specified\n");
@@ -562,13 +563,13 @@ process_input_line(char *buf)
     msg.data = &(outbuf[start]);
     msg.data_len = pos-start;
     if (time_count) {
-	time_msgs(con, &msg, &addr, addr_len, time_count);
+	time_msgs(con, &msg, addr, addr_len, time_count);
 	rv = 0;
     } else {
 	if (msg.netfn & 1)
-	    rv = con->send_response(con, &addr, addr_len, &msg, seq);
+	    rv = con->send_response(con, addr, addr_len, &msg, seq);
 	else
-	    rv = con->send_command(con, &addr, addr_len, &msg,
+	    rv = con->send_command(con, addr, addr_len, &msg,
 				   rsp_handler, NULL);
 	if (rv) {
 	    fprintf(stderr, "Error sending command: %x\n", rv);

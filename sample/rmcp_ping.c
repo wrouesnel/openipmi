@@ -127,9 +127,11 @@ main(int argc, char *argv[])
     unsigned char      rsp[28];
     int                sock;
     int                rv;
-    struct sockaddr    dest;
+    char               dest_data[sizeof(struct sockaddr)];
+    struct sockaddr    *dest = (struct sockaddr *) dest_data;
     size_t             destlen;
-    struct sockaddr    src;
+    char               src_data[sizeof(struct sockaddr)];
+    struct sockaddr    *src = (struct sockaddr *) src_data;
     int                val;
     socklen_t          fromlen;
     fd_set             readfds;
@@ -206,11 +208,11 @@ main(int argc, char *argv[])
 		    gai_strerror(rv));
 	    usage();
 	}
-	dest = *(res0->ai_addr);
+	*dest = *(res0->ai_addr);
 	destlen = res0->ai_addrlen;
 	freeaddrinfo(res0);
     } else {
-	struct sockaddr_in *ip = (struct sockaddr_in *) &dest;
+	struct sockaddr_in *ip = (struct sockaddr_in *) dest;
 	ip->sin_family = AF_INET;
 	ip->sin_port = htons(port);
 	ip->sin_addr.s_addr = INADDR_BROADCAST;
@@ -254,7 +256,7 @@ main(int argc, char *argv[])
 	    starttag++;
 	    if (starttag > 254)
 		starttag = 0;
-	    rv = sendto(sock, ping_msg, sizeof(ping_msg), 0, &dest, destlen);
+	    rv = sendto(sock, ping_msg, sizeof(ping_msg), 0, dest, destlen);
 	    if (rv < 0) {
 		close(sock);
 		perror("sendto");
@@ -278,8 +280,8 @@ main(int argc, char *argv[])
 	    goto next;
 	}
 	
-	fromlen = sizeof(src);
-	rv = recvfrom(sock, rsp, sizeof(rsp), 0, &src, &fromlen);
+	fromlen = sizeof(*src);
+	rv = recvfrom(sock, rsp, sizeof(rsp), 0, src, &fromlen);
 
 	if (debug_packet && (rv > 0)) {
 	    int i;
@@ -302,12 +304,12 @@ main(int argc, char *argv[])
 	{
 	    fprintf(stderr, "Invalid ping response\n");
 	} else {
-	    if (! add_host(&src))
+	    if (! add_host(src))
 		goto next;
-	    rv = getnameinfo(&src, fromlen, host, sizeof(host),
+	    rv = getnameinfo(src, fromlen, host, sizeof(host),
 			     serv, sizeof(serv), 0);
 	    if (rv) {
-		struct sockaddr_in *ip = (struct sockaddr_in *) &src;
+		struct sockaddr_in *ip = (struct sockaddr_in *) src;
 		addrname = inet_ntoa(ip->sin_addr);
 	    } else
 		addrname = host;
