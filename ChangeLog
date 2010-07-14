@@ -1,5 +1,12 @@
+2010-07-14 Corey Minyard <cminyard@mvista.com>
+
+	* Makefile.am, configure.in, cmdlang/Makefile.am, doc/Makefile.am,
+	glib/Makefile.am, lanserv/Makefile.am lib/Makefile.am, tcl/Makefile.am,
+	ui/Makefile.am, unix/Makefile.am, utils/Makefile.am: Remove all
+	gnu make specific constructs and make automake happy.
+
 2010-06-02 Dann Frazier <dannf at sourceforge.net>
-	
+
 	* ipmi.init - Initscripts should be idempotent, meaning you can
 	safely call "start" multiple times in a row and receive a success
 	each time if the service is running. This requirement is mentioned
@@ -13,7 +20,7 @@
 
 	This change fixes this. It also includes a fix for a syntax error
 	that prevents start_watchdog_common() from working at all.
-	
+
 2010-05-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Change the "share count" checking to check if
@@ -30,16 +37,16 @@
 	Fix those problems.
 
 	* configure.in: Move to version 2.0.18.
-	
+
 2010-04-29 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 2.0.17.
-	
+
 2010-04-28 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/ipmi.c:  Add a cache option
 	to allow using the local cache to be enabled or disabled.
-	
+
 	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c,
 	include/OpenIPMI/ipmiif.h.in:
 	Add support for the cache option.  Also rearrange the handling
@@ -59,7 +66,7 @@
 	* swig/python/Makefile.i, swig/OpenIPMI.i,
 	swig/python/openipmigui/Makefile.am:
 	Clean up various compile issues with the python sources.
-	
+
 2010-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Use unsigned int, not double, to hold the raw
@@ -67,9 +74,9 @@
 
 	* lib/ipmi_lan.c: Pass in the correct socket length to sendto,
 	not just the maximum possible size.
-	
+
 2010-04-21 Alex Deiter <alex.deiter@gmail.com>
-	
+
 	* cmdlang/ipmish.c, cmdlang/out_fru.c, configure.in,
 	lanserv/OpenIPMI/lanserv.h, lanserv/emu.h, lanserv/lanserv.c,
 	lanserv/lanserv_emu.c, lib/fru_spd_decode.c, lib/oem_intel.c,
@@ -110,7 +117,7 @@
 	obviously fails. The init script does not show any error and
 	pretends everything is OK.  So modify the init script to detect
 	that another watchdog is registered and print a failure message.
-	
+
 2009-06-17 Eric J. Bowersox <ericb@aspsys.com>
 
 	* lib/ipmi_lan.c: Two more null-pointer fixes to ipmi_lan.c, found
@@ -132,17 +139,17 @@
 
 	* lib/oem_atca_conn.c: Fix a logic problem in the disabling
 	of ATCA address checking.
-	
+
 2009-06-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Fix a problem where the ATCA address
 	checking code could be called even if it was disabled.
-	
+
 2009-03-16 Corey Minyard <cminyard@mvista.com>
-	
+
 	* configure.in: Move to version 2.0.16.  It's been a while and
 	a release is a good idea, I think.
-	
+
 2009-01-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/normal_fru.c: An Intel document (IPMI 0.9 to IPMI 1.0 Change
@@ -256,7 +263,7 @@
 	destruction) to detect this.  To avoid burdening the user with
 	having to watch that stuff, provide an easy way for them to know
 	when a callback handler is automatically removed.
-	
+
 	* include/OpenIPMI/internal/ipmi_entity.h: Added helper functions
 	for the callback cleanup.
 
@@ -288,7 +295,7 @@
 
 	* lib/pef.c: Make sure the PEF object stays around during the
 	capabilities check.
-	
+
 2008-04-04 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: The send_command_option function of a connection
@@ -310,7 +317,7 @@
 	is for reservation messages; on a slow link a reservation would be
 	resent, then the first response would be received and the old
 	reservation was being returned.
-	
+
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a side-effect send
 	command function.
 	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: ditto
@@ -333,7 +340,7 @@
 	* lib/oem_atca_conn.c: ditto
 
 	* sample/sample.c: Add test code for multiple init/shutdown.
-	
+
 
 2008-03-27 Corey Minyard <cminyard@mvista.com>
 
@@ -341,7 +348,7 @@
 	cases it would never properly deliver events.
 
 	* configure.in: Move to version 2.0.14.
-	
+
 2008-03-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/lanserv.h, lanserv/OpenIPMI/lanserv.h: Move
@@ -361,7 +368,7 @@
 	* libedit/makelist: When we try to compile OpenIMPI (2.0.11 or
 	previous versions) under Turkish locale, we get some erors like
 	 chared.c:442: error: 'ED_UNASSIGNED' undeclared (first use in
-	 this function) 
+	 this function)
 	This is because Turkish character i. Using ASCII could solve the
 	problem. I am attaching a patch for makelist, so we can compile
 	it.
@@ -401,7 +408,7 @@
 
 	* configure.in: Since one of the changes fixed a critical bug,
 	move to version 2.0.13.
-	
+
 2007-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Fix
@@ -497,7 +504,7 @@
 
 	* swig/python/OpenIPMI_lang.i: If a method raises an exception,
 	print the method name.
-	
+
 2006-07-21 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
 
         * lib/oem_kontron_conn.c: Add more board support.
@@ -583,7 +590,7 @@
 	Technically, for SDRs with a system software ID owner, it might be
 	better to make sure that threadhold and event enables are not
 	done, but hopefully the SDRs are right.  Yeah, right, I know.
-	
+
 	* include/OpenIPMI/internal/ipmi_sensor.h: Add a function to set
 	the readable field for a sensor.
 
@@ -594,9 +601,9 @@
 
 	* lib/sensor.c: Fix some problems parsing type 3 SDRs.  Also added
 	some error logs and cleaned things up a bit.
-	
+
 	* configure.in: Move to version 2.0.10
-	
+
 2006-11-29 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_types.h: Increase the value of
@@ -745,7 +752,7 @@
 	* swig/python/openipmigui/_fru.py: Added a refresh button to
 	re-read the whole FRU contents.  This allows you to change
 	multi-record data and see what happens.
-	
+
 	* swig/python/openipmigui/gui.py: Got wheel mouse scrolling working.
 	* swig/python/openipmigui/gui_list.py: ditto
 	* swig/python/openipmigui/gui_treelist.py: ditto
@@ -770,7 +777,7 @@
 
 	* swig/python/openipmigui/_fru.py: Added support for the new FRU
 	enumerations.
-	
+
 2006-11-06 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Redid
@@ -779,7 +786,7 @@
 
 	* swig/python/openipmigui/gui_cmdwin.py: Fixed some problems
 	dealing with backspace and delete.
-	
+
 2006-11-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_fru.h, lib/normal_fru.c: Reworked
@@ -802,7 +809,7 @@
 
 	* swig/python/openipmigui/gui_treelist.py: Add the ability to insert
 	items before a list element.
-	
+
 	* swig/python/openipmigui/_fru.py: Add the ability to insert items
 	before an array element.  Fix boolean handling.
 
@@ -869,7 +876,7 @@
 
 	* swig/python/openipmigui/gui_treelist.py: Added the ability to
 	remove items from the tree and added better cleanup facilities.
-	
+
 	* swig/python/openipmigui/_fru.py: Added the ability to remove
 	array items.
 
@@ -891,7 +898,7 @@
 
 	* swig/python/openipmigui/_fru.py: Added support for setting FRU
 	items.
-	
+
 2006-10-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c, doc/IPMI.ltx: Created a power feed control for
@@ -1007,7 +1014,7 @@
 
 	* include/OpenIPMI/ipmi_picmg.h: Added the new PICMG messages from
 	the new ATCA spec.
-	
+
 	* lib/oem_atca_conn.c: Added support for ATCA RMCP ping sockets so
 	that the auxiliary IP connections on ATCA chassis can be
 	monitored.
@@ -1065,19 +1072,19 @@
 	See the code for details.
 
 	* configure.in: Move to version 2.0.8
-	
+
 2006-09-21 Coly Li <colyli@gmail.com>
 
-	* swig/python/Makefile.am: Fix the path mistake for install 
+	* swig/python/Makefile.am: Fix the path mistake for install
 	handling.
 
 2006-09-21 Coly Li <colyli@gmail.com>
-	
+
 	* swig/OpenIPMI.i: add the missed IPMI_SWIG_C_CB_EXIT to
 	add_domain_change_handler and remove_domain_change_handler.
 
 2006-09-20 Corey Minyard <cminyard@mvista.com>
-	
+
 	* cmdlang/Makefile.am: Add proper uninstall handling
 	* include/OpenIPMI/Makefile.am: ditto
 	* include/OpenIPMI/internal/Makefile.am: ditto
@@ -1230,7 +1237,7 @@
 2006-05-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_posix.h: Remove selector interface.
-	
+
 	* unix/posix_os_hnd.c: Remove selector interface and make
 	sset_log_handler static.
 	* unix/posix_thread_os_hnd.c: ditto
@@ -1271,7 +1278,7 @@
 
 	* */Makefile.am: Add -Wsign-compare to find signed/unsigned
 	comparison problems.
-	
+
 	* practically everything: Fixed signed/unsigned comparison problems.
 
 2006-03-18 Corey Minyard <cminyard@mvista.com>
@@ -1316,7 +1323,7 @@
 
 	* lib/lan.c: Add the new statistic interface support.
 	* lib/domain.c: ditto
-	
+
 2006-03-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Need to pass an entire channel set's worth
@@ -1336,7 +1343,7 @@
 
 	* lib/mc.c: Don't start operations unless the MC is in the proper
 	state.
-	
+
 	* lib/entity.c: Make sure only one presence check is running at a
 	time.
 
@@ -1378,7 +1385,7 @@
 	* lib/mc.c: Removed the use of the sensor wait queue.  It caused
 	problems handling failure conditions and was pointless.  Also
 	added some debug tracing stuff.
-	
+
 2006-02-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Make sure use_orig_addr is handled in all cases,
@@ -1402,7 +1409,7 @@
 	supplied.  This fixes problem with system interface MC scanning.
 
 	* cmdlang/cmd_sensor.c: Fixed some misnamed comments.
-	
+
 	* lib/entity.c: Make sure the domain exists before calling
 	_ipmi_put_domain_fully_up().
 
@@ -1428,7 +1435,7 @@
 
 	* lib/entity.c: Fixed some possible deadlocks dealing with the
 	built-in hot-swap state machine and presence handling.
-	
+
 2006-02-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui.py, man/openipmigui.1:  Added some
@@ -1498,7 +1505,7 @@
 	* sample/Makefile.am: ditto
 	* ui/Makefile.am: ditto
 	* unix/Makefile.am: ditto
-	
+
 	* lib/lanparm.c: Fixed a data overrun in ipmi_lanparm_set_config.
 	* lib/solparm.c: ditto
 
@@ -1523,10 +1530,10 @@
 	* swig/python/openipmigui/_sensor.py: ditto
 
 	* swig/python/openipmigui/errstr.py: Only do a clear in 2.4
-	
+
 	* swig/python/openipmigui/_sel.py: Fix problems deleting single
-	events. 
-	
+	events.
+
 2006-02-10 Coly <colyli@gmail.com>, Corey Minyard <cminyard@mvista.com>
 
 	* libedit: Add this directory
@@ -1580,7 +1587,7 @@
 	* swig/perl/OpenIPMI_perl.c, swig/python/OpenIPMI_lang.i: Added a
 	new return value type that will take an empty return and not
 	modify the return value.
-	
+
 	* swig/OpenIPMI.i: Allow event handlers to take return values from
 	the handler, but preserve current semantics.
 
@@ -1644,7 +1651,7 @@
 
 	* swig/python/openipmigui/_mc_chan.py: Add support for detecting
 	if an MC supports SoL before offering solparm configuration.
-	
+
 	* swig/python/openipmigui/_mc_lanparm.py: Add support for handling
 	enum values.
 	* swig/python/openipmigui/_mc_lanparm.py: ditto
@@ -1658,7 +1665,7 @@
 
 	* swig/python/openipmigui/_mc_pef.py: Add support for PEF
 	configuration.
-	
+
 	* swig/python/openipmigui/Makefile.am: Add solparm and pef
 	configuration files.
 
@@ -1693,7 +1700,7 @@
 
 	* swig/python/openipmigui/_mc_chan.py: Tie-ins for solparm support
 	are here.
-	
+
 	* swig/python/openipmigui/Makefile.am: Add the new solparm file.
 
 2006-02-03 Corey Minyard <cminyard@mvista.com>
@@ -1849,7 +1856,7 @@
 	* man/Makefile.am, man/openipmi_conparms.7: Added a man page on
 	the standard connection parms, so it doesn't have to be in every
 	man page.
-	
+
 	* man/openipmicmd.1: Swith over to use the new conparms manpage.
 
 	* man/solterm.1: Added docs for solterm.
@@ -1931,7 +1938,7 @@
 	Basically, it completely abstract connection type information so
 	new connections can be seamlessly added to OpenIPMI without
 	changing the core code, GUI, or anything else like that.
-	
+
 	* include/OpenIPMI/ipmi_conn.h, lib/domain.c, lib/ipmiif.h.in:
 	Added a way to get the arguments for a connections.
 
@@ -1976,7 +1983,7 @@
 	handling in domains.
 	* swig/python/openipmigui/_domain.py: ditto
 	* swig/python/openipmigui/gui.py: ditto
-	
+
 	* swig/python/openipmigui/Makefile.am: Add the _conn.py file.
 
 	* sample/ipmicmd.c, sample/Makefile.am: Remove the popt parsing
@@ -2001,7 +2008,7 @@
 	* include/OpenIPMI/ipmi_conn.h: Add an interface to the connection
 	for returning the current arguments that could be fed to a new
 	connection.
-	
+
 2006-01-09 Corey Minyard <cminyard@mvista.com>
 
 	* man/openipmigui.1, man/Makefile.am: Started a man page for the
@@ -2026,7 +2033,7 @@
 	* lib/mc.c: Added handling of checking if the channel support
 	RMCP+ before allowing setting of 20-bit passwords.  Also allow
 	a null handler for ipmi_mc_set_user().
-	
+
 	* swig/python/openipmigui/*.py: Work on IPMI user handling.
 
 2006-01-06 Corey Minyard <cminyard@mvista.com>
@@ -2049,7 +2056,7 @@
 
 	* swig/python/openipmigui/*.py: Work on getting the lanparm values
 	and channel values settable.
-	
+
 2006-01-05 Corey Minyard <cminyard@mvista.com>
 
 	* swig/OpenIPMI.i: Add a way for the languages to plug-in code at
@@ -2101,7 +2108,7 @@
 	and lanparm handling.
 
 2005-12-29 Corey Minyard <cminyard@mvista.com>
-	
+
 	* lib/ipmi_payload.c: Fix things so send message commands can be
 	routed through a LAN channel.  This allows ATCA AMCs to be
 	directly communicated with.
@@ -2205,7 +2212,7 @@
 	* lib/oem_atca.c: Set the auto activate/deactivate function to
 	NULL instead of real functions that return value.  That lets the
 	upper level code detect that this is not supported.
-	
+
 	* swig/python/OpenIPMI_lang.i: Fixes problems with returning NULL
 	char ** and other ** objects.
 
@@ -2340,7 +2347,7 @@
 
 	* swig/OpenIPMI.i: Add entity SDR id and entity id string fetch
 	methods.
-	
+
 2005-11-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, lib/domain.c: Make sure certain things don't run when
@@ -2459,7 +2466,7 @@
 	functions to take an array of IPMB addresses, not a single ipmb
 	address.  Required for per-channel IPMB support.  An unfortunate
 	(mostly internal) interface change.
-	
+
 	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.h: Add
 	per-channel IPMB address support.
 	* lib/ipmi_lan.c: ditto
@@ -2516,14 +2523,14 @@
 
 	* lib/oem_atca.c: Added support for local blade domains when coming
 	in from an system interface.
-	
+
 2005-10-17 Matt Domsch <Matt_Domsch@dell.com>
 	* ipmi.init: if ipmi_devintf can't be removed, don't delete /dev/ipmi0
 	* ipmi.init: merge SuSE config file foo=yes vs foo=1  changes.
 	* ipmi.sysconf: ditto
 
 2005-10-13 Corey Minyard <cminyard@mvista.com>
-	
+
 	* cmdlang/Makefile.am: Fix the clean to work properly.
 	* glib/Makefile.am: ditto
 	* lanserv/Makefile.am: ditto
@@ -2557,7 +2564,7 @@
 	* lib/pef.c: ditto
 	* lib/sdr.c: ditto
 	* lib/sensor.c: ditto
-	
+
 	* lib/sel.c: Optimized SEL clearing.  If the SEL detects that all
 	entries are deleted, it will immediately add a fetch operation at
 	the head of the queue.  If the fetch operation succeeds and clears
@@ -2598,7 +2605,7 @@
 
 2005-10-04 Matt Domsch <Matt_Domsch@dell.com>
 	* ipmi.init: don't strictly require LSB functions on Red Hat / VMware
-	
+
 2005-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* utils/*.c, lanserv/*.c, lanserv/*.h: Relicense part of OpenIPMI
@@ -2645,7 +2652,7 @@
 	* lib/event.c, include/OpenIPMI/ipmiif.h.in: Added a way to
 	"interpret" an existing event the same way that new incoming
 	events are interpreted.
-	
+
 	* cmdlang/cmd_sel.c: Added an "interp" option to the event
 	listing command to interpret the event.
 
@@ -2656,11 +2663,11 @@
 	(driver 36.0) and newer uses poweroff_powercycle.
 
 	* OpenIPMI.spec.in: %preun and %postun fixes from Fedora Core
-	
+
 2005-09-08 Matt Domsch <Matt_Domsch@dell.com>
 
 	* ipmi.init: silence modprobe output, matches Fedora again
-	
+
 2005-09-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Check that the write and write complete functions are
@@ -2685,7 +2692,7 @@
 
 	* include/OpenIPMI/internal/ipmi_oem.h:  Move some FRU-specific
 	interfaces out of here.
-	
+
 	* include/OpenIPMI/internal/ipmi_fru.h: Move the FRU-specific
 	interfaces into here.
 
@@ -2876,7 +2883,7 @@
 	* sample/sample3.c: ditto
 
 	* configure.in: Move to version 2.0.2
-	
+
 2005-07-13 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_sensor.c, include/OpenIPMI/ipmiif.h.in:
@@ -2908,12 +2915,12 @@
 	a user problem.
 
 2005-06-14 Forrest Zhao <forrest.zhao@intel.com>, Corey Minyard <cminyard@mvista.com>
-	
-	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h 
+
+	* include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h
 	  lib/fru.c, lib/oem_atca.c, ui/ui.c: Add support for OEM FRU
 	  multirecord decode, providing a hierarchy interface for user to
 	  get each field of decoded OEM FRU multirecord.
- 
+
 2005-06-10 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Fix some english grammar problems in a pring.
@@ -2994,7 +3001,7 @@
 
 	* lib/oem_atca.c, lib/oem_motorola_mxp.c, lib/domain.c: Use the
 	old event info in the event itself to reject old events.
-	
+
 	* lanserv/README.emulator: Added channel info fetching.
 	* lanserv/atca.emu: ditto
 	* lanserv/emu.c: ditto
@@ -3037,12 +3044,12 @@
 	cause the SEL fetch to not work any more on systems that support
 	individual deletes.
 
-2005-04-14 Corey Minyard <cminyard@mvista.com> 
+2005-04-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fix a bug with multiple IPMI connections on the
 	same FD.
 
-2005-04-13 Corey Minyard <cminyard@mvista.com> 
+2005-04-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/strings.c, lib/ipmi_sol.c, sample/solterm.c: Fix compile
 	problems with older compilers.
@@ -3051,11 +3058,11 @@
 	Properties command instead of getting the shelf FRU info address,
 	since not all systems get the shelf FRU properly.
 
-2005-04-08 Corey Minyard <cminyard@mvista.com> 
+2005-04-08 Corey Minyard <cminyard@mvista.com>
 
 	* sample/ipmicmd.c: Make sure all error output goes to stderr and
 	only submit the command once in LAN mode.
-	
+
 2005-04-07 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.spec.in: Added solterm, reorganized a little.
@@ -3098,13 +3105,13 @@
 
 	* lib/ipmi_lan.c: Cleaned up some minor things.
 
-2005-03-30 Corey Minyard <cminyard@mvista.com> 
+2005-03-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sel.c: Remove a bogus stat increment.
 
 	* lib/ipmi_lan.c: Add a missing stat.
 
-2005-03-30 Corey Minyard <cminyard@mvista.com> 
+2005-03-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fix a problem with multiple connections to the
 	same address.  These cannot share lan_fd entries because they
@@ -3120,7 +3127,7 @@
 
 	* all: Release version 2.0.0.
 
-2005-03-29 Corey Minyard <cminyard@mvista.com> 
+2005-03-29 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added support for a
 	IPMI_CONN_HACK_BROKEN_INTEL_BMC for handling RMCP+ problems
@@ -3139,24 +3146,24 @@
 
 	* lib/hmac.c: The integrity length for normal messages is 12 bytes
 	for SHA1-96, not 20 bytes.
-	
+
 	* lib/rakp.c: The integrity length for RAKP4 messages was 12
 	bytes, not 20 bytes.
-	
+
 	* lanserv/lanserv_ipmi.c: It seems the payload length does not
 	include the integrity padding, adjust for that. The integrity
 	length for normal messages is 12 bytes for SHA1-96, not 20 bytes.
 	The integrity length for RAKP4 messages was 12 bytes, not 20
 	bytes.
 
-2005-03-29 Darius Davis <dariusd@users.sourceforge.net>, Corey Minyard <cminyard@mvista.com> 
+2005-03-29 Darius Davis <dariusd@users.sourceforge.net>, Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Add test for execinfo.h
 
 	* utils/ipmi_malloc.c: #ifdef HAVE_EXECINFO_H around code dependent on
 	execinfo.h and the backtrace function.
 
-2005-03-24 Corey Minyard <cminyard@mvista.com> 
+2005-03-24 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting
 	the data to avoid compiler warning.
@@ -3186,7 +3193,7 @@
 	* lib/sensor.c: change log2 to c_log2 for platforms that define
 	log2 as a macro (Cygwin).
 
-2005-03-23 Corey Minyard <cminyard@mvista.com> 
+2005-03-23 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as
 	intended.
@@ -3300,13 +3307,13 @@
 
 	* lib/oem_atca.c: Some more fixups for the Intel chassis.
 
-2005-02-24 Corey Minyard <cminyard@mvista.com> 
+2005-02-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Ignore controls and sensors for presence if they
 	are supposed to be ignored when the entity is not present.  I
 	think I previously misunderstood this bit (not like it is well
 	explained, anyway).
-	
+
 	* lib/sensor.c, lib/control.c: Make oem sensors and controls not
 	ignored when the entity is not present.
 	* lib/oem_motorola_mxp.c: ditto
@@ -3331,7 +3338,7 @@
 
 	* include/OpenIPMI/ipmi_conn.h: Added a statistics interface.
 
-2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
+2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Added a physical slot number attribute for
 	entities, useful for ATCA, CTCA, PICMG2.6, etc.
@@ -3345,7 +3352,7 @@
 	* lib/entity.c: Fixed an ordering problem were if the FRU becomes
 	present before its entity data comes in, still fetch the FRU info.
 
-2005-02-18 Corey Minyard <cminyard@mvista.com> 
+2005-02-18 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_entity.c: Add an "entity tree" command to dump
 	the list of entities in a tree structure.
@@ -3353,7 +3360,7 @@
 	* lib/fru.c: Add a new error to handle auto-resizing of FRU
 	fetches with.
 
-2005-02-11 Corey Minyard <cminyard@mvista.com> 
+2005-02-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_utils.c, include/OpenIPMI/ipmi_addr.h: Add an address
 	comparison that does not use the LUN as part of the comparison.
@@ -3368,7 +3375,7 @@
 
 	* lib/mc.c: Fixed an error/shutdown race with timer info.
 
-2005-02-08 Corey Minyard <cminyard@mvista.com> 
+2005-02-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed some problems with the use of qsort and the
 	sorting and comparing of device locator records and entity
@@ -3394,7 +3401,7 @@
 	* utils/ipmi_malloc.c: Don't free the memory in the alloced list
 	when shutting down.  It may still be in use.
 
-2005-02-02 Corey Minyard <cminyard@mvista.com> 
+2005-02-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/os_handler.h, lib/ipmi.c: Added an interface to
 	protect users that have created their own OS handler from
@@ -3410,7 +3417,7 @@
 	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.cg, unix/Makefile.am:
 	ditto
 
-2005-02-01 Corey Minyard <cminyard@mvista.com> 
+2005-02-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Add support for dynamically resizing SDR fetches if
 	the system cannot support the size required.  This allowed an
@@ -3435,12 +3442,12 @@
 	* lib/sdr.h: Added support for storing and retrieving SDR
 	data in the database for client-side caching.
 
-2005-01-30 Corey Minyard <cminyard@mvista.com> 
+2005-01-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c: Allow zero-length parm responses to represent
 	optional unsupported parms.
 
-2005-01-27 Corey Minyard <cminyard@mvista.com> 
+2005-01-27 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Changes "==" to "=".
 
@@ -3452,7 +3459,7 @@
 
 	* include/OpenIPMI/ipmi_lan.h: Improve payload docs.
 
-2005-01-25 Corey Minyard <cminyard@mvista.com> 
+2005-01-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/event.c: Fixed a problem with the data length when getting
 	data.
@@ -3460,7 +3467,7 @@
 	* configure.in, lanserv/Makefile.am, sample/Makefile.am: Added
 	popt library detection and overriding.
 
-2005-01-23 Corey Minyard <cminyard@mvista.com> 
+2005-01-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sel.c: Fixed a bug where the SEL lock was being held in
 	the SEL fetch done callback.
@@ -3478,7 +3485,7 @@
 	* lib/ipmi_lan.c, lib/rakp.c: Fixed some broken stuff caused by
 	the last changes to the LAN code.
 
-2005-01-21 Corey Minyard <cminyard@mvista.com> 
+2005-01-21 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_lan.h: Added a function to payloads to get
 	the message tag for a message, and added a message tag parm to
@@ -3494,7 +3501,7 @@
 	* lanserv/lanserv_emu.c: Added an option to override the port
 	number.
 
-2005-01-20 Corey Minyard <cminyard@mvista.com> 
+2005-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Allow the SNMP and OpenSSL libraries and compile
 	flags to be hard-coded on the configure command line.
@@ -3503,8 +3510,8 @@
 
 	* lib/lanparm.c: Fixed some problem handling the newly added
 	parms not being there.
-	
-2005-01-19 Corey Minyard <cminyard@mvista.com> 
+
+2005-01-19 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_lanparm.h: Added the RMCP+ and VLAN
 	lanparms.
@@ -3520,7 +3527,7 @@
 	* lib/ipmi_lan.c: Use the right size when comparing the bmc_key in
 	the options.  Also remove some debugging cruft.
 
-2005-01-17 Corey Minyard <cminyard@mvista.com> 
+2005-01-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:
 	Moved ipmi_mc_get_address, ipmi_mc_get_channel, and
@@ -3530,7 +3537,7 @@
 	* lib/sel.c: Added a comment on why the SEL fetch is aborted after
 	so many reservation losses in the fetch.
 
-2005-01-14 Corey Minyard <cminyard@mvista.com> 
+2005-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fixed some race conditions between reuse of LAN
 	connections and destruction of LAN connections.
@@ -3549,7 +3556,7 @@
 	* lib/domain.c: ditto
 	* lib/ipmi.c: ditto
 
-2005-01-13 Corey Minyard <cminyard@mvista.com> 
+2005-01-13 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/entity.c: Undeprecated the
 	hot-swap requester and indicator command, since HPI provides them.
@@ -3579,7 +3586,7 @@
 	* lib/oem_motorola_mxp_intf.c, lib/ipmi.c: Removed old MXP
 	interface support (it shouldn't be needed any more and maintenance
 	was getting to be a pain).
-	
+
 	* lib/ipmi_lan.c: Added connection reuse.  If a user makes a
 	connection to a system and the same connection already exists
 	(same parms) then it will reuse the old connection.
@@ -3587,7 +3594,7 @@
 	* lib/entity.c: Found a problem with disconnect/reconnect; it was
 	claiming a lock recursively in once case.
 
-2005-01-12 Corey Minyard <cminyard@mvista.com> 
+2005-01-12 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Add support for openssl.
 	* cmdlang/Makefile.am: ditto
@@ -3619,7 +3626,7 @@
 	* sample/ipmicmd.c: ditto
 
 	* lib/strings.c: Adde RMCP+ auth strings.
-	
+
 	* include/OpenIPMI/ipmi_conn.h: Added the concept of asynchronous
 	events so that payloads can report asyncronous data coming up.
 	* lib/ipmi_smi.c: ditto
@@ -3631,7 +3638,7 @@
 	* lib/oem_motorola_mxp_intf.c: Ditto
 
 	* include/OpenIPMI/ipmi_err.h: Added RMCP+ errors.
-	
+
 	* include/OpenIPMI/ipmi_lan.h: Added support for RMCP+ payloads,
 	authentication, integrity, and confidentiality handling.  This
 	includes new options for lan connection and the ability to
@@ -3659,21 +3666,21 @@
 
 	* lanserv/lanserv.c: Fixed the random data routines to work right.
 	* lanserv/lanserv_emu.c: ditto.
-	
+
 	* lanserv/lanserv_config.c: Added support for some RMCP+ data.
-	
+
 	* lanserv/lanserv_ipmi.c: Added support for RMCP+.
 
 	* man/ipmi_cmdlang.7: Added info about the RMCP+ LAN parms.
-	
+
 	* configure.in: Update to version 2.0.0.
 
-2005-01-11 Corey Minyard <cminyard@mvista.com> 
+2005-01-11 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/Makefile.am: Fixed so it installs in
 	the right place.
 
-2005-01-04 Corey Minyard <cminyard@mvista.com> 
+2005-01-04 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Added a warning log if the FRU fetch request
 	failed.
@@ -3686,7 +3693,7 @@
 
 	* doc/IPMI.ltx: Added info for user and channel management.
 
-2005-01-03 Corey Minyard <cminyard@mvista.com> 
+2005-01-03 Corey Minyard <cminyard@mvista.com>
 
 	* Include/OpenIPMI/ipmi_pet.h, lib/pet.c: Added a refcount to the
 	PET external interface and fixed some problems with PET handling.
@@ -3694,7 +3701,7 @@
 	* swig/OpenIPMI.i: Added PET support.
 
 	* swig/perl/test_pet, swig/perl/Makefile.am: Added PET perl tests.
-	
+
 	* glib/glib_os_hnd.c: Fixed the perform_one_op function to
 	time (sort of) properly.
 
@@ -3713,7 +3720,7 @@
 
 	* configure.in: Move to version 1.4.7.
 
-2005-01-01 Corey Minyard <cminyard@mvista.com> 
+2005-01-01 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/test_pef: Add PEF tests.
 
@@ -3721,7 +3728,7 @@
 
 	* lib/pef.c: Fixed some problems with PEF handling.
 
-2004-12-31 Corey Minyard <cminyard@mvista.com> 
+2004-12-31 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/lanserv.h, lanserv/lanserv_ipmi.c: Added PEF
 	config support.
@@ -3731,7 +3738,7 @@
 	* lib/pef.c: Fixed a problem getting the last alert string and the
 	guid data and a few data format problems.
 
-2004-12-30 Corey Minyard <cminyard@mvista.com> 
+2004-12-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_strings.h: Converted return strings to
 	be const because the user can't change them.
@@ -3767,7 +3774,7 @@
 
 	* swig/OpenIPMI.i: Added support for PEF.
 
-2004-12-29 Corey Minyard <cminyard@mvista.com> 
+2004-12-29 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added printing of if the sensor/control should be
 	ignored if the entity is not present.
@@ -3782,7 +3789,7 @@
 	up the presence code to properly handle presence sensor removal.
 	Also modify the presence detection to be 100% compliant with
 	the spec, including messaging FRU devices as the last step.
-	
+
 	* lib/chassis.c: Remove the dummy presence sensor since the
 	controls can be used for presence now.
 
@@ -3797,7 +3804,7 @@
 
 	* swig/OpenIPMI.i: Fix a compile problem.
 
-2004-12-28 Corey Minyard <cminyard@mvista.com> 
+2004-12-28 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/lanparm.h, lanparm/lanparm_ipmi.c: Added
 	support for lanparm configuration parameters.
@@ -3812,7 +3819,7 @@
 
 	* swig/OpenIPMI.i: Added support for lanparm configuration.
 
-2004-12-26 Corey Minyard <cminyard@mvista.com> 
+2004-12-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Invert the values from get/set channel access so they
 	are logical for the user.
@@ -3833,7 +3840,7 @@
 	* include/OpenIPMI/ipmi_lanparm.h, lib/lanparm.c: Added an
 	interface for getting general data values by index/name.
 
-2004-12-25 Corey Minyard <cminyard@mvista.com> 
+2004-12-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed some minor bugs in user handling.
 
@@ -3843,7 +3850,7 @@
 	support for all the user bits in the set and get user access
 	commands.
 
-2004-12-23 Corey Minyard <cminyard@mvista.com> 
+2004-12-23 Corey Minyard <cminyard@mvista.com>
 
 	* sample/ipmicmd.c: Removed the ipmi_log() func, it was junk
 	and caused problems.
@@ -3855,7 +3862,7 @@
 
 	* lib/sensor.c: Fix a missing sensor in a callback.
 
-2004-12-22 Corey Minyard <cminyard@mvista.com> 
+2004-12-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h,	include/OpenIPMI/ipmi_user.h:
 	Added handling for users and channel information.
@@ -3863,12 +3870,12 @@
 	* lib/cmd_mc.c: converted over to the standard user and channel
 	handling.
 
-2004-12-17 Corey Minyard <cminyard@mvista.com> 
+2004-12-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c, lib/pef.c, lib/pet.c: Fixed some locking and
 	refcount problems found with testing.
 
-2004-12-16 Corey Minyard <cminyard@mvista.com> 
+2004-12-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fixed a problem with FRU area creation, where the
 	versions where not set properly.
@@ -3877,7 +3884,7 @@
 
 	* swig/OpenIPMI.i: Added handling for properly deleting FRU
 	information when we are done with it.
-	
+
 	* lib/fru.c: Fixed some race conditions with the new list stuff
 	and FRU destruction.
 
@@ -3909,7 +3916,7 @@
 
 	* lib/mc.c: Fixed some problems where the refetch callbacks
 	were not always being called in certain error situations.
-	
+
 	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.c:
 	Modified the domain attributes to be refcount based, since
 	they could theoretically go away while still in use.
@@ -3918,7 +3925,7 @@
 	* lib/pet.c: ditto
 	* lib/fru.c: ditto
 
-2004-12-15 Corey Minyard <cminyard@mvista.com> 
+2004-12-15 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.c: Fixe the name of the set
 	multi-record function function.
@@ -3932,7 +3939,7 @@
 	internal FRUs.
 	* lib/entity.c: ditto
 	* lib/oem_atca.c: ditto
-	
+
 	* swig/perl/test_fru, swig/perl/Lanserv.pm: More work on tests.
 
 	* lib/ipmi.c, lib/fru.c: Fixed some more string handling problems
@@ -3956,7 +3963,7 @@
 	* swig/OpenIPMI.i: More work to fix some bugs and add the
 	error constants used by OpenIPMI.
 
-2004-12-14 Corey Minyard <cminyard@mvista.com> 
+2004-12-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fixed some bugs with FRU handling.
 
@@ -3981,7 +3988,7 @@
 	* swig/perl/test_fru, swig/perl/Lanserv.pm, swig/perl/Makefile.am:
 	Started working on some tests.
 
-2004-12-13 Corey Minyard <cminyard@mvista.com> 
+2004-12-13 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/locked_list.h, utils/locked_list.h:
 	Added the ability for the user to use their own lock with locked
@@ -4017,7 +4024,7 @@
 
 	* lib/fru.c: Fixed problems writing multi-records.
 
-2004-12-10 Corey Minyard <cminyard@mvista.com> 
+2004-12-10 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Fixes
 	to the IPMI string encoding/decoding routines.
@@ -4030,7 +4037,7 @@
 	to modify FRU info and write FRU data back to the FRU.
 
 	* lib/fru.c: Added tracking of FRUs in the system.
-	
+
 	* include/OpenIPMI/internal/ipmi_utils.c, lib/fru.c: Added an
 	interface for FRUs so internal stuff can allocate untracked FRU
 	information.  This way, user's can't delete internal FRU data.
@@ -4051,8 +4058,8 @@
 
 	* lib/domain.c: Minor fixes for attribute handling, make sure
 	things are cleared out correctly.
-	
-2004-12-07 Corey Minyard <cminyard@mvista.com> 
+
+2004-12-07 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/mc.c, lib/domain.c,	lib/ipmi.c:
 	Added an option to not set the SEL time.
@@ -4075,7 +4082,7 @@
 	* cmdlang/cmd_entity.c: ditto
 	* man/ipmi_cmdlang.7: ditto
 
-2004-12-03 Corey Minyard <cminyard@mvista.com> 
+2004-12-03 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed a problem where the startup SEL time was not set
 	if the target time was ahead of the time on the system.  This
@@ -4083,8 +4090,8 @@
 
 	* lib/oem_atca.c: Reworked the fixups for broken entity ids to
 	be more general.
-	
-2004-12-02 Corey Minyard <cminyard@mvista.com> 
+
+2004-12-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: fixed a problem with ipmi_parse_args mishandling
 	userids.
@@ -4092,7 +4099,7 @@
 	* include/OpenIPMI/*.h: Added extern "C" to all the necessary
 	include files.
 
-2004-12-01 Corey Minyard <cminyard@mvista.com> 
+2004-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Ignore sensors for presence if they use the
 	generic reading type codes.
@@ -4100,7 +4107,7 @@
 	* lib/chassis.c: Added a dummy presence sensor for the chassis
 	entity so it will be reported as present.
 
-2004-11-27 Corey Minyard <cminyard@mvista.com> 
+2004-11-27 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Added a new, more
 	flexible interface for configuring a LAN connection.  Hopefully
@@ -4109,7 +4116,7 @@
 
 	* lib/ipmi.c: Adjusted to use the new LAN connection method.
 
-2004-11-18 Corey Minyard <cminyard@mvista.com> 
+2004-11-18 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_smi.c: Fix the unregister ioctl for the socket interface.
 
@@ -4120,7 +4127,7 @@
 
 	* configure.in: Move to version 1.4.6.
 
-2004-11-16 Corey Minyard <cminyard@mvista.com> 
+2004-11-16 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_mc.c: Added support for the user information
 	viewing and modification.
@@ -4128,18 +4135,18 @@
 	* man/ipmi_cmdlang.7: Added information about the channel
 	and user commands just added.
 
-2004-11-15 Corey Minyard <cminyard@mvista.com> 
+2004-11-15 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_auth.h, lib/ipmi_lan.c: Added the
 	ability to have a "default" auth type that will pick the
 	best authentication type available.
-	
+
 	* include/OpenIPMI/ipmi_auth.h, lib/strings.c: Added strings
 	for the auth and privilege values.
 
 	* lib/ipmi.c: Added a new parameter parsing function that should
 	be easier to use.
-	
+
 	* cmdlang/cmd_domain.c: Added support for a "domain open"
 	command using the new parameter parsing.
 
@@ -4155,13 +4162,13 @@
 	* lib/ipmi_lan.c: Fixed a bug where a timer might be freed
 	twice on an error.
 
-2004-11-10 Corey Minyard <cminyard@mvista.com> 
+2004-11-10 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/ipmish.c: Fixes a problem with the --execute command
 	line option where only the first and last command would be
 	executed.
 
-2004-11-09 Corey Minyard <cminyard@mvista.com> 
+2004-11-09 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.spec.in: Changes to compile on Redhat.
 
@@ -4175,11 +4182,11 @@
 
 	* sample/ipmicmd.c: Don't segv when given bad parms.
 
-2004-11-05 Corey Minyard <cminyard@mvista.com> 
+2004-11-05 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Another fix to the perl installation dir.
 
-2004-11-04 Corey Minyard <cminyard@mvista.com> 
+2004-11-04 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Fix perlinstalldir to work.
 
@@ -4192,7 +4199,7 @@
 
 	* swig/OpenIPMI.i: Fixed initialization to work without glib.
 
-2004-11-01 Corey Minyard <cminyard@mvista.com> 
+2004-11-01 Corey Minyard <cminyard@mvista.com>
 
 	* FAQ: Added some useful information
 
@@ -4217,10 +4224,10 @@
 	data.
 
 	* swig/perl/sample: Fixed some problems with events.
-	
+
 	* configure.in: Move to version 1.4.4
 
-2004-10-29 Corey Minyard <cminyard@mvista.com> 
+2004-10-29 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added another connection close
 	handler that has a callback.  This way, the domain code can know
@@ -4242,8 +4249,8 @@
 	* swig/perl/Makefile: ditto
 	* swig/perl/sample: ditto
 	* swig/perl/ipmi_powerctl: ditto
-	
-2004-10-27 Corey Minyard <cminyard@mvista.com> 
+
+2004-10-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fixed race conditions handling sequence numbers
 	and connection handling.
@@ -4262,21 +4269,21 @@
 	* cmdlang/out_fru.c, man/ipmi_cmdlang.7: Converted over to the new
 	generic FRU interface and changed the output format some.
 
-2004-10-26 Corey Minyard <cminyard@mvista.com> 
+2004-10-26 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Renamed
 	ipmi_discrete_event_readable to ipmi_sensor_discrete_event_readable.
 	* lib/entity.c: ditto
 	* cmdlang/cmd_sensor.c: ditto
 
-2004-10-24 Corey Minyard <cminyard@mvista.com> 
+2004-10-24 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/entity.c: Deprectated the
 	ability to directly handle the hot-swap indicators and requesters.
 	In hindsight, this seems like a bad idea.  This should be under
 	the control of the hot-swap state machine.
 
-2004-10-22 Corey Minyard <cminyard@mvista.com> 
+2004-10-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fix problems with connection failure during
 	startup of the connection.  This fixes problems with the
@@ -4295,7 +4302,7 @@
 	* cmdlang/ipmi_sh.c, man/ipmish.1: Added the ability to turn off
 	the redisplay of the command line on incoming events.
 
-2004-10-20 Corey Minyard <cminyard@mvista.com> 
+2004-10-20 Corey Minyard <cminyard@mvista.com>
 
 	* Makefile.am: Added glib OS handler.
 	* configure.in: ditto
@@ -4318,7 +4325,7 @@
 	* lib/sdr.c: ditto
 	* unix/posix_thread_os_hnd.c: ditto
 	* include/OpenIPMI/ipmi_glib.h: ditto
-	
+
 	* ui/ui.c: Add internal MC include file.
 
 	* cmdlang/Makefile.am: Work on adding glib support.
@@ -4337,8 +4344,8 @@
 	* lib/sdr.c: ditto
 	* lib/sel.c: ditto
 	* lib/sensor.c: ditto
-	
-2004-10-19 Corey Minyard <cminyard@mvista.com> 
+
+2004-10-19 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_conn.c: Renamed IPMI_MAX_DOMAIN_NAME_LEN to
 	IPMI_DOMAIN_NAME LEN to make it consistent with the other defines.
@@ -4360,7 +4367,7 @@
 	* ui/ui.c: ditto
 
 
-2004-10-18 Corey Minyard <cminyard@mvista.com> 
+2004-10-18 Corey Minyard <cminyard@mvista.com>
 
 	* Practically_everything: More work on the include files, moved
 	the internal/OEM include files to an "internal" directory, more
@@ -4376,7 +4383,7 @@
 	* lib/mc.c: Don't set the SEL time if that would move the time
 	backwards.
 
-2004-10-14 Corey Minyard <cminyard@mvista.com> 
+2004-10-14 Corey Minyard <cminyard@mvista.com>
 
 	* Practically_everything: A restructure of the include files
 	so the ipmiif.h is really the only thing you need to include
@@ -4385,7 +4392,7 @@
 	for external user programs to use ipmi_domain.h, ipmi_mc.h,
 	or things like that.
 
-2004-10-14 Corey Minyard <cminyard@mvista.com> 
+2004-10-14 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/strings.c, lib/sensor.c: Added
 	sensor direction from the 2.0 spec.
@@ -4409,7 +4416,7 @@
 	* lib/ipmi_smi.c: ditto
 
 
-2004-10-12 Corey Minyard <cminyard@mvista.com> 
+2004-10-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed some race conditions with entity creation
 	and deletion.  The changes make sure that if an entity is deleted
@@ -4426,7 +4433,7 @@
 	* lib/sensor.c: Fix handling of duplicate SDR record detection
 	to take the MC into account, too.
 
-2004-10-11 Corey Minyard <cminyard@mvista.com> 
+2004-10-11 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_event.h, lib/event.c: Changed the type
 	for getting event data to an unsigned char.
@@ -4448,14 +4455,14 @@
 
 	* cmdlang/cmd_lanparm.c: Fixed a problem with losing lanparm
 	configs.
-	
+
 	* cmdlang/cmd_pef.c: Fixed a problem with losing pef configs.
 
 	* include/OpenIPMI/ipmi_conn.h: Added a con_type field to the
 	connection type for the connection code to use to identify itself.
 	Added a priv_level field so the privilege of the conneciton may be
 	reported.
-	
+
 	* lib/ipmi_lan.c, lib/ipmi_smi.c: Added the new items to the
 	connection type.
 
@@ -4475,7 +4482,7 @@
 	* cmdlang/ipmish.c, cmdlang/cmdlang.c, lib/ipmi_lan.c: Added
 	support for the msg err debugging flag.
 
-2004-10-10 Corey Minyard <cminyard@mvista.com> 
+2004-10-10 Corey Minyard <cminyard@mvista.com>
 
 	* man/ipmi_cmdlang.7: Finished this document.
 
@@ -4484,7 +4491,7 @@
 
 	* configure.in: Move to version 1.4.3
 
-2004-10-09 Corey Minyard <cminyard@mvista.com> 
+2004-10-09 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMIcmdlang.pc.in, Makefile.am: Added file for the new
 	cmdlang library.
@@ -4498,7 +4505,7 @@
 	* man/ipmi_cmdlang.7: Lots of work adding docs.  More formatting
 	work still to do.
 
-2004-10-08 Corey Minyard <cminyard@mvista.com> 
+2004-10-08 Corey Minyard <cminyard@mvista.com>
 
 	* doc/IPMI.ltx: Documentation cleanup
 
@@ -4527,7 +4534,7 @@
 	* lib/entity.c: Make sure the MC is locked when iterating controls.
 
 	* lib/lanparm.c: Fixed a lock problem.
-	
+
 	* lib/pef.c: Fixed a lock problem.
 
 	* lib/sensor.c: Zero the data used when fetching event enables.
@@ -4535,8 +4542,8 @@
 	* man/ipmish.1: Added man page.
 
 	* man/ipmi_cmdlang.7: Started man page.
-	
-2004-10-07 Corey Minyard <cminyard@mvista.com> 
+
+2004-10-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixes some problems found by a static analysis
 	tool.
@@ -4575,7 +4582,7 @@
 
 	* include/OpenIPMI/ipmi_sensor.h, lib/sensor.c: Added a way
 	to get a sensor's domain.
-	
+
 	* include/OpenIPMI/ipmiif.h.in: Added support to the open domain
 	call for detecting when the domain has finished all initial
 	operations.
@@ -4583,7 +4590,7 @@
 	* lib/domain.c: ditto
 	* lib/entity.c: ditto
 	* lib/mc.c: ditto
-	
+
 	* ui/ui.c: Adjusted for the change to open domain.
 	* ui/basic_ui.c: ditto
 	* sample/sample.c: ditto
@@ -4599,7 +4606,7 @@
 	* sample/sample2.c: ditto
 	* sample/sample3.c: ditto
 
-2004-10-06 Corey Minyard <cminyard@mvista.com> 
+2004-10-06 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added an anonymous
 	attribute that allows external code to tie data into the domain
@@ -4617,7 +4624,7 @@
 
 	* lib/pef.c, lib/lanparm.c: Fix locking behaviour to work.
 
-2004-10-05 Corey Minyard <cminyard@mvista.com> 
+2004-10-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in: Renamed a bunch of the sensor
 	functions and types to make their names more consistent  I hope
@@ -4638,7 +4645,7 @@
 
 	* unix/posix_thread_os_hnd.c: Add a missing return.
 
-2004-10-04 Corey Minyard <cminyard@mvista.com> 
+2004-10-04 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Add the ability
 	to check the local control capability of an LED.
@@ -4649,13 +4656,13 @@
 
 	* lib/oem_atca.c: Fixed color reporting to report black when
 	the on time is 0.
-	
+
 	* lib/domain.c: Minor changes to domain startup reporting so
 	things come in the right order.
 
 	* lanserv/emu.c: Fixed local control support to use the right bit.
 
-2004-10-02 Corey Minyard <cminyard@mvista.com> 
+2004-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_domain.h:
 	Added support for some option for enabling/disabling various
@@ -4664,7 +4671,7 @@
 	* lib/mc.c: ditto
 	* lib/entity.c: ditto
 
-2004-10-01 Corey Minyard <cminyard@mvista.com> 
+2004-10-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Add support for a
 	global domain change handler to report addition and removal of
@@ -4673,18 +4680,18 @@
 	* lib/pet.c: Removed an extraneous mc put, cleaned up close
 	handling to be done in the proper order.
 
-2004-09-25 Chetan Hiremath <chetan.hiremath@intel.com> 
+2004-09-25 Chetan Hiremath <chetan.hiremath@intel.com>
 
 	* lib/ipmi_smi.c: Use the proper address on received commands and
 	async events.
 
-2004-09-23 Corey Minyard <cminyard@mvista.com> 
+2004-09-23 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_pet.h, lib/pet.c: Modified the PETs to be
 	refcount based, use locked lists, and have all the information
 	about them available.
 
-2004-09-17 Corey Minyard <cminyard@mvista.com> 
+2004-09-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/fru.c: Modified the FRU length
 	returned to include the NIL character for ASCII strings.
@@ -4692,11 +4699,11 @@
 	* include/OpenIPMI/ipmiif.h.in, lib/fru.c: Added a way to get the
 	domain from the fru type.
 
-2004-09-13 Corey Minyard <cminyard@mvista.com> 
+2004-09-13 Corey Minyard <cminyard@mvista.com>
 
 	* FAQ: Added some information about the driver.
 
-2004-09-11 Corey Minyard <cminyard@mvista.com> 
+2004-09-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain, include/OpenIPMI/ipmiif.h.in: Added options
 	to the ipmi_open_domain call to allow things to be done in
@@ -4704,17 +4711,17 @@
 	* ui/ui.c, ui/basic_ui.c: Adjust for previous change
 	* sample/sample.c, sample/sample2.s, sample/sample3.c: ditto
 
-2004-09-09 Corey Minyard <cminyard@mvista.com> 
+2004-09-09 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Return the proper callback data for the sel_reread
 	function.
 
-2004-09-08 Corey Minyard <cminyard@mvista.com> 
+2004-09-08 Corey Minyard <cminyard@mvista.com>
 
 	* utils/ipmi_malloc.c, include/OpenIPMI/ipmi_malloc.h: Added
 	an ipmi_strndup() function.
 
-2004-09-07 Corey Minyard <cminyard@mvista.com> 
+2004-09-07 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a list of
 	domains and a way to iterate them.
@@ -4733,7 +4740,7 @@
 
 	* lib/ipmi.c: Added a prototype for ipmi_malloc_init().
 
-2004-09-02 Corey Minyard <cminyard@mvista.com> 
+2004-09-02 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Print active information about MCs when reported.
 
@@ -4771,13 +4778,13 @@
 
 	* sample/sample2.c, sample/sample3.c: Fixed a few small problems
 	in the examples.
-	
+
 	* configure.in: Move to version 1.4.2
 
 	* lib/ipmi_lan.c: Fixed a problem where the wrong LUN was being
 	looked at in LAN reponses.
 
-2004-09-01 Corey Minyard <cminyard@mvista.com> 
+2004-09-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/chassis.c: Fixed a problem where the wrong error was being
 	passed to a callback.
@@ -4813,11 +4820,11 @@
 	* lib/mc.c: Apply pending updated to devid data before installing
 	a new MC.
 
-2004-08-23 Corey Minyard <cminyard@mvista.com> 
+2004-08-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Fixed a problem with SDR support.
 
-2004-08-20 Corey Minyard <cminyard@mvista.com> 
+2004-08-20 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_intel.c: Fixed some problems with the alarm panel,
 	modified to add the controls and entities at the right time and
@@ -4841,7 +4848,7 @@
 
 	* lib/oem_intel.c: Handle different bus ids for alarm panel.
 
-2004-08-19 Corey Minyard <cminyard@mvista.com> 
+2004-08-19 Corey Minyard <cminyard@mvista.com>
 
 	* doc/Makefile: Add new documentation.  Note that this is LaTex
 	for now but will probably be switched to docbook.
@@ -4858,7 +4865,7 @@
 
 	* configure.in: Move to version 1.4.1
 
-2004-08-16 Corey Minyard <cminyard@mvista.com> 
+2004-08-16 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_controls.c:
 	Renamed the "setting" part of a transition light to "value" to
@@ -4871,12 +4878,12 @@
 
 	* lanserv/lanserv_config.c: Print the line number of errors.
 
-2004-08-10 Corey Minyard <cminyard@mvista.com> 
+2004-08-10 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added support for displaying the one-shot reset and
 	output devices.
 
-2004-08-06 Corey Minyard <cminyard@mvista.com> 
+2004-08-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Fixed some problems with handling event
 	masks.
@@ -4897,7 +4904,7 @@
 	* lib/entity.c, lib/control.c, lib/sensor.c: Don't allow
 	operations on destroyed objects.
 
-2004-08-04 Corey Minyard <cminyard@mvista.com> 
+2004-08-04 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Added a way
 	to tell if the threshold is returned by the sensor when the
@@ -4909,7 +4916,7 @@
 	* lib/sensor.c: ditto
 	* lib/strings.c: ditto
 
-2004-08-03 Corey Minyard <cminyard@mvista.com> 
+2004-08-03 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Added more
 	consistent functions for checking if threshold and discrete
@@ -4920,7 +4927,7 @@
 	* sample/sample3.c, sample/Makefile.am: Added a new sample
 	file to show something about event settings.
 
-2004-08-02 Corey Minyard <cminyard@mvista.com> 
+2004-08-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in: Renamed some parameters to be more
 	clear, moved some things around that were in the wrong places.
@@ -4930,13 +4937,13 @@
 	there is a presence bit for processor sensors.
 
 	* lib/oem_atca.c: Fixed an error log.
-	
-2004-07-29 Corey Minyard <cminyard@mvista.com> 
+
+2004-07-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/domain.h: Added a way to fetch
 	the main SDRs from a domain.
 
-2004-07-13 Corey Minyard <cminyard@mvista.com> 
+2004-07-13 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h: Fixed a misnamed parm.
 
@@ -4950,12 +4957,12 @@
 	entities were not being detected not-present in some cases
 	when they went from non-present to present.
 
-2004-06-28 Corey Minyard <cminyard@mvista.com> 
+2004-06-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed a theoretical race condition in fetching
 	the system SELs.
-	
-2004-06-24 Corey Minyard <cminyard@mvista.com> 
+
+2004-06-24 Corey Minyard <cminyard@mvista.com>
 
 	* sample/sample.c: Added event handling for sensors to the sample.
 
@@ -4963,7 +4970,7 @@
 
 	* lib/mc.c: Initialize info->err in ipmi_mc_reread_sel().
 
-2004-06-23 Corey Minyard <cminyard@mvista.com> 
+2004-06-23 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/os_handler.h: Add some user functions for
 	performing operations like freeing hte handler, and waiting for
@@ -4978,11 +4985,11 @@
 
 	* lib/entity.c: Fixed a problem with always fetching FRU data.
 
-2004-06-22 Corey Minyard <cminyard@mvista.com> 
+2004-06-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Fix a race with deleting an MC.
 
-2004-06-18 Corey Minyard <cminyard@mvista.com> 
+2004-06-18 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_domain.h:
 	Added a ipmi_domain_get_type() function for determining the type
@@ -5003,7 +5010,7 @@
 	* man/ipmi_ui.1, man/ipmicmd.1, man/ipmilan.8: Cleanups for the
 	man pages.
 
-2004-06-17 Corey Minyard <cminyard@mvista.com> 
+2004-06-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, lib/mc.c: Don't check the OEM handlers if the MC
 	is in used, wait until the MC is no longer in use and apply the
@@ -5019,14 +5026,14 @@
 	put, so that the entity can be modified by OEM handlers before
 	they are reported
 
-2004-06-15 Corey Minyard <cminyard@mvista.com> 
+2004-06-15 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Check for a null event in call_presence_handlers().
 
 	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.c: Fixed up some
 	problems with posix_vlog.
 
-2004-05-21 Corey Minyard <cminyard@mvista.com> 
+2004-05-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Add a callback for fetching FRU information even
 	if the FRU information is bad.
@@ -5036,7 +5043,7 @@
 	* lib/oem_intel.c: Added support for the alarm panel on an Intel
 	server box.
 
-2004-04-30 Corey Minyard <cminyard@mvista.com> 
+2004-04-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_posix.c: Reworked the POSIX os handler to
 	make it easier to use and add helper code for handling threaded
@@ -5068,7 +5075,7 @@
 	use.  Presence is also change to work this way, but it may need
 	some more thinking.
 
-2004-04-29 Corey Minyard <cminyard@mvista.com> 
+2004-04-29 Corey Minyard <cminyard@mvista.com>
 
 	* everything: A massive rework of the internals.  Basically,
 	locking was reworked completely.  Now locks are *not* held in user
@@ -5090,7 +5097,7 @@
 	* lib/sensor.c: Fix the hysteresis setting to send a message that
 	is the right size.
 
-2004-04-15 Corey Minyard <cminyard@mvista.com> 
+2004-04-15 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_intel.c: More work on getting the various Intel servers
 	supported better.
@@ -5112,7 +5119,7 @@
 	knowing when the MC has finished reading its SDRs and reading the
 	SEL for the first time.
 
-2004-04-14 Corey Minyard <cminyard@mvista.com> 
+2004-04-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Scan MCs from MCDLRs even if the information is
 	not used for anything else.
@@ -5124,8 +5131,8 @@
 	servers.
 
 	* configure.in: Move to version 1.3.4.
-	
-2004-04-13 Corey Minyard <cminyard@mvista.com> 
+
+2004-04-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Prefer to keep the MCDLR information for an entity
 	that has FRU information, and don't try any FRU detection work if
@@ -5138,7 +5145,7 @@
 	* lib/entity.c, lib/sensor.c: Some minor changes to entity
 	presence detection.
 
-2004-04-12 Corey Minyard <cminyard@mvista.com> 
+2004-04-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/control.c, lib/sensor.c, lib/entity.c: Reworked the internal
 	naming of these to make them consistent.
@@ -5189,8 +5196,8 @@
 	* lib/oem_atca.c: Added hacks for broken SDRs.
 
 	* configure.in: Move to version 1.3.3.
-	
-2004-04-09 Corey Minyard <cminyard@mvista.com> 
+
+2004-04-09 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.c: Added
 	capabilities to disable, enable, and remove MCs, also added a
@@ -5198,7 +5205,7 @@
 
 	* lanserv/lanserv_emu.c: Added support for the sleep command.
 
-2004-04-08 Corey Minyard <cminyard@mvista.com> 
+2004-04-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_smi.c, lib/ipmi_lan.c, lib/domain.c: Remove the broken
 	broadcast handling from the domain code and put it into the
@@ -5234,7 +5241,7 @@
 	* lib/oem_atca.c: Create the entities for the items in the shelf
 	address table at startup and keep them around.
 
-2004-04-07 Corey Minyard <cminyard@mvista.com> 
+2004-04-07 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added an MC active callback to the UI.
 
@@ -5242,12 +5249,12 @@
 
 	* lib/oem_motorola_mxp.c: Added a slot GA sensor to the AMC.
 
-2004-04-02 Corey Minyard <cminyard@mvista.com> 
+2004-04-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, lib/control.c: Make sure that calls that send
 	messages cannot be done on destroyed sensors.
 
-2004-04-02 Corey Minyard <cminyard@mvista.com> 
+2004-04-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c, lib/sensor.c, lib/control.c: Fixed a rather nasty
 	race condition.  Sensors and control may go away after the MC goes
@@ -5256,7 +5263,7 @@
 	calls ipmi_xxx_convert_to_id(), which requires the MC to exist.
 	These were converted to use the pointer itself.
 
-2004-04-02 Corey Minyard <cminyard@mvista.com> 
+2004-04-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Reworked LED
 	support to better handle ATCA.  Added hot-swap support.
@@ -5279,7 +5286,7 @@
 
 	* lib/entity.c, include/OpenIPMI/ipmi_entity.c: Added support for
 	checking the current hot-swap state (as in an audit).
-	
+
 	* include/OpenIPMI/ipmiif.h.in: Added functions for the above
 	call.
 
@@ -5294,7 +5301,7 @@
 	* lib/control.c, include/OpenIPMI/ipmi_control.h: Added a way to
 	do noseq callbacks to controls.
 
-2004-04-01 Corey Minyard <cminyard@mvista.com> 
+2004-04-01 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start
 	at ATCA support.
@@ -5335,7 +5342,7 @@
 	* lanserv/emu_cmd.c, lanserv/emu.h: Made command reading halt
 	on the first error.
 
-2004-03-31 Corey Minyard <cminyard@mvista.com> 
+2004-03-31 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed
 	some problems with getting the event state.
@@ -5352,7 +5359,7 @@
 
 	* lib/sdr.c: Fix a memory leak when the SDRs are replaced.
 
-2004-03-30 Corey Minyard <cminyard@mvista.com> 
+2004-03-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Fix a problem checking the event capabilities
 	on setting the event enables.
@@ -5361,7 +5368,7 @@
 	actually working on a useful simulator.  Added SDR, FRU data, and
 	sensor support.
 
-2004-03-26 Corey Minyard <cminyard@mvista.com> 
+2004-03-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Added calling the entity update handler when the
 	hot-swap capabilities change.
@@ -5389,12 +5396,12 @@
 	* lib/entity.c: Don't fetch FRU information for an entity until
 	it is present.
 
-2004-03-25 Corey Minyard <cminyard@mvista.com> 
+2004-03-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Always rescan FRU info on an entity presence change
 	for an entity that has FRU info.
 
-2004-03-23 Corey Minyard <cminyard@mvista.com> 
+2004-03-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Call _ipmi_find_or_create_mc_by_slave_addr() on new
 	mcdlrs.
@@ -5409,11 +5416,11 @@
 	* lib/entity.c: Use certain sensors that have presence bits as
 	presence sensors.
 
-2004-03-20 Corey Minyard <cminyard@mvista.com> 
+2004-03-20 Corey Minyard <cminyard@mvista.com>
 
 	* everything: Massive rework of the code structure.
 
-2004-03-19 Corey Minyard <cminyard@mvista.com> 
+2004-03-19 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, include/OpenIPMI/ipmiif.h.in: Completele rework
 	the version handling so that major, minor, release, and extra
@@ -5429,7 +5436,7 @@
 	at a threaded POSIX OS handler, libOpenIPMIpthread.
 	* OpenIPMIpthread.pc.in, Makefile.am, configure.in: ditto
 
-2004-03-15 Corey Minyard <cminyard@mvista.com> 
+2004-03-15 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/selector.h, lib/selector.c: Unfortunately,
 	there were some race conditions in the freeing up of file
@@ -5444,12 +5451,12 @@
 	* lib/ipmi_lan.c: ditto
 	* lib/oem_motorola_mxp_intf.c: ditto
 
-2004-03-11 Corey Minyard <cminyard@mvista.com> 
+2004-03-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fix the set_time routine to pass in the info to the
 	message send.
 
-2004-03-09 Corey Minyard <cminyard@mvista.com> 
+2004-03-09 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Don't create the "healthy" sensor for
 	AMC boards.
@@ -5457,7 +5464,7 @@
 	* lib/oem_motorola_mxp.c: Clear our the right variable after the
 	allocation of info->con_ch_info.
 
-2004-03-04 Corey Minyard <cminyard@mvista.com> 
+2004-03-04 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_int.h, lib/sel.c, lib/mc.c: Fix broken
 	time calculations for events.
@@ -5470,7 +5477,7 @@
 	* doc/OpenIPMI.texi: Added some more documentation and cleaned
 	things up a little.
 
-2004-03-02 Corey Minyard <cminyard@mvista.com> 
+2004-03-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
 	compared against the wrong IP address.
@@ -5481,7 +5488,7 @@
 
 	* lib/control.c: Fixed the range check in ipmi_control_pointer_cb().
 
-2004-03-01 Corey Minyard <cminyard@mvista.com> 
+2004-03-01 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
 
@@ -5490,7 +5497,7 @@
 	* include/OpenIPMI/ipmi_conn.h, lib/ipmi.c, ui/basic_ui.c: Added
 	a source address length to the SNMP trap reporting handler.
 
-2004-02-26 Corey Minyard <cminyard@mvista.com> 
+2004-02-26 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to check if an
 	ID is invalid.
@@ -5552,7 +5559,7 @@
 
 	* configure.in: Move to version 1.3.0.
 
-2004-02-25 Corey Minyard <cminyard@mvista.com> 
+2004-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive
 	NULL values that were not being handled.
@@ -5567,7 +5574,7 @@
 
 	* ui/ui.c: Converted over to the multi-callback handlers.
 
-2004-02-24 Corey Minyard <cminyard@mvista.com> 
+2004-02-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/control.c: Added an option for light controls to be able to
 	set their color, on, and off times directly.
@@ -5612,7 +5619,7 @@
 	Changed _ipmi_find_or_create_mc_by_slave_addr() to take a channel
 	as part of the address.
 
-2004-02-23 Corey Minyard <cminyard@mvista.com> 
+2004-02-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away
 	while the SDRs were being fetched.  I wasn't following my own
@@ -5632,7 +5639,7 @@
 	* lib/oem_motorola_mxp.c: Changed the number of boards on the
 	half-pint chassis to 9.  Fixed the detection of board versions.
 
-2004-02-22 Corey Minyard <cminyard@mvista.com> 
+2004-02-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Added reading the reset control for
 	boards.  Don't create the I2C Isolate controls on the half-pint
@@ -5644,8 +5651,8 @@
 	* configure.in: Move to version 1.2.14.
 
 	* sensor.c: Added a missing command length setting.
-	
-2004-02-20 Corey Minyard <cminyard@mvista.com> 
+
+2004-02-20 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added multi-record
 	FRU handling.
@@ -5658,7 +5665,7 @@
 
 	* lib/oem_atca.c: More ATCA work.
 
-2004-02-19 Corey Minyard <cminyard@mvista.com> 
+2004-02-19 Corey Minyard <cminyard@mvista.com>
 
 	* lib/lanparm.c: Initialize the callback data when cleaning
 	the lan parm lock.
@@ -5681,7 +5688,7 @@
 
 	* lib/oem_atca.c, lib/ipmi.c: Started work on the ATCA code.
 
-2004-02-18 Corey Minyard <cminyard@mvista.com> 
+2004-02-18 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Reworked SNMP library configuration to check
 	for the include files first, then the libraries.
@@ -5715,7 +5722,7 @@
 	on a failover.  Changed so that old messages will certainly
 	be ignored.
 
-2004-02-17 Corey Minyard <cminyard@mvista.com> 
+2004-02-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag
 	to the interface data.
@@ -5729,7 +5736,7 @@
 
 	* configure.in: Move to version 1.2.11.
 
-2004-02-12 Corey Minyard <cminyard@mvista.com> 
+2004-02-12 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/entity.c: Added entity-id based
 	versions of some hot-swap functions and the function to get the
@@ -5749,8 +5756,8 @@
 
 	* lib/OpenIPMI/ipmi_addr.h, lib/ipmi_utils.c: Added a privilege
 	field to the IPMI LAN address.
-	
-2004-02-11 Corey Minyard <cminyard@mvista.com> 
+
+2004-02-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Reworked sensor naming to include the entity
 	id and instance.
@@ -5784,7 +5791,7 @@
 
 	* configure.in: Move to version 1.2.9.
 
-2004-02-10 Corey Minyard <cminyard@mvista.com> 
+2004-02-10 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events
 	to the SEL of an MC.
@@ -5795,7 +5802,7 @@
 	* lib/oem_motorola_mxp.c: Make the entities for boards on the MXP
 	V2 chassis device-relative.
 
-2004-02-09 Corey Minyard <cminyard@mvista.com> 
+2004-02-09 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.2.7.
 
@@ -5818,7 +5825,7 @@
 
 	* configure.in: Move to version 1.2.8.
 
-2004-02-08 Corey Minyard <cminyard@mvista.com> 
+2004-02-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Don't subtract 0x60 from device-relative entity
 	instances in the id, just leave it.
@@ -5828,7 +5835,7 @@
 	* ui/ui.c: Subtract 0x60 from device-relative entity instances on
 	display/input.
 
-2004-02-02 Corey Minyard <cminyard@mvista.com> 
+2004-02-02 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.2.6.
 
@@ -5836,7 +5843,7 @@
 	information in there so the logs can be correlated to specific
 	domains, sensors, MCs, etc.
 
-2004-01-31 Corey Minyard <cminyard@mvista.com> 
+2004-01-31 Corey Minyard <cminyard@mvista.com>
 
 	* domain.c: Cleaned up logs, made them include the file and
 	function name.
@@ -5845,13 +5852,13 @@
 	* ipmi_lan.c: Modified message logging to separate the raw
 	and normla message logging.
 
-2004-01-29 Corey Minyard <cminyard@mvista.com> 
+2004-01-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Move the AMC chassis id and temp cool
 	LED to the main chassis entity, since only the active AMC handles
 	it.
 
-2004-01-28 Corey Minyard <cminyard@mvista.com> 
+2004-01-28 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.2.5.
 
@@ -5865,11 +5872,11 @@
 	startup mode to avoid scanning an MC before the user is informed
 	of the domain being up.
 
-2004-01-27 Corey Minyard <cminyard@mvista.com> 
+2004-01-27 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Finished implementing the hot-swap state machine.
 
-2004-01-26 Corey Minyard <cminyard@mvista.com> 
+2004-01-26 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/sensor.c, lib/control.c,
 	lib/entity.c: Added some routines for dealing more directly with
@@ -5883,11 +5890,11 @@
 	* lib/oem_motorola_mxp.c: Reworked the control and sensor creation
 	so the object is fully correct and available when reported.
 
-2004-01-25 Corey Minyard <cminyard@mvista.com> 
+2004-01-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Lots of cleanups and error handling consolidation.
 
-2004-01-24 Corey Minyard <cminyard@mvista.com> 
+2004-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, include/OpenIPMI/ipmi_sensor.c: Reworked the
 	default threshold handling, I misread the spec on this.  These are
@@ -5898,7 +5905,7 @@
 
 	* configure.in: Move to version 1.2.3.
 
-2004-01-23 Corey Minyard <cminyard@mvista.com> 
+2004-01-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ilist.c, include/OpenIPMI/ilist.h: Added a
 	ilist_twoitem_destroy() call.
@@ -5931,18 +5938,18 @@
 	* lib/oem_motorola_mxp.c: Modified the code to register all
 	product ids from 0x01 to 0x40 as MXP products.
 
-2004-01-22 Corey Minyard <cminyard@mvista.com> 
+2004-01-22 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_control.h:
 	Added a way for standard value controls to generate events.
 	* lib/control.c: ditto
 
-2004-01-21 Corey Minyard <cminyard@mvista.com> 
+2004-01-21 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/sensor.c: Added a way to register
 	multiple handlers on a sensor event.
 
-2004-01-20 Corey Minyard <cminyard@mvista.com> 
+2004-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h: Added hot-swap state machine and
 	function definitions.
@@ -5956,7 +5963,7 @@
 	* lib/conn.c: Converted OEM connection callback list to the
 	two item list, and call all the OEM connection callbacks at once.
 
-2004-01-19 Corey Minyard <cminyard@mvista.com> 
+2004-01-19 Corey Minyard <cminyard@mvista.com>
 
 	* lib/conn.c, include/OpenIPMI/ipmi_conn.h: Added a connection
 	handler for testing new connections types (primiarily for ATCA).
@@ -5977,7 +5984,7 @@
 	* lib/ipmi_smi.c: Have the shutdown code call the handler on all
 	outstanding messages.
 
-2004-01-14 Corey Minyard <cminyard@mvista.com> 
+2004-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, ui/basic_ui.c: Added support for net snmp.
 
@@ -6001,7 +6008,7 @@
 	* lib/oem_motorola_mxp.c, doc/OpenIPMI.texi: Removed the fan speed
 	control (it no longer works) and added the fan speed reading.
 
-2004-01-14 Corey Minyard <cminyard@mvista.com> 
+2004-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* doc/OpenIPMI.texi: Added some MXP-specific information.
 
@@ -6012,7 +6019,7 @@
 	* lib/domain.c: Added scanning the system interface when a
 	connection goes up or down.
 
-2004-01-13 Corey Minyard <cminyard@mvista.com> 
+2004-01-13 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.2.1
 
@@ -6043,7 +6050,7 @@
 
 	* ui/basic_ui.c: Added support for SNMP traps.
 
-2004-01-12 Corey Minyard <cminyard@mvista.com> 
+2004-01-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/pet.c, include/OpenIPMI/ipmi_pet.h: Modified the PET code to
 	only handle a single channel, and to specify the channel and
@@ -6074,7 +6081,7 @@
 	to the OEM sensors so they can use the normal sensor code for
 	things that are standard.
 
-2004-01-09 Corey Minyard <cminyard@mvista.com> 
+2004-01-09 Corey Minyard <cminyard@mvista.com>
 	* include/OpenIPMI/ipmi_bits.h, ui/ui.c, lib/strings.c: Added
 	one-shot reset, general output, and one-shot ouput controls.
 
@@ -6092,7 +6099,7 @@
 	* lib/mc.c: Don't delete the MC removed handlers unless the MC is
 	really deleted.
 
-2004-01-08 Corey Minyard <cminyard@mvista.com> 
+2004-01-08 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Added error info logs to tell why a FRU was bad.
 
@@ -6102,7 +6109,7 @@
 	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added code to
 	check if a specific connection is active and to activate a
 	connection explicitly.
-	
+
 	* ui/ui.c: Added support for the connection activation.
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a mc reset command
@@ -6117,7 +6124,7 @@
 
 	* lib/pef.c: Various fixes for PEF handling.
 
-2004-01-07 Corey Minyard <cminyard@mvista.com> 
+2004-01-07 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added LAN and PEF lock clearing.
 
@@ -6134,7 +6141,7 @@
 
 	* lib/oem_motorola_mxp.c: Set the broadcast broken flag.
 
-2004-01-06 Corey Minyard <cminyard@mvista.com> 
+2004-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/pef.c, include/OpenIPMI/ipmi_pef.h: Reworked this to handle
 	locking properly, the lock is claimed on a PEF config read and the
@@ -6146,7 +6153,7 @@
 	and the lock is cleared on a write.  Also added a specific clear
 	lock operation.
 
-2004-01-05 Corey Minyard <cminyard@mvista.com> 
+2004-01-05 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in
 	the main routine.
@@ -6165,7 +6172,7 @@
 
 	* ui/ui.c: Added the ability to set the LAN and PEF parameters.
 
-2004-01-05 Corey Minyard <cminyard@mvista.com> 
+2004-01-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_int.h, lib/ipmi.c: Added a way for
 	internal code to fetch the global OS handler.
@@ -6190,7 +6197,7 @@
 
 	* ui/ui.c: Added support for the LAN parameter display.
 
-2004-01-02 Corey Minyard <cminyard@mvista.com> 
+2004-01-02 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_int.h: Added ipmi_strdup for use by
 	everyone.
@@ -6202,12 +6209,12 @@
 	handling LAN configuration parameters.
 
 	* ui/ui.c: Added some code for fetching and writing PEFs.
-	
-2003-12-26 Corey Minyard <cminyard@mvista.com> 
+
+2003-12-26 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.1.8
 
-2003-12-26 Corey Minyard <cminyard@mvista.com> 
+2003-12-26 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added a domain OEM
 	handler for detecting and setting up special types of domains,
@@ -6217,13 +6224,13 @@
 	didn't clear things up at all.  Some manufacturers have
 	interpreted a certain way that this added code handles, but IMHO
 	it is incorrect.
-	
+
 2003-12-09  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/ilist.c: Fix a bug in the routine to go to the previous
 	item.
 
-2003-12-05 Corey Minyard <cminyard@mvista.com> 
+2003-12-05 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Work on SDR emulation.
 
@@ -6301,12 +6308,12 @@
 	* lib/control.c: ditto
 	* lib/oem_motorola_mxp.c: ditto
 	* ui/ui.c: ditto
-	
+
 2003-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Added a way to
 	get the source MC for the control.
-	
+
 	* include/OpenIPMI/ipmi_sensor.h, lib/sensor.c: Added a way to
 	get the source MC for the sensor.
 
@@ -6320,7 +6327,7 @@
 
 	* ui/ui.c: Added MC update handler registration so new MCs are
 	reported.
-	
+
 2003-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/ipmi.h: Added parameter parsing
@@ -6363,12 +6370,12 @@
 
 	* sample/sample.c, ui/basic_ui.c, sample/ipmicmd.c: Reworked to
 	use the new IPv6 capable interfaces.
-	
+
 2003-11-10 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed MC scanning to handle a single address
 	properly and fixed some error handling cases.
-	
+
 2003-10-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed MC scanning to skip addresses properly at
@@ -6421,7 +6428,7 @@
 	was bad because it didn't avoid the contention and it was possible
 	to have two SDR readings going on at the same time in the same SDR
 	structure.
-	
+
 2003-10-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: If a BMC reports through its channels that is does
@@ -6439,7 +6446,7 @@
 	functions.
 	* lanserver/lanserv_emu.c, lanserv/emu.c, lanserv/emu.h: Ditto
 	* include/OpenIPMI/lanserv.h: Ditto
-	
+
 2003-10-17 Tony Griffiths <tonyg@agile.tv>
 
 	* lib/ipmi_smi.c: Added some enhanced debugging info.
@@ -6447,16 +6454,16 @@
 2003-10-17 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.1.5.
-	
+
 2003-10-16 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to get the
 	current SEL time.
 
 2003-10-16 Louis Zhuang <louis.zhuang@intel.com>
-	
-	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: add a bundle of mc wapper 
-	functions for SEL operation 
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: add a bundle of mc wapper
+	functions for SEL operation
 
 2003-10-15 Corey Minyard <cminyard@mvista.com>
 
@@ -6559,13 +6566,13 @@
 
 	* include/OpenIPMI/ipmi_types.h: The bit assigns for
 	entity_instance and channel were switched in the entity id type.
-	
+
 	* include/OpenIPMI/ipmi_control.h: Added an include for
 	ipmi_addr.h since it is used in this include file.
 
 	* include/OpenIPMI/ipmi_oem.h, lib/mc.c: Allow multiple OEM removal
 	handlers to be registered against an MC.
-	
+
 	* include/OpenIPMI/ipmi_mc.h, lib/Makefile.am, lib/mc.c, lib/chassis.c:
 	Added converting chassis control commands to a power control.
 
@@ -6670,17 +6677,17 @@
 	* lib/oem_motorola_mxp.c: Updated for FRU handling.
 
 	* ui/ui.c: Added better entity output and FRU change handling.
-	
+
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added some FRU handling commands.
 
 	* lib/mc.c: Added entity scanning to device SDRs.
-	
+
 	* lib/entity.c: Reworked the entity SDR handling code so that it
 	tracks the old values, detects when values change, and does the
 	appropriate thing.
-	
+
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added FRU handling code.
 	* include/OpenIPMI/ipmiif.h: ditto
 	* lib/Makefile.am, include/OpenIPMI/Makefile.am: ditto
@@ -6712,7 +6719,7 @@
 	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_int.h: Moved
 	the string decoding and data decoding functions into the internal
 	functions.
-	
+
 
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
@@ -6751,7 +6758,7 @@
 
 2003-08-27 Corey Minyard <cminyard@mvista.com>
 
-	* lib/ipmi_lan.c: Fixed reconnection problems. 
+	* lib/ipmi_lan.c: Fixed reconnection problems.
 
 	* lib/oem_motorola_mxp_intf: Removed connection loss detection from
 	the MXP-specific queue fetch, because it is unreliable.  Just use
@@ -6835,8 +6842,8 @@
 	sharing a connection between IP addresses.  Not all boxes support
 	sharing a connection between IP addresses.
 
-	* lib/domain.c: Fixed a problem handling 
-	
+	* lib/domain.c: Fixed a problem handling
+
 	* lib/ipmi_lan.c, lib/oem_motorola_mxp_intf.c: Fixed a problem
 	where the connection state wouldn't change if only the active
 	value changed and not the IPMB address.
@@ -6890,7 +6897,7 @@
 
 	* utils/test_md5.c, utils/test_md2.c: Make the tests run
 	standalone.
-	
+
 	* lanserv/Makefile.am: Make dependencies for libraries be in
 	the build directory, not the source directory.  This way it will
 	build in a separate object directory.
@@ -7073,27 +7080,27 @@
 2003-05-16 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.4.1
-	
+
 	* lanserv_oem_force.c, ipmi_oem_force.c: The permission from
 	Force Computers(tm) came much faster than I expected.  This
 	included some OEM handling for the various Force cards, for
 	switching the cards to/from BMC mode and for fetching the IPMB
 	address.  Thanks to Force for their help.
-	
+
 	* ipmi.c, lanserv.c, ipmicmd.c: Added calls to initialize the
 	Force OEM code.
 
 2003-05-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.h: Moved to include/OpenIPMI
-	
+
 	* lanserv.c: Handled move of lanserv.h
 	* lanserv_asf.c: ditto
 	* lanserv_ipmi.c: ditto
 	* lanserv_emu.c: ditto
 
 	* configure.in: Move to version 0.4.0
-	
+
 	* ipmicmd.c: Changed the order of the lun and netfn to make it
 	consistent with ipmi_ui.
 
@@ -7146,13 +7153,13 @@
 	first established.
 	* include/OpenIPMI/ipmi_oem.h: ditto
 	* include/OpenIPMI/ipmi_int.h: ditto
-	
+
 	* ipmicmd.c: Reworked this so it sits on top of an IPMI
 	connection.  This means you can make LAN connection now.
 
 	* ipmi_utils.c: Split out some generic IPMI things that don't
 	depend on anything else.
-	
+
 	* everything: Added the concept of an IPMI domain, and replaced
 	the "BMC" with the "domain".  This was not a huge change from a
 	usage point of view, but was a big restructure internally.  This
@@ -7231,7 +7238,7 @@
 
 	* include/OpenIPMI/ipmi_types.h: Moved ipmi_con_t as an opaque
 	type into here, so the user can access it.
-	
+
 2003-04-28 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added logs for error and
@@ -7273,7 +7280,7 @@
 	* priv_table.c, include/OpenIPMI/ipmi_auth.h: Added a table and
 	handling for figuring out if a message is permitted for a certain
 	priviledge level.
-	
+
 	* include/OpenIPMI/ipmi_msgbits.h: Added all the message ids from
 	table G-1 from the IPMI 1.5 spec.
 
@@ -7594,7 +7601,7 @@
 
 	* mc.c, include/OpenIPMI/ipmi_conn.h: Modified the ipmi_init_con()
 	call to take the slave address.
-	
+
 	* ipmi_lan.c, ipmi_smi.c: Now pass in the slave address to
 	ipmi_init_con().
 
@@ -7602,7 +7609,7 @@
 
 	* ui.c: Various cleanups for the SMI address and the new SEL
 	setup.
-	
+
 	* ilist.c, ilist.h: Added a way to traverse the list backwards.
 
 	* ipmi_smi.c: Converted the BMC to use an SMI address.
@@ -7628,10 +7635,10 @@
 	* sdr.c: Made some of the err info logs unique.
 
 	* mc.c, entity.c: memory leak removals
-	
+
 	* ilist.c, ilist.h, ipmi.c: Added separate allocation routines
 	for the ilist code.
-	
+
 	* mc.c, include/OpenIPMI/ipmi_oem.h: Added a shutdown callback to
 	the OEM registeration.
 
@@ -7639,10 +7646,10 @@
 	the mc.
 
 	* ipmi.c, include/OpenIPMI/ipmiif.h: Added global shutdown code.
-	
+
 	* ipmi.c, include/OpenIPMI/ipmi_int.h: Added memory debugging
 	code.
-	
+
 	* basic_ui.c: Converted over to the new memory debugging code.
 	* control.c: ditto
 	* entity.c: ditto
@@ -7674,7 +7681,7 @@
 
 	* mc.c, sdr.c, sel.c: Changed all 1-bit integers to unsigned so
 	that comparisons work properly.
-	
+
 2003-02-09 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Moved to version 0.1.3.
@@ -7691,7 +7698,7 @@
 	Modified the previous change to report the number of entries in
 	the SEL, since the number of total entries available in the SEL
 	may not be available.
-	
+
 	* mc.c, include/OpenIPMI/ipmiif.h, sel.c, include/OpenIPMI/ipmi_sel.h:
 	Added a way to get the estimated number of entries left for new
 	events in the SEL.
@@ -7721,7 +7728,7 @@
 
 	* ui.c: Fixed some problems with threshold display, and added
 	the current value of the threshold (out of range).
-	
+
 	* ui.c: Fixes some va_arg problems.
 
 	* sensor.c: Fixed problems with sensor allocation.
@@ -7729,16 +7736,16 @@
 2003-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Changed shutdown code to close the connection first.
-	
+
 	* mc.c: Modified the close connection code to avoid locking
 	problems.
 
 	* include/OpenIPMI/ipmiif.h: Changed the format of the close done
 	callback to remove the BMC (since it will be gone).
-	
+
 	* selector.c, include/OpenIPMI/selector.h: Modified the selector
 	code to be reentrant
-	
+
 	* ipmi.c, include/OpenIPMI/ipmi_int.h: Added a way to allocate a
 	lock using the global IPMI selector.
 
@@ -7757,13 +7764,13 @@
 	device support bits.
 
 	* ui.c: Added a command to dump the SDRs.
-	
+
 	* sdr.c: Reworked the fetching of SDRs to get the SDR info first,
 	then to do the reservation if it is required.
 
 	* sensor.c: Fixed the sensor calculation values to be the right
 	signedness.
-	
+
 	* mc.c: Modified SEL fetch to restart the timer after the previous
 	SEL fetch completes.
 
@@ -7797,9 +7804,9 @@
 	SEL scan) while the connection is down.
 	* ipmi_lan.c: ditto
 	* ipmi_smi.c: ditto
-	
+
 	* OpenIPMI.texi: Documented the changes to the SEL code.
-	
+
 	* mc.c, include/OpenIPMI/ipmi_oem.h: Added an OEM callback for MC
 	removal.
 
@@ -7819,7 +7826,7 @@
 2003-01-15 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Fixed a locking problem with SEL operations.
-	
+
 	* mc.c, include/OpenIPMI/ipmi_mc.h: Added a hook for event
 	deletion handling, so OEM code can do its own event deletion.
 
@@ -7836,7 +7843,7 @@
 	* configure.in: Move version to 0.1.0.
 
 	* OpenIPMI.texi: More work on docs.
-	
+
 	* sel.c, mc.c: Minor cleanups.
 
 	* ipmi_smi.c: Modified the timeout to be a much larger value.
@@ -7847,16 +7854,16 @@
 
 	* mc.c: Added a periodic rescan of the presence sensors
 	periodically (with the bus scan).
-	
+
 	* ui.c: Added rescanning of entities when displaying them.
-	
+
 	* mc.c, include/OpenIPMI/mc.h, entity.c: Added support for
 	handling unhandled (not delivered to the user) events, so the user
 	can delete them if they like.
 
 	* ui.c: The info wasn't being passed into the id-to-pointer
 	converted for the mccmd command.
-	
+
 	* OpenIPMI.texi: More work on docs.
 
 	* control.c: Fixed the calculation size for the non-standard entry
@@ -7879,7 +7886,7 @@
 	entities were specifically being locked.
 
 	* ipmi_sensor.c, sensor.c: Made the sensor callbacks const.
-	
+
 
 2003-01-08 Corey Minyard <cminyard@mvista.com>
 
@@ -7887,13 +7894,13 @@
 
 	* include/OpenIPMI/ipmi_int.h, mc.c, ui.c: Added an event debug
 	level.
-	
+
 2003-01-07 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.texi: More work on docs.
 
 	* Makefile.am: Turned on lock checking code generation.
-	
+
 	* include/OpenIPMI/ipmi_int.h: Cleaned up the debugging flags.
 
 	* include/OpenIPMI/ipmi_sel.h: Changed the name "log" to "event".
@@ -7908,19 +7915,19 @@
 	* sensor.c: ditto
 	* test1.c: ditto
 	* ui.c: ditto
-	
+
 	* sel.c: Cleaned up the rather broken locking.
-	
+
 	* sdr.c, include/OpenIPMI/ipmi_sdr.h: Cleaned up the names and
 	cleaned up the rather broken locking.
-	
+
 	* control.c: Added IPMI logging information.
 	* sdr.c: ditto
 	* sel.c: ditto
 	* sensor.c: ditto
-	
+
 	* configure.in: Changed to version 0.0.3.
-	
+
 	* include/OpenIPMI/log.h: Reworked log handling to add a log type.
 	* include/OpenIPMI/os_handler.h: ditto
 	* ipmi.c: ditto
@@ -7937,9 +7944,9 @@
 2003-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Converted the bmc pointer to a bmc id.
-	
+
 	* ipmi_smi.c: Fixed a double unlock.
-	
+
 	* ipmi.c, include/OpenIPMI/ipmi_int.h, ui_os.c: Added code for
 	checking for locking errors, fixed locking errors
 	* control.c: ditto
@@ -7959,7 +7966,7 @@
 	a slot sensor).
 	* include/OpenIPMI/ipmi_sensor.h: ditto
 	* include/OpenIPMI/ipmiif.h: ditto
-	
+
 	* ipmi_lan.c: Modified the timers to be alloc/free/start/stop, so
 	they can be allocated and reused at will.
 	* ipmi_smi.c: ditto

@@ -15,6 +15,8 @@ PKGCONFIGS = OpenIPMIutils.pc OpenIPMI.pc OpenIPMIui.pc OpenIPMIposix.pc \
 	     OpenIPMIpthread.pc OpenIPMIcmdlang.pc $(GLIB_PKGCONF) \
 	     $(GLIB12_PKGCONF) $(TCL_PKGCONF)
 
+ACLOCAL_AMFLAGS = -I m4
+
 install-data-local: $(PKGCONFIGS)
 	$(mkinstalldirs) $(DESTDIR)$(libdir)/pkgconfig
 	$(INSTALL_DATA) $(PKGCONFIGS) $(DESTDIR)$(libdir)/pkgconfig

@@ -1,14 +1,6 @@
 
-empty:=
-space:= $(empty) $(empty)
-
 LIB_VERSION = 0.0.5
-
-SPACE_VERSION = $(subst .,$(space),$(LIB_VERSION))
-VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
-VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
-VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
-LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
+LD_VERSION = 0:5:0
 
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
 	$(OPENSSLINCS)
