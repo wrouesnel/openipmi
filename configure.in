@@ -852,8 +852,9 @@ case $host in
 esac
 
 AC_CHECK_LIB(curses, tgetent, TERM_LIBS=-lcurses,
-   [AC_CHECK_LIB(ncurses, tgetent, TERM_LIBS=-lncurses,
-      [AC_MSG_ERROR([libtermcap, libcurses or libncurses are required!])] )] )
+   [AC_CHECK_LIB(ncursesw, tgetent, TERM_LIBS=-lncursesw,
+    [AC_CHECK_LIB(ncurses, tgetent, TERM_LIBS=-lncurses,
+      [AC_MSG_ERROR([libtermcap, libcurses or libncurses are required!])])] )] )
 
 # Checks for header files.
 AC_FUNC_ALLOCA

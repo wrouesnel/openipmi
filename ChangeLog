@@ -1,3 +1,7 @@
+2011-06-15 Anduras AG <https://sourceforge.net/users/anduras/>
+
+	* configure.in, ui/Makefile.am: Add support for ncursesw.
+
 2010-07-14 Corey Minyard <cminyard@mvista.com>
 
 	* Makefile.am, configure.in, cmdlang/Makefile.am, doc/Makefile.am,

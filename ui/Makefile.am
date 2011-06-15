@@ -18,6 +18,6 @@ libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIui.map
 
 ipmi_ui_SOURCES = basic_ui.c
-ipmi_ui_LDADD = libOpenIPMIui.la $(top_builddir)/utils/libOpenIPMIutils.la $(top_builddir)/lib/libOpenIPMI.la $(top_builddir)/unix/libOpenIPMIposix.la -lncurses $(SNMPLIBS) $(OPENSSLLIBS) $(GDBM_LIB)
+ipmi_ui_LDADD = libOpenIPMIui.la $(top_builddir)/utils/libOpenIPMIutils.la $(top_builddir)/lib/libOpenIPMI.la $(top_builddir)/unix/libOpenIPMIposix.la $(TERM_LIBS) $(SNMPLIBS) $(OPENSSLLIBS) $(GDBM_LIB)
 
 CLEANFILES = libOpenIPMIui.map
