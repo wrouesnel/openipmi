@@ -4254,7 +4254,7 @@ char *get_error_string(unsigned int val);
 
     /*
      * Iterate through all the MCs in the object.  The
-     * mc_iter_cb method will be called on the first parameter for
+     * domain_iter_mc_cb method will be called on the first parameter for
      * each mc in the domain.  The parameters it receives will be:
      * <self> <domain> <mc>.
      */
@@ -4264,10 +4264,10 @@ char *get_error_string(unsigned int val);
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
-	if (! valid_swig_cb(handler, mc_iter_cb))
+	if (! valid_swig_cb(handler, domain_iter_mc_cb))
 	    rv = EINVAL;
 	else {
-	    handler_val = get_swig_cb(handler, mc_iter_cb);
+	    handler_val = get_swig_cb(handler, domain_iter_mc_cb);
 	    ipmi_domain_iterate_mcs(self, domain_iterate_mcs_handler,
 				    handler_val);
 	}

@@ -17,7 +17,7 @@ nodist__OpenIPMI_la_SOURCES = OpenIPMI_wrap.c
 _OpenIPMI_la_LDFLAGS = -module -avoid-version
 _OpenIPMI_la_LIBADD = $(OPENIPMI_SWIG_LIBS) $(PYTHON_POSIX_LIB)
 
-EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py sample.py
+EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py sample.py sample2.py
 
 OpenIPMI.pyc: OpenIPMI.py _OpenIPMI.la
 	-PYTHONPATH=$(PYPATH) $(pythonprog) -c 'import OpenIPMI.py'
@@ -48,4 +48,4 @@ uninstall-local:
 	rm -f "$(DESTDIR)$(bindir)/openipmigui"
 
 rungui:
-	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/.libs/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py

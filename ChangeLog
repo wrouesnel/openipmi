@@ -1,3 +1,22 @@
+2011-10-12 Corey Minyard <cminyard@mvista.com>
+
+	* Makefile.am, swig/python/Makefile.am: Fixed the rungui setting due
+	to changes in autoconf and such.
+
+	* configure.in: Add a check for execinfo.h that used to be automatic.
+
+	* swig/OpenIPMI.i: Fix an issue with domain.iterate_mcs().  The
+	callback name was inconsistent, causing issues.  Make the callback
+	name domain_iter_mc_cb in all cases.
+
+	* swig/python/Makefile.am, swig/python/sample2.py: Add a simple
+	sample program to send get device id periodically.
+
+	* utils/ipmi_malloc.c: Fix a bug in the malloc code to handle if no
+	traceback is passed in.
+
+	* configure.in: Move to version 2.0.19.
+
 2011-06-15 Anduras AG <https://sourceforge.net/users/anduras/>
 
 	* configure.in, ui/Makefile.am: Add support for ncursesw.

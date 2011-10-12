@@ -152,10 +152,10 @@ ipmi_debug_malloc(size_t size, void **tb)
 
     hdr->signature = SIGNATURE;
     hdr->size = size;
-    memcpy(hdr->tb, tb, sizeof(hdr->tb));
-    for (i=0; i<TB_SIZE; i++) {
+    if (tb)
+	memcpy(hdr->tb, tb, sizeof(hdr->tb));
+    for (i=0; i<TB_SIZE; i++)
 	trlr->tb[i] = (void *) SIGNATURE;
-    }
 
     data += sizeof(*hdr);
     for (i=size; i<real_size; i++)
