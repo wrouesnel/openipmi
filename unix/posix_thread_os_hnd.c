@@ -556,6 +556,9 @@ create_thread(os_handler_t       *handler,
 	rv = pthread_attr_init(&attr);
 	if (rv)
 	    return rv;
+	rv = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	if (rv)
+	    goto out;
 	rv = pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
 	if (rv)
 	    goto out;
