@@ -1,3 +1,8 @@
+2012-04-27 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/cmd_sensor.c: A sensor event does not have to be readable
+	to support event enables.
+
 2012-01-05 Michael Pauzner <MichaelP@Radware.com>
 
 	* unix/posix_thread_os_hnd.c: Add pthread_attr_setinheritsched()
