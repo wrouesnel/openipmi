@@ -1,3 +1,9 @@
+2012-01-05 Michael Pauzner <MichaelP@Radware.com>
+
+	* unix/posix_thread_os_hnd.c: Add pthread_attr_setinheritsched()
+	when setting the priority of a thread, so the set will actually
+	work.
+
 2011-10-12 Corey Minyard <cminyard@mvista.com>
 
 	* Makefile.am, swig/python/Makefile.am: Fixed the rungui setting due
