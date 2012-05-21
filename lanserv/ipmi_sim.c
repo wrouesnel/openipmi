@@ -205,15 +205,15 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 	    perror("Error receiving message");
 	    exit(1);
 	}
-	return;
+	goto out;
     }
     l.xmit_fd = lan_fd;
 
     if (len < 4)
-	return;
+	goto out;
 
     if (msgd[0] != 6)
-	return; /* Invalid version */
+	goto out; /* Invalid version */
 
     /* Check the message class. */
     switch (msgd[3]) {
@@ -225,6 +225,8 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 	    ipmi_handle_lan_msg(data->lan, msgd, len, &l, sizeof(l));
 	    break;
     }
+ out:
+    return;
 }
 
 static int

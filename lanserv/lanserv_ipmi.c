@@ -3454,8 +3454,8 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 		     "LAN msg failure: message too short");
 	    return;
 	}
-	memcpy(msg->iana, msg->data+1, 3);
-	msg->data+= 4;
+	memcpy(msg->iana, msg->data + 1, 3);
+	msg->data += 4;
 	msg->payload_id = ipmi_get_uint16(msg->data);
 	msg->data += 2;
     }

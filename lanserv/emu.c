@@ -3972,6 +3972,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
     lmc_data_t *mc;
     ipmi_msg_t smsg;
     ipmi_msg_t *omsg = msg;
+    unsigned int olen = *rdata_len;
     unsigned char *data = NULL;
 
     if (msg->cmd == IPMI_SEND_MSG_CMD) {
@@ -4052,6 +4053,13 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
 	int i;
+
+	if (*rdata_len + 8 > olen) {
+	    rdata[0] = IPMI_CANNOT_RETURN_REQ_LENGTH_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+
 	for (i=*rdata_len-1; i>=0; i--)
 	    rdata[i+7] = rdata[i];
 	rdata[0] = 0;
