@@ -75,6 +75,8 @@
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/lanserv.h>
 
 #include "emu.h"
@@ -89,11 +91,11 @@ static int port = -1;
 
 typedef struct misc_data
 {
-    int max_fd;
-    int lan_fd[MAX_ADDR];
-    char *config_file;
-    struct timeval next_tick_time;
+    emu_data_t *emu;
     lan_data_t *lan;
+    os_handler_t *os_hnd;
+    os_handler_waiter_factory_t *waiter_factory;
+    os_hnd_timer_id_t *timer;
 } misc_data_t;
 
 static void *
@@ -143,13 +145,12 @@ lan_send(lan_data_t *lan,
     }
 }
 
-static emu_data_t *emu;
-
 static int
 smi_send(lan_data_t *lan, msg_t *msg)
 {
-    unsigned char    data[36];
-    unsigned int     data_len = sizeof(data);
+    misc_data_t      *data = lan->user_info;
+    unsigned char    msgd[36];
+    unsigned int     msgd_len = sizeof(msgd);
     ipmi_msg_t       imsg;
 
     imsg.netfn = msg->netfn;
@@ -158,9 +159,9 @@ smi_send(lan_data_t *lan, msg_t *msg)
     imsg.data_len = msg->len;
 
     /* LAN is defined to be channel 1. */
-    ipmi_emu_handle_msg(emu, 1, msg->rs_lun, &imsg, data, &data_len);
+    ipmi_emu_handle_msg(data->emu, 1, msg->rs_lun, &imsg, msgd, &msgd_len);
 
-    ipmi_handle_smi_rsp(lan, msg, data, data_len);
+    ipmi_handle_smi_rsp(lan, msg, msgd, msgd_len);
     return 0;
 }
 
@@ -190,14 +191,15 @@ gen_rand(lan_data_t *lan, void *data, int len)
 }
 
 static void
-handle_msg_lan(int lan_fd, lan_data_t *lan)
+lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 {
-    int                len;
-    lan_addr_t         l;
-    unsigned char      data[256];
+    misc_data_t   *data = cb_data;
+    int           len;
+    lan_addr_t    l;
+    unsigned char msgd[256];
 
     l.addr_len = sizeof(l.addr);
-    len = recvfrom(lan_fd, data, sizeof(data), 0, &(l.addr), &(l.addr_len));
+    len = recvfrom(lan_fd, msgd, sizeof(msgd), 0, &(l.addr), &(l.addr_len));
     if (len < 0) {
 	if (errno != EINTR) {
 	    perror("Error receiving message");
@@ -210,17 +212,17 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     if (len < 4)
 	return;
 
-    if (data[0] != 6)
+    if (msgd[0] != 6)
 	return; /* Invalid version */
 
     /* Check the message class. */
-    switch (data[3]) {
+    switch (msgd[3]) {
 	case 6:
-	    handle_asf(lan, data, len, &l, sizeof(l));
+	    handle_asf(data->lan, msgd, len, &l, sizeof(l));
 	    break;
 
 	case 7:
-	    ipmi_handle_lan_msg(lan, data, len, &l, sizeof(l));
+	    ipmi_handle_lan_msg(data->lan, msgd, len, &l, sizeof(l));
 	    break;
     }
 }
@@ -250,44 +252,6 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     }
 
     return fd;
-}
-
-static int
-cmp_timeval(struct timeval *tv1, struct timeval *tv2)
-{
-    if (tv1->tv_sec < tv2->tv_sec)
-        return -1;
-    if (tv1->tv_sec > tv2->tv_sec)
-        return 1;
-    if (tv1->tv_usec < tv2->tv_usec)
-        return -1;
-    if (tv1->tv_usec > tv2->tv_usec)
-        return 1;
-    return 0;
-}
-
-static void
-diff_timeval(struct timeval *dest,
-	     struct timeval *left,
-	     struct timeval *right)
-{
-    if (   (left->tv_sec < right->tv_sec)
-	|| (   (left->tv_sec == right->tv_sec)
-	    && (left->tv_usec < right->tv_usec)))
-    {
-	/* If left < right, just force to zero, don't allow negative
-           numbers. */
-	dest->tv_sec = 0;
-	dest->tv_usec = 0;
-	return;
-    }
-
-    dest->tv_sec = left->tv_sec - right->tv_sec;
-    dest->tv_usec = left->tv_usec - right->tv_usec;
-    while (dest->tv_usec < 0) {
-	dest->tv_usec += 1000000;
-	dest->tv_sec--;
-    }
 }
 
 static void
@@ -391,7 +355,7 @@ static unsigned int pos = 0;
 static int echo = 1;
 
 static void
-handle_user_char(char c)
+handle_user_char(misc_data_t *data, char c)
 {
     switch(c) {
     case 8:
@@ -418,7 +382,7 @@ handle_user_char(char c)
 	if (strcmp(buffer, "noecho") == 0)
 	    echo = 0;
 	else
-	    ipmi_emu_cmd(emu, buffer);
+	    ipmi_emu_cmd(data->emu, buffer);
 	printf("> ");
 	pos = 0;
 	break;
@@ -434,17 +398,19 @@ handle_user_char(char c)
 		printf("%c", c);
 	}
     }
+    fflush(stdout);
 }
 
 static void
-handle_user_data_ready(void)
+user_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
-    char rc;
-    int count;
+    misc_data_t *data = cb_data;
+    char        rc;
+    int         count;
 
-    count = read(0, &rc, 1);
+    count = read(fd, &rc, 1);
     if (count > 0)
-	handle_user_char(rc);
+	handle_user_char(data, rc);
 }
 
 struct termios old_termios;
@@ -477,48 +443,34 @@ static void
 sleeper(emu_data_t *emu, struct timeval *time)
 {
     misc_data_t    *data = ipmi_emu_get_user_data(emu);
-    struct timeval timeout;
-    struct timeval left = *time;
-    struct timeval time_now;
-    int            i;
-    int            rv;
-    int            done_on_timeout = 0;
+    os_handler_waiter_t *waiter;
 
-    for (;;) {
-	fd_set readfds;
+    waiter = os_handler_alloc_waiter(data->waiter_factory);
+    if (!waiter) {
+	fprintf(stderr, "Unable to allocate waiter\n");
+	exit(1);
+    }
 
-	fflush(stdout);
+    os_handler_waiter_wait(waiter, time);
+    os_handler_waiter_release(waiter);
+}
 
-	FD_ZERO(&readfds);
+static void
+tick(void *cb_data, os_hnd_timer_id_t *id)
+{
+    misc_data_t *data = cb_data;
+    struct timeval tv;
+    int err;
 
-	for (i=0; i<num_addr; i++)
-	    FD_SET(data->lan_fd[i], &readfds);
+    ipmi_lan_tick(data->lan, 1);
+    ipmi_emu_tick(data->emu, 1);
 
-	gettimeofday(&time_now, NULL);
-	diff_timeval(&timeout, &data->next_tick_time, &time_now);
-	if (cmp_timeval(&timeout, &left) < 0) {
-	    diff_timeval(&left, &left, &timeout);
-	} else {
-	    timeout = left;
-	    done_on_timeout = 1;
-	}
-	rv = select(data->max_fd, &readfds, NULL, NULL, &timeout);
-	if ((rv == -1) && (errno == EINTR))
-	    continue;
-
-	if (rv == 0) {
-	    if (done_on_timeout)
-		return;
-	    ipmi_lan_tick(data->lan, 1);
-	    ipmi_emu_tick(emu, 1);
-	    gettimeofday(&data->next_tick_time, NULL);
-	    data->next_tick_time.tv_sec += 1;
-	} else {
-	    for (i=0; i<num_addr; i++) {
-		if (FD_ISSET(data->lan_fd[i], &readfds))
-		    handle_msg_lan(data->lan_fd[i], data->lan);
-	    }
-	}
+    gettimeofday(&tv, NULL);
+    tv.tv_sec += 1;
+    err = data->os_hnd->start_timer(data->os_hnd, data->timer, &tv, tick, data);
+    if (err) {
+	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
+	exit(1);
     }
 }
 
@@ -527,25 +479,43 @@ main(int argc, const char *argv[])
 {
     lan_data_t  lan;
     misc_data_t data;
-    int rv;
-    int o;
+    int err;
     int i;
     poptContext poptCtx;
-    struct timeval timeout;
-    struct timeval time_now;
+    struct timeval tv;
+    int lan_fd[MAX_ADDR];
+    os_hnd_fd_id_t *lan_fd_id[MAX_ADDR];
+    os_hnd_fd_id_t *user_fd_id;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
-    while ((o = poptGetNextOpt(poptCtx)) >= 0) {
-	switch (o) {
+    while ((i = poptGetNextOpt(poptCtx)) >= 0) {
+	switch (i) {
 	    case 'd':
 		debug++;
 		break;
 	}
     }
 
-    data.config_file = config_file;
+    data.os_hnd = ipmi_posix_setup_os_handler();
+    if (!data.os_hnd) {
+	fprintf(stderr, "Unable to allocate OS handler\n");
+	exit(1);
+    }
 
-    emu = ipmi_emu_alloc(&data, sleeper);
+    err = os_handler_alloc_waiter_factory(data.os_hnd, 0, 0,
+					  &data.waiter_factory);
+    if (err) {
+	fprintf(stderr, "Unable to allocate waiter factory: 0x%x\n", err);
+	exit(1);
+    }
+
+    err = data.os_hnd->alloc_timer(data.os_hnd, &data.timer);
+    if (err) {
+	fprintf(stderr, "Unable to allocate timer: 0x%x\n", err);
+	exit(1);
+    }
+
+    data.emu = ipmi_emu_alloc(&data, sleeper);
 
     memset(&lan, 0, sizeof(lan));
     lan.user_info = &data;
@@ -559,7 +529,7 @@ main(int argc, const char *argv[])
     lan.debug = debug;
 
     num_addr = MAX_ADDR;
-    if (lanserv_read_config(&lan, data.config_file, (sockaddr_ip_t *) addr,
+    if (lanserv_read_config(&lan, config_file, (sockaddr_ip_t *) addr,
 			    addr_len, &num_addr))
 	exit(1);
 
@@ -581,73 +551,59 @@ main(int argc, const char *argv[])
 	if (addr_len[i] == 0)
 	    break;
 
-	data.lan_fd[i] = open_lan_fd(&addr[i].s_ipsock.s_addr, addr_len[i]);
-	if (data.lan_fd[i] == -1) {
+	lan_fd[i] = open_lan_fd(&addr[i].s_ipsock.s_addr, addr_len[i]);
+	if (lan_fd[i] == -1) {
 	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
 	    exit(1);
 	}
 
 	memcpy(addr_data, &addr[i].s_ipsock.s_addr4.sin_addr.s_addr, 4);
 	memcpy(addr_data+4, &addr[i].s_ipsock.s_addr4.sin_port, 2);
-	ipmi_emu_set_addr(emu, i, 0, addr_data, 6);
+	ipmi_emu_set_addr(data.emu, i, 0, addr_data, 6);
     }
 
-    rv = ipmi_lan_init(&lan);
-    if (rv)
+    err = ipmi_lan_init(&lan);
+    if (err)
 	return 1;
 
     data.lan = &lan;
 
     init_term();
     printf("> ");
-
-    data.max_fd = -1;
-    for (i=0; i<num_addr; i++) {
-	if (data.lan_fd[i] > data.max_fd)
-	    data.max_fd = data.lan_fd[i];
+    fflush(stdout);
+    err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, 0,
+					  user_data_ready, &data,
+					  NULL, &user_fd_id);
+    if (err) {
+	fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
+	exit(1);
     }
-    data.max_fd++;
+
+    for (i=0; i<num_addr; i++) {
+	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd[i],
+					      lan_data_ready, &data,
+					      NULL, &lan_fd_id[i]);
+	if (err) {
+	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+	    exit(1);
+	}
+    }
 
     if (command_string) {
-	ipmi_emu_cmd(emu, command_string);
+	ipmi_emu_cmd(data.emu, command_string);
     }
 
     if (command_file)
-	read_command_file(emu, command_file);
+	read_command_file(data.emu, command_file);
 
-    gettimeofday(&data.next_tick_time, NULL);
-    data.next_tick_time.tv_sec += 1;
-    for (;;) {
-	fd_set readfds;
-
-	fflush(stdout);
-
-	FD_ZERO(&readfds);
-
-	FD_SET(0, &readfds);
-	for (i=0; i<num_addr; i++)
-	    FD_SET(data.lan_fd[i], &readfds);
-
-	gettimeofday(&time_now, NULL);
-	diff_timeval(&timeout, &data.next_tick_time, &time_now);
-	rv = select(data.max_fd, &readfds, NULL, NULL, &timeout);
-	if ((rv == -1) && (errno == EINTR))
-	    continue;
-
-	if (rv == 0) {
-	    ipmi_lan_tick(&lan, 1);
-	    ipmi_emu_tick(emu, 1);
-	    gettimeofday(&data.next_tick_time, NULL);
-	    data.next_tick_time.tv_sec += 1;
-	} else {
-	    if (FD_ISSET(0, &readfds))
-		handle_user_data_ready();
-
-	    for (i=0; i<num_addr; i++) {
-		if (FD_ISSET(data.lan_fd[i], &readfds))
-		    handle_msg_lan(data.lan_fd[i], &lan);
-	    }
-	}
+    gettimeofday(&tv, NULL);
+    tv.tv_sec += 1;
+    err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);
+    if (err) {
+	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
+	exit(1);
     }
-}
 
+    data.os_hnd->operation_loop(data.os_hnd);
+    return 0;
+}

@@ -9,7 +9,7 @@ lib_LTLIBRARIES = libIPMIlanserv.la
 
 bin_PROGRAMS = ipmilan
 
-noinst_PROGRAMS = lanserv_emu ipmi_checksum
+noinst_PROGRAMS = ipmi_sim ipmi_checksum
 
 noinst_HEADERS = emu.h
 
@@ -27,9 +27,9 @@ ipmilan_SOURCES = lanserv.c
 ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmilan_LDFLAGS = -rdynamic
 
-lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
-lanserv_emu_LDADD = $(POPTLIBS) libIPMIlanserv.la
-lanserv_emu_LDFLAGS = -rdynamic
+ipmi_sim_SOURCES = ipmi_sim.c emu.c emu_cmd.c
+ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
+ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
 
 EXTRA_DIST = atca.emu README.emulator
 
