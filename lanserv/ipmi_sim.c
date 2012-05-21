@@ -465,8 +465,8 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_lan_tick(data->lan, 1);
     ipmi_emu_tick(data->emu, 1);
 
-    gettimeofday(&tv, NULL);
-    tv.tv_sec += 1;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
     err = data->os_hnd->start_timer(data->os_hnd, data->timer, &tv, tick, data);
     if (err) {
 	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
@@ -596,8 +596,8 @@ main(int argc, const char *argv[])
     if (command_file)
 	read_command_file(data.emu, command_file);
 
-    gettimeofday(&tv, NULL);
-    tv.tv_sec += 1;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
     err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);
     if (err) {
 	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
