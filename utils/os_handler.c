@@ -182,6 +182,8 @@ single_waiter_thread(void *data)
     os_hnd->unlock(os_hnd, factory->lock);
 }
 
+extern int ipmi_malloc_init(os_handler_t *os_hnd);
+
 int
 os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
 				unsigned int num_threads,
@@ -192,6 +194,8 @@ os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
     int                         rv;
     unsigned int                i;
     int                         has_threads = 0;
+
+    ipmi_malloc_init(os_hnd);
 
     if (os_hnd->create_lock && os_hnd->create_cond
 	&& os_hnd->create_thread)

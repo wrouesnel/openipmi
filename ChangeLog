@@ -1,3 +1,10 @@
+2012-05-21 Corey Minyard <cminyard@mvista.com>
+
+	* os_handler.c, ipmi_malloc.c: Since the OS handler waiter stuff
+	uses ipmi_malloc(), initialize it from there.  And only initialize
+	the os_handler once in ipmi_malloc_init(), to avoid any issues
+	with the OS handler changing.
+
 2012-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_sensor.c: A sensor event does not have to be readable

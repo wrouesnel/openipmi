@@ -470,6 +470,7 @@ ipmi_strndup(const char *str, int n)
 int
 ipmi_malloc_init(os_handler_t *os_hnd)
 {
-    malloc_os_hnd = os_hnd;
+    if (!malloc_os_hnd)
+	malloc_os_hnd = os_hnd;
     return 0;
 }
