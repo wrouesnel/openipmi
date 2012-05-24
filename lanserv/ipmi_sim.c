@@ -151,15 +151,8 @@ smi_send(lan_data_t *lan, msg_t *msg)
     misc_data_t      *data = lan->user_info;
     unsigned char    msgd[36];
     unsigned int     msgd_len = sizeof(msgd);
-    ipmi_msg_t       imsg;
 
-    imsg.netfn = msg->netfn;
-    imsg.cmd = msg->cmd;
-    imsg.data = msg->data;
-    imsg.data_len = msg->len;
-
-    /* LAN is defined to be channel 1. */
-    ipmi_emu_handle_msg(data->emu, 1, msg->rs_lun, &imsg, msgd, &msgd_len);
+    ipmi_emu_handle_msg(data->emu, msg, msgd, &msgd_len);
 
     ipmi_handle_smi_rsp(lan, msg, msgd, msgd_len);
     return 0;
@@ -348,10 +341,6 @@ write_config(lan_data_t *lan)
 //    misc_data_t *info = lan->user_info;
 }
 
-sockaddr_ip_t addr[MAX_ADDR];
-socklen_t addr_len[MAX_ADDR];
-int num_addr = 0;
-
 static char buffer[1024];
 static unsigned int pos = 0;
 static int echo = 1;
@@ -480,14 +469,14 @@ int
 main(int argc, const char *argv[])
 {
     lan_data_t  lan;
+    bmc_data_t  bmcinfo;
     misc_data_t data;
     int err;
     int i;
     poptContext poptCtx;
     struct timeval tv;
-    int lan_fd[MAX_ADDR];
-    os_hnd_fd_id_t *lan_fd_id[MAX_ADDR];
-    os_hnd_fd_id_t *user_fd_id;
+    int lan_fd;
+    os_hnd_fd_id_t *fd_id;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
@@ -519,7 +508,9 @@ main(int argc, const char *argv[])
 
     data.emu = ipmi_emu_alloc(&data, sleeper);
 
+    memset(&bmcinfo, 0, sizeof(bmcinfo));
     memset(&lan, 0, sizeof(lan));
+    lan.bmcinfo = &bmcinfo;
     lan.user_info = &data;
     lan.alloc = ialloc;
     lan.free = ifree;
@@ -530,38 +521,47 @@ main(int argc, const char *argv[])
     lan.log = lanserv_log;
     lan.debug = debug;
 
-    num_addr = MAX_ADDR;
-    if (lanserv_read_config(&lan, config_file, (sockaddr_ip_t *) addr,
-			    addr_len, &num_addr))
+    if (lanserv_read_config(&lan, config_file))
 	exit(1);
 
-    if (num_addr == 0) {
-	struct sockaddr_in *ipaddr = (void *) &addr[0];
+    if (lan.num_lan_addrs == 0) {
+	struct sockaddr_in *ipaddr = (void *) &lan.lan_addrs[0].addr;
 	ipaddr->sin_family = AF_INET;
 	if (port > 0)
 	    ipaddr->sin_port = htons(port);
 	else
 	    ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
-	addr_len[0] = sizeof(*ipaddr);
-	num_addr++;
+	lan.lan_addrs[0].addr_len = sizeof(*ipaddr);
+	lan.num_lan_addrs++;
     }
 
-    for (i=0; i<num_addr; i++) {
+    for (i=0; i<lan.num_lan_addrs; i++) {
 	unsigned char addr_data[6];
 
-	if (addr_len[i] == 0)
+	if (lan.lan_addrs[i].addr_len == 0)
 	    break;
 
-	lan_fd[i] = open_lan_fd(&addr[i].s_ipsock.s_addr, addr_len[i]);
-	if (lan_fd[i] == -1) {
+	lan_fd = open_lan_fd(&lan.lan_addrs[i].addr.s_ipsock.s_addr,
+			     lan.lan_addrs[i].addr_len);
+	if (lan_fd == -1) {
 	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
 	    exit(1);
 	}
 
-	memcpy(addr_data, &addr[i].s_ipsock.s_addr4.sin_addr.s_addr, 4);
-	memcpy(addr_data+4, &addr[i].s_ipsock.s_addr4.sin_port, 2);
+	memcpy(addr_data,
+	       &lan.lan_addrs[i].addr.s_ipsock.s_addr4.sin_addr.s_addr, 4);
+	memcpy(addr_data+4,
+	       &lan.lan_addrs[i].addr.s_ipsock.s_addr4.sin_port, 2);
 	ipmi_emu_set_addr(data.emu, i, 0, addr_data, 6);
+
+	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd,
+					      lan_data_ready, &data,
+					      NULL, &fd_id);
+	if (err) {
+	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+	    exit(1);
+	}
     }
 
     err = ipmi_lan_init(&lan);
@@ -575,28 +575,25 @@ main(int argc, const char *argv[])
     fflush(stdout);
     err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, 0,
 					  user_data_ready, &data,
-					  NULL, &user_fd_id);
+					  NULL, &fd_id);
     if (err) {
 	fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
 	exit(1);
     }
 
-    for (i=0; i<num_addr; i++) {
-	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd[i],
-					      lan_data_ready, &data,
-					      NULL, &lan_fd_id[i]);
-	if (err) {
-	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
-	    exit(1);
-	}
-    }
+    ipmi_emu_set_bmcinfo(data.emu, &bmcinfo);
 
-    if (command_string) {
+    if (command_string)
 	ipmi_emu_cmd(data.emu, command_string);
-    }
 
     if (command_file)
 	read_command_file(data.emu, command_file);
+
+    if (lan.guid) {
+	lmc_data_t *bmc = ipmi_emu_get_bmc_mc(data.emu);
+	if (bmc)
+	    ipmi_emu_set_mc_guid(bmc, lan.guid, 0);
+    }
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;

@@ -59,6 +59,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <string.h>
 #include <netdb.h>
 
@@ -159,23 +160,6 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
     return 0;
 }
 
-static void
-cleanup_ascii(uint8_t *c, unsigned int len)
-{
-    unsigned int i;
-
-    i = 0;
-    while ((i < len) && (*c != 0)) {
-	c++;
-	i++;
-    }
-    while (i < len) {
-	*c = 0;
-	c++;
-	i++;
-    }
-}
-
 static int
 read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 {
@@ -197,7 +181,7 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 	}
 	tok[end] = '\0';
 	strncpy((char *) data, tok, len);
-	cleanup_ascii(data, len);
+	zero_extend_ascii(data, len);
     } else {
 	unsigned int i;
 	char         c[3];
@@ -242,30 +226,30 @@ get_user(char **tokptr, lan_data_t *lan, char **err)
     rv = get_bool(tokptr, &val, err);
     if (rv)
 	return rv;
-    lan->users[num].valid = val;
+    lan->bmcinfo->users[num].valid = val;
 
-    rv = read_bytes(tokptr, lan->users[num].username, err, 16);
+    rv = read_bytes(tokptr, lan->bmcinfo->users[num].username, err, 16);
     if (rv)
 	return rv;
 
-    rv = read_bytes(tokptr, lan->users[num].pw, err, 20);
+    rv = read_bytes(tokptr, lan->bmcinfo->users[num].pw, err, 20);
     if (rv)
 	return rv;
 
     rv = get_priv(tokptr, &val, err);
     if (rv)
 	return rv;
-    lan->users[num].privilege = val;
+    lan->bmcinfo->users[num].privilege = val;
 
     rv = get_uint(tokptr, &val, err);
     if (rv)
 	return rv;
-    lan->users[num].max_sessions = val;
+    lan->bmcinfo->users[num].max_sessions = val;
 
     rv = get_auths(tokptr, &val, err);
     if (rv)
 	return rv;
-    lan->users[num].allowed_auths = val;
+    lan->bmcinfo->users[num].allowed_auths = val;
 
     return 0;
 }
@@ -337,10 +321,7 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len, char **err)
 #define MAX_CONFIG_LINE 256
 int
 lanserv_read_config(lan_data_t    *lan,
-		    char          *config_file,
-		    sockaddr_ip_t addr[],
-		    socklen_t     addr_len[],
-		    int           *num_addr)
+		    char          *config_file)
 {
     FILE         *f = fopen(config_file, "r");
     char         buf[MAX_CONFIG_LINE];
@@ -350,14 +331,29 @@ lanserv_read_config(lan_data_t    *lan,
     int          err = 0;
     int          line;
     char         *errstr;
-    int          max_addr = *num_addr;
 
-    *num_addr = 0;
     if (!f) {
 	fprintf(stderr, "Unable to open configuration file '%s'\n",
 		config_file);
 	return -1;
     }
+
+    lan->channel_num = 1;
+    lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
+    lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+    lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
+    lan->bmcinfo->channels[1] = &lan->channel;
+
+    lan->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
+    /* Assume this for now, override with config */
+    lan->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
+    lan->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    lan->bmcinfo->channels[0xf] = &lan->sys_channel;
+
+    lan->num_lan_addrs = 0;
+    lan->lan_addrs = NULL;
+    lan->num_ser_addrs = 0;
+    lan->ser_addrs = NULL;
 
     line = 0;
     while (fgets(buf, sizeof(buf), f) != NULL) {
@@ -391,14 +387,22 @@ lanserv_read_config(lan_data_t    *lan,
 	    err = get_auths(&tokptr, &val, &errstr);
 	    lan->channel.priv_info[3].allowed_auths = val;
 	} else if (strcmp(tok, "addr") == 0) {
-	    if (*num_addr >= max_addr) {
-		fprintf(stderr, "Too many addresses specified\n");
-		err = EINVAL;
+	    lanserv_addr_t *newa = malloc(sizeof(*newa) *
+					  (lan->num_lan_addrs + 1));
+	    if (!newa) {
+	        fprintf(stderr, "Out of memory on line %d\n", line);
+		return -1;
 	    }
-	    err = get_sock_addr(&tokptr, &(addr[*num_addr]),
-				&(addr_len[*num_addr]),
-				&errstr);
-	    (*num_addr)++;
+	    free(lan->lan_addrs);
+	    lan->lan_addrs = newa;
+	    newa += lan->num_lan_addrs;
+	    lan->num_lan_addrs += 1;
+
+	    err = get_sock_addr(&tokptr, &newa->addr, &newa->addr_len, &errstr);
+	    if (err) {
+	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
+		return err;
+	    }	
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, lan, &errstr);
 	} else if (strcmp(tok, "guid") == 0) {

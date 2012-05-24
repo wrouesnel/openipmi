@@ -1,3 +1,17 @@
+2012-05-24 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/ipmi_sim_info.h, lanserv/OpenIPMI/lanserv.h:
+	Moved some generic information into ipmi_sim_info.h for use by
+	the emulator and lanserv.
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.h: Rework the
+	emulator to move some generic information into ipmi_sim_info.h
+	structures.
+
+	* lanserv/ipmi_sim.c, lanserv/lanserv.c, lanserv/lanserv_config.c:
+	Rework for the above changes.
+	* lanserv/lanserv_ipmi.c: ditto
+
 2012-05-21 Corey Minyard <cminyard@mvista.com>
 
 	* os_handler.c, ipmi_malloc.c: Since the OS handler waiter stuff
@@ -5,8 +19,11 @@
 	the os_handler once in ipmi_malloc_init(), to avoid any issues
 	with the OS handler changing.
 
-	* lamserv_emu.c, ipmi_sim.c, Makefile.am: Rename lanserv_emu to
+	* lanserv_emu.c, ipmi_sim.c, Makefile.am: Rename lanserv_emu to
 	ipmi_sim, and modify ipmi_sim to use the OS handler.
+
+	* lanserv/emu.c: Fix a buffer overrun if a SEND_MSG response was
+	too large to fit into the buffer.
 
 2012-04-27 Corey Minyard <cminyard@mvista.com>
 

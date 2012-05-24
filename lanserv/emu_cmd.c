@@ -92,6 +92,54 @@ get_uint(char **toks, unsigned int *val, char *errstr)
     return 0;
 }
 
+static int
+get_bytes(char **tokptr, unsigned char *data, char *errstr, unsigned int len)
+{
+    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *end;
+
+    if (!tok) {
+	if (errstr)
+	    printf("**No %s given\n", errstr);
+	return EINVAL;
+    }
+    if (*tok == '"') {
+	int end;
+	/* Ascii PW */
+	tok++;
+	end = strlen(tok) - 1;
+	if (tok[end] != '"') {
+	  printf("**ASCII %s doesn't end in '\"'", errstr);
+	    return EINVAL;
+	}
+	tok[end] = '\0';
+	strncpy((char *) data, tok, len);
+	zero_extend_ascii(data, len);
+    } else {
+	unsigned int i;
+	char         c[3];
+	/* HEX pw */
+	if (strlen(tok) != 32) {
+	    printf("**HEX %s not 32 HEX characters long", errstr);
+	    return EINVAL;
+	}
+	c[2] = '\0';
+	for (i=0; i<len; i++) {
+	    c[0] = *tok;
+	    tok++;
+	    c[1] = *tok;
+	    tok++;
+	    data[i] = strtoul(c, &end, 16);
+	    if (*end != '\0') {
+		printf("**Invalid HEX character in %s", errstr);
+		return -1;
+	    }
+	}
+    }
+
+    return 0;
+}
+
 #define INPUT_BUFFER_SIZE 65536
 int
 read_command_file(emu_data_t *emu, char *command_file)
@@ -553,10 +601,10 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     rv = get_uint(toks, &product_id_i, "Product ID");
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1);
-    if (rv)
-	goto next;
- next:
+
+    /* Don't care on an error */
+    get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1);
+
     mfg_id[0] = mfg_id_i & 0xff;
     mfg_id[1] = (mfg_id_i >> 8) & 0xff;
     mfg_id[2] = (mfg_id_i >> 16) & 0xff;
@@ -571,30 +619,17 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
-mc_setchan(emu_data_t *emu, lmc_data_t *mc, char **toks)
+mc_set_guid(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    unsigned char channel;
-    unsigned char medium_type;
-    unsigned char protocol_type;
-    unsigned char session_support;
+    unsigned char guid[16];
     int           rv;
 
-    rv = get_uchar(toks, &channel, "Channel Number", 0);
+    rv = get_bytes(toks, guid, "GUID", 16);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &medium_type, "Medium Type", 0);
-    if (rv)
-	return rv;
-    rv = get_uchar(toks, &protocol_type, "Protocol Type", 0);
-    if (rv)
-	return rv;
-    rv = get_uchar(toks, &session_support, "Session Support", 0);
-    if (rv)
-	return rv;
-    rv = ipmi_emu_set_mc_channel(mc, channel, medium_type, protocol_type,
-				 session_support);
-    if (rv)
-	printf("**Unable to set up channel, error 0x%x\n", rv);
+
+    rv = ipmi_emu_set_mc_guid(mc, guid, 1);
+
     return rv;
 }
 
@@ -836,7 +871,7 @@ static struct {
     { "mc_disable",	MC,		mc_disable },
     { "mc_enable",	MC,		mc_enable },
     { "mc_setbmc",      NOMC,		mc_setbmc },
-    { "mc_setchan",	MC,		mc_setchan },
+    { "mc_set_guid",	MC,		mc_set_guid },
     { "atca_enable",    NOMC,	        atca_enable },
     { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },

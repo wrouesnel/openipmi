@@ -174,11 +174,12 @@ find_user(lan_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
     user_t *rv = NULL;
 
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->users[i].valid
-	    && (memcmp(user, lan->users[i].username, 16) == 0))
+	if (lan->bmcinfo->users[i].valid
+	    && (memcmp(user, lan->bmcinfo->users[i].username, 16) == 0))
 	{
-	    if (name_only_lookup || (lan->users[i].privilege == priv)) {
-		rv = &(lan->users[i]);
+	    if (name_only_lookup ||
+		(lan->bmcinfo->users[i].privilege == priv)) {
+		rv = &(lan->bmcinfo->users[i]);
 		break;
 	    }
 	}
@@ -228,7 +229,7 @@ close_session(lan_data_t *lan, session_t *session)
 	session->integh->cleanup(lan, session);
     if (session->confh)
 	session->confh->cleanup(lan, session);
-    lan->active_sessions--;
+    lan->channel.active_sessions--;
     if (session->src_addr) {
 	lan->free(lan, session->src_addr);
 	session->src_addr = NULL;
@@ -577,30 +578,35 @@ return_err(lan_data_t *lan, msg_t *msg, session_t *session, uint8_t err)
 static void
 handle_get_system_guid(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    uint8_t data[17];
+    unsigned char rdata[17];
+    unsigned int rdata_len = sizeof(rdata);
 
     if (lan->guid) {
-	data[0] = 0;
-	memcpy(data+1, lan->guid, 16);
-	return_rsp_data(lan, msg, session, data, 17);
+	if (rdata_len < 17) {
+	    rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+	    rdata_len = 1;
+	    goto out;
+	}
+	rdata[0] = 0;
+	memcpy(rdata + 1, lan->guid, 16);
+	rdata_len = 17;
     } else {
-	lan->log(INVALID_MSG, msg,
-		 "Invalid command: 0x%x", msg->cmd);
-	return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	rdata_len = 1;
     }
+ out:
+    return_rsp_data(lan, msg, session, rdata, rdata_len);
 }
 
 static void
 handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 {
-    uint8_t data[9];
-    uint8_t chan;
-    uint8_t priv;
-    int     do_rmcpp;
+    uint8_t   data[9];
+    uint8_t   chan;
+    uint8_t   priv;
+    int       do_rmcpp;
 
     if (msg->len < 2) {
-	lan->log(INVALID_MSG, msg,
-		 "Get channel auth failed: message too short");
 	return_err(lan, msg, NULL, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
     }
@@ -609,14 +615,10 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
     chan = msg->data[0] & 0xf;
     priv = msg->data[1] & 0xf;
     if (chan == 0xe)
-	chan = MAIN_CHANNEL;
-    if (chan != MAIN_CHANNEL) {
-	lan->log(INVALID_MSG, msg,
-		 "Get channel auth failed: Invalid channel: %d", chan);
+	chan = lan->channel_num;
+    if (chan != lan->channel_num) {
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
     } else if (priv > lan->channel.privilege_limit) {
-	lan->log(INVALID_MSG, msg,
-		 "Get channel auth failed: Invalid privilege: %d", priv);
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
     } else {
 	if (! lan->guid)
@@ -630,8 +632,8 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 			   user-level authenitcation is on,
 			   non-null user names disabled,
 			   no anonymous support. */
-	if (lan->users[1].valid) {
-	    if (is_authval_null(lan->users[1].pw))
+	if (lan->bmcinfo->users[1].valid) {
+	    if (is_authval_null(lan->bmcinfo->users[1].pw))
 		data[3] |= 0x01; /* Anonymous login. */
 	    else
 		data[3] |= 0x02; /* Null user supported. */
@@ -681,6 +683,13 @@ handle_get_session_challenge(lan_data_t *lan, msg_t *msg)
 	lan->log(SESSION_CHALLENGE_FAILED, msg,
 		 "Session challenge failed: Invalid authorization type");
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
+	return;
+    }
+
+    if (lan->channel.active_sessions >= MAX_SESSIONS) {
+	lan->log(SESSION_CHALLENGE_FAILED, msg,
+		 "Session challenge failed: To many open sessions");
+	return_err(lan, msg, NULL, IPMI_OUT_OF_SPACE_CC);
 	return;
     }
 
@@ -807,7 +816,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     }
 
     auth = msg->data[0] & 0xf;
-    user = &(lan->users[user_idx]);
+    user = &(lan->bmcinfo->users[user_idx]);
     if (! (user->valid)) {
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
@@ -825,6 +834,12 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 		 "Activate session failed: Message auth %d was invalid for"
 		 " user 0x%x",
 		 msg->authtype, user_idx);
+	return;
+    }
+
+    if (lan->channel.active_sessions >= MAX_SESSIONS) {
+	lan->log(NEW_SESSION_FAILED, msg,
+		 "Session challenge failed: To many open sessions");
 	return;
     }
 
@@ -880,7 +895,8 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 	goto out_free;
     }
 
-    if (! (lan->channel.priv_info[priv-1].allowed_auths & (1 << auth))) {
+    if (! (lan->channel.priv_info[priv-1].
+	   allowed_auths & (1 << auth))) {
 	/* Authentication level not permitted for this privilege */
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Auth level %d invalid for"
@@ -929,6 +945,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     session->userid = user->idx;
     session->time_left = lan->default_session_timeout;
 
+    lan->channel.active_sessions++;
     lan->log(NEW_SESSION, msg,
 	     "Activate session: Session opened for user 0x%x, max priv %d",
 	     user_idx, priv);
@@ -946,8 +963,6 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     ipmi_set_uint32(data+6, session->recv_seq);
 
     data[10] = session->max_priv;
-
-    lan->active_sessions++;
 
     return_rsp_data(lan, msg, &dummy_session, data, 11);
     return;
@@ -1138,7 +1153,7 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
     } else {
 	int i;
 
-	if (idx <= lan->active_sessions) {
+	if (idx <= lan->channel.active_sessions) {
 	    for (i=0; i<=MAX_SESSIONS; i++) {
 		if (lan->sessions[i].active) {
 		    idx--;
@@ -1153,7 +1168,7 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 
     data[0] = 0;
     data[2] = MAX_SESSIONS;
-    data[3] = lan->active_sessions;
+    data[3] = lan->channel.active_sessions;
     if (nses) {
 	data[1] = nses->handle;
 	data[4] = nses->userid;
@@ -1222,9 +1237,11 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 	}
 
 	if (upd1 == 1) {
-	    lan->channel.PEF_alerting = (msg->data[1] >> 5) & 1;
+	    lan->channel.PEF_alerting
+		= (msg->data[1] >> 5) & 1;
 	} else {
-	    lan->nonv_channel.PEF_alerting = (msg->data[1] >> 5) & 1;
+	    lan->channel.PEF_alerting_nonv
+		= (msg->data[1] >> 5) & 1;
 	    write_nonv = 1;
 	}
     } else if (upd1 != 0) {
@@ -1241,7 +1258,8 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 	}
 
 	if (upd2 == 1) {
-	    lan->nonv_channel.privilege_limit = newv;
+	    lan->channel.privilege_limit_nonv
+		= newv;
 	    write_nonv = 1;
 	} else {
 	    lan->channel.privilege_limit = newv;
@@ -1262,7 +1280,6 @@ handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 {
     uint8_t   data[3];
     uint8_t   upd;
-    channel_t *channel;
 
     if (msg->len < 2) {
 	lan->log(INVALID_MSG, msg,
@@ -1279,17 +1296,18 @@ handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
     upd = (msg->data[1] >> 6) & 0x3;
 
     if (upd == 2) {
-	channel = &(lan->channel);
+	data[1] = ((lan->channel.PEF_alerting << 5)
+		   | 0x2);
+	data[2] = lan->channel.privilege_limit;
     } else if (upd == 1) {
-	channel = &(lan->nonv_channel);
+	data[1] = ((lan->channel.PEF_alerting_nonv
+		    << 5) | 0x2);
+	data[2] = lan->channel.privilege_limit_nonv;
     } else {
 	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
 	return;
     }
-
     data[0] = 0;
-    data[1] = ((channel->PEF_alerting << 5) | 0x2);
-    data[2] = channel->privilege_limit;
 
     return_rsp_data(lan, msg, session, data, 3);
 }
@@ -1316,7 +1334,7 @@ handle_get_channel_info(lan_data_t *lan, session_t *session, msg_t *msg)
 	data[1] = chan;
 	data[2] = 4; /* 802.3 LAN */
 	data[3] = 1; /* IPMB, for some reason. */
-	data[4] = (2 << 6) | lan->active_sessions;
+	data[4] = (2 << 6) | lan->channel.active_sessions;
 	data[5] = 0xf2; /* IPMI IANA */
 	data[6] = 0x1b;
 	data[7] = 0x00;
@@ -1364,32 +1382,32 @@ handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 
     if (msg->data[0] & 0x80) {
 	newv = (msg->data[0] >> 4) & 1;
-	if (newv != lan->users[user].valid) {
-	    lan->users[user].valid = newv;
+	if (newv != lan->bmcinfo->users[user].valid) {
+	    lan->bmcinfo->users[user].valid = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 5) & 1;
-	if (newv != lan->users[user].link_auth) {
-	    lan->users[user].link_auth = newv;
+	if (newv != lan->bmcinfo->users[user].link_auth) {
+	    lan->bmcinfo->users[user].link_auth = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 6) & 1;
-	if (newv != lan->users[user].cb_only) {
-	    lan->users[user].cb_only = newv;
+	if (newv != lan->bmcinfo->users[user].cb_only) {
+	    lan->bmcinfo->users[user].cb_only = newv;
 	    changed = 1;
 	}
     }
 
-    if (priv != lan->users[user].privilege) {
-	lan->users[user].privilege = priv;
+    if (priv != lan->bmcinfo->users[user].privilege) {
+	lan->bmcinfo->users[user].privilege = priv;
 	changed = 1;
     }
 
     if (msg->len >= 4) {
 	/* Got the session limit byte. */
 	newv = msg->data[3] & 0xf;
-	if (newv != lan->users[user].max_sessions) {
-	    lan->users[user].max_sessions = newv;
+	if (newv != lan->bmcinfo->users[user].max_sessions) {
+	    lan->bmcinfo->users[user].max_sessions = newv;
 	    changed = 1;
 	}
     }
@@ -1431,17 +1449,17 @@ handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
     /* Number of enabled users. */
     data[2] = 0;
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->users[i].valid)
+	if (lan->bmcinfo->users[i].valid)
 	    data[2]++;
     }
 
     /* Only fixed user name is user 1. */
-    data[3] = lan->users[1].valid;
+    data[3] = lan->bmcinfo->users[1].valid;
 
-    data[4] = ((lan->users[user].valid << 4)
-	       | (lan->users[user].link_auth << 5)
-	       | (lan->users[user].cb_only << 6)
-	       | lan->users[user].privilege);
+    data[4] = ((lan->bmcinfo->users[user].valid << 4)
+	       | (lan->bmcinfo->users[user].link_auth << 5)
+	       | (lan->bmcinfo->users[user].cb_only << 6)
+	       | lan->bmcinfo->users[user].privilege);
 
     return_rsp_data(lan, msg, session, data, 5);
 }
@@ -1464,8 +1482,8 @@ handle_set_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 	return;
     }
 
-    memcpy(lan->users[user].username, msg->data+1, 16);
-    cleanup_ascii_16(lan->users[user].username);
+    memcpy(lan->bmcinfo->users[user].username, msg->data+1, 16);
+    cleanup_ascii_16(lan->bmcinfo->users[user].username);
 
     return_err(lan, msg, session, 0);
 }
@@ -1490,7 +1508,7 @@ handle_get_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
     }
 
     data[0] = 0;
-    memcpy(data+1, lan->users[user].username, 16);
+    memcpy(data+1, lan->bmcinfo->users[user].username, 16);
 
     return_rsp_data(lan, msg, session, data, 17);
 }
@@ -1516,9 +1534,9 @@ handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
 
     op = msg->data[1] & 0x3;
     if (op == 0) {
-	lan->users[user].valid = 0;
+	lan->bmcinfo->users[user].valid = 0;
     } else if (op == 1) {
-	lan->users[user].valid = 1;
+	lan->bmcinfo->users[user].valid = 1;
     } else {
 	if (msg->len < 18) {
 	    lan->log(INVALID_MSG, msg,
@@ -1527,7 +1545,7 @@ handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
 	    return;
 	}
 	if (op == 2) {
-	    memcpy(lan->users[user].pw, msg->data+2, 16);
+	    memcpy(lan->bmcinfo->users[user].pw, msg->data+2, 16);
 	} else {
 	    /* Nothing to do for test password, we accept anything. */
 	}
@@ -2586,7 +2604,7 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
     idata[56] = a->role;
     idata[57] = a->username_len;
     memcpy(idata+58, a->username, idata[57]);
-    user = &(lan->users[session->userid]);
+    user = &(lan->bmcinfo->users[session->userid]);
 
     HMAC(a->akey, user->pw, a->akey_len,
 	 idata, 58+idata[57], data + *data_len, &ilen);
@@ -2621,7 +2639,7 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
     unsigned char       idata[38];
     unsigned int        ilen;
     unsigned char       integ[20];
-    user_t              *user = &(lan->users[session->userid]);
+    user_t              *user = &(lan->bmcinfo->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
     if (((*data_len) - a->akey_len) < 8)
@@ -2695,7 +2713,7 @@ hmac_sha1_init(lan_data_t *lan, session_t *session)
 static int
 hmac_md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t *user = &(lan->users[session->userid]);
+    user_t *user = &(lan->bmcinfo->users[session->userid]);
     session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
     session->auth_data.ikey_len = 16;
@@ -2758,7 +2776,7 @@ auth_free(void *info, void *data)
 static int
 md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t          *user = &(lan->users[session->userid]);
+    user_t          *user = &(lan->bmcinfo->users[session->userid]);
     int             rv;
     ipmi_authdata_t idata;
 
@@ -3204,7 +3222,7 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     data[31] = 8;
     data[32] = conf;
 
-    lan->active_sessions++;
+    lan->channel.active_sessions++;
 
     return_rmcpp_rsp(lan, session, msg, 0x11, data, 36, NULL, 0);
     return;
@@ -3663,6 +3681,7 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     msg.authtype = data[4];
     msg.data = data+5;
     msg.len = len - 5;
+    msg.channel = lan->channel_num;
 
     if (msg.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	ipmi_handle_rmcpp_msg(lan, &msg);
@@ -3767,7 +3786,7 @@ ipmi_lan_init(lan_data_t *lan)
     uint8_t challenge_data[16];
 
     for (i=0; i<=MAX_USERS; i++) {
-	lan->users[i].idx = i;
+	lan->bmcinfo->users[i].idx = i;
     }
 
     for (i=0; i<=MAX_SESSIONS; i++) {
@@ -3799,7 +3818,7 @@ ipmi_lan_init(lan_data_t *lan)
     }
 
     /* Force user 1 to be a null user. */
-    memset(lan->users[1].username, 0, 16);
+    memset(lan->bmcinfo->users[1].username, 0, 16);
 
     i = lan->gen_rand(lan, challenge_data, 16);
     if (i)

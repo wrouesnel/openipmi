@@ -40,6 +40,7 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_picmg.h>
 #include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 #include "emu.h"
 
@@ -170,19 +171,14 @@ typedef struct led_data_s
     unsigned char def_override_color;
 } led_data_t;
 
-#define IPMI_MAX_CHANNELS 8
-typedef struct lmc_channel_info_s
-{
-    unsigned char medium_type;
-    unsigned char protocol_type;
-    unsigned char session_support;
-} lmc_channel_info_t;
-
 struct lmc_data_s
 {
     emu_data_t *emu;
 
     int enabled;
+
+    unsigned char guid[16];
+    unsigned char guid_set;
 
     unsigned char ipmb;
 
@@ -196,7 +192,7 @@ struct lmc_data_s
     unsigned char mfg_id[3];	   /* bytes 8-10 */
     unsigned char product_id[2];   /* bytes 11-12 */
 
-    lmc_channel_info_t chans[IPMI_MAX_CHANNELS];
+    bmc_data_t *bmcinfo;
 
     sel_t sel;
 
@@ -248,6 +244,7 @@ typedef struct emu_addr_s
 
 struct emu_data_s
 {
+    bmc_data_t *bmcinfo;
     int        bmc_mc;
     lmc_data_t *ipmb[128];
 
@@ -413,12 +410,12 @@ handle_invalid_cmd(lmc_data_t    *mc,
 }
 
 static int
-check_msg_length(ipmi_msg_t    *msg,
+check_msg_length(msg_t         *msg,
 		 unsigned int  len,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
-    if (msg->data_len < len) {
+    if (msg->len < len) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	*rdata_len = 1;
 	return 1;
@@ -429,7 +426,7 @@ check_msg_length(ipmi_msg_t    *msg,
 
 static void
 handle_get_sel_info(lmc_data_t    *mc,
-		    ipmi_msg_t    *msg,
+		    msg_t         *msg,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
 {
@@ -456,7 +453,7 @@ handle_get_sel_info(lmc_data_t    *mc,
 
 static void
 handle_get_sel_allocation_info(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -482,7 +479,7 @@ handle_get_sel_allocation_info(lmc_data_t    *mc,
 
 static void
 handle_reserve_sel(lmc_data_t    *mc,
-		   ipmi_msg_t    *msg,
+		   msg_t         *msg,
 		   unsigned char *rdata,
 		   unsigned int  *rdata_len)
 {
@@ -506,7 +503,7 @@ handle_reserve_sel(lmc_data_t    *mc,
 
 static void
 handle_get_sel_entry(lmc_data_t    *mc,
-		     ipmi_msg_t    *msg,
+		     msg_t         *msg,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
@@ -578,7 +575,7 @@ handle_get_sel_entry(lmc_data_t    *mc,
 
 static void
 handle_add_sel_entry(lmc_data_t    *mc,
-		     ipmi_msg_t    *msg,
+		     msg_t         *msg,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
@@ -607,7 +604,7 @@ handle_add_sel_entry(lmc_data_t    *mc,
 
 static void
 handle_delete_sel_entry(lmc_data_t    *mc,
-			ipmi_msg_t    *msg,
+			msg_t         *msg,
 			unsigned char *rdata,
 			unsigned int  *rdata_len)
 {
@@ -675,7 +672,7 @@ handle_delete_sel_entry(lmc_data_t    *mc,
 
 static void
 handle_clear_sel(lmc_data_t    *mc,
-		 ipmi_msg_t    *msg,
+		 msg_t         *msg,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
@@ -739,7 +736,7 @@ handle_clear_sel(lmc_data_t    *mc,
 
 static void
 handle_get_sel_time(lmc_data_t    *mc,
-		    ipmi_msg_t    *msg,
+		    msg_t         *msg,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
 {
@@ -758,7 +755,7 @@ handle_get_sel_time(lmc_data_t    *mc,
 
 static void
 handle_set_sel_time(lmc_data_t    *mc,
-		    ipmi_msg_t    *msg,
+		    msg_t         *msg,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
 {
@@ -930,7 +927,7 @@ ipmi_mc_add_device_sdr(lmc_data_t    *mc,
 
 static void
 handle_get_sdr_repository_info(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -956,7 +953,7 @@ handle_get_sdr_repository_info(lmc_data_t    *mc,
 
 static void
 handle_get_sdr_repository_alloc_info(lmc_data_t    *mc,
-				     ipmi_msg_t    *msg,
+				     msg_t         *msg,
 				     unsigned char *rdata,
 				     unsigned int  *rdata_len)
 {
@@ -981,7 +978,7 @@ handle_get_sdr_repository_alloc_info(lmc_data_t    *mc,
 
 static void
 handle_reserve_sdr_repository(lmc_data_t    *mc,
-			      ipmi_msg_t    *msg,
+			      msg_t         *msg,
 			      unsigned char *rdata,
 			      unsigned int  *rdata_len)
 {
@@ -1013,7 +1010,7 @@ handle_reserve_sdr_repository(lmc_data_t    *mc,
 
 static void
 handle_get_sdr(lmc_data_t    *mc,
-	       ipmi_msg_t    *msg,
+	       msg_t         *msg,
 	       unsigned char *rdata,
 	       unsigned int  *rdata_len)
 {
@@ -1092,7 +1089,7 @@ handle_get_sdr(lmc_data_t    *mc,
 
 static void
 handle_add_sdr(lmc_data_t    *mc,
-	       ipmi_msg_t    *msg,
+	       msg_t         *msg,
 	       unsigned char *rdata,
 	       unsigned int  *rdata_len)
 {
@@ -1116,7 +1113,7 @@ handle_add_sdr(lmc_data_t    *mc,
     if (check_msg_length(msg, 6, rdata, rdata_len))
 	return;
 
-    if (msg->data_len != msg->data[5] + 6) {
+    if (msg->len != (unsigned int) msg->data[5] + 6) {
 	rdata[0] = 0x80; /* Length is invalid. */
 	*rdata_len = 1;
 	return;
@@ -1139,7 +1136,7 @@ handle_add_sdr(lmc_data_t    *mc,
 
 static void
 handle_partial_add_sdr(lmc_data_t    *mc,
-		       ipmi_msg_t    *msg,
+		       msg_t         *msg,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len)
 {
@@ -1187,7 +1184,7 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 	    *rdata_len = 1;
 	    return;
 	}
-	if (msg->data_len > msg->data[11] + 12) {
+	if (msg->len > (unsigned int) msg->data[11] + 12) {
 	    rdata[0] = 0x80; /* Invalid data length */
 	    *rdata_len = 1;
 	    return;
@@ -1202,8 +1199,8 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 	    return;
 	}
 	mc->part_add_sdr = new_sdr_entry(mc, &mc->main_sdrs, msg->data[11]);
-	memcpy(mc->part_add_sdr->data+2, msg->data+8, msg->data_len - 8);
-	mc->part_add_next = msg->data_len - 8;
+	memcpy(mc->part_add_sdr->data+2, msg->data+8, msg->len - 8);
+	mc->part_add_next = msg->len - 8;
     } else {
 	if (!mc->part_add_next) {
 	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
@@ -1217,15 +1214,15 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 	    *rdata_len = 1;
 	    return;
 	}
-	if ((offset + msg->data_len - 6) > mc->part_add_sdr->length) {
+	if ((offset + msg->len - 6) > mc->part_add_sdr->length) {
 	    free_sdr(mc->part_add_sdr);
 	    mc->part_add_sdr = NULL;
 	    rdata[0] = 0x80; /* Invalid data length */
 	    *rdata_len = 1;
 	    return;
 	}
-	memcpy(mc->part_add_sdr->data+offset, msg->data+6, msg->data_len-6);
-	mc->part_add_next += msg->data_len - 6;
+	memcpy(mc->part_add_sdr->data+offset, msg->data+6, msg->len-6);
+	mc->part_add_next += msg->len - 6;
     }
 
     if ((msg->data[5] & 0xf) == 1) {
@@ -1247,7 +1244,7 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 
 static void
 handle_delete_sdr(lmc_data_t    *mc,
-		  ipmi_msg_t    *msg,
+		  msg_t         *msg,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
@@ -1314,7 +1311,7 @@ handle_delete_sdr(lmc_data_t    *mc,
 
 static void
 handle_clear_sdr_repository(lmc_data_t    *mc,
-			    ipmi_msg_t    *msg,
+			    msg_t         *msg,
 			    unsigned char *rdata,
 			    unsigned int  *rdata_len)
 {
@@ -1376,7 +1373,7 @@ handle_clear_sdr_repository(lmc_data_t    *mc,
 
 static void
 handle_get_sdr_repository_time(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -1395,7 +1392,7 @@ handle_get_sdr_repository_time(lmc_data_t    *mc,
 
 static void
 handle_set_sdr_repository_time(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -1418,7 +1415,7 @@ handle_set_sdr_repository_time(lmc_data_t    *mc,
 
 static void
 handle_enter_sdr_repository_update(lmc_data_t    *mc,
-				   ipmi_msg_t    *msg,
+				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
@@ -1445,7 +1442,7 @@ handle_enter_sdr_repository_update(lmc_data_t    *mc,
 
 static void
 handle_exit_sdr_repository_update(lmc_data_t    *mc,
-				  ipmi_msg_t    *msg,
+				  msg_t         *msg,
 				  unsigned char *rdata,
 				  unsigned int  *rdata_len)
 {
@@ -1472,7 +1469,7 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
 
 static void
 handle_get_fru_inventory_area_info(lmc_data_t    *mc,
-				   ipmi_msg_t    *msg,
+				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
@@ -1496,7 +1493,7 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 
 static void
 handle_read_fru_data(lmc_data_t    *mc,
-		     ipmi_msg_t    *msg,
+		     msg_t         *msg,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
@@ -1540,7 +1537,7 @@ handle_read_fru_data(lmc_data_t    *mc,
 
 static void
 handle_write_fru_data(lmc_data_t    *mc,
-		      ipmi_msg_t    *msg,
+		      msg_t         *msg,
 		      unsigned char *rdata,
 		      unsigned int  *rdata_len)
 {
@@ -1559,7 +1556,7 @@ handle_write_fru_data(lmc_data_t    *mc,
     }
 
     offset = ipmi_get_uint16(msg->data+1);
-    count = msg->data_len - 3;
+    count = msg->len - 3;
 
     if (offset >= mc->frus[devid].length) {
 	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
@@ -1632,8 +1629,7 @@ ipmi_mc_add_fru_data(lmc_data_t    *mc,
 
 static void
 handle_storage_netfn(lmc_data_t    *mc,
-		     unsigned char lun,
-		     ipmi_msg_t    *msg,
+		     msg_t         *msg,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
@@ -1745,7 +1741,7 @@ handle_storage_netfn(lmc_data_t    *mc,
 
 static void
 handle_get_device_id(lmc_data_t    *mc,
-		     ipmi_msg_t    *msg,
+		     msg_t         *msg,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
@@ -1764,14 +1760,17 @@ handle_get_device_id(lmc_data_t    *mc,
 
 static void
 handle_get_channel_info(lmc_data_t    *mc,
-			unsigned char chan,
-			ipmi_msg_t    *msg,
+			msg_t         *msg,
 			unsigned char *rdata,
 			unsigned int  *rdata_len)
 {
     unsigned char lchan;
+    unsigned char medium_type;
+    unsigned char protocol_type;
+    unsigned char session_support;
+    unsigned char active_sessions;
 
-    if (msg->data_len < 1) {
+    if (msg->len < 1) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	*rdata_len = 1;
 	return;
@@ -1779,25 +1778,37 @@ handle_get_channel_info(lmc_data_t    *mc,
 
     lchan = msg->data[0];
     if (lchan == 0xe)
-	lchan = chan;
+	lchan = msg->channel;
     else if (lchan >= IPMI_MAX_CHANNELS) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (! mc->chans[lchan].medium_type) {
-	rdata[0] = IPMI_NOT_PRESENT_CC;
-	*rdata_len = 1;
-	return;
+    if (! mc->bmcinfo || ! mc->bmcinfo->channels[lchan]) {
+	if (lchan == 0) {
+	    /* The IPMB channel is always there. */
+	    medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
+	    protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+	    session_support = IPMI_CHANNEL_SESSION_LESS;
+	    active_sessions = 0;
+	} else {
+	    rdata[0] = IPMI_NOT_PRESENT_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    } else {
+	medium_type = mc->bmcinfo->channels[lchan]->medium_type;
+	protocol_type = mc->bmcinfo->channels[lchan]->protocol_type;
+	session_support = mc->bmcinfo->channels[lchan]->session_support;
+	active_sessions = mc->bmcinfo->channels[lchan]->active_sessions;
     }
 
     rdata[0] = 0;
     rdata[1] = lchan;
-    rdata[2] = mc->chans[lchan].medium_type;
-    rdata[3] = mc->chans[lchan].protocol_type;
-    /* FIXME - no handling of active sessions */
-    rdata[4] = mc->chans[lchan].session_support << 6;
+    rdata[2] = medium_type;
+    rdata[3] = protocol_type;
+    rdata[4] = (session_support << 6) | active_sessions;
     rdata[5] = 0xf2;
     rdata[6] = 0x1b;
     rdata[7] = 0x00;
@@ -1808,9 +1819,7 @@ handle_get_channel_info(lmc_data_t    *mc,
 
 static void
 handle_app_netfn(lmc_data_t    *mc,
-		 unsigned char chan,
-		 unsigned char lun,
-		 ipmi_msg_t    *msg,
+		 msg_t         *msg,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
@@ -1820,7 +1829,7 @@ handle_app_netfn(lmc_data_t    *mc,
 	break;
 
     case IPMI_GET_CHANNEL_INFO_CMD:
-	handle_get_channel_info(mc, chan, msg, rdata, rdata_len);
+	handle_get_channel_info(mc, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -1831,7 +1840,7 @@ handle_app_netfn(lmc_data_t    *mc,
 
 static void
 handle_get_event_receiver(lmc_data_t    *mc,
-			  ipmi_msg_t    *msg,
+			  msg_t         *msg,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
@@ -1848,7 +1857,7 @@ handle_get_event_receiver(lmc_data_t    *mc,
 
 static void
 handle_set_event_receiver(lmc_data_t    *mc,
-			  ipmi_msg_t    *msg,
+			  msg_t         *msg,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
@@ -1869,8 +1878,7 @@ handle_set_event_receiver(lmc_data_t    *mc,
 
 static void
 handle_get_device_sdr_info(lmc_data_t    *mc,
-			   unsigned char lun,
-			   ipmi_msg_t    *msg,
+			   msg_t         *msg,
 			   unsigned char *rdata,
 			   unsigned int  *rdata_len)
 {
@@ -1880,7 +1888,7 @@ handle_get_device_sdr_info(lmc_data_t    *mc,
     }
 
     rdata[0] = 0;
-    rdata[1] = mc->num_sensors_per_lun[lun];
+    rdata[1] = mc->num_sensors_per_lun[msg->rs_lun];
     rdata[2] = ((mc->dynamic_sensor_population << 7)
 		| (mc->lun_has_sensors[3] << 3)
 		| (mc->lun_has_sensors[2] << 2)
@@ -1897,8 +1905,7 @@ handle_get_device_sdr_info(lmc_data_t    *mc,
 
 static void
 handle_reserve_device_sdr_repository(lmc_data_t    *mc,
-				     unsigned char lun,
-				     ipmi_msg_t    *msg,
+				     msg_t         *msg,
 				     unsigned char *rdata,
 				     unsigned int  *rdata_len)
 {
@@ -1912,19 +1919,18 @@ handle_reserve_device_sdr_repository(lmc_data_t    *mc,
 	return;
     }
 
-    mc->device_sdrs[lun].reservation++;
-    if (mc->device_sdrs[lun].reservation == 0)
-	mc->device_sdrs[lun].reservation++;
+    mc->device_sdrs[msg->rs_lun].reservation++;
+    if (mc->device_sdrs[msg->rs_lun].reservation == 0)
+	mc->device_sdrs[msg->rs_lun].reservation++;
 
     rdata[0] = 0;
-    ipmi_set_uint16(rdata+1, mc->device_sdrs[lun].reservation);
+    ipmi_set_uint16(rdata+1, mc->device_sdrs[msg->rs_lun].reservation);
     *rdata_len = 3;
 }
 
 static void
 handle_get_device_sdr(lmc_data_t    *mc,
-		      unsigned char lun,
-		      ipmi_msg_t    *msg,
+		      msg_t         *msg,
 		      unsigned char *rdata,
 		      unsigned int  *rdata_len)
 {
@@ -1945,7 +1951,7 @@ handle_get_device_sdr(lmc_data_t    *mc,
 	uint16_t reservation = ipmi_get_uint16(msg->data+0);
 
 	if ((reservation != 0)
-	    && (reservation != mc->device_sdrs[lun].reservation))
+	    && (reservation != mc->device_sdrs[msg->rs_lun].reservation))
 	{
 	    rdata[0] = IPMI_INVALID_RESERVATION_CC;
 	    *rdata_len = 1;
@@ -1958,16 +1964,17 @@ handle_get_device_sdr(lmc_data_t    *mc,
     count = msg->data[5];
 
     if (record_id == 0) {
-	entry = mc->device_sdrs[lun].sdrs;
+	entry = mc->device_sdrs[msg->rs_lun].sdrs;
     } else if (record_id == 0xffff) {
-	entry = mc->device_sdrs[lun].sdrs;
+	entry = mc->device_sdrs[msg->rs_lun].sdrs;
 	if (entry) {
 	    while (entry->next) {
 		entry = entry->next;
 	    }
 	}
     } else {
-	entry = find_sdr_by_recid(mc, &mc->device_sdrs[lun], record_id, NULL);
+	entry = find_sdr_by_recid(mc, &mc->device_sdrs[msg->rs_lun],
+				  record_id, NULL);
     }
 
     if (entry == NULL) {
@@ -2005,8 +2012,7 @@ handle_get_device_sdr(lmc_data_t    *mc,
 
 static void
 handle_set_sensor_hysteresis(lmc_data_t    *mc,
-			     unsigned char lun,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -2017,13 +2023,13 @@ handle_set_sensor_hysteresis(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
@@ -2039,8 +2045,7 @@ handle_set_sensor_hysteresis(lmc_data_t    *mc,
 
 static void
 handle_get_sensor_hysteresis(lmc_data_t    *mc,
-			     unsigned char lun,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -2051,13 +2056,13 @@ handle_get_sensor_hysteresis(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if ((sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE)
 	&& (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_READABLE))
     {
@@ -2197,8 +2202,7 @@ check_thresholds(lmc_data_t *mc, sensor_t *sensor, int gen_event)
 
 static void
 handle_set_sensor_thresholds(lmc_data_t    *mc,
-			     unsigned char lun,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -2210,13 +2214,13 @@ handle_set_sensor_thresholds(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if ((sensor->event_reading_code != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	|| (sensor->threshold_support != IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE))
     {
@@ -2247,8 +2251,7 @@ handle_set_sensor_thresholds(lmc_data_t    *mc,
 
 static void
 handle_get_sensor_thresholds(lmc_data_t    *mc,
-			     unsigned char lun,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -2260,13 +2263,13 @@ handle_get_sensor_thresholds(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if ((sensor->event_reading_code != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	|| ((sensor->threshold_support != IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE)
 	    && (sensor->threshold_support != IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE)))
@@ -2290,27 +2293,27 @@ handle_get_sensor_thresholds(lmc_data_t    *mc,
 
 static void
 handle_set_sensor_event_enable(lmc_data_t    *mc,
-			       unsigned char lun,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
     int           sens_num;
     sensor_t      *sensor;
-    int           i, j, e;
+    unsigned int  i;
+    int           j, e;
     unsigned char op;
 
     if (check_msg_length(msg, 2, rdata, rdata_len))
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if ((sensor->event_support == IPMI_EVENT_SUPPORT_NONE)
 	|| (sensor->event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE))
     {
@@ -2348,7 +2351,7 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 
     e = 0;
     for (i=2; i<=3; i++) {
-	if (msg->data_len <= i)
+	if (msg->len <= i)
 	    break;
 	for (j=0; j<8; j++, e++) {
 	    if (e >= 15)
@@ -2359,7 +2362,7 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
     }
     e = 0;
     for (i=4; i<=5; i++) {
-	if (msg->data_len <= i)
+	if (msg->len <= i)
 	    break;
 	for (j=0; j<8; j++, e++) {
 	    if (e >= 15)
@@ -2375,8 +2378,7 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 
 static void
 handle_get_sensor_event_enable(lmc_data_t    *mc,
-			       unsigned char lun,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -2388,13 +2390,13 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     if ((sensor->event_support == IPMI_EVENT_SUPPORT_NONE)
 	|| (sensor->event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE))
     {
@@ -2436,8 +2438,7 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
 
 static void
 handle_set_sensor_type(lmc_data_t    *mc,
-		       unsigned char lun,
-		       ipmi_msg_t    *msg,
+		       msg_t         *msg,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len)
 {
@@ -2446,8 +2447,7 @@ handle_set_sensor_type(lmc_data_t    *mc,
 
 static void
 handle_get_sensor_type(lmc_data_t    *mc,
-		       unsigned char lun,
-		       ipmi_msg_t    *msg,
+		       msg_t         *msg,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len)
 {
@@ -2458,13 +2458,13 @@ handle_get_sensor_type(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
     rdata[0] = 0;
     rdata[1] = sensor->sensor_type;
     rdata[2] = sensor->event_reading_code;
@@ -2473,8 +2473,7 @@ handle_get_sensor_type(lmc_data_t    *mc,
 
 static void
 handle_get_sensor_reading(lmc_data_t    *mc,
-			  unsigned char lun,
-			  ipmi_msg_t    *msg,
+			  msg_t         *msg,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
@@ -2486,13 +2485,13 @@ handle_get_sensor_reading(lmc_data_t    *mc,
 	return;
 
     sens_num = msg->data[0];
-    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num])) {
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sensor = mc->sensors[lun][sens_num];
+    sensor = mc->sensors[msg->rs_lun][sens_num];
 
     rdata[0] = 0;
     rdata[1] = sensor->value;
@@ -2701,8 +2700,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 
 static void
 handle_sensor_event_netfn(lmc_data_t    *mc,
-			  unsigned char lun,
-			  ipmi_msg_t    *msg,
+			  msg_t         *msg,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
@@ -2716,51 +2714,51 @@ handle_sensor_event_netfn(lmc_data_t    *mc,
 	break;
 
     case IPMI_GET_DEVICE_SDR_INFO_CMD:
-	handle_get_device_sdr_info(mc, lun, msg, rdata, rdata_len);
+	handle_get_device_sdr_info(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD:
-	handle_reserve_device_sdr_repository(mc, lun, msg, rdata, rdata_len);
+	handle_reserve_device_sdr_repository(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_DEVICE_SDR_CMD:
-	handle_get_device_sdr(mc, lun, msg, rdata, rdata_len);
+	handle_get_device_sdr(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SET_SENSOR_HYSTERESIS_CMD:
-	handle_set_sensor_hysteresis(mc, lun, msg, rdata, rdata_len);
+	handle_set_sensor_hysteresis(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_HYSTERESIS_CMD:
-	handle_get_sensor_hysteresis(mc, lun, msg, rdata, rdata_len);
+	handle_get_sensor_hysteresis(mc, msg, rdata, rdata_len);
 	break;
 	
     case IPMI_SET_SENSOR_THRESHOLD_CMD:
-	handle_set_sensor_thresholds(mc, lun, msg, rdata, rdata_len);
+	handle_set_sensor_thresholds(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_THRESHOLD_CMD:
-	handle_get_sensor_thresholds(mc, lun, msg, rdata, rdata_len);
+	handle_get_sensor_thresholds(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SET_SENSOR_EVENT_ENABLE_CMD:
-	handle_set_sensor_event_enable(mc, lun, msg, rdata, rdata_len);
+	handle_set_sensor_event_enable(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_EVENT_ENABLE_CMD:
-	handle_get_sensor_event_enable(mc, lun, msg, rdata, rdata_len);
+	handle_get_sensor_event_enable(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SET_SENSOR_TYPE_CMD:
-	handle_set_sensor_type(mc, lun, msg, rdata, rdata_len);
+	handle_set_sensor_type(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_TYPE_CMD:
-	handle_get_sensor_type(mc, lun, msg, rdata, rdata_len);
+	handle_get_sensor_type(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_READING_CMD:
-	handle_get_sensor_reading(mc, lun, msg, rdata, rdata_len);
+	handle_get_sensor_reading(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_EVENT_STATUS_CMD:
@@ -2815,7 +2813,7 @@ ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
 
 static void
 handle_set_power(lmc_data_t    *mc,
-		 ipmi_msg_t    *msg,
+		 msg_t         *msg,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
@@ -2830,7 +2828,7 @@ handle_set_power(lmc_data_t    *mc,
 
 static void
 handle_get_power(lmc_data_t    *mc,
-		 ipmi_msg_t    *msg,
+		 msg_t         *msg,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
@@ -2841,7 +2839,7 @@ handle_get_power(lmc_data_t    *mc,
 
 static void
 handle_set_hs_led(lmc_data_t    *mc,
-		  ipmi_msg_t    *msg,
+		  msg_t         *msg,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
@@ -2858,7 +2856,7 @@ handle_set_hs_led(lmc_data_t    *mc,
 
 static void
 handle_get_hs_led(lmc_data_t    *mc,
-		  ipmi_msg_t    *msg,
+		  msg_t         *msg,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
@@ -2869,8 +2867,7 @@ handle_get_hs_led(lmc_data_t    *mc,
 
 static void
 handle_oem0_netfn(lmc_data_t    *mc,
-		  unsigned char lun,
-		  ipmi_msg_t    *msg,
+		  msg_t         *msg,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
@@ -2899,7 +2896,7 @@ handle_oem0_netfn(lmc_data_t    *mc,
 
 static void
 handle_picmg_get_properties(lmc_data_t    *mc,
-			    ipmi_msg_t    *msg,
+			    msg_t         *msg,
 			    unsigned char *rdata,
 			    unsigned int  *rdata_len)
 {
@@ -2913,7 +2910,7 @@ handle_picmg_get_properties(lmc_data_t    *mc,
 
 static void
 handle_picmg_get_address_info(lmc_data_t    *mc,
-			      ipmi_msg_t    *msg,
+			      msg_t         *msg,
 			      unsigned char *rdata,
 			      unsigned int  *rdata_len)
 {
@@ -2922,16 +2919,16 @@ handle_picmg_get_address_info(lmc_data_t    *mc,
     unsigned char devid = 0;
     int           i;
 
-    if (msg->data_len == 3) {
+    if (msg->len == 3) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (msg->data_len >= 2)
+    if (msg->len >= 2)
 	devid = msg->data[1];
 
-    if (msg->data_len >= 4) {
+    if (msg->len >= 4) {
 	switch (msg->data[2]) {
 	case 0:
 	    hw_addr = msg->data[3];
@@ -2942,7 +2939,7 @@ handle_picmg_get_address_info(lmc_data_t    *mc,
 	    break;
 
 	case 3:
-	    if (msg->data_len < 5) {
+	    if (msg->len < 5) {
 		rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 		*rdata_len = 1;
 		return;
@@ -2989,7 +2986,7 @@ handle_picmg_get_address_info(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_fru_control(lmc_data_t    *mc,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -3018,7 +3015,7 @@ handle_picmg_cmd_fru_control(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fru_led_properties(lmc_data_t    *mc,
-					ipmi_msg_t    *msg,
+					msg_t         *msg,
 					unsigned char *rdata,
 					unsigned int  *rdata_len)
 {
@@ -3049,7 +3046,7 @@ handle_picmg_cmd_get_fru_led_properties(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
-					    ipmi_msg_t    *msg,
+					    msg_t         *msg,
 					    unsigned char *rdata,
 					    unsigned int  *rdata_len)
 {
@@ -3132,7 +3129,7 @@ picmg_led_set(lmc_data_t *mc, sensor_t *sensor)
 
 static void
 handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
-				   ipmi_msg_t    *msg,
+				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
@@ -3200,7 +3197,7 @@ handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
-				   ipmi_msg_t    *msg,
+				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
@@ -3247,7 +3244,7 @@ handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_shelf_address_info(lmc_data_t    *mc,
-					ipmi_msg_t    *msg,
+					msg_t         *msg,
 					unsigned char *rdata,
 					unsigned int  *rdata_len)
 {
@@ -3256,7 +3253,7 @@ handle_picmg_cmd_get_shelf_address_info(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_shelf_address_info(lmc_data_t    *mc,
-					ipmi_msg_t    *msg,
+					msg_t         *msg,
 					unsigned char *rdata,
 					unsigned int  *rdata_len)
 {
@@ -3265,7 +3262,7 @@ handle_picmg_cmd_set_shelf_address_info(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_ipmb_state(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3274,7 +3271,7 @@ handle_picmg_cmd_set_ipmb_state(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_fru_activation_policy(lmc_data_t    *mc,
-					   ipmi_msg_t    *msg,
+					   msg_t         *msg,
 					   unsigned char *rdata,
 					   unsigned int  *rdata_len)
 {
@@ -3283,7 +3280,7 @@ handle_picmg_cmd_set_fru_activation_policy(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fru_activation_policy(lmc_data_t    *mc,
-					   ipmi_msg_t    *msg,
+					   msg_t         *msg,
 					   unsigned char *rdata,
 					   unsigned int  *rdata_len)
 {
@@ -3292,7 +3289,7 @@ handle_picmg_cmd_get_fru_activation_policy(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
-				    ipmi_msg_t    *msg,
+				    msg_t         *msg,
 				    unsigned char *rdata,
 				    unsigned int  *rdata_len)
 {
@@ -3356,7 +3353,7 @@ handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_device_locator_record(lmc_data_t    *mc,
-					   ipmi_msg_t    *msg,
+					   msg_t         *msg,
 					   unsigned char *rdata,
 					   unsigned int  *rdata_len)
 {
@@ -3365,7 +3362,7 @@ handle_picmg_cmd_get_device_locator_record(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_port_state(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3374,7 +3371,7 @@ handle_picmg_cmd_set_port_state(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_port_state(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3383,7 +3380,7 @@ handle_picmg_cmd_get_port_state(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_compute_power_properties(lmc_data_t    *mc,
-					  ipmi_msg_t    *msg,
+					  msg_t         *msg,
 					  unsigned char *rdata,
 					  unsigned int  *rdata_len)
 {
@@ -3392,7 +3389,7 @@ handle_picmg_cmd_compute_power_properties(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_power_level(lmc_data_t    *mc,
-				 ipmi_msg_t    *msg,
+				 msg_t         *msg,
 				 unsigned char *rdata,
 				 unsigned int  *rdata_len)
 {
@@ -3401,7 +3398,7 @@ handle_picmg_cmd_set_power_level(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_power_level(lmc_data_t    *mc,
-				 ipmi_msg_t    *msg,
+				 msg_t         *msg,
 				 unsigned char *rdata,
 				 unsigned int  *rdata_len)
 {
@@ -3410,7 +3407,7 @@ handle_picmg_cmd_get_power_level(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_renegotiate_power(lmc_data_t    *mc,
-				   ipmi_msg_t    *msg,
+				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
@@ -3419,7 +3416,7 @@ handle_picmg_cmd_renegotiate_power(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fan_speed_properties(lmc_data_t    *mc,
-					  ipmi_msg_t    *msg,
+					  msg_t         *msg,
 					  unsigned char *rdata,
 					  unsigned int  *rdata_len)
 {
@@ -3428,7 +3425,7 @@ handle_picmg_cmd_get_fan_speed_properties(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_fan_level(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -3437,7 +3434,7 @@ handle_picmg_cmd_set_fan_level(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fan_level(lmc_data_t    *mc,
-			       ipmi_msg_t    *msg,
+			       msg_t         *msg,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
@@ -3446,7 +3443,7 @@ handle_picmg_cmd_get_fan_level(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3455,7 +3452,7 @@ handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_ipmb_link_info(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3464,7 +3461,7 @@ handle_picmg_cmd_ipmb_link_info(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_shelf_power_allocation(lmc_data_t    *mc,
-					ipmi_msg_t    *msg,
+					msg_t         *msg,
 					unsigned char *rdata,
 					unsigned int  *rdata_len)
 {
@@ -3492,7 +3489,7 @@ handle_picmg_cmd_shelf_power_allocation(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_shelf_manager_ipmb_address(lmc_data_t    *mc,
-					    ipmi_msg_t    *msg,
+					    msg_t         *msg,
 					    unsigned char *rdata,
 					    unsigned int  *rdata_len)
 {
@@ -3501,7 +3498,7 @@ handle_picmg_cmd_shelf_manager_ipmb_address(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_set_fan_policy(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3510,7 +3507,7 @@ handle_picmg_cmd_set_fan_policy(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_fan_policy(lmc_data_t    *mc,
-				ipmi_msg_t    *msg,
+				msg_t         *msg,
 				unsigned char *rdata,
 				unsigned int  *rdata_len)
 {
@@ -3520,7 +3517,7 @@ handle_picmg_cmd_get_fan_policy(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
-					  ipmi_msg_t    *msg,
+					  msg_t         *msg,
 					  unsigned char *rdata,
 					  unsigned int  *rdata_len)
 {
@@ -3541,7 +3538,7 @@ handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
-						   ipmi_msg_t    *msg,
+						   msg_t         *msg,
 						   unsigned char *rdata,
 						   unsigned int  *rdata_len)
 {
@@ -3651,7 +3648,7 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
-					    ipmi_msg_t    *msg,
+					    msg_t         *msg,
 					    unsigned char *rdata,
 					    unsigned int  *rdata_len)
 {
@@ -3687,7 +3684,7 @@ handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
     emu->atca_fru_inv_lock_timeout = 20;
 
     offset = ipmi_get_uint16(msg->data+4);
-    count = msg->data_len - 6;
+    count = msg->len - 6;
 
     if (offset >= emu->temp_fru_inv_data_len) {
 	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
@@ -3712,7 +3709,7 @@ handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
 
 static void
 handle_picmg_cmd_get_shelf_manager_ip_addresses(lmc_data_t    *mc,
-						ipmi_msg_t    *msg,
+						msg_t         *msg,
 						unsigned char *rdata,
 						unsigned int  *rdata_len)
 {
@@ -3780,8 +3777,7 @@ ipmi_emu_atca_set_site(emu_data_t    *emu,
 
 static void
 handle_picmg_msg(lmc_data_t    *mc,
-		 unsigned char lun,
-		 ipmi_msg_t    *msg,
+		 msg_t         *msg,
 		 unsigned char *rdata,
 		 unsigned int  *rdata_len)
 {
@@ -3928,8 +3924,7 @@ handle_picmg_msg(lmc_data_t    *mc,
 
 static void
 handle_group_extension_netfn(lmc_data_t    *mc,
-			     unsigned char lun,
-			     ipmi_msg_t    *msg,
+			     msg_t         *msg,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
@@ -3939,7 +3934,7 @@ handle_group_extension_netfn(lmc_data_t    *mc,
     switch (msg->data[0]) {
     case IPMI_PICMG_GRP_EXT:
 	if (mc->emu->atca_mode)
-	    handle_picmg_msg(mc, lun, msg, rdata, rdata_len);
+	    handle_picmg_msg(mc, msg, rdata, rdata_len);
 	else
 	    handle_invalid_cmd(mc, rdata, rdata_len);
 	break;
@@ -3962,16 +3957,14 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 }
 
 void
-ipmi_emu_handle_msg(emu_data_t     *emu,
-		    unsigned char  chan,
-		    unsigned char  lun,
-		    ipmi_msg_t     *msg,
-		    unsigned char  *rdata,
-		    unsigned int   *rdata_len)
+ipmi_emu_handle_msg(emu_data_t    *emu,
+		    msg_t         *msg,
+		    unsigned char *rdata,
+		    unsigned int  *rdata_len)
 {
     lmc_data_t *mc;
-    ipmi_msg_t smsg;
-    ipmi_msg_t *omsg = msg;
+    msg_t smsg;
+    msg_t *omsg = msg;
     unsigned int olen = *rdata_len;
     unsigned char *data = NULL;
 
@@ -3989,7 +3982,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	}
 
 	data = msg->data + 1;
-	data_len = msg->data_len - 1;
+	data_len = msg->len - 1;
 	if (data[0] == 0) {
 	    /* Broadcast, just skip the first byte, but check len. */
 	    data++;
@@ -4009,13 +4002,13 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	}
 
 	smsg.netfn = data[1] >> 2;
-	lun = data[1] & 0x3;
+	smsg.rs_lun = data[1] & 0x3;
 	smsg.cmd = data[5];
 	smsg.data = data + 6;
-	smsg.data_len = data_len - 7; /* Subtract off the header and
-					 the end checksum */
+	smsg.len = data_len - 7; /* Subtract off the header and
+				    the end checksum */
+	smsg.channel = 0; /* IPMB channel is 0 */
 	msg = &smsg;
-	chan = 0; /* IPMB channel is 0 */
     } else {
 	mc = emu->ipmb[emu->bmc_mc >> 1];
 	if (!mc || !mc->enabled) {
@@ -4027,23 +4020,23 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     switch (msg->netfn) {
     case IPMI_APP_NETFN:
-	handle_app_netfn(mc, chan, lun, msg, rdata, rdata_len);
+	handle_app_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SENSOR_EVENT_NETFN:
-	handle_sensor_event_netfn(mc, lun, msg, rdata, rdata_len);
+	handle_sensor_event_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_STORAGE_NETFN:
-	handle_storage_netfn(mc, lun, msg, rdata, rdata_len);
+	handle_storage_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GROUP_EXTENSION_NETFN:
-	handle_group_extension_netfn(mc, lun, msg, rdata, rdata_len);
+	handle_group_extension_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case 0x30:
-	handle_oem0_netfn(mc, lun, msg, rdata, rdata_len);
+	handle_oem0_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -4151,17 +4144,13 @@ ipmi_mc_destroy(lmc_data_t *mc)
 }
 
 int
-ipmi_emu_set_mc_channel(lmc_data_t    *mc,
-			unsigned char channel,
-			unsigned char medium_type,
-			unsigned char protocol_type,
-			unsigned char session_support)
+ipmi_emu_set_mc_guid(lmc_data_t *mc,
+		     unsigned char guid[16],
+		     int force)
 {
-    if (channel >= IPMI_MAX_CHANNELS)
-	return EINVAL;
-    mc->chans[channel].medium_type = medium_type;
-    mc->chans[channel].protocol_type = protocol_type;
-    mc->chans[channel].session_support = session_support & 0x3;
+    if (force || !mc->guid_set)
+	memcpy(mc->guid, guid, 16);
+    mc->guid_set = 1;
     return 0;
 }
 
@@ -4269,6 +4258,10 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	ipmi_mc_destroy(emu->ipmb[ipmb >> 1]);
 
     emu->ipmb[ipmb >> 1] = mc;
+
+    if (ipmb == emu->bmc_mc)
+	mc->bmcinfo = emu->bmcinfo;
+
     return 0;
 }
 
@@ -4380,10 +4373,35 @@ ipmi_emu_get_mc_by_addr(emu_data_t *emu, unsigned char ipmb, lmc_data_t **mc)
 }
 
 int
+ipmi_emu_set_bmcinfo(emu_data_t *emu, bmc_data_t *bmcinfo)
+{
+    lmc_data_t *mc;
+
+    emu->bmcinfo = bmcinfo;
+    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
+	mc->bmcinfo = bmcinfo;
+    return 0;
+}
+
+int
 ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb)
 {
+    lmc_data_t *mc;
+
     if (ipmb & 1)
 	return EINVAL;
     emu->bmc_mc = ipmb;
+    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
+	mc->bmcinfo = emu->bmcinfo;
     return 0;
+}
+
+lmc_data_t *
+ipmi_emu_get_bmc_mc(emu_data_t *emu)
+{
+    lmc_data_t *mc;
+    
+    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
+	return mc;
+    return NULL;
 }

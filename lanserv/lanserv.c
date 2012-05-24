@@ -566,14 +566,11 @@ write_config(lan_data_t *lan)
 
 void init_oem_force(void);
 
-sockaddr_ip_t addr[MAX_ADDR];
-socklen_t addr_len[MAX_ADDR];
-int num_addr = 0;
-
 int
 main(int argc, const char *argv[])
 {
     lan_data_t  lan;
+    bmc_data_t  bmcinfo;
     misc_data_t data;
     int max_fd;
     int rv;
@@ -607,13 +604,14 @@ main(int argc, const char *argv[])
     /* Call the OEM init code. */
     init_oem_force();
 
+    memset(&bmcinfo, 0, sizeof(bmcinfo));
     memset(&lan, 0, sizeof(lan));
+    lan.bmcinfo = &bmcinfo;
     lan.user_info = &data;
     lan.alloc = ialloc;
     lan.free = ifree;
 
-    num_addr = MAX_ADDR;
-    if (lanserv_read_config(&lan, data.config_file, addr, addr_len, &num_addr))
+    if (lanserv_read_config(&lan, data.config_file))
 	exit(1);
 
     data.smi_fd = ipmi_open(ipmi_dev);
@@ -629,20 +627,21 @@ main(int argc, const char *argv[])
     lan.log = lanserv_log;
     lan.debug = debug;
 
-    if (num_addr == 0) {
-	struct sockaddr_in *ipaddr = (void *) &addr[0];
+    if (lan.num_lan_addrs == 0) {
+	struct sockaddr_in *ipaddr = (void *) &lan.lan_addrs[0].addr;
 	ipaddr->sin_family = AF_INET;
 	ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
-	addr_len[0] = sizeof(*ipaddr);
-	num_addr++;
+	lan.lan_addrs[0].addr_len = sizeof(*ipaddr);
+	lan.num_lan_addrs++;
     }
 
-    for (i=0; i<num_addr; i++) {
-	if (addr_len[i] == 0)
+    for (i=0; i<lan.num_lan_addrs; i++) {
+	if (lan.lan_addrs[i].addr_len == 0)
 	    break;
 
-	data.lan_fd[i] = open_lan_fd(&addr[i], addr_len[i]);
+	data.lan_fd[i] = open_lan_fd(&lan.lan_addrs[i].addr,
+				     lan.lan_addrs[i].addr_len);
 	if (data.lan_fd[i] == -1) {
 	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
 	    exit(1);
@@ -677,7 +676,7 @@ main(int argc, const char *argv[])
     lanserv_log(LAN_ERR, NULL, "%s startup", argv[0]);
 
     max_fd = data.smi_fd;
-    for (i=0; i<num_addr; i++) {
+    for (i=0; i<lan.num_lan_addrs; i++) {
 	if (data.lan_fd[i] > max_fd)
 	    max_fd = data.lan_fd[i];
     }
@@ -690,7 +689,7 @@ main(int argc, const char *argv[])
 
 	FD_ZERO(&readfds);
 	FD_SET(data.smi_fd, &readfds);
-	for (i=0; i<num_addr; i++)
+	for (i=0; i<lan.num_lan_addrs; i++)
 	    FD_SET(data.lan_fd[i], &readfds);
 
 	gettimeofday(&time_now, NULL);
@@ -707,7 +706,7 @@ main(int argc, const char *argv[])
 		handle_msg_ipmi(data.smi_fd, &lan);
 	    }
 
-	    for (i=0; i<num_addr; i++) {
+	    for (i=0; i<lan.num_lan_addrs; i++) {
 		if (FD_ISSET(data.lan_fd[i], &readfds))
 		    handle_msg_lan(data.lan_fd[i], &lan);
 	    }

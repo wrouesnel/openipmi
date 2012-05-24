@@ -6,8 +6,6 @@ atca_enable
 mc_add 20 0 1 23 9 8 1f 1291 f02
 atca_set_site 0x10 3 1
 mc_setbmc 20
-mc_setchan 20 0 1 1 0
-mc_setchan 20 1 4 1 2
 main_sdr_add 20 00 00 51 12 0f 20 00 00 1f 00 00 00 f0 1 0 c4 'T 'e 's 't
 sel_enable 20 100 0b
 mc_add_fru_data 20 0 400 \

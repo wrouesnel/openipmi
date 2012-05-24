@@ -57,7 +57,6 @@
 #define __LANSERV_H
 
 #include <sys/uio.h> /* for iovec */
-#include <stdint.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -66,6 +65,7 @@
 #include <netdb.h>
 
 #include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_sim_info.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,12 +73,7 @@ extern "C" {
 
 /*
  * Restrictions: <=64 sessions
- *               <=64 users (per spec, 6 bits)
  */
-#define MAX_USERS		63
-#define USER_BITS_REQ		6 /* Bits required to hold a user. */
-#define USER_MASK		0x3f
-#define MAX_SESSIONS		63
 #define SESSION_BITS_REQ	6 /* Bits required to hold a session. */
 #define SESSION_MASK		0x3f
 
@@ -86,70 +81,6 @@ extern "C" {
 
 typedef struct session_s session_t;
 typedef struct lan_data_s lan_data_t;
-
-typedef struct msg_s
-{
-    void *src_addr;
-    int  src_len;
-
-    long oem_data; /* For use by OEM handlers.  This will be set to
-                      zero by the calling code. */
-
-    unsigned char authtype;
-    uint32_t      seq;
-    uint32_t      sid;
-
-    /* RMCP parms */
-    unsigned char *authcode;
-    unsigned char authcode_data[16];
-
-    /* RMCP+ parms */
-    unsigned char payload;
-    unsigned char encrypted;
-    unsigned char authenticated;
-    unsigned char iana[3];
-    uint16_t      payload_id;
-    unsigned char *authdata;
-    unsigned int  authdata_len;
-
-    unsigned char netfn;
-    unsigned char rs_addr;
-    unsigned char rs_lun;
-    unsigned char rq_addr;
-    unsigned char rq_lun;
-    unsigned char rq_seq;
-    unsigned char cmd;
-
-    unsigned char *data;
-    unsigned int  len;
-
-    unsigned long ll_data; /* For use by the low-level code. */
-} msg_t;
-
-typedef struct rsp_msg
-{
-    uint8_t        netfn;
-    uint8_t        cmd;
-    unsigned short data_len;
-    uint8_t        *data;
-} rsp_msg_t;
-
-#define NUM_PRIV_LEVEL 4
-typedef struct channel_s
-{
-    unsigned int available : 1;
-
-    unsigned int PEF_alerting : 1;
-    unsigned int per_msg_auth : 1;
-
-    /* We don't support user-level authentication disable, and access
-       mode is always available and cannot be set. */
-
-    unsigned int privilege_limit : 4;
-    struct {
-	unsigned char allowed_auths;
-    } priv_info[NUM_PRIV_LEVEL];
-} channel_t;
 
 typedef struct integ_handlers_s
 {
@@ -246,22 +177,6 @@ struct session_s
     void *src_addr;
     int  src_len;
 };
-
-typedef struct user_s
-{
-    unsigned char valid;
-    unsigned char link_auth;
-    unsigned char cb_only;
-    unsigned char username[16];
-    unsigned char pw[20];
-    unsigned char privilege;
-    unsigned char max_sessions;
-    unsigned char curr_sessions;
-    uint16_t      allowed_auths;
-
-    /* Set by the user code. */
-    int           idx; /* My idx in the table. */
-} user_t;
 
 typedef struct lanparm_dest_data_s
 {
@@ -366,19 +281,46 @@ typedef struct pef_data_s
     } changed;
 } pef_data_t;
 
+typedef struct sockaddr_ip_s {
+    union
+        {
+    	    struct sockaddr s_addr;
+            struct sockaddr_in  s_addr4;
+#ifdef PF_INET6
+            struct sockaddr_in6 s_addr6;
+#endif
+        } s_ipsock;
+/*    socklen_t addr_len;*/
+} sockaddr_ip_t;
+
+typedef struct lanserv_addr_s {
+    sockaddr_ip_t addr;
+    socklen_t     addr_len;
+} lanserv_addr_t;
+
+typedef struct rsp_msg
+{
+    uint8_t        netfn;
+    uint8_t        cmd;
+    unsigned short data_len;
+    uint8_t        *data;
+} rsp_msg_t;
+
 struct lan_data_s
 {
-    /* user 0 is not used. */
-    user_t users[MAX_USERS+1];
+    bmc_data_t *bmcinfo;
 
+    unsigned char *guid;
+
+    unsigned int channel_num;
     channel_t channel;
-    channel_t nonv_channel; /* What to write to nonv ram. */
+
+    channel_t sys_channel;
 
     /* The amount of time in seconds before a session will be shut
        down if there is no activity. */
     unsigned int default_session_timeout;
 
-    unsigned char *guid;
     unsigned char *bmc_key;
 
     void *user_info;
@@ -452,8 +394,6 @@ struct lan_data_s
     /* Used to make the sid somewhat unique. */
     uint32_t sid_seq;
 
-    unsigned int active_sessions;
-
     ipmi_authdata_t challenge_auth;
     unsigned int next_challenge_seq;
 
@@ -462,6 +402,12 @@ struct lan_data_s
 
     pef_data_t pef;
     pef_data_t pef_rollback;
+
+    lanserv_addr_t *lan_addrs;
+    int num_lan_addrs;
+
+    lanserv_addr_t *ser_addrs;
+    int num_ser_addrs;
 };
 
 
@@ -498,24 +444,9 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
 
-typedef struct sockaddr_ip_s {
-    union
-        {
-    	    struct sockaddr s_addr;
-            struct sockaddr_in  s_addr4;
-#ifdef PF_INET6
-            struct sockaddr_in6 s_addr6;
-#endif
-        } s_ipsock;
-/*    socklen_t addr_len;*/
-} sockaddr_ip_t;
-
 /* Read in a configuration file and fill in the lan and address info. */
 int lanserv_read_config(lan_data_t    *lan,
-			char          *config_file,
-			sockaddr_ip_t addr[],
-			socklen_t     addr_len[],
-			int           *num_addr);
+			char          *config_file);
 
 /* Call this periodically to time things.  time_since_last is the
    number of seconds since the last call to this. */

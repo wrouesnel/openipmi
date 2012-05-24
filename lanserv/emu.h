@@ -1,9 +1,63 @@
+/*
+ * emu.h
+ *
+ * MontaVista IPMI LAN server include file
+ *
+ * Author: MontaVista Software, Inc.
+ *         Corey Minyard <minyard@mvista.com>
+ *         source@mvista.com
+ *
+ * Copyright 2003,2004,2005,2012 MontaVista Software Inc.
+ *
+ * This software is available to you under a choice of one of two
+ * licenses.  You may choose to be licensed under the terms of the GNU
+ * Lesser General Public License (GPL) Version 2 or the modified BSD
+ * license below.  The following disclamer applies to both licenses:
+ *
+ *  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+ *  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ *  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+ *  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ *  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * GNU Lesser General Public Licence
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public License
+ *  as published by the Free Software Foundation; either version 2 of
+ *  the License, or (at your option) any later version.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * Modified BSD Licence
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials provided
+ *      with the distribution.
+ *   3. The name of the author may not be used to endorse or promote
+ *      products derived from this software without specific prior
+ *      written permission.
+ */
 
 #ifndef __EMU_IPMI_
 #define __EMU_IPMI_
 
 #include <sys/time.h>
-#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_sim_info.h>
 
 typedef struct emu_data_s emu_data_t;
 typedef struct lmc_data_s lmc_data_t;
@@ -18,12 +72,10 @@ void *ipmi_emu_get_user_data(emu_data_t *emu);
 
 void ipmi_emu_sleep(emu_data_t *emu, struct timeval *time);
 
-void ipmi_emu_handle_msg(emu_data_t     *emu,
-			 unsigned char  chan,
-			 unsigned char  lun,
-			 ipmi_msg_t     *msg,
-			 unsigned char  *rdata,
-			 unsigned int   *rdata_len);
+void ipmi_emu_handle_msg(emu_data_t    *emu,
+			 msg_t         *msg,
+			 unsigned char *rdata,
+			 unsigned int  *rdata_len);
 
 int ipmi_emu_add_mc(emu_data_t    *emu,
 		    unsigned char ipmb,
@@ -42,13 +94,15 @@ void ipmi_mc_destroy(lmc_data_t *mc);
 void ipmi_mc_disable(lmc_data_t *mc);
 void ipmi_mc_enable(lmc_data_t *mc);
 
+int ipmi_emu_set_bmcinfo(emu_data_t *emu, bmc_data_t *bmcinfo);
+
+lmc_data_t *ipmi_emu_get_bmc_mc(emu_data_t *emu);
+
 int ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb);
 
-int ipmi_emu_set_mc_channel(lmc_data_t    *mc,
-			    unsigned char channel,
-			    unsigned char medium_type,
-			    unsigned char protocol_type,
-			    unsigned char session_support);
+int ipmi_emu_set_mc_guid(lmc_data_t *mc,
+			 unsigned char guid[16],
+			 int force);
 
 int ipmi_emu_get_mc_by_addr(emu_data_t    *emu,
 			    unsigned char ipmb,
