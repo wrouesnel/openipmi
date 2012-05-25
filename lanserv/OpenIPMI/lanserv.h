@@ -298,6 +298,60 @@ typedef struct lanserv_addr_s {
     socklen_t     addr_len;
 } lanserv_addr_t;
 
+typedef struct serserv_data_s serserv_data_t;
+
+typedef struct ser_codec_s {
+    char *name;
+    void (*handle_char)(unsigned char ch, serserv_data_t *si);
+    void (*send)(msg_t *msg, serserv_data_t *si);
+    int (*setup)(serserv_data_t *si);
+    void (*handle_event)(msg_t *emsg, serserv_data_t *si);
+    void (*handle_ipmb)(msg_t *emsg, serserv_data_t *si);
+} ser_codec_t;
+
+typedef struct ser_oem_handler_s {
+    char *name;
+    int (*handler)(const unsigned char *msg, unsigned int len,
+		   serserv_data_t *si,
+		   unsigned char *rsp, unsigned int *rsp_len);
+    void (*init)(serserv_data_t *si);
+} ser_oem_handler_t;
+
+struct serserv_data_s {
+    lanserv_addr_t addr;
+
+    bmc_data_t *bmcinfo;
+
+    void (*ser_send)(serserv_data_t *si, unsigned char *data,
+		     unsigned int data_len);
+
+    int (*smi_send)(serserv_data_t *si, msg_t *msg);
+
+    ser_codec_t *codec;
+    void *codec_info;
+
+    ser_oem_handler_t *oem;
+    void *oem_info;
+
+    /* Queues for events and IPMB messages. */
+    msg_t *ipmb_q, *ipmb_q_tail;
+    msg_t *event_q, *event_q_tail;
+
+    /* Settings */
+    int           debug;
+    unsigned int  do_connect : 1;
+    unsigned int  echo : 1;
+    unsigned int  do_attn : 1;
+    unsigned char my_ipmb;
+    unsigned char global_enables;
+    unsigned char attn_chars[8];
+    unsigned int  attn_chars_len;
+};
+
+ser_codec_t *ser_lookup_codec(char *name);
+ser_oem_handler_t *ser_lookup_oem(char *name);
+
+
 typedef struct rsp_msg
 {
     uint8_t        netfn;
@@ -306,9 +360,18 @@ typedef struct rsp_msg
     uint8_t        *data;
 } rsp_msg_t;
 
+/*
+ * General connection information
+ */
+typedef struct conn_data_s
+{
+} conn_data_t;
+
 struct lan_data_s
 {
     bmc_data_t *bmcinfo;
+
+    conn_data_t *conn;
 
     unsigned char *guid;
 
@@ -406,7 +469,7 @@ struct lan_data_s
     lanserv_addr_t *lan_addrs;
     int num_lan_addrs;
 
-    lanserv_addr_t *ser_addrs;
+    serserv_data_t *ser_addrs;
     int num_ser_addrs;
 };
 

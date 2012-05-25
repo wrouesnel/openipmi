@@ -66,7 +66,8 @@ void ipmi_emu_tick(emu_data_t *emu, unsigned int seconds);
 
 typedef void (*ipmi_emu_sleep_cb)(emu_data_t *emu, struct timeval *time);
 
-emu_data_t *ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper);
+emu_data_t *ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper,
+			   bmc_data_t *bmcinfo);
 
 void *ipmi_emu_get_user_data(emu_data_t *emu);
 
@@ -93,8 +94,6 @@ void ipmi_mc_destroy(lmc_data_t *mc);
 
 void ipmi_mc_disable(lmc_data_t *mc);
 void ipmi_mc_enable(lmc_data_t *mc);
-
-int ipmi_emu_set_bmcinfo(emu_data_t *emu, bmc_data_t *bmcinfo);
 
 lmc_data_t *ipmi_emu_get_bmc_mc(emu_data_t *emu);
 

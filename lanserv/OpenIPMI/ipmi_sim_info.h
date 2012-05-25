@@ -97,7 +97,11 @@ typedef struct msg_s
     unsigned int  len;
 
     unsigned long ll_data; /* For use by the low-level code. */
+
+    struct msg_s *next;
 } msg_t;
+
+#define IPMI_SIM_MAX_MSG_LENGTH 36
 
 #define IPMI_MAX_CHANNELS 16
 #define NUM_PRIV_LEVEL 4
@@ -155,6 +159,8 @@ typedef struct user_s
 typedef struct bmc_data_s {
     /* user 0 is not used. */
     user_t users[MAX_USERS + 1];
+
+    unsigned char bmc_ipmb;
 
     channel_t *channels[IPMI_MAX_CHANNELS];
 } bmc_data_t;

@@ -245,7 +245,6 @@ typedef struct emu_addr_s
 struct emu_data_s
 {
     bmc_data_t *bmcinfo;
-    int        bmc_mc;
     lmc_data_t *ipmb[128];
 
     int          atca_mode;
@@ -4010,7 +4009,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	smsg.channel = 0; /* IPMB channel is 0 */
 	msg = &smsg;
     } else {
-	mc = emu->ipmb[emu->bmc_mc >> 1];
+	mc = emu->ipmb[emu->bmcinfo->bmc_ipmb >> 1];
 	if (!mc || !mc->enabled) {
 	    rdata[0] = 0xff;
 	    *rdata_len = 1;
@@ -4056,7 +4055,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	for (i=*rdata_len-1; i>=0; i--)
 	    rdata[i+7] = rdata[i];
 	rdata[0] = 0;
-	rdata[1] = emu->bmc_mc;
+	rdata[1] = emu->bmcinfo->bmc_ipmb;
 	rdata[2] = ((msg->netfn | 1) << 2) | (data[4] & 0x3);
 	rdata[3] = ipmb_checksum(rdata+1, 2, 0);
 	rdata[4] = data[0];
@@ -4069,7 +4068,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 }
 
 emu_data_t *
-ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper)
+ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper, bmc_data_t *bmcinfo)
 {
     emu_data_t *data = malloc(sizeof(*data));
 
@@ -4077,6 +4076,7 @@ ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper)
 	memset(data, 0, sizeof(*data));
 	data->user_data = user_data;
 	data->sleeper = sleeper;
+	data->bmcinfo = bmcinfo;
     }
 	
     return data;
@@ -4259,7 +4259,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
     emu->ipmb[ipmb >> 1] = mc;
 
-    if (ipmb == emu->bmc_mc)
+    if (ipmb == emu->bmcinfo->bmc_ipmb)
 	mc->bmcinfo = emu->bmcinfo;
 
     return 0;
@@ -4373,25 +4373,14 @@ ipmi_emu_get_mc_by_addr(emu_data_t *emu, unsigned char ipmb, lmc_data_t **mc)
 }
 
 int
-ipmi_emu_set_bmcinfo(emu_data_t *emu, bmc_data_t *bmcinfo)
-{
-    lmc_data_t *mc;
-
-    emu->bmcinfo = bmcinfo;
-    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
-	mc->bmcinfo = bmcinfo;
-    return 0;
-}
-
-int
 ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb)
 {
     lmc_data_t *mc;
 
     if (ipmb & 1)
 	return EINVAL;
-    emu->bmc_mc = ipmb;
-    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
+    emu->bmcinfo->bmc_ipmb = ipmb;
+    if (!ipmi_emu_get_mc_by_addr(emu, ipmb, &mc))
 	mc->bmcinfo = emu->bmcinfo;
     return 0;
 }
@@ -4401,7 +4390,7 @@ ipmi_emu_get_bmc_mc(emu_data_t *emu)
 {
     lmc_data_t *mc;
     
-    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmc_mc, &mc))
+    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmcinfo->bmc_ipmb, &mc))
 	return mc;
     return NULL;
 }

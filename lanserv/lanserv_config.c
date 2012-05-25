@@ -318,10 +318,93 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len, char **err)
     return 0;
 }
 
+static int
+get_serial(char **tokptr, lan_data_t *lan, char **errstr)
+{
+    serserv_data_t *info;
+    char *tok, *tok2;
+    int err;
+
+    info = malloc(sizeof(*info) * (lan->num_ser_addrs + 1));
+    if (!info) {
+	*errstr = "Out of memory";
+	return -1;
+    }
+    if (lan->ser_addrs) {
+	memcpy(info, lan->ser_addrs,
+	       sizeof(*info) * lan->num_ser_addrs);
+	free(lan->ser_addrs);
+    }
+    lan->ser_addrs = info;
+    info += lan->num_ser_addrs;
+    lan->num_ser_addrs++;
+    memset(info, 0, sizeof(*info));
+
+    err = get_sock_addr(tokptr, &info->addr.addr, &info->addr.addr_len, errstr);
+    if (err)
+	return err;
+
+    tok = strtok_r(NULL, " \t\n", tokptr);
+    while (tok) {
+	if (strcmp(tok, "connect") == 0) {
+	    info->do_connect = 1;
+	    continue;
+	}
+
+	tok2 = strtok_r(NULL, " \t\n", tokptr);
+	if (strcmp(tok, "codec") == 0) {
+	    info->codec = ser_lookup_codec(tok2);
+	    if (!info->codec) {
+		*errstr = "Invalid codec";
+		return -1;
+	    }
+	} else if (strcmp(tok, "oem") == 0) {
+	    info->oem = ser_lookup_oem(tok2);
+	    if (!info->oem) {
+		*errstr = "Invalid oem setting";
+		return -1;
+	    }
+	} else if (strcmp(tok, "attn") == 0) {
+	    unsigned int pos = 0;
+	    char *tokptr2 = NULL, *endp;
+
+	    info->do_attn = 1;
+	    tok2 = strtok_r(tok2, ",", &tokptr2);
+	    while (tok2) {
+		if (pos >= sizeof(info->attn_chars)) {
+		    *errstr = "Too many attn characters";
+		    return -1;
+		}
+		info->attn_chars[pos] = strtoul(tok2, &endp, 0);
+		if (*endp != '\0') {
+		    *errstr = "Invalid attn value";
+		    return -1;
+		}
+		pos++;
+		tok2 = strtok_r(NULL, ",", &tokptr2);
+	    }
+	    info->attn_chars_len = pos;
+	} else if (strcmp(tok, "ipmb") == 0) {
+	    char *endp;
+	    info->my_ipmb = strtoul(tok2, &endp, 0);
+	    if (*endp != '\0') {
+		*errstr = "Invalid IPMB address";
+		return -1;
+	    }
+	} else {
+	    *errstr = "Invalid setting, not connect, codec, oem, attn, or ipmb";
+	    return -1;
+	}
+    }
+
+    return 0;
+}
+
 #define MAX_CONFIG_LINE 256
 int
 lanserv_read_config(lan_data_t    *lan,
-		    char          *config_file)
+		    char          *config_file,
+		    unsigned int  channel_num)
 {
     FILE         *f = fopen(config_file, "r");
     char         buf[MAX_CONFIG_LINE];
@@ -342,7 +425,7 @@ lanserv_read_config(lan_data_t    *lan,
     lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
     lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
     lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
-    lan->bmcinfo->channels[1] = &lan->channel;
+    lan->bmcinfo->channels[lan->channel_num] = &lan->channel;
 
     lan->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
     /* Assume this for now, override with config */
@@ -393,16 +476,17 @@ lanserv_read_config(lan_data_t    *lan,
 	        fprintf(stderr, "Out of memory on line %d\n", line);
 		return -1;
 	    }
-	    free(lan->lan_addrs);
+	    if (lan->lan_addrs) {
+		memcpy(newa, lan->lan_addrs,
+		       sizeof(*newa) * lan->num_lan_addrs);
+		free(lan->lan_addrs);
+	    }
 	    lan->lan_addrs = newa;
 	    newa += lan->num_lan_addrs;
 	    lan->num_lan_addrs += 1;
+	    memset(newa, 0, sizeof(*newa));
 
 	    err = get_sock_addr(&tokptr, &newa->addr, &newa->addr_len, &errstr);
-	    if (err) {
-	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
-		return err;
-	    }	
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, lan, &errstr);
 	} else if (strcmp(tok, "guid") == 0) {
@@ -425,6 +509,8 @@ lanserv_read_config(lan_data_t    *lan,
 	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
 		return err;
 	    }	
+	} else if (strcmp(tok, "serial") == 0) {
+	    err = get_serial(&tokptr, lan, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

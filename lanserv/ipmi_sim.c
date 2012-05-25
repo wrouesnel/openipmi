@@ -506,9 +506,10 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    data.emu = ipmi_emu_alloc(&data, sleeper);
-
     memset(&bmcinfo, 0, sizeof(bmcinfo));
+
+    data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
+
     memset(&lan, 0, sizeof(lan));
     lan.bmcinfo = &bmcinfo;
     lan.user_info = &data;
@@ -580,8 +581,6 @@ main(int argc, const char *argv[])
 	fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
 	exit(1);
     }
-
-    ipmi_emu_set_bmcinfo(data.emu, &bmcinfo);
 
     if (command_string)
 	ipmi_emu_cmd(data.emu, command_string);
