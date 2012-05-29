@@ -130,5 +130,5 @@ handle_asf(lan_data_t *lan,
     vec[0].iov_len = 28;
 
     /* Return the response. */
-    lan->lan_send(lan, vec, 1, from_addr, from_len);
+    lan->send_out(lan, vec, 1, from_addr, from_len);
 }

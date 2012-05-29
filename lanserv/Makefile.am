@@ -14,7 +14,7 @@ noinst_PROGRAMS = ipmi_sim ipmi_checksum
 noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
-	lanserv_oem_force.c lanserv_config.c config.c serial_ipmi.c
+	lanserv_oem_force.c lanserv_config.c config.c serial_ipmi.c serv.c
 nodist_libIPMIlanserv_la_SOURCES = ../utils/ipmi_auth.c ../utils/md2.c \
 	../utils/md5.c
 libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS)

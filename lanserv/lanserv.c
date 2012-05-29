@@ -116,13 +116,13 @@ dump_hex(void *vdata, int len, int left)
 }
 
 static void *
-ialloc(lan_data_t *lan, int size)
+ialloc(channel_t *lan, int size)
 {
     return malloc(size);
 }
 
 static void
-ifree(lan_data_t *lan, void *data)
+ifree(channel_t *lan, void *data)
 {
     return free(data);
 }
@@ -170,28 +170,28 @@ lan_send(lan_data_t *lan,
 }
 
 static void
-ipmb_addr_change_dev(lan_data_t    *lan,
+ipmb_addr_change_dev(channel_t     *chan,
 		     unsigned char addr)
 {
     unsigned int slave_addr = addr;
     int          rv;
-    misc_data_t  *info = lan->user_info;
+    misc_data_t  *info = chan->oem.user_data;
 
     info->bmc_ipmb = addr;
     rv = ioctl(info->smi_fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
     if (rv) {
-	lan->log(OS_ERROR, NULL,
-		 "Error setting IPMB address: 0x%x", errno);
+	chan->log(OS_ERROR, NULL,
+		  "Error setting IPMB address: 0x%x", errno);
     }    
 }
 
 static int
-smi_send_dev(lan_data_t *lan, msg_t *msg)
+smi_send_dev(channel_t *chan, msg_t *msg)
 {
     struct ipmi_req  req;
     char             addr_data[sizeof(struct ipmi_addr)];
     struct ipmi_addr *addr = (struct ipmi_addr *) addr_data;
-    misc_data_t      *info = lan->user_info;
+    misc_data_t      *info = chan->oem.user_data;
     int              rv;
 
     req.addr = (unsigned char *) addr;
@@ -340,7 +340,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	return;
     }
 
-    ipmi_handle_smi_rsp(lan, msg, rsp.msg.data, rsp.msg.data_len);
+    ipmi_handle_smi_rsp(&lan->channel, msg, rsp.msg.data, rsp.msg.data_len);
 }
 
 static void
@@ -609,8 +609,8 @@ main(int argc, const char *argv[])
     memset(&lan, 0, sizeof(lan));
     lan.conn.bmcinfo = &bmcinfo;
     lan.user_info = &data;
-    lan.alloc = ialloc;
-    lan.free = ifree;
+    lan.channel.alloc = ialloc;
+    lan.channel.free = ifree;
 
     if (read_config(&lan, data.config_file))
 	exit(1);
@@ -619,13 +619,14 @@ main(int argc, const char *argv[])
     if (data.smi_fd == -1)
 	exit(1);
 
-    lan.lan_send = lan_send;
+    lan.send_out = lan_send;
     handle_msg_ipmi = handle_msg_ipmi_dev;
-    lan.smi_send = smi_send_dev;
-    lan.ipmb_addr_change = ipmb_addr_change_dev;
+    lan.channel.smi_send = smi_send_dev;
+    lan.channel.oem.user_data = &data;
+    lan.channel.oem.ipmb_addr_change = ipmb_addr_change_dev;
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
-    lan.log = lanserv_log;
+    lan.channel.log = lanserv_log;
     lan.debug = debug;
 
     if (lan.num_lan_addrs == 0) {

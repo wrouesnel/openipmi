@@ -33,7 +33,8 @@
 
 #include <stdlib.h>
 
-#include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/serv.h>
 
 typedef struct force_oem_data_s
 {
@@ -42,13 +43,13 @@ typedef struct force_oem_data_s
 } force_oem_data_t;
 
 static int
-force_rsp_handler(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp)
+force_rsp_handler(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 {
     unsigned char new_addr;
 
     if (rsp->netfn == 0x31) {
 	/* A force OEM response. */
-	force_oem_data_t *fdata = lan->oem_data;
+	force_oem_data_t *fdata = chan->oem.oem_data;
 
 	switch (rsp->cmd)
 	{
@@ -70,10 +71,10 @@ force_rsp_handler(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp)
 
 		if (new_addr != fdata->curr_addr) {
 		    fdata->curr_addr = fdata->slave_addr;
-		    lan->log(INFO, NULL,
-			     "Change Force MC address to 0x%x", new_addr);
-		    if (lan->ipmb_addr_change)
-			lan->ipmb_addr_change(lan, fdata->curr_addr);
+		    chan->log(INFO, NULL,
+			      "Change Force MC address to 0x%x", new_addr);
+		    if (chan->oem.ipmb_addr_change)
+			chan->oem.ipmb_addr_change(chan, fdata->curr_addr);
 		}
 		break;
 
@@ -89,8 +90,8 @@ force_rsp_handler(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp)
 		fdata->slave_addr = rsp->data[3];
 		if (fdata->curr_addr != rsp->data[2]) {
 		    fdata->curr_addr = rsp->data[2];
-		    if (lan->ipmb_addr_change)
-			lan->ipmb_addr_change(lan, fdata->curr_addr);
+		    if (chan->oem.ipmb_addr_change)
+			chan->oem.ipmb_addr_change(chan, fdata->curr_addr);
 		}
 
 		return msg->oem_data;
@@ -142,14 +143,14 @@ static force_oem_data_t force_data =
 };
 
 static void
-force_oem_installer(lan_data_t *lan, void *cb_data)
+force_oem_installer(channel_t *chan, void *cb_data)
 {
-    lan->oem_handle_rsp = force_rsp_handler;
-    lan->oem_check_permitted = force_check_permitted;
-    lan->oem_data = &force_data;
+    chan->oem.oem_handle_rsp = force_rsp_handler;
+    chan->oem.oem_check_permitted = force_check_permitted;
+    chan->oem.oem_data = &force_data;
 
     /* Set a command to get the current address. */
-    ipmi_oem_send_msg(lan, 0x30, 4, NULL, 0, 1);
+    ipmi_oem_send_msg(chan, 0x30, 4, NULL, 0, 1);
 }
 
 static oem_handler_t force_735_oem =

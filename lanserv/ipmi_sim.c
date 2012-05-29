@@ -102,13 +102,13 @@ typedef struct misc_data
 } misc_data_t;
 
 static void *
-ialloc(lan_data_t *lan, int size)
+ialloc(channel_t *chan, int size)
 {
     return malloc(size);
 }
 
 static void
-ifree(lan_data_t *lan, void *data)
+ifree(channel_t *chan, void *data)
 {
     return free(data);
 }
@@ -149,15 +149,15 @@ lan_send(lan_data_t *lan,
 }
 
 static int
-smi_send(lan_data_t *lan, msg_t *msg)
+smi_send(channel_t *chan, msg_t *msg)
 {
-    misc_data_t      *data = lan->user_info;
+    misc_data_t      *data = chan->oem.user_data;
     unsigned char    msgd[36];
     unsigned int     msgd_len = sizeof(msgd);
 
     ipmi_emu_handle_msg(data->emu, msg, msgd, &msgd_len);
 
-    ipmi_handle_smi_rsp(lan, msg, msgd, msgd_len);
+    ipmi_handle_smi_rsp(chan, msg, msgd, msgd_len);
     return 0;
 }
 
@@ -516,13 +516,14 @@ main(int argc, const char *argv[])
     memset(&lan, 0, sizeof(lan));
     lan.conn.bmcinfo = &bmcinfo;
     lan.user_info = &data;
-    lan.alloc = ialloc;
-    lan.free = ifree;
-    lan.lan_send = lan_send;
-    lan.smi_send = smi_send;
+    lan.channel.alloc = ialloc;
+    lan.channel.free = ifree;
+    lan.send_out = lan_send;
+    lan.channel.oem.user_data = &data;
+    lan.channel.smi_send = smi_send;
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
-    lan.log = lanserv_log;
+    lan.channel.log = lanserv_log;
     lan.debug = debug;
 
     if (read_config(&lan, config_file))
