@@ -42,8 +42,7 @@ typedef struct force_oem_data_s
 } force_oem_data_t;
 
 static int
-force_rsp_handler(lan_data_t *lan, msg_t *msg,
-		  session_t *session, rsp_msg_t *rsp)
+force_rsp_handler(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp)
 {
     unsigned char new_addr;
 

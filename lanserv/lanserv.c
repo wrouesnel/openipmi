@@ -76,6 +76,7 @@
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/serv_config.h>
 
 #include <linux/ipmi.h>
 
@@ -606,12 +607,12 @@ main(int argc, const char *argv[])
 
     memset(&bmcinfo, 0, sizeof(bmcinfo));
     memset(&lan, 0, sizeof(lan));
-    lan.bmcinfo = &bmcinfo;
+    lan.conn.bmcinfo = &bmcinfo;
     lan.user_info = &data;
     lan.alloc = ialloc;
     lan.free = ifree;
 
-    if (lanserv_read_config(&lan, data.config_file))
+    if (read_config(&lan, data.config_file))
 	exit(1);
 
     data.smi_fd = ipmi_open(ipmi_dev);

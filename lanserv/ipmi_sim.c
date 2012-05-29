@@ -77,7 +77,10 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_posix.h>
+#include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
+
+#include <OpenIPMI/serv_config.h>
 
 #include "emu.h"
 
@@ -511,7 +514,7 @@ main(int argc, const char *argv[])
     data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
 
     memset(&lan, 0, sizeof(lan));
-    lan.bmcinfo = &bmcinfo;
+    lan.conn.bmcinfo = &bmcinfo;
     lan.user_info = &data;
     lan.alloc = ialloc;
     lan.free = ifree;
@@ -522,7 +525,7 @@ main(int argc, const char *argv[])
     lan.log = lanserv_log;
     lan.debug = debug;
 
-    if (lanserv_read_config(&lan, config_file))
+    if (read_config(&lan, config_file))
 	exit(1);
 
     if (lan.num_lan_addrs == 0) {

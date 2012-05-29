@@ -174,12 +174,12 @@ find_user(lan_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
     user_t *rv = NULL;
 
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->bmcinfo->users[i].valid
-	    && (memcmp(user, lan->bmcinfo->users[i].username, 16) == 0))
+	if (lan->conn.bmcinfo->users[i].valid
+	    && (memcmp(user, lan->conn.bmcinfo->users[i].username, 16) == 0))
 	{
 	    if (name_only_lookup ||
-		(lan->bmcinfo->users[i].privilege == priv)) {
-		rv = &(lan->bmcinfo->users[i]);
+		(lan->conn.bmcinfo->users[i].privilege == priv)) {
+		rv = &(lan->conn.bmcinfo->users[i]);
 		break;
 	    }
 	}
@@ -489,7 +489,7 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 	session->sid = 0;
     }
 
-    if (lan->oem_handle_rsp && lan->oem_handle_rsp(lan, msg, session, rsp))
+    if (lan->oem_handle_rsp && lan->oem_handle_rsp(lan, msg, rsp))
 	/* OEM code handled the response. */
 	return;
 
@@ -632,8 +632,8 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 			   user-level authenitcation is on,
 			   non-null user names disabled,
 			   no anonymous support. */
-	if (lan->bmcinfo->users[1].valid) {
-	    if (is_authval_null(lan->bmcinfo->users[1].pw))
+	if (lan->conn.bmcinfo->users[1].valid) {
+	    if (is_authval_null(lan->conn.bmcinfo->users[1].pw))
 		data[3] |= 0x01; /* Anonymous login. */
 	    else
 		data[3] |= 0x02; /* Null user supported. */
@@ -816,7 +816,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     }
 
     auth = msg->data[0] & 0xf;
-    user = &(lan->bmcinfo->users[user_idx]);
+    user = &(lan->conn.bmcinfo->users[user_idx]);
     if (! (user->valid)) {
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
@@ -1382,32 +1382,32 @@ handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 
     if (msg->data[0] & 0x80) {
 	newv = (msg->data[0] >> 4) & 1;
-	if (newv != lan->bmcinfo->users[user].valid) {
-	    lan->bmcinfo->users[user].valid = newv;
+	if (newv != lan->conn.bmcinfo->users[user].valid) {
+	    lan->conn.bmcinfo->users[user].valid = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 5) & 1;
-	if (newv != lan->bmcinfo->users[user].link_auth) {
-	    lan->bmcinfo->users[user].link_auth = newv;
+	if (newv != lan->conn.bmcinfo->users[user].link_auth) {
+	    lan->conn.bmcinfo->users[user].link_auth = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 6) & 1;
-	if (newv != lan->bmcinfo->users[user].cb_only) {
-	    lan->bmcinfo->users[user].cb_only = newv;
+	if (newv != lan->conn.bmcinfo->users[user].cb_only) {
+	    lan->conn.bmcinfo->users[user].cb_only = newv;
 	    changed = 1;
 	}
     }
 
-    if (priv != lan->bmcinfo->users[user].privilege) {
-	lan->bmcinfo->users[user].privilege = priv;
+    if (priv != lan->conn.bmcinfo->users[user].privilege) {
+	lan->conn.bmcinfo->users[user].privilege = priv;
 	changed = 1;
     }
 
     if (msg->len >= 4) {
 	/* Got the session limit byte. */
 	newv = msg->data[3] & 0xf;
-	if (newv != lan->bmcinfo->users[user].max_sessions) {
-	    lan->bmcinfo->users[user].max_sessions = newv;
+	if (newv != lan->conn.bmcinfo->users[user].max_sessions) {
+	    lan->conn.bmcinfo->users[user].max_sessions = newv;
 	    changed = 1;
 	}
     }
@@ -1449,17 +1449,17 @@ handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
     /* Number of enabled users. */
     data[2] = 0;
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->bmcinfo->users[i].valid)
+	if (lan->conn.bmcinfo->users[i].valid)
 	    data[2]++;
     }
 
     /* Only fixed user name is user 1. */
-    data[3] = lan->bmcinfo->users[1].valid;
+    data[3] = lan->conn.bmcinfo->users[1].valid;
 
-    data[4] = ((lan->bmcinfo->users[user].valid << 4)
-	       | (lan->bmcinfo->users[user].link_auth << 5)
-	       | (lan->bmcinfo->users[user].cb_only << 6)
-	       | lan->bmcinfo->users[user].privilege);
+    data[4] = ((lan->conn.bmcinfo->users[user].valid << 4)
+	       | (lan->conn.bmcinfo->users[user].link_auth << 5)
+	       | (lan->conn.bmcinfo->users[user].cb_only << 6)
+	       | lan->conn.bmcinfo->users[user].privilege);
 
     return_rsp_data(lan, msg, session, data, 5);
 }
@@ -1482,8 +1482,8 @@ handle_set_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 	return;
     }
 
-    memcpy(lan->bmcinfo->users[user].username, msg->data+1, 16);
-    cleanup_ascii_16(lan->bmcinfo->users[user].username);
+    memcpy(lan->conn.bmcinfo->users[user].username, msg->data+1, 16);
+    cleanup_ascii_16(lan->conn.bmcinfo->users[user].username);
 
     return_err(lan, msg, session, 0);
 }
@@ -1508,7 +1508,7 @@ handle_get_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
     }
 
     data[0] = 0;
-    memcpy(data+1, lan->bmcinfo->users[user].username, 16);
+    memcpy(data+1, lan->conn.bmcinfo->users[user].username, 16);
 
     return_rsp_data(lan, msg, session, data, 17);
 }
@@ -1534,9 +1534,9 @@ handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
 
     op = msg->data[1] & 0x3;
     if (op == 0) {
-	lan->bmcinfo->users[user].valid = 0;
+	lan->conn.bmcinfo->users[user].valid = 0;
     } else if (op == 1) {
-	lan->bmcinfo->users[user].valid = 1;
+	lan->conn.bmcinfo->users[user].valid = 1;
     } else {
 	if (msg->len < 18) {
 	    lan->log(INVALID_MSG, msg,
@@ -1545,7 +1545,7 @@ handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
 	    return;
 	}
 	if (op == 2) {
-	    memcpy(lan->bmcinfo->users[user].pw, msg->data+2, 16);
+	    memcpy(lan->conn.bmcinfo->users[user].pw, msg->data+2, 16);
 	} else {
 	    /* Nothing to do for test password, we accept anything. */
 	}
@@ -2362,7 +2362,7 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
 
     session->time_left = lan->default_session_timeout;
 
-    if (lan->oem_handle_msg && lan->oem_handle_msg(lan, msg, session))
+    if (lan->oem_handle_msg && lan->oem_handle_msg(lan, msg))
 	/* OEM code handled the message. */
 	return;
 
@@ -2604,7 +2604,7 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
     idata[56] = a->role;
     idata[57] = a->username_len;
     memcpy(idata+58, a->username, idata[57]);
-    user = &(lan->bmcinfo->users[session->userid]);
+    user = &(lan->conn.bmcinfo->users[session->userid]);
 
     HMAC(a->akey, user->pw, a->akey_len,
 	 idata, 58+idata[57], data + *data_len, &ilen);
@@ -2639,7 +2639,7 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
     unsigned char       idata[38];
     unsigned int        ilen;
     unsigned char       integ[20];
-    user_t              *user = &(lan->bmcinfo->users[session->userid]);
+    user_t              *user = &(lan->conn.bmcinfo->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
     if (((*data_len) - a->akey_len) < 8)
@@ -2713,7 +2713,7 @@ hmac_sha1_init(lan_data_t *lan, session_t *session)
 static int
 hmac_md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t *user = &(lan->bmcinfo->users[session->userid]);
+    user_t *user = &(lan->conn.bmcinfo->users[session->userid]);
     session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
     session->auth_data.ikey_len = 16;
@@ -2776,7 +2776,7 @@ auth_free(void *info, void *data)
 static int
 md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t          *user = &(lan->bmcinfo->users[session->userid]);
+    user_t          *user = &(lan->conn.bmcinfo->users[session->userid]);
     int             rv;
     ipmi_authdata_t idata;
 
@@ -3721,8 +3721,7 @@ ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
 }
 
 static int
-lan_look_for_get_devid(lan_data_t *lan, msg_t *msg, session_t *session,
-		       rsp_msg_t *rsp)
+lan_look_for_get_devid(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp)
 {
     if ((rsp->netfn == (IPMI_APP_NETFN | 1))
 	&& (rsp->cmd == IPMI_GET_DEVICE_ID_CMD)
@@ -3786,7 +3785,7 @@ ipmi_lan_init(lan_data_t *lan)
     uint8_t challenge_data[16];
 
     for (i=0; i<=MAX_USERS; i++) {
-	lan->bmcinfo->users[i].idx = i;
+	lan->conn.bmcinfo->users[i].idx = i;
     }
 
     for (i=0; i<=MAX_SESSIONS; i++) {
@@ -3818,7 +3817,7 @@ ipmi_lan_init(lan_data_t *lan)
     }
 
     /* Force user 1 to be a null user. */
-    memset(lan->bmcinfo->users[1].username, 0, 16);
+    memset(lan->conn.bmcinfo->users[1].username, 0, 16);
 
     i = lan->gen_rand(lan, challenge_data, 16);
     if (i)

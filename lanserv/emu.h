@@ -57,7 +57,7 @@
 #define __EMU_IPMI_
 
 #include <sys/time.h>
-#include <OpenIPMI/ipmi_sim_info.h>
+#include <OpenIPMI/serv.h>
 
 typedef struct emu_data_s emu_data_t;
 typedef struct lmc_data_s lmc_data_t;

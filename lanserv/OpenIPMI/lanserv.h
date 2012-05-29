@@ -56,16 +56,8 @@
 #ifndef __LANSERV_H
 #define __LANSERV_H
 
-#include <sys/uio.h> /* for iovec */
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
-#include <netdb.h>
-
 #include <OpenIPMI/ipmi_auth.h>
-#include <OpenIPMI/ipmi_sim_info.h>
+#include <OpenIPMI/serv.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -281,77 +273,6 @@ typedef struct pef_data_s
     } changed;
 } pef_data_t;
 
-typedef struct sockaddr_ip_s {
-    union
-        {
-    	    struct sockaddr s_addr;
-            struct sockaddr_in  s_addr4;
-#ifdef PF_INET6
-            struct sockaddr_in6 s_addr6;
-#endif
-        } s_ipsock;
-/*    socklen_t addr_len;*/
-} sockaddr_ip_t;
-
-typedef struct lanserv_addr_s {
-    sockaddr_ip_t addr;
-    socklen_t     addr_len;
-} lanserv_addr_t;
-
-typedef struct serserv_data_s serserv_data_t;
-
-typedef struct ser_codec_s {
-    char *name;
-    void (*handle_char)(unsigned char ch, serserv_data_t *si);
-    void (*send)(msg_t *msg, serserv_data_t *si);
-    int (*setup)(serserv_data_t *si);
-    void (*handle_event)(msg_t *emsg, serserv_data_t *si);
-    void (*handle_ipmb)(msg_t *emsg, serserv_data_t *si);
-} ser_codec_t;
-
-typedef struct ser_oem_handler_s {
-    char *name;
-    int (*handler)(const unsigned char *msg, unsigned int len,
-		   serserv_data_t *si,
-		   unsigned char *rsp, unsigned int *rsp_len);
-    void (*init)(serserv_data_t *si);
-} ser_oem_handler_t;
-
-struct serserv_data_s {
-    lanserv_addr_t addr;
-
-    bmc_data_t *bmcinfo;
-
-    void (*ser_send)(serserv_data_t *si, unsigned char *data,
-		     unsigned int data_len);
-
-    int (*smi_send)(serserv_data_t *si, msg_t *msg);
-
-    ser_codec_t *codec;
-    void *codec_info;
-
-    ser_oem_handler_t *oem;
-    void *oem_info;
-
-    /* Queues for events and IPMB messages. */
-    msg_t *ipmb_q, *ipmb_q_tail;
-    msg_t *event_q, *event_q_tail;
-
-    /* Settings */
-    int           debug;
-    unsigned int  do_connect : 1;
-    unsigned int  echo : 1;
-    unsigned int  do_attn : 1;
-    unsigned char my_ipmb;
-    unsigned char global_enables;
-    unsigned char attn_chars[8];
-    unsigned int  attn_chars_len;
-};
-
-ser_codec_t *ser_lookup_codec(char *name);
-ser_oem_handler_t *ser_lookup_oem(char *name);
-
-
 typedef struct rsp_msg
 {
     uint8_t        netfn;
@@ -360,25 +281,14 @@ typedef struct rsp_msg
     uint8_t        *data;
 } rsp_msg_t;
 
-/*
- * General connection information
- */
-typedef struct conn_data_s
-{
-} conn_data_t;
-
 struct lan_data_s
 {
-    bmc_data_t *bmcinfo;
-
-    conn_data_t *conn;
+    conn_data_t conn;
 
     unsigned char *guid;
 
     unsigned int channel_num;
     channel_t channel;
-
-    channel_t sys_channel;
 
     /* The amount of time in seconds before a session will be shut
        down if there is no activity. */
@@ -435,14 +345,12 @@ struct lan_data_s
        continue, or non-zero if the message should not go through
        normal handling.  This field may be NULL, and it will be
        ignored. */
-    int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg, session_t *session);
+    int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg);
 
     /* Called before a response is sent.  Should return 0 if the
        standard handling should continue, or non-zero if the OEM
-       handled the response itself.  Note that this code should *not
-       free the message, the lanserv_ipmi code will handle that. */
-    int (*oem_handle_rsp)(lan_data_t *lan, msg_t *msg,
-			  session_t *session, rsp_msg_t *rsp);
+       handled the response itself. */
+    int (*oem_handle_rsp)(lan_data_t *lan, msg_t *msg, rsp_msg_t *rsp);
 
     /* Check the privilege of a command to see if it is permitted. */
     int (*oem_check_permitted)(unsigned char priv,
@@ -468,9 +376,6 @@ struct lan_data_s
 
     lanserv_addr_t *lan_addrs;
     int num_lan_addrs;
-
-    serserv_data_t *ser_addrs;
-    int num_ser_addrs;
 };
 
 
@@ -508,8 +413,10 @@ void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
 
 /* Read in a configuration file and fill in the lan and address info. */
-int lanserv_read_config(lan_data_t    *lan,
-			char          *config_file);
+int lanserv_read_config(lan_data_t   *lan,
+			FILE         *f,
+			int          *line,
+			unsigned int channel_num);
 
 /* Call this periodically to time things.  time_since_last is the
    number of seconds since the last call to this. */
