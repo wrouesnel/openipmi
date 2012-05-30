@@ -62,14 +62,13 @@
 
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/lanserv.h>
-#include <OpenIPMI/serv_config.h>
 
 #ifndef IPMI_LAN_STD_PORT_STR
 #define IPMI_LAN_STD_PORT_STR	"623"
 #endif
 
 int
-lanserv_read_config(lan_data_t    *lan,
+lanserv_read_config(bmc_data_t    *bmc,
 		    FILE          *f,
 		    int           *line,
 		    unsigned int  channel_num)
@@ -80,14 +79,24 @@ lanserv_read_config(lan_data_t    *lan,
     unsigned int val;
     int          err = 0;
     char         *errstr;
+    lan_data_t   *lan;
 
-    lan->channel_num = channel_num;
+    lan = bmc->alloc(bmc, sizeof(*lan));
+    if (!lan) {
+	err = -1;
+	errstr = "Out of memory allocating lan data";
+	goto out_err;
+    }
+    memset(lan, 0, sizeof(*lan));
+
+    lan->bmcinfo = bmc;
+    lan->channel.chan_info = lan;
+    lan->channel.channel_num = channel_num;
     lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
     lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
     lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
-    lan->conn.bmcinfo->channels[lan->channel_num] = &lan->channel;
+    lan->bmcinfo->channels[channel_num] = &lan->channel;
 
-    *line = 0;
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	(*line)++;
 
@@ -97,8 +106,10 @@ lanserv_read_config(lan_data_t    *lan,
 	if (!tok)
 	    continue;
 
-	if (strcmp(tok, "endlan") == 0)
+	if (strcmp(tok, "endlan") == 0) {
+	    bmc->channels[channel_num] = &lan->channel;
 	    return 0;
+	}
 
 	if (strcmp(tok, "PEF_alerting") == 0) {
 	    err = get_bool(&tokptr, &val, &errstr);
@@ -166,11 +177,14 @@ lanserv_read_config(lan_data_t    *lan,
 	}
 
 	if (err) {
+	out_err:
+	    bmc->free(bmc, lan);
 	    fprintf(stderr, "Error on line %d: %s\n", *line, errstr);
 	    return err;
 	}
     }
 
+    bmc->free(bmc, lan);
     fprintf(stderr, "End of file in lan section\n");
     return -1;
 }

@@ -10,7 +10,7 @@ typedef int (*ipmi_emu_cmd_handler)(emu_data_t *emu,
 				    char       **toks);
 
 static int
-get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
+emu_get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
 {
     char *str, *tmpstr;
 
@@ -37,8 +37,8 @@ get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
 }
 
 static int
-get_bitmask(char **toks, unsigned char *val, char *errstr, unsigned int size,
-	    int empty_ok)
+emu_get_bitmask(char **toks, unsigned char *val, char *errstr,
+	    unsigned int size, int empty_ok)
 {
     char *str;
     int  i, j;
@@ -72,7 +72,7 @@ get_bitmask(char **toks, unsigned char *val, char *errstr, unsigned int size,
 }
 
 static int
-get_uint(char **toks, unsigned int *val, char *errstr)
+emu_get_uint(char **toks, unsigned int *val, char *errstr)
 {
     char *str, *tmpstr;
 
@@ -93,7 +93,8 @@ get_uint(char **toks, unsigned int *val, char *errstr)
 }
 
 static int
-get_bytes(char **tokptr, unsigned char *data, char *errstr, unsigned int len)
+emu_get_bytes(char **tokptr, unsigned char *data, char *errstr,
+	      unsigned int len)
 {
     char *tok = strtok_r(NULL, " \t\n", tokptr);
     char *end;
@@ -200,11 +201,11 @@ sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  max_records;
     unsigned char flags;
 
-    rv = get_uint(toks, &max_records, "max records");
+    rv = emu_get_uint(toks, &max_records, "max records");
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &flags, "flags", 0);
+    rv = emu_get_uchar(toks, &flags, "flags", 0);
     if (rv)
 	return rv;
 
@@ -223,12 +224,12 @@ sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char data[13];
     unsigned int  r;
 
-    rv = get_uchar(toks, &record_type, "record type", 0);
+    rv = emu_get_uchar(toks, &record_type, "record type", 0);
     if (rv)
 	return rv;
 
     for (i=0; i<13; i++) {
-	rv = get_uchar(toks, &data[i], "data byte", 0);
+	rv = emu_get_uchar(toks, &data[i], "data byte", 0);
 	if (rv)
 	    return rv;
     }
@@ -249,7 +250,7 @@ main_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char data[256];
 
     for (i=0; i<256; i++) {
-	rv = get_uchar(toks, &data[i], "data byte", 1);
+	rv = emu_get_uchar(toks, &data[i], "data byte", 1);
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
@@ -272,12 +273,12 @@ device_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char data[256];
     unsigned char lun;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
     for (i=0; i<256; i++) {
-	rv = get_uchar(toks, &data[i], "data byte", 1);
+	rv = emu_get_uchar(toks, &data[i], "data byte", 1);
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
@@ -301,19 +302,19 @@ sensor_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char type;
     unsigned char code;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &type, "sensor type", 0);
+    rv = emu_get_uchar(toks, &type, "sensor type", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &code, "event reading code", 0);
+    rv = emu_get_uchar(toks, &code, "event reading code", 0);
     if (rv)
 	return rv;
 
@@ -333,23 +334,23 @@ sensor_set_bit(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char value;
     unsigned char gen_event;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &bit, "bit to set", 0);
+    rv = emu_get_uchar(toks, &bit, "bit to set", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &value, "bit value", 0);
+    rv = emu_get_uchar(toks, &value, "bit value", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &gen_event, "generate event", 0);
+    rv = emu_get_uchar(toks, &gen_event, "generate event", 0);
     if (rv)
 	return rv;
 
@@ -368,19 +369,19 @@ sensor_set_bit_clr_rest(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char bit;
     unsigned char gen_event;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &bit, "bit to set", 0);
+    rv = emu_get_uchar(toks, &bit, "bit to set", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &gen_event, "generate event", 0);
+    rv = emu_get_uchar(toks, &gen_event, "generate event", 0);
     if (rv)
 	return rv;
 
@@ -399,19 +400,19 @@ sensor_set_value(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char value;
     unsigned char gen_event;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &value, "value", 0);
+    rv = emu_get_uchar(toks, &value, "value", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &gen_event, "generate event", 0);
+    rv = emu_get_uchar(toks, &gen_event, "generate event", 0);
     if (rv)
 	return rv;
 
@@ -430,23 +431,23 @@ sensor_set_hysteresis(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char support;
     unsigned char positive, negative;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &support, "hysteresis support", 0);
+    rv = emu_get_uchar(toks, &support, "hysteresis support", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &positive, "positive hysteresis", 0);
+    rv = emu_get_uchar(toks, &positive, "positive hysteresis", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &negative, "negative hysteresis", 0);
+    rv = emu_get_uchar(toks, &negative, "negative hysteresis", 0);
     if (rv)
 	return rv;
 
@@ -468,24 +469,24 @@ sensor_set_threshold(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char thresholds[6];
     int           i;
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &support, "threshold support", 0);
+    rv = emu_get_uchar(toks, &support, "threshold support", 0);
     if (rv)
 	return rv;
 
-    rv = get_bitmask(toks, enabled, "threshold enabled", 6, 0);
+    rv = emu_get_bitmask(toks, enabled, "threshold enabled", 6, 0);
     if (rv)
 	return rv;
 
     for (i=5; i>=0; i--) {
-	rv = get_uchar(toks, &thresholds[i], "threshold value", 0);
+	rv = emu_get_uchar(toks, &thresholds[i], "threshold value", 0);
 	if (rv)
 	    return rv;
     }
@@ -511,39 +512,39 @@ sensor_set_event_support(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char assert_enabled[15];
     unsigned char deassert_enabled[15];
 
-    rv = get_uchar(toks, &lun, "LUN", 0);
+    rv = emu_get_uchar(toks, &lun, "LUN", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &num, "sensor num", 0);
+    rv = emu_get_uchar(toks, &num, "sensor num", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &events_enable, "events enable", 0);
+    rv = emu_get_uchar(toks, &events_enable, "events enable", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &scanning, "scanning", 0);
+    rv = emu_get_uchar(toks, &scanning, "scanning", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &support, "event support", 0);
+    rv = emu_get_uchar(toks, &support, "event support", 0);
     if (rv)
 	return rv;
 
-    rv = get_bitmask(toks, assert_support, "assert support", 15, 0);
+    rv = emu_get_bitmask(toks, assert_support, "assert support", 15, 0);
     if (rv)
 	return rv;
 
-    rv = get_bitmask(toks, deassert_support, "deassert support", 15, 0);
+    rv = emu_get_bitmask(toks, deassert_support, "deassert support", 15, 0);
     if (rv)
 	return rv;
 
-    rv = get_bitmask(toks, assert_enabled, "assert enabled", 15, 0);
+    rv = emu_get_bitmask(toks, assert_enabled, "assert enabled", 15, 0);
     if (rv)
 	return rv;
 
-    rv = get_bitmask(toks, deassert_enabled, "deassert enabled", 15, 0);
+    rv = emu_get_bitmask(toks, deassert_enabled, "deassert enabled", 15, 0);
     if (rv)
 	return rv;
 
@@ -574,36 +575,36 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char dyn_sens = 0;
     int           rv;
     
-    rv = get_uchar(toks, &ipmb, "IPMB address", 0);
+    rv = emu_get_uchar(toks, &ipmb, "IPMB address", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &device_id, "Device ID", 0);
+    rv = emu_get_uchar(toks, &device_id, "Device ID", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &has_device_sdrs, "Has Device SDRs", 0);
+    rv = emu_get_uchar(toks, &has_device_sdrs, "Has Device SDRs", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &device_revision, "Device Revision", 0);
+    rv = emu_get_uchar(toks, &device_revision, "Device Revision", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &major_fw_rev, "Major FW Rev", 0);
+    rv = emu_get_uchar(toks, &major_fw_rev, "Major FW Rev", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &minor_fw_rev, "Minor FW Rev", 0);
+    rv = emu_get_uchar(toks, &minor_fw_rev, "Minor FW Rev", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &device_support, "Device Support", 0);
+    rv = emu_get_uchar(toks, &device_support, "Device Support", 0);
     if (rv)
 	return rv;
-    rv = get_uint(toks, &mfg_id_i, "Manufacturer ID");
+    rv = emu_get_uint(toks, &mfg_id_i, "Manufacturer ID");
     if (rv)
 	return rv;
-    rv = get_uint(toks, &product_id_i, "Product ID");
+    rv = emu_get_uint(toks, &product_id_i, "Product ID");
     if (rv)
 	return rv;
 
     /* Don't care on an error */
-    get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1);
+    emu_get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1);
 
     mfg_id[0] = mfg_id_i & 0xff;
     mfg_id[1] = (mfg_id_i >> 8) & 0xff;
@@ -624,7 +625,7 @@ mc_set_guid(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char guid[16];
     int           rv;
 
-    rv = get_bytes(toks, guid, "GUID", 16);
+    rv = emu_get_bytes(toks, guid, "GUID", 16);
     if (rv)
 	return rv;
 
@@ -661,11 +662,11 @@ mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char gen_int;
     int           rv;
 
-    rv = get_uchar(toks, &power, "Power", 0);
+    rv = emu_get_uchar(toks, &power, "Power", 0);
     if (rv)
 	return rv;
 
-    rv = get_uchar(toks, &gen_int, "Gen int", 0);
+    rv = emu_get_uchar(toks, &gen_int, "Gen int", 0);
     if (rv)
 	return rv;
 
@@ -685,16 +686,16 @@ mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
     int           i;
     int           rv;
 
-    rv = get_uchar(toks, &devid, "Device ID", 0);
+    rv = emu_get_uchar(toks, &devid, "Device ID", 0);
     if (rv)
 	return rv;
 
-    rv = get_uint(toks, &length, "FRU physical size");
+    rv = emu_get_uint(toks, &length, "FRU physical size");
     if (rv)
 	return rv;
 
     for (i=0; i<MAX_FRU_SIZE; i++) {
-	rv = get_uchar(toks, &data[i], "data byte", 1);
+	rv = emu_get_uchar(toks, &data[i], "data byte", 1);
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
@@ -718,7 +719,7 @@ mc_dump_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  i;
     int           rv;
 
-    rv = get_uchar(toks, &devid, "Device ID", 0);
+    rv = emu_get_uchar(toks, &devid, "Device ID", 0);
     if (rv)
 	return rv;
 
@@ -745,7 +746,7 @@ mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char ipmb;
     int           rv;
 
-    rv = get_uchar(toks, &ipmb, "IPMB address of BMC", 0);
+    rv = emu_get_uchar(toks, &ipmb, "IPMB address of BMC", 0);
     if (rv)
 	return rv;
     rv = ipmi_emu_set_bmc_mc(emu, ipmb);
@@ -773,13 +774,13 @@ atca_set_site(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char site_type;
     unsigned char site_number;
     
-    rv = get_uchar(toks, &hw_address, "hardware address", 0);
+    rv = emu_get_uchar(toks, &hw_address, "hardware address", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &site_type, "site type", 0);
+    rv = emu_get_uchar(toks, &site_type, "site type", 0);
     if (rv)
 	return rv;
-    rv = get_uchar(toks, &site_number, "site number", 0);
+    rv = emu_get_uchar(toks, &site_number, "site number", 0);
     if (rv)
 	return rv;
 
@@ -795,7 +796,7 @@ mc_set_num_leds(emu_data_t *emu, lmc_data_t *mc, char **toks)
     int           rv;
     unsigned char count;
 
-    rv = get_uchar(toks, &count, "number of LEDs", 0);
+    rv = emu_get_uchar(toks, &count, "number of LEDs", 0);
     if (rv)
 	return rv;
 
@@ -825,7 +826,7 @@ sleep_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
     struct timeval tv;
     int            rv;
 
-    rv = get_uint(toks, &time, "timeout");
+    rv = emu_get_uint(toks, &time, "timeout");
     if (rv)
 	return rv;
 
@@ -898,7 +899,7 @@ ipmi_emu_cmd(emu_data_t *emu, char *cmd_str)
 	if (strcmp(cmd, cmds[i].name) == 0) {
 	    if (cmds[i].flags & MC) {
 		unsigned char ipmb;
-		rv = get_uchar(&toks, &ipmb, "MC address", 0);
+		rv = emu_get_uchar(&toks, &ipmb, "MC address", 0);
 		if (rv)
 		    return rv;
 		rv = ipmi_emu_get_mc_by_addr(emu, ipmb, &mc);

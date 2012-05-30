@@ -14,7 +14,7 @@ noinst_PROGRAMS = ipmi_sim ipmi_checksum
 noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
-	lanserv_oem_force.c lanserv_config.c config.c serial_ipmi.c serv.c
+	lanserv_oem_force.c lanserv_config.c config.c serv.c
 nodist_libIPMIlanserv_la_SOURCES = ../utils/ipmi_auth.c ../utils/md2.c \
 	../utils/md5.c
 libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS)
@@ -25,7 +25,7 @@ ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
 ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la
-ipmilan_LDFLAGS = -rdynamic
+ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
 
 ipmi_sim_SOURCES = ipmi_sim.c emu.c emu_cmd.c
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la

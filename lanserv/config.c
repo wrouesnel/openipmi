@@ -1,5 +1,5 @@
 /*
- * lanserv_config.c
+ * config.c
  *
  * MontaVista IPMI code for reading lanserv configuration files.
  *
@@ -58,11 +58,8 @@
 #include <string.h>
 #include <netdb.h>
 
-#include <OpenIPMI/ipmi_mc.h>
-
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
-#include <OpenIPMI/serv_config.h>
 
 int
 get_bool(char **tokptr, unsigned int *rval, char **err)
@@ -318,91 +315,8 @@ get_user(char **tokptr, bmc_data_t *bmc, char **err)
     return 0;
 }
 
-static int
-get_serial(char **tokptr, lan_data_t *lan, char **errstr)
-{
-    serserv_data_t *info;
-    char *tok, *tok2;
-    int err;
-
-    info = malloc(sizeof(*info) * (lan->conn.num_ser_addrs + 1));
-    if (!info) {
-	*errstr = "Out of memory";
-	return -1;
-    }
-    if (lan->conn.ser_addrs) {
-	memcpy(info, lan->conn.ser_addrs,
-	       sizeof(*info) * lan->conn.num_ser_addrs);
-	free(lan->conn.ser_addrs);
-    }
-    lan->conn.ser_addrs = info;
-    info += lan->conn.num_ser_addrs;
-    lan->conn.num_ser_addrs++;
-    memset(info, 0, sizeof(*info));
-
-    err = get_sock_addr(tokptr, &info->addr.addr, &info->addr.addr_len,
-			NULL, errstr);
-    if (err)
-	return err;
-
-    tok = strtok_r(NULL, " \t\n", tokptr);
-    while (tok) {
-	if (strcmp(tok, "connect") == 0) {
-	    info->do_connect = 1;
-	    continue;
-	}
-
-	tok2 = strtok_r(NULL, " \t\n", tokptr);
-	if (strcmp(tok, "codec") == 0) {
-	    info->codec = ser_lookup_codec(tok2);
-	    if (!info->codec) {
-		*errstr = "Invalid codec";
-		return -1;
-	    }
-	} else if (strcmp(tok, "oem") == 0) {
-	    info->oem = ser_lookup_oem(tok2);
-	    if (!info->oem) {
-		*errstr = "Invalid oem setting";
-		return -1;
-	    }
-	} else if (strcmp(tok, "attn") == 0) {
-	    unsigned int pos = 0;
-	    char *tokptr2 = NULL, *endp;
-
-	    info->do_attn = 1;
-	    tok2 = strtok_r(tok2, ",", &tokptr2);
-	    while (tok2) {
-		if (pos >= sizeof(info->attn_chars)) {
-		    *errstr = "Too many attn characters";
-		    return -1;
-		}
-		info->attn_chars[pos] = strtoul(tok2, &endp, 0);
-		if (*endp != '\0') {
-		    *errstr = "Invalid attn value";
-		    return -1;
-		}
-		pos++;
-		tok2 = strtok_r(NULL, ",", &tokptr2);
-	    }
-	    info->attn_chars_len = pos;
-	} else if (strcmp(tok, "ipmb") == 0) {
-	    char *endp;
-	    info->my_ipmb = strtoul(tok2, &endp, 0);
-	    if (*endp != '\0') {
-		*errstr = "Invalid IPMB address";
-		return -1;
-	    }
-	} else {
-	    *errstr = "Invalid setting, not connect, codec, oem, attn, or ipmb";
-	    return -1;
-	}
-    }
-
-    return 0;
-}
-
 int
-read_config(lan_data_t *lan,
+read_config(bmc_data_t *bmc,
 	    char       *config_file)
 {
     FILE         *f = fopen(config_file, "r");
@@ -420,25 +334,6 @@ read_config(lan_data_t *lan,
 	return -1;
     }
 
-    lan->conn.bmcinfo->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
-    /* Assume this for now, override with config */
-    lan->conn.bmcinfo->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
-    lan->conn.bmcinfo->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    lan->conn.bmcinfo->sys_channel.active_sessions = 0;
-    lan->conn.bmcinfo->channels[0xf] = &lan->conn.bmcinfo->sys_channel;
-
-    lan->conn.bmcinfo->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
-    lan->conn.bmcinfo->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
-    lan->conn.bmcinfo->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    lan->conn.bmcinfo->ipmb_channel.active_sessions = 0;
-    lan->conn.bmcinfo->channels[0] = &lan->conn.bmcinfo->ipmb_channel;
-
-    lan->num_lan_addrs = 0;
-    lan->lan_addrs = NULL;
-
-    lan->conn.num_ser_addrs = 0;
-    lan->conn.ser_addrs = NULL;
-
     line = 0;
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	line++;
@@ -451,12 +346,13 @@ read_config(lan_data_t *lan,
 
 	if (strcmp(tok, "startlan") == 0) {
 	    err = get_uint(&tokptr, &val, &errstr);
-	    if (!err)
-		err = lanserv_read_config(lan, f, &line, val);
+	    if (!err) {
+		err = lanserv_read_config(bmc, f, &line, val);
+	    }
 	} else if (strcmp(tok, "user") == 0) {
-	    err = get_user(&tokptr, lan->conn.bmcinfo, &errstr);
+	    err = get_user(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
-	    err = get_serial(&tokptr, lan, &errstr);
+	  //err = get_serial(&tokptr, lan, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

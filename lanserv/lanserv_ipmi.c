@@ -124,23 +124,6 @@ is_authval_null(uint8_t *val)
     return 1;
 }
 
-static void
-cleanup_ascii_16(uint8_t *c)
-{
-    int i;
-
-    i = 0;
-    while ((i < 16) && (*c != 0)) {
-	c++;
-	i++;
-    }
-    while (i < 16) {
-	*c = 0;
-	c++;
-	i++;
-    }
-}
-
 static user_t *
 find_user(lan_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
 {
@@ -148,12 +131,12 @@ find_user(lan_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
     user_t *rv = NULL;
 
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->conn.bmcinfo->users[i].valid
-	    && (memcmp(user, lan->conn.bmcinfo->users[i].username, 16) == 0))
+	if (lan->bmcinfo->users[i].valid
+	    && (memcmp(user, lan->bmcinfo->users[i].username, 16) == 0))
 	{
 	    if (name_only_lookup ||
-		(lan->conn.bmcinfo->users[i].privilege == priv)) {
-		rv = &(lan->conn.bmcinfo->users[i]);
+		(lan->bmcinfo->users[i].privilege == priv)) {
+		rv = &(lan->bmcinfo->users[i]);
 		break;
 	    }
 	}
@@ -463,11 +446,6 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 	session->sid = 0;
     }
 
-    if (lan->channel.oem.oem_handle_rsp &&
-	lan->channel.oem.oem_handle_rsp(&lan->channel, msg, rsp))
-	/* OEM code handled the response. */
-	return;
-
     if (!session)
 	return;
 
@@ -596,8 +574,8 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
     chan = msg->data[0] & 0xf;
     priv = msg->data[1] & 0xf;
     if (chan == 0xe)
-	chan = lan->channel_num;
-    if (chan != lan->channel_num) {
+	chan = lan->channel.channel_num;
+    if (chan != lan->channel.channel_num) {
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
     } else if (priv > lan->channel.privilege_limit) {
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
@@ -613,8 +591,8 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 			   user-level authenitcation is on,
 			   non-null user names disabled,
 			   no anonymous support. */
-	if (lan->conn.bmcinfo->users[1].valid) {
-	    if (is_authval_null(lan->conn.bmcinfo->users[1].pw))
+	if (lan->bmcinfo->users[1].valid) {
+	    if (is_authval_null(lan->bmcinfo->users[1].pw))
 		data[3] |= 0x01; /* Anonymous login. */
 	    else
 		data[3] |= 0x02; /* Null user supported. */
@@ -797,7 +775,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     }
 
     auth = msg->data[0] & 0xf;
-    user = &(lan->conn.bmcinfo->users[user_idx]);
+    user = &(lan->bmcinfo->users[user_idx]);
     if (! (user->valid)) {
 	lan->channel.log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
@@ -847,7 +825,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     ipmi_set_uint32(tsid, msg->sid);
     ipmi_set_uint32(tseq, msg->seq);
     rv = auth_check(&dummy_session, tsid, tseq, msg->data-6, msg->len+7,
-		    msg->authcode);
+		    msg->rmcp.authcode);
     if (rv) {
 	lan->channel.log(AUTH_FAILED, msg,
 		 "Activate session failed: Message auth failed");
@@ -1155,7 +1133,7 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 	data[1] = nses->handle;
 	data[4] = nses->userid;
 	data[5] = nses->priv;
-	data[6] = MAIN_CHANNEL | (session->rmcpplus << 4);
+	data[6] = lan->channel.channel_num | (session->rmcpplus << 4);
 	return_rsp_data(lan, msg, session, data, 7);
     } else {
 	data[1] = 0;
@@ -1168,53 +1146,37 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void
-handle_get_authcode(lan_data_t *lan, session_t *session, msg_t *msg)
+set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
+		   unsigned int *rdata_len)
 {
-    lan->channel.log(INVALID_MSG, msg,
-	     "Get authcode failure: invalid command");
-    /* This is optional, and we don't do it yet. */
-    return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
-}
-
-static void
-handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t upd1, upd2;
-    int     write_nonv = 0;
-    uint8_t newv;
-
-    if (msg->len < 3) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Set channel access failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
+    uint8_t    upd1, upd2;
+    int        write_nonv = 0;
+    uint8_t    newv;
+    lan_data_t *lan = chan->chan_info;
 
     upd1 = (msg->data[1] >> 6) & 0x3;
     if ((upd1 == 1) || (upd1 == 2)) {
 	newv = (msg->data[1] >> 4) & 1;
 	if (newv) {
 	    /* Don't support per-msg authentication */
-	    return_err(lan, msg, session, 0x83);
+	    rdata[0] = 0x83;
+	    *rdata_len = 0;
 	    return;
 	}
 	    
 	newv = (msg->data[1] >> 3) & 1;
 	if (newv) {
 	    /* Don't support unauthenticated user-level access */
-	    return_err(lan, msg, session, 0x83);
+	    rdata[0] = 0x83;
+	    *rdata_len = 0;
 	    return;
 	}
 	    
 	newv = (msg->data[1] >> 0) & 7;
 	if (newv != 0x2) {
 	    /* Only support "always available" channel */
-	    return_err(lan, msg, session, 0x83);
+	    rdata[0] = 0x83;
+	    *rdata_len = 0;
 	    return;
 	}
 
@@ -1227,7 +1189,8 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 	    write_nonv = 1;
 	}
     } else if (upd1 != 0) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 0;
 	return;
     }
 
@@ -1235,7 +1198,8 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
     if ((upd2 == 1) || (upd2 == 2)) {
 	newv = (msg->data[2] >> 0) & 0xf;
 	if ((newv == 0) || (newv > 4)) {
-	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 0;
 	    return;
 	}
 
@@ -1247,313 +1211,25 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 	    lan->channel.privilege_limit = newv;
 	}
     } else if (upd2 != 0) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 0;
 	return;
     }
 
     if (write_nonv)
-	lan->write_config(lan);
+	lan->bmcinfo->write_config(lan->bmcinfo);
 
-    return_err(lan, msg, session, 0);
+    rdata[0] = 0;
+    *rdata_len = 0;
 }
 
 static void
-handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t   data[3];
-    uint8_t   upd;
-
-    if (msg->len < 2) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Get channel access failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    upd = (msg->data[1] >> 6) & 0x3;
-
-    if (upd == 2) {
-	data[1] = ((lan->channel.PEF_alerting << 5)
-		   | 0x2);
-	data[2] = lan->channel.privilege_limit;
-    } else if (upd == 1) {
-	data[1] = ((lan->channel.PEF_alerting_nonv
-		    << 5) | 0x2);
-	data[2] = lan->channel.privilege_limit_nonv;
-    } else {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-    data[0] = 0;
-
-    return_rsp_data(lan, msg, session, data, 3);
-}
-
-static void
-handle_get_channel_info(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t data[10];
-    uint8_t chan;
-
-    if (msg->len < 1) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Get channel info failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    chan = msg->data[0] & 0xf;
-
-    if (chan == 0xe)
-	chan = MAIN_CHANNEL;
-    if (chan == MAIN_CHANNEL) {
-	data[0] = 0;
-	data[1] = chan;
-	data[2] = 4; /* 802.3 LAN */
-	data[3] = 1; /* IPMB, for some reason. */
-	data[4] = (2 << 6) | lan->channel.active_sessions;
-	data[5] = 0xf2; /* IPMI IANA */
-	data[6] = 0x1b;
-	data[7] = 0x00;
-	data[8] = 0x00;
-	data[9] = 0x00;
-	return_rsp_data(lan, msg, session, data, 10);
-    } else {
-	/* Send it on. */
-	handle_smi_msg(lan, session, msg);
-    }
-}
-
-static void
-handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t user;
-    uint8_t priv;
-    uint8_t newv;
-    int     changed = 0;
-
-    if (msg->len < 3) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Set user access failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    user = msg->data[1] & 0x3f;
-    if (user == 0) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    priv = msg->data[2] & 0xf;
-    /* Allow privilege level F as the "no access" privilege */
-    if (((priv == 0) || (priv > 4)) && (priv != 0xf)) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    if (msg->data[0] & 0x80) {
-	newv = (msg->data[0] >> 4) & 1;
-	if (newv != lan->conn.bmcinfo->users[user].valid) {
-	    lan->conn.bmcinfo->users[user].valid = newv;
-	    changed = 1;
-	}
-	newv = (msg->data[0] >> 5) & 1;
-	if (newv != lan->conn.bmcinfo->users[user].link_auth) {
-	    lan->conn.bmcinfo->users[user].link_auth = newv;
-	    changed = 1;
-	}
-	newv = (msg->data[0] >> 6) & 1;
-	if (newv != lan->conn.bmcinfo->users[user].cb_only) {
-	    lan->conn.bmcinfo->users[user].cb_only = newv;
-	    changed = 1;
-	}
-    }
-
-    if (priv != lan->conn.bmcinfo->users[user].privilege) {
-	lan->conn.bmcinfo->users[user].privilege = priv;
-	changed = 1;
-    }
-
-    if (msg->len >= 4) {
-	/* Got the session limit byte. */
-	newv = msg->data[3] & 0xf;
-	if (newv != lan->conn.bmcinfo->users[user].max_sessions) {
-	    lan->conn.bmcinfo->users[user].max_sessions = newv;
-	    changed = 1;
-	}
-    }
-
-    if (changed)
-	lan->write_config(lan);
-
-    return_err(lan, msg, session, 0);
-}
-
-static void
-handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t data[5];
-    int     i;
-    uint8_t user;
-
-    if (msg->len < 2) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Get user access failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    user = msg->data[1] & 0x3f;
-    if (user == 0) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    data[0] = 0;
-    data[1] = MAX_USERS;
-
-    /* Number of enabled users. */
-    data[2] = 0;
-    for (i=1; i<=MAX_USERS; i++) {
-	if (lan->conn.bmcinfo->users[i].valid)
-	    data[2]++;
-    }
-
-    /* Only fixed user name is user 1. */
-    data[3] = lan->conn.bmcinfo->users[1].valid;
-
-    data[4] = ((lan->conn.bmcinfo->users[user].valid << 4)
-	       | (lan->conn.bmcinfo->users[user].link_auth << 5)
-	       | (lan->conn.bmcinfo->users[user].cb_only << 6)
-	       | lan->conn.bmcinfo->users[user].privilege);
-
-    return_rsp_data(lan, msg, session, data, 5);
-}
-
-static void
-handle_set_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t user;
-
-    if (msg->len < 17) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Set user name failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    user = msg->data[0] & 0x3f;
-    if (user <= 1) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    memcpy(lan->conn.bmcinfo->users[user].username, msg->data+1, 16);
-    cleanup_ascii_16(lan->conn.bmcinfo->users[user].username);
-
-    return_err(lan, msg, session, 0);
-}
-
-static void
-handle_get_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t user;
-    uint8_t data[17];
-
-    if (msg->len < 1) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Get user name failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    user = msg->data[0] & 0x3f;
-    if (user <= 1) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    data[0] = 0;
-    memcpy(data+1, lan->conn.bmcinfo->users[user].username, 16);
-
-    return_rsp_data(lan, msg, session, data, 17);
-}
-
-static void
-handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
-{
-    uint8_t user;
-    uint8_t op;
-
-    if (msg->len < 2) {
-	lan->channel.log(INVALID_MSG, msg,
-		 "Set user password failure: message too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    user = msg->data[0] & 0x3f;
-    if (user == 0) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
-
-    op = msg->data[1] & 0x3;
-    if (op == 0) {
-	lan->conn.bmcinfo->users[user].valid = 0;
-    } else if (op == 1) {
-	lan->conn.bmcinfo->users[user].valid = 1;
-    } else {
-	if (msg->len < 18) {
-	    lan->channel.log(INVALID_MSG, msg,
-		     "Set user password failure: message too short");
-	    return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	    return;
-	}
-	if (op == 2) {
-	    memcpy(lan->conn.bmcinfo->users[user].pw, msg->data+2, 16);
-	} else {
-	    /* Nothing to do for test password, we accept anything. */
-	}
-    }
-
-    return_err(lan, msg, session, 0);
-}
-
-static void
-handle_ipmi_set_lan_config_parms(lan_data_t *lan,
-				 session_t  *session,
-				 msg_t      *msg)
+set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
+		     unsigned int *rdata_len)
 {
     unsigned char err = 0;
     int           idx;
-
-    if (msg->len < 3) {
-	lan->channel.log(INVALID_MSG, msg, "Set lan config parm too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
+    lan_data_t    *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1785,55 +1461,19 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 	err = 0x80; /* Parm not supported */
     }
 
-    return_err(lan, msg, session, err);
+    rdata[0] = err;
+    *rdata_len = 1;
 }
 
 static void
-return_lan_config_data(lan_data_t *lan, unsigned int rev, int rev_only,
-		       msg_t *msg, session_t *session,
-		       unsigned char *data, unsigned int data_len)
-{
-    rsp_msg_t rsp;
-    unsigned char d[36];
-    unsigned int  d_len;
-
-    d[0] = 0;
-    d[1] = rev;
-    if (rev_only) {
-	d_len = 2;
-    } else {
-	memcpy(d+2, data, data_len);
-	d_len = data_len + 2;
-    }
-	
-    rsp.netfn = IPMI_TRANSPORT_NETFN | 1;
-    rsp.cmd = IPMI_GET_LAN_CONFIG_PARMS_CMD;
-    rsp.data = d;
-    rsp.data_len = d_len;
-    return_rsp(lan, msg, session, &rsp);
-}
-
-
-static void
-handle_ipmi_get_lan_config_parms(lan_data_t *lan,
-				 session_t  *session,
-				 msg_t      *msg)
+get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
+		     unsigned int *rdata_len)
 {
     int           idx;
     unsigned char databyte = 0;
     unsigned char *data = NULL;
     unsigned int  length = 0;
-
-    if (msg->len < 4) {
-	lan->channel.log(INVALID_MSG, msg, "Get lan config parm too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
-	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
-	return;
-    }
+    lan_data_t    *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1924,7 +1564,8 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
     case 18:
 	idx = msg->data[2] & 0xf;
 	if (idx > lan->lanparm.num_destinations) {
-	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
 	    return;
 	} else {
 	    data = lan->lanparm.dest[idx].type;
@@ -1935,7 +1576,8 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
     case 19:
 	idx = msg->data[2] & 0xf;
 	if (idx > lan->lanparm.num_destinations) {
-	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
 	    return;
 	} else {
 	    data = lan->lanparm.dest[idx].addr;
@@ -1969,7 +1611,8 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
     case 25:
 	idx = msg->data[2] & 0xf;
 	if (idx > lan->lanparm.num_destinations) {
-	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
 	    return;
 	} else {
 	    data = lan->lanparm.dest[idx].vlan;
@@ -1978,355 +1621,23 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 	break;
 
     default:
-	return_err(lan, msg, session, 0x80); /* Parm not supported */
+	rdata[0] = 0x80; /* Parm not supported */
+	*rdata_len = 0;
 	return;
     }
+
+    rdata[0] = 0;
+    rdata[1] = 0x11;
+    *rdata_len = 2;
+    if (msg->data[0] & 0x80)
+	return;
 
     if (data) {
-	return_lan_config_data(lan, 0x11, msg->data[0] & 0x80,
-			       msg, session, data, length);
+	memcpy(rdata + 2, data, length);
+	*rdata_len += length;
     } else {
-	return_lan_config_data(lan, 0x11, msg->data[0] & 0x80,
-			       msg, session, &databyte, 1);
-    }
-}
-
-static void
-handle_ipmi_get_pef_capabilities(lan_data_t *lan,
-				 session_t  *session,
-				 msg_t      *msg)
-{
-    unsigned char data[4];
-
-    data[0] = 0;
-    data[1] = 0x51; /* version */
-    data[2] = 0x3f; /* support everything but OEM */
-    data[3] = MAX_EVENT_FILTERS;
-
-    return return_rsp_data(lan, msg, session, data, 4);
-}
-
-static void
-handle_ipmi_set_pef_config_parms(lan_data_t *lan,
-				 session_t  *session,
-				 msg_t      *msg)
-{
-    unsigned char err = 0;
-    int           set, block;
-
-    if (msg->len < 2) {
-	lan->channel.log(INVALID_MSG, msg, "Set pef config parm too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    switch (msg->data[0] & 0x7f)
-    {
-    case 0:
-	switch (msg->data[1] & 0x3)
-	{
-	case 0:
-	    if (lan->pef.set_in_progress) {
-		/* rollback */
-		memcpy(&lan->pef, &lan->pef_rollback,
-		       sizeof(lan->pef));
-	    }
-	    /* No affect otherwise */
-	    break;
-
-	case 1:
-	    if (lan->pef.set_in_progress)
-		err = 0x81; /* Another user is writing. */
-	    else {
-		/* Save rollback data */
-		memcpy(&lan->pef_rollback, &lan->pef,
-		       sizeof(lan->pef));
-		lan->pef.set_in_progress = 1;
-	    }
-	    break;
-
-	case 2:
-	    if (lan->pef.commit)
-		lan->pef.commit(lan);
-	    memset(&lan->pef.changed, 0, sizeof(lan->pef.changed));
-	    lan->pef.set_in_progress = 0;
-	    break;
-
-	case 3:
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	}
-	break;
-
-    case 5:
-    case 8:
-    case 11:
-	err = 0x82; /* Read-only data */
-	break;
-
-    case 1:
-	lan->pef.pef_control = msg->data[1];
-	lan->pef.changed.pef_control = 1;
-	break;
-
-    case 2:
-	lan->pef.pef_action_global_control = msg->data[1];
-	lan->pef.changed.pef_action_global_control = 1;
-	break;
-
-    case 3:
-	lan->pef.pef_startup_delay = msg->data[1];
-	lan->pef.changed.pef_startup_delay = 1;
-	break;
-
-    case 4:
-	lan->pef.pef_alert_startup_delay = msg->data[1];
-	lan->pef.changed.pef_alert_startup_delay = 1;
-	break;
-
-    case 6:
-	set = msg->data[1] & 0x7f;
-	if (msg->len < 22)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= lan->pef.num_event_filters))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    set = msg->data[1] & 0x7f;
-	    memcpy(lan->pef.event_filter_table[set], msg->data+1, 21);
-	    lan->pef.changed.event_filter_table[set] = 1;
-	}
-	break;
-
-    case 7:
-	set = msg->data[1] & 0x7f;
-	if (msg->len < 3)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= lan->pef.num_event_filters))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    set = msg->data[1] & 0x7f;
-	    memcpy(lan->pef.event_filter_data1[set], msg->data+1, 2);
-	    lan->pef.changed.event_filter_data1[set] = 1;
-	}
-	break;
-
-    case 9:
-	set = msg->data[1] & 0x7f;
-	if (msg->len < 5)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= lan->pef.num_alert_policies))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    set = msg->data[1] & 0x7f;
-	    memcpy(lan->pef.alert_policy_table[set], msg->data+1, 4);
-	    lan->pef.changed.alert_policy_table[set] = 1;
-	}
-	break;
-
-    case 10:
-	if (msg->len < 18)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else {
-	    memcpy(lan->pef.system_guid, msg->data+1, 17);
-	    lan->pef.changed.system_guid = 1;
-	}
-	break;
-
-    case 12:
-	set = msg->data[1] & 0x7f;
-	if (msg->len < 4)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= lan->pef.num_alert_strings)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    set = msg->data[1] & 0x7f;
-	    memcpy(lan->pef.alert_string_keys[set], msg->data+1, 3);
-	    lan->pef.changed.alert_string_keys[set] = 1;
-	}
-	break;
-
-    case 13:
-	set = msg->data[1] & 0x7f;
-	if (msg->len < 4)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= lan->pef.num_alert_strings)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else if (msg->data[2] == 0)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    int dlen = msg->len - 3;
-	    set = msg->data[1] & 0x7f;
-	    block = msg->data[2] - 1;
-	    if (((block*16) + dlen) > MAX_ALERT_STRING_LEN) {
-		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
-		break;
-	    }
-	    memcpy(lan->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
-	    lan->pef.changed.alert_strings[set] = 1;
-	}
-	break;
-
-    default:
-	err = 0x80; /* Parm not supported */
-    }
-
-    return_err(lan, msg, session, err);
-}
-
-static void
-return_pef_config_data(lan_data_t *lan, unsigned int rev, int rev_only,
-		       msg_t *msg, session_t *session,
-		       unsigned char *data, unsigned int data_len)
-{
-    rsp_msg_t rsp;
-    unsigned char d[36];
-    unsigned int  d_len;
-
-    d[0] = 0;
-    d[1] = rev;
-    if (rev_only) {
-	d_len = 2;
-    } else {
-	memcpy(d+2, data, data_len);
-	d_len = data_len + 2;
-    }
-	
-    rsp.netfn = IPMI_SENSOR_EVENT_NETFN | 1;
-    rsp.cmd = IPMI_GET_PEF_CONFIG_PARMS_CMD;
-    rsp.data = d;
-    rsp.data_len = d_len;
-    return_rsp(lan, msg, session, &rsp);
-}
-
-
-static void
-handle_ipmi_get_pef_config_parms(lan_data_t *lan,
-				 session_t  *session,
-				 msg_t      *msg)
-{
-    int           set, block;
-    unsigned char databyte = 0;
-    unsigned char *data = NULL;
-    unsigned int  length = 0;
-    unsigned char err = 0;
-    unsigned char tmpdata[18];
-
-    if (msg->len < 3) {
-	lan->channel.log(INVALID_MSG, msg, "Get pef config parm too short");
-	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	return;
-    }
-
-    switch (msg->data[0] & 0x7f)
-    {
-    case 0:
-	databyte = lan->pef.set_in_progress;
-	break;
-
-    case 5:
-	databyte = lan->pef.num_event_filters - 1;
-	break;
-
-    case 8:
-	databyte = lan->pef.num_alert_policies - 1;
-	break;
-
-    case 11:
-	databyte = lan->pef.num_alert_strings - 1;
-	break;
-
-    case 1:
-	databyte = lan->pef.pef_control;
-	break;
-
-    case 2:
-	databyte = lan->pef.pef_action_global_control;
-	break;
-
-    case 3:
-	databyte = lan->pef.pef_startup_delay;
-	break;
-
-    case 4:
-	databyte = lan->pef.pef_alert_startup_delay;
-	break;
-
-    case 6:
-	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= lan->pef.num_event_filters))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    data = lan->pef.event_filter_table[set];
-	    length = 21;
-	}
-	break;
-
-    case 7:
-	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= lan->pef.num_event_filters))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    data = lan->pef.event_filter_data1[set];
-	    length = 2;
-	}
-	break;
-
-    case 9:
-	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= lan->pef.num_alert_policies))
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    data = lan->pef.alert_policy_table[set];
-	    length = 4;
-	}
-	break;
-
-    case 10:
-	data = lan->pef.system_guid;
-	length = 17;
-	break;
-
-    case 12:
-	set = msg->data[1] & 0x7f;
-	if (set >= lan->pef.num_alert_strings)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    data = lan->pef.alert_string_keys[set];
-	    length = 3;
-	}
-	break;
-
-    case 13:
-	set = msg->data[1] & 0x7f;
-	if (set >= lan->pef.num_alert_strings)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else if (msg->data[2] == 0)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    block = msg->data[2] - 1;
-	    if ((block*16) > MAX_ALERT_STRING_LEN) {
-		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
-		break;
-	    }
-	    tmpdata[0] = set;
-	    tmpdata[1] = block + 1;
-	    memcpy(tmpdata+2, lan->pef.alert_strings[set]+(block*16), 16);
-	    data = tmpdata;
-	    length = 18;
-	}
-	break;
-
-    default:
-	err = 0x80; /* Parm not supported */
-    }
-
-    if (err) {
-	return_err(lan, msg, session, err);
-    } else if (data) {
-	return_pef_config_data(lan, 0x11, msg->data[0] & 0x80,
-			       msg, session, data, length);
-    } else {
-	return_pef_config_data(lan, 0x11, msg->data[0] & 0x80,
-			       msg, session, &databyte, 1);
+	rdata[2] = databyte;
+	*rdata_len = 3;
     }
 }
 
@@ -2415,78 +1726,6 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
 
 	case IPMI_GET_SESSION_INFO_CMD:
 	    handle_get_session_info(lan, session, msg);
-	    break;
-
-	case IPMI_GET_AUTHCODE_CMD:
-	    handle_get_authcode(lan, session, msg);
-	    break;
-
-	case IPMI_SET_CHANNEL_ACCESS_CMD:
-	    handle_set_channel_access(lan, session, msg);
-	    break;
-
-	case IPMI_GET_CHANNEL_ACCESS_CMD:
-	    handle_get_channel_access(lan, session, msg);
-	    break;
-
-	case IPMI_GET_CHANNEL_INFO_CMD:
-	    handle_get_channel_info(lan, session, msg);
-	    break;
-
-	case IPMI_SET_USER_ACCESS_CMD:
-	    handle_set_user_access(lan, session, msg);
-	    break;
-
-	case IPMI_GET_USER_ACCESS_CMD:
-	    handle_get_user_access(lan, session, msg);
-	    break;
-
-	case IPMI_SET_USER_NAME_CMD:
-	    handle_set_user_name(lan, session, msg);
-	    break;
-
-	case IPMI_GET_USER_NAME_CMD:
-	    handle_get_user_name(lan, session, msg);
-	    break;
-
-	case IPMI_SET_USER_PASSWORD_CMD:
-	    handle_set_user_password(lan, session, msg);
-	    break;
-
-	default:
-	    handle_smi_msg(lan, session, msg);
-	}
-    } else if (msg->netfn == IPMI_TRANSPORT_NETFN) {
-	switch (msg->cmd)
-	{
-	case IPMI_SET_LAN_CONFIG_PARMS_CMD:
-	    handle_ipmi_set_lan_config_parms(lan, session, msg);
-	    break;
-
-	case IPMI_GET_LAN_CONFIG_PARMS_CMD:
-	    handle_ipmi_get_lan_config_parms(lan, session, msg);
-	    break;
-
-	default:
-	    lan->channel.log(INVALID_MSG, msg,
-		     "Normal session message failure: Invalid cmd: 0x%x",
-		     msg->cmd);
-	    return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
-	    break;
-	}
-    } else if (msg->netfn == IPMI_SENSOR_EVENT_NETFN) {
-	switch (msg->cmd)
-	{
-	case IPMI_GET_PEF_CAPABILITIES_CMD:
-	    handle_ipmi_get_pef_capabilities(lan, session, msg);
-	    break;
-
-	case IPMI_SET_PEF_CONFIG_PARMS_CMD:
-	    handle_ipmi_set_pef_config_parms(lan, session, msg);
-	    break;
-
-	case IPMI_GET_PEF_CONFIG_PARMS_CMD:
-	    handle_ipmi_get_pef_config_parms(lan, session, msg);
 	    break;
 
 	default:
@@ -2588,7 +1827,7 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
     idata[56] = a->role;
     idata[57] = a->username_len;
     memcpy(idata+58, a->username, idata[57]);
-    user = &(lan->conn.bmcinfo->users[session->userid]);
+    user = &(lan->bmcinfo->users[session->userid]);
 
     HMAC(a->akey, user->pw, a->akey_len,
 	 idata, 58+idata[57], data + *data_len, &ilen);
@@ -2623,7 +1862,7 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
     unsigned char       idata[38];
     unsigned int        ilen;
     unsigned char       integ[20];
-    user_t              *user = &(lan->conn.bmcinfo->users[session->userid]);
+    user_t              *user = &(lan->bmcinfo->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
     if (((*data_len) - a->akey_len) < 8)
@@ -2697,7 +1936,7 @@ hmac_sha1_init(lan_data_t *lan, session_t *session)
 static int
 hmac_md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t *user = &(lan->conn.bmcinfo->users[session->userid]);
+    user_t *user = &(lan->bmcinfo->users[session->userid]);
     session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
     session->auth_data.ikey_len = 16;
@@ -2760,7 +1999,7 @@ auth_free(void *info, void *data)
 static int
 md5_init(lan_data_t *lan, session_t *session)
 {
-    user_t          *user = &(lan->conn.bmcinfo->users[session->userid]);
+    user_t          *user = &(lan->bmcinfo->users[session->userid]);
     int             rv;
     ipmi_authdata_t idata;
 
@@ -3397,7 +2636,7 @@ payload_handler_cb payload_handlers[64] =
 int
 decrypt_message(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    if (!msg->encrypted) {
+    if (!msg->rmcpp.encrypted) {
 	if (session->conf != 0) {
 	    lan->channel.log(INVALID_MSG, msg,
 		     "Message failure:"
@@ -3413,7 +2652,7 @@ decrypt_message(lan_data_t *lan, session_t *session, msg_t *msg)
 int
 check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    if (!msg->authenticated) {
+    if (!msg->rmcpp.authenticated) {
 	if (session->integ != 0) {
 	    lan->channel.log(INVALID_MSG, msg,
 		     "Message failure:"
@@ -3446,19 +2685,19 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 		 "LAN msg failure: message too short");
 	return;
     }
-    msg->payload = msg->data[0] & 0x3f;
-    msg->encrypted = (msg->data[0] >> 7) & 1;
-    msg->authenticated = (msg->data[0] >> 6) & 1;
+    msg->rmcpp.payload = msg->data[0] & 0x3f;
+    msg->rmcpp.encrypted = (msg->data[0] >> 7) & 1;
+    msg->rmcpp.authenticated = (msg->data[0] >> 6) & 1;
     msg->data++;
-    if (msg->payload == 2) {
+    if (msg->rmcpp.payload == 2) {
 	if (msg->len < 17) {
 	    lan->channel.log(LAN_ERR, msg,
 		     "LAN msg failure: message too short");
 	    return;
 	}
-	memcpy(msg->iana, msg->data + 1, 3);
+	memcpy(msg->rmcpp.iana, msg->data + 1, 3);
 	msg->data += 4;
-	msg->payload_id = ipmi_get_uint16(msg->data);
+	msg->rmcpp.payload_id = ipmi_get_uint16(msg->data);
 	msg->data += 2;
     }
     msg->sid = ipmi_get_uint32(msg->data);
@@ -3475,12 +2714,12 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 		   bytes, but reject if not enough. */
     }
 
-    msg->authdata_len = msg->len - len;
-    msg->authdata = msg->data + len;
+    msg->rmcpp.authdata_len = msg->len - len;
+    msg->rmcpp.authdata = msg->data + len;
     msg->len = len;
 
     if (msg->sid == 0) {
-	if (msg->authenticated || msg->encrypted) {
+	if (msg->rmcpp.authenticated || msg->rmcpp.encrypted) {
 	    lan->channel.log(LAN_ERR, msg,
 		     "LAN msg failure:"
 		     " Got encrypted or authenticated SID 0 msg");
@@ -3504,8 +2743,8 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	    return;
 	}
 
-	imsg.encrypted = msg->encrypted;
-	imsg.authenticated = msg->authenticated;
+	imsg.rmcpp.encrypted = msg->rmcpp.encrypted;
+	imsg.rmcpp.authenticated = msg->rmcpp.authenticated;
 
 	rv = check_message_integrity(lan, session, &imsg);
 	if (rv) {
@@ -3526,7 +2765,7 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	/* Check that the session sequence number is valid.  We make
 	   sure it is within 8 of the last highest received sequence
 	   number, per the spec. */
-	if (msg->authenticated)
+	if (msg->rmcpp.authenticated)
 	    seq = &session->recv_seq;
 	else
 	    seq = &session->unauth_recv_seq;
@@ -3543,8 +2782,8 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	    *seq = msg->seq;
     }
 
-    if (payload_handlers[msg->payload])
-	payload_handlers[msg->payload](lan, msg);
+    if (payload_handlers[msg->rmcpp.payload])
+	payload_handlers[msg->rmcpp.payload](lan, msg);
 }
 
 void
@@ -3571,12 +2810,12 @@ ipmi_handle_rmcp_msg(lan_data_t *lan, msg_t *msg)
 	    return;
 	}
 
-	memcpy(msg->authcode_data, msg->data + 8, 16);
-	msg->authcode = msg->authcode_data;
+	memcpy(msg->rmcp.authcode_data, msg->data + 8, 16);
+	msg->rmcp.authcode = msg->rmcp.authcode_data;
 	msg->data += 24;
 	msg->len -= 24;
     } else {
-	msg->authcode = NULL;
+	msg->rmcp.authcode = NULL;
 	msg->data += 8;
 	msg->len -= 8;
     }
@@ -3612,7 +2851,7 @@ ipmi_handle_rmcp_msg(lan_data_t *lan, msg_t *msg)
 	}
 
 	rv = auth_check(session, tsid, tseq, msg->data, msg->len,
-			msg->authcode);
+			msg->rmcp.authcode);
 	if (rv) {
 	    lan->channel.log(AUTH_FAILED, msg,
 		     "Normal session message failure: auth failure");
@@ -3665,7 +2904,7 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     msg.authtype = data[4];
     msg.data = data+5;
     msg.len = len - 5;
-    msg.channel = lan->channel_num;
+    msg.channel = lan->channel.channel_num;
 
     if (msg.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	ipmi_handle_rmcpp_msg(lan, &msg);
@@ -3679,11 +2918,12 @@ void
 ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
 {
     int i;
-    msg_t msg; /* A fake message to hold the address. */
 
     for (i=1; i<=MAX_SESSIONS; i++) {
 	if (lan->sessions[i].active) {
 	    if (lan->sessions[i].time_left <= time_since_last) {
+		msg_t msg; /* A fake message to hold the address. */
+
 		msg.src_addr = lan->sessions[i].src_addr;
 		msg.src_len = lan->sessions[i].src_len;
 		lan->channel.log(SESSION_CLOSED, &msg,
@@ -3702,10 +2942,6 @@ ipmi_lan_init(lan_data_t *lan)
     int     i;
     uint8_t challenge_data[16];
 
-    for (i=0; i<=MAX_USERS; i++) {
-	lan->conn.bmcinfo->users[i].idx = i;
-    }
-
     for (i=0; i<=MAX_SESSIONS; i++) {
 	lan->sessions[i].handle = i;
     }
@@ -3721,24 +2957,13 @@ ipmi_lan_init(lan_data_t *lan)
     for (i=0; i<17; i++)
 	lan->lanparm.cipher_suite_entry[i] = i;
 
-    lan->pef.num_event_filters = MAX_EVENT_FILTERS;
-    for (i=0; i<MAX_EVENT_FILTERS; i++) {
-	lan->pef.event_filter_table[i][0] = i;
-	lan->pef.event_filter_data1[i][0] = i;
-    }
-    lan->pef.num_alert_policies = MAX_ALERT_POLICIES;
-    for (i=0; i<MAX_ALERT_POLICIES; i++)
-	lan->pef.alert_policy_table[i][0] = i;
-    lan->pef.num_alert_strings = MAX_ALERT_STRINGS;
-    for (i=0; i<MAX_ALERT_STRINGS; i++) {
-	lan->pef.alert_string_keys[i][0] = i;
-    }
-
-    lan->channel.chan_info = lan;
     lan->channel.return_rsp = lan_return_rsp;
+    lan->channel.get_lan_parms = get_lan_config_parms;
+    lan->channel.set_lan_parms = set_lan_config_parms;
+    lan->channel.set_chan_access = set_channel_access;
 
     /* Force user 1 to be a null user. */
-    memset(lan->conn.bmcinfo->users[1].username, 0, 16);
+    memset(lan->bmcinfo->users[1].username, 0, 16);
 
     i = lan->gen_rand(lan, challenge_data, 16);
     if (i)

@@ -59,6 +59,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/serv.h>
 
@@ -109,6 +110,11 @@ ipmi_handle_smi_rsp(channel_t *chan, msg_t *msg, uint8_t *rspd, int rsp_len)
     rsp.data = rspd;
     rsp.data_len = rsp_len;
 
+    if (chan->oem.oem_handle_rsp &&
+	chan->oem.oem_handle_rsp(chan, msg, &rsp))
+	/* OEM code handled the response. */
+	return;
+
     chan->return_rsp(chan, msg, &rsp);
     chan->free(chan, msg);
 }
@@ -155,7 +161,10 @@ look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 	check_oem_handlers(chan);
 
 	/* Will be set to 1 if we sent it. */
-	return msg->oem_data;
+	if (msg->oem_data) {
+	    chan->free(chan, msg);
+	    return 1;
+	}
     }
     return 0;
 }
@@ -163,12 +172,13 @@ look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 int
 chan_init(channel_t *chan)
 {
+    int rv = 0;
+
     /* If the calling code already hasn't set up an OEM handler, we
        set up our own to look for a get device id.  When we find a get
-       device ID, we call the OEM code to install their own. */
-    if (chan->oem.oem_handle_rsp == NULL) {
-	int rv;
-
+       device ID, we call the OEM code to install their own.  Hijack
+       channel 0 for this. */
+    if ((chan->channel_num == 0) && (chan->oem.oem_handle_rsp == NULL)) {
 	chan->oem.oem_handle_rsp = look_for_get_devid;
 
 	/* Send a get device id to the low-level code so we can
@@ -178,4 +188,45 @@ chan_init(channel_t *chan)
 			       NULL, 0, 1);
     }
 
+    return rv;
 }
+
+void
+bmcinfo_init(bmc_data_t *bmc)
+{
+    unsigned int i;
+
+    memset(bmc, 0, sizeof(*bmc));
+
+    bmc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
+    bmc->sys_channel.channel_num = 0xf;
+    /* Assume this for now, override with config */
+    bmc->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
+    bmc->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    bmc->sys_channel.active_sessions = 0;
+    bmc->channels[0xf] = &bmc->sys_channel;
+
+    bmc->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
+    bmc->ipmb_channel.channel_num = 0;
+    bmc->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+    bmc->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    bmc->ipmb_channel.active_sessions = 0;
+    bmc->channels[0] = &bmc->ipmb_channel;
+
+    for (i=0; i<=MAX_USERS; i++) {
+	bmc->users[i].idx = i;
+    }
+    bmc->pef.num_event_filters = MAX_EVENT_FILTERS;
+    for (i=0; i<MAX_EVENT_FILTERS; i++) {
+	bmc->pef.event_filter_table[i][0] = i;
+	bmc->pef.event_filter_data1[i][0] = i;
+    }
+    bmc->pef.num_alert_policies = MAX_ALERT_POLICIES;
+    for (i=0; i<MAX_ALERT_POLICIES; i++)
+	bmc->pef.alert_policy_table[i][0] = i;
+    bmc->pef.num_alert_strings = MAX_ALERT_STRINGS;
+    for (i=0; i<MAX_ALERT_STRINGS; i++) {
+	bmc->pef.alert_string_keys[i][0] = i;
+    }
+}
+

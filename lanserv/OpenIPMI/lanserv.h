@@ -69,8 +69,6 @@ extern "C" {
 #define SESSION_BITS_REQ	6 /* Bits required to hold a session. */
 #define SESSION_MASK		0x3f
 
-#define MAIN_CHANNEL	0x7
-
 typedef struct session_s session_t;
 typedef struct lan_data_s lan_data_t;
 
@@ -234,52 +232,12 @@ struct lanparm_data_s
     } changed;
 };
 
-#define MAX_EVENT_FILTERS 16
-#define MAX_ALERT_POLICIES 16
-#define MAX_ALERT_STRINGS 16
-#define MAX_ALERT_STRING_LEN 64
-
-typedef struct pef_data_s
-{
-    unsigned int set_in_progress : 2;
-    void (*commit)(lan_data_t *lan); /* Called when the commit occurs. */
-
-    unsigned char pef_control;
-    unsigned char pef_action_global_control;
-    unsigned char pef_startup_delay;
-    unsigned char pef_alert_startup_delay;
-    unsigned char num_event_filters;
-    unsigned char event_filter_table[MAX_EVENT_FILTERS][21];
-    unsigned char event_filter_data1[MAX_EVENT_FILTERS][2];
-    unsigned char num_alert_policies;
-    unsigned char alert_policy_table[MAX_ALERT_POLICIES][4];
-    unsigned char system_guid[17];
-    unsigned char num_alert_strings;
-    unsigned char alert_string_keys[MAX_ALERT_STRINGS][3];
-    unsigned char alert_strings[MAX_ALERT_STRINGS][MAX_ALERT_STRING_LEN];
-
-    /* Tells what has changed, so the commit can do something about it. */
-    struct {
-	unsigned int pef_control : 1;
-	unsigned int pef_action_global_control : 1;
-	unsigned int pef_startup_delay : 1;
-	unsigned int pef_alert_startup_delay : 1;
-	unsigned int system_guid : 1;
-	unsigned char event_filter_table[MAX_EVENT_FILTERS];
-	unsigned char event_filter_data1[MAX_EVENT_FILTERS];
-	unsigned char alert_policy_table[MAX_ALERT_POLICIES];
-	unsigned int alert_string_keys[MAX_ALERT_STRINGS];
-	unsigned int alert_strings[MAX_ALERT_STRINGS];
-    } changed;
-} pef_data_t;
-
 struct lan_data_s
 {
-    conn_data_t conn;
+    bmc_data_t *bmcinfo;
 
     unsigned char *guid;
 
-    unsigned int channel_num;
     channel_t channel;
 
     /* The amount of time in seconds before a session will be shut
@@ -299,10 +257,6 @@ struct lan_data_s
     /* Generate 'size' bytes of random data into 'data'. */
     int (*gen_rand)(lan_data_t *lan, void *data, int size);
 
-    /* Write the configuration file (done when a non-volatile
-       change is done, or when a user name/password is written. */
-    void (*write_config)(lan_data_t *lan);
-
     int debug;
 
     /* Don't fill in the below in the user code. */
@@ -319,9 +273,6 @@ struct lan_data_s
     lanparm_data_t lanparm;
     lanparm_data_t lanparm_rollback;
 
-    pef_data_t pef;
-    pef_data_t pef_rollback;
-
     lanserv_addr_t *lan_addrs;
     int num_lan_addrs;
 };
@@ -336,7 +287,7 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 			 void *from_addr, int from_len);
 
 /* Read in a configuration file and fill in the lan and address info. */
-int lanserv_read_config(lan_data_t   *lan,
+int lanserv_read_config(bmc_data_t   *bmc,
 			FILE         *f,
 			int          *line,
 			unsigned int channel_num);

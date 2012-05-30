@@ -1784,7 +1784,7 @@ handle_get_channel_info(lmc_data_t    *mc,
 	return;
     }
 
-    if (! mc->bmcinfo || ! mc->bmcinfo->channels[lchan]) {
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
 	if (lchan == 0) {
 	    /* The IPMB channel is always there. */
 	    medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
@@ -1817,6 +1817,367 @@ handle_get_channel_info(lmc_data_t    *mc,
 }
 
 static void
+handle_get_channel_access(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    unsigned char lchan;
+    channel_t *chan;
+    uint8_t   upd;
+
+    if (msg->len < 2) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lchan = msg->data[0];
+    if (lchan == 0xe)
+	lchan = msg->channel;
+    else if (lchan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	if (lchan == 0) {
+	    rdata[0] = 0;
+	    rdata[1] = 0;
+	    rdata[2] = 0;
+	    *rdata_len = 3;
+	    return;
+	}
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    chan = mc->bmcinfo->channels[lchan];
+
+    upd = (msg->data[1] >> 6) & 0x3;
+
+    rdata[0] = 0;
+    if (upd == 2) {
+	rdata[1] = ((chan->PEF_alerting << 5) | 0x2);
+	rdata[2] = chan->privilege_limit;
+	*rdata_len = 3;
+    } else if (upd == 1) {
+	rdata[1] = ((chan->PEF_alerting_nonv << 5) | 0x2);
+	rdata[2] = chan->privilege_limit_nonv;
+	*rdata_len = 3;
+    } else {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+}
+
+static void
+cleanup_ascii_16(uint8_t *c)
+{
+    int i;
+
+    i = 0;
+    while ((i < 16) && (*c != 0)) {
+	c++;
+	i++;
+    }
+    while (i < 16) {
+	*c = 0;
+	c++;
+	i++;
+    }
+}
+
+static void
+handle_set_user_access(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    uint8_t user;
+    uint8_t priv;
+    uint8_t newv;
+    int     changed = 0;
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    user = msg->data[1] & 0x3f;
+    if (user == 0) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    priv = msg->data[2] & 0xf;
+    /* Allow privilege level F as the "no access" privilege */
+    if (((priv == 0) || (priv > 4)) && (priv != 0xf)) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->data[0] & 0x80) {
+	newv = (msg->data[0] >> 4) & 1;
+	if (newv != mc->bmcinfo->users[user].valid) {
+	    mc->bmcinfo->users[user].valid = newv;
+	    changed = 1;
+	}
+	newv = (msg->data[0] >> 5) & 1;
+	if (newv != mc->bmcinfo->users[user].link_auth) {
+	    mc->bmcinfo->users[user].link_auth = newv;
+	    changed = 1;
+	}
+	newv = (msg->data[0] >> 6) & 1;
+	if (newv != mc->bmcinfo->users[user].cb_only) {
+	    mc->bmcinfo->users[user].cb_only = newv;
+	    changed = 1;
+	}
+    }
+
+    if (priv != mc->bmcinfo->users[user].privilege) {
+	mc->bmcinfo->users[user].privilege = priv;
+	changed = 1;
+    }
+
+    if (msg->len >= 4) {
+	/* Got the session limit byte. */
+	newv = msg->data[3] & 0xf;
+	if (newv != mc->bmcinfo->users[user].max_sessions) {
+	    mc->bmcinfo->users[user].max_sessions = newv;
+	    changed = 1;
+	}
+    }
+
+    if (changed)
+	mc->bmcinfo->write_config(mc->bmcinfo);
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_user_access(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    int     i;
+    uint8_t user;
+
+    if (msg->len < 2) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    user = msg->data[1] & 0x3f;
+    if (user == 0) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = MAX_USERS;
+
+    /* Number of enabled users. */
+    rdata[2] = 0;
+    for (i=1; i<=MAX_USERS; i++) {
+	if (mc->bmcinfo->users[i].valid)
+	    rdata[2]++;
+    }
+
+    /* Only fixed user name is user 1. */
+    rdata[3] = mc->bmcinfo->users[1].valid;
+
+    rdata[4] = ((mc->bmcinfo->users[user].valid << 4)
+		| (mc->bmcinfo->users[user].link_auth << 5)
+		| (mc->bmcinfo->users[user].cb_only << 6)
+		| mc->bmcinfo->users[user].privilege);
+    *rdata_len = 5;
+}
+
+static void
+handle_set_user_name(lmc_data_t    *mc,
+		     msg_t         *msg,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len)
+{
+    uint8_t user;
+
+    if (msg->len < 17) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    user = msg->data[0] & 0x3f;
+    if (user <= 1) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    memcpy(mc->bmcinfo->users[user].username, msg->data+1, 16);
+    cleanup_ascii_16(mc->bmcinfo->users[user].username);
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_user_name(lmc_data_t    *mc,
+		     msg_t         *msg,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len)
+{
+    uint8_t user;
+    uint8_t data[17];
+
+    if (msg->len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    user = msg->data[0] & 0x3f;
+    if (user <= 1) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    data[0] = 0;
+    memcpy(data+1, mc->bmcinfo->users[user].username, 16);
+    *rdata_len = 17;
+}
+
+static void
+handle_set_user_password(lmc_data_t    *mc,
+			 msg_t         *msg,
+			 unsigned char *rdata,
+			 unsigned int  *rdata_len)
+{
+    uint8_t user;
+    uint8_t op;
+
+    if (msg->len < 2) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    user = msg->data[0] & 0x3f;
+    if (user == 0) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    op = msg->data[1] & 0x3;
+    if (op == 0) {
+	mc->bmcinfo->users[user].valid = 0;
+    } else if (op == 1) {
+	mc->bmcinfo->users[user].valid = 1;
+    } else {
+	if (msg->len < 18) {
+	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	if (op == 2) {
+	    memcpy(mc->bmcinfo->users[user].pw, msg->data+2, 16);
+	} else {
+	    /* Nothing to do for test password, we accept anything. */
+	}
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_set_channel_access(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    unsigned char lchan;
+    channel_t *chan;
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lchan = msg->data[0];
+    if (lchan == 0xe)
+	lchan = msg->channel;
+    else if (lchan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    chan = mc->bmcinfo->channels[lchan];
+
+    if (!chan->set_chan_access) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    chan->set_chan_access(chan, msg, rdata, rdata_len);
+}
+
+static void
 handle_app_netfn(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
@@ -1831,8 +2192,139 @@ handle_app_netfn(lmc_data_t    *mc,
 	handle_get_channel_info(mc, msg, rdata, rdata_len);
 	break;
 
+    case IPMI_GET_CHANNEL_ACCESS_CMD:
+	handle_get_channel_access(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_USER_ACCESS_CMD:
+	handle_set_user_access(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_USER_ACCESS_CMD:
+	handle_get_user_access(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_USER_NAME_CMD:
+	handle_set_user_name(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_USER_NAME_CMD:
+	handle_get_user_name(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_USER_PASSWORD_CMD:
+	handle_set_user_password(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_CHANNEL_ACCESS_CMD:
+	handle_set_channel_access(mc, msg, rdata, rdata_len);
+	break;
+
     default:
 	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+    }
+}
+
+static void
+handle_ipmi_set_lan_config_parms(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    unsigned char lchan;
+    channel_t *chan;
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lchan = msg->data[0];
+    if (lchan == 0xe)
+	lchan = msg->channel;
+    else if (lchan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+    chan = mc->bmcinfo->channels[lchan];
+
+    if (!chan->set_lan_parms) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    chan->set_lan_parms(chan, msg, rdata, rdata_len);
+}
+
+static void
+handle_ipmi_get_lan_config_parms(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    unsigned char lchan;
+    channel_t *chan;
+
+    if (msg->len < 4) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lchan = msg->data[0];
+    if (lchan == 0xe)
+	lchan = msg->channel;
+    else if (lchan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    chan = mc->bmcinfo->channels[lchan];
+
+    if (!chan->get_lan_parms) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    chan->get_lan_parms(chan, msg, rdata, rdata_len);
+}
+
+static void
+handle_transport_netfn(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    switch(msg->cmd) {
+    case IPMI_SET_LAN_CONFIG_PARMS_CMD:
+	handle_ipmi_set_lan_config_parms(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_LAN_CONFIG_PARMS_CMD:
+	handle_ipmi_get_lan_config_parms(mc, msg, rdata, rdata_len);
 	break;
     }
 }
@@ -2698,6 +3190,348 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 }
 
 static void
+handle_ipmi_get_pef_capabilities(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = 0x51; /* version */
+    rdata[2] = 0x3f; /* support everything but OEM */
+    rdata[3] = MAX_EVENT_FILTERS;
+    *rdata_len = 4;
+}
+
+static void
+handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    unsigned char err = 0;
+    int           set, block;
+    bmc_data_t    *bmc = mc->bmcinfo;
+
+    if (msg->len < 2) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!bmc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    switch (msg->data[0] & 0x7f)
+    {
+    case 0:
+	switch (msg->data[1] & 0x3)
+	{
+	case 0:
+	    if (bmc->pef.set_in_progress) {
+		/* rollback */
+		memcpy(&bmc->pef, &bmc->pef_rollback,
+		       sizeof(bmc->pef));
+	    }
+	    /* No affect otherwise */
+	    break;
+
+	case 1:
+	    if (bmc->pef.set_in_progress)
+		err = 0x81; /* Another user is writing. */
+	    else {
+		/* Save rollback data */
+		memcpy(&bmc->pef_rollback, &bmc->pef,
+		       sizeof(bmc->pef));
+		bmc->pef.set_in_progress = 1;
+	    }
+	    break;
+
+	case 2:
+	    if (bmc->pef.commit)
+		bmc->pef.commit(bmc);
+	    memset(&bmc->pef.changed, 0, sizeof(bmc->pef.changed));
+	    bmc->pef.set_in_progress = 0;
+	    break;
+
+	case 3:
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	}
+	break;
+
+    case 5:
+    case 8:
+    case 11:
+	err = 0x82; /* Read-only data */
+	break;
+
+    case 1:
+	bmc->pef.pef_control = msg->data[1];
+	bmc->pef.changed.pef_control = 1;
+	break;
+
+    case 2:
+	bmc->pef.pef_action_global_control = msg->data[1];
+	bmc->pef.changed.pef_action_global_control = 1;
+	break;
+
+    case 3:
+	bmc->pef.pef_startup_delay = msg->data[1];
+	bmc->pef.changed.pef_startup_delay = 1;
+	break;
+
+    case 4:
+	bmc->pef.pef_alert_startup_delay = msg->data[1];
+	bmc->pef.changed.pef_alert_startup_delay = 1;
+	break;
+
+    case 6:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 22)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(bmc->pef.event_filter_table[set], msg->data+1, 21);
+	    bmc->pef.changed.event_filter_table[set] = 1;
+	}
+	break;
+
+    case 7:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 3)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(bmc->pef.event_filter_data1[set], msg->data+1, 2);
+	    bmc->pef.changed.event_filter_data1[set] = 1;
+	}
+	break;
+
+    case 9:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 5)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= bmc->pef.num_alert_policies))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(bmc->pef.alert_policy_table[set], msg->data+1, 4);
+	    bmc->pef.changed.alert_policy_table[set] = 1;
+	}
+	break;
+
+    case 10:
+	if (msg->len < 18)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(bmc->pef.system_guid, msg->data+1, 17);
+	    bmc->pef.changed.system_guid = 1;
+	}
+	break;
+
+    case 12:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (set >= bmc->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(bmc->pef.alert_string_keys[set], msg->data+1, 3);
+	    bmc->pef.changed.alert_string_keys[set] = 1;
+	}
+	break;
+
+    case 13:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (set >= bmc->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else if (msg->data[2] == 0)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    int dlen = msg->len - 3;
+	    set = msg->data[1] & 0x7f;
+	    block = msg->data[2] - 1;
+	    if (((block*16) + dlen) > MAX_ALERT_STRING_LEN) {
+		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+		break;
+	    }
+	    memcpy(bmc->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
+	    bmc->pef.changed.alert_strings[set] = 1;
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    rdata[0] = err;
+    *rdata_len = 1;
+}
+
+static void
+handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    int           set, block;
+    unsigned char databyte = 0;
+    unsigned char *data = NULL;
+    unsigned int  length = 0;
+    unsigned char err = 0;
+    unsigned char tmpdata[18];
+
+    bmc_data_t    *bmc = mc->bmcinfo;
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!bmc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    switch (msg->data[0] & 0x7f)
+    {
+    case 0:
+	databyte = bmc->pef.set_in_progress;
+	break;
+
+    case 5:
+	databyte = bmc->pef.num_event_filters - 1;
+	break;
+
+    case 8:
+	databyte = bmc->pef.num_alert_policies - 1;
+	break;
+
+    case 11:
+	databyte = bmc->pef.num_alert_strings - 1;
+	break;
+
+    case 1:
+	databyte = bmc->pef.pef_control;
+	break;
+
+    case 2:
+	databyte = bmc->pef.pef_action_global_control;
+	break;
+
+    case 3:
+	databyte = bmc->pef.pef_startup_delay;
+	break;
+
+    case 4:
+	databyte = bmc->pef.pef_alert_startup_delay;
+	break;
+
+    case 6:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = bmc->pef.event_filter_table[set];
+	    length = 21;
+	}
+	break;
+
+    case 7:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = bmc->pef.event_filter_data1[set];
+	    length = 2;
+	}
+	break;
+
+    case 9:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= bmc->pef.num_alert_policies))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = bmc->pef.alert_policy_table[set];
+	    length = 4;
+	}
+	break;
+
+    case 10:
+	data = bmc->pef.system_guid;
+	length = 17;
+	break;
+
+    case 12:
+	set = msg->data[1] & 0x7f;
+	if (set >= bmc->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = bmc->pef.alert_string_keys[set];
+	    length = 3;
+	}
+	break;
+
+    case 13:
+	set = msg->data[1] & 0x7f;
+	if (set >= bmc->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else if (msg->data[2] == 0)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    block = msg->data[2] - 1;
+	    if ((block*16) > MAX_ALERT_STRING_LEN) {
+		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+		break;
+	    }
+	    tmpdata[0] = set;
+	    tmpdata[1] = block + 1;
+	    memcpy(tmpdata+2, bmc->pef.alert_strings[set]+(block*16), 16);
+	    data = tmpdata;
+	    length = 18;
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    rdata[0] = err;
+    if (err) {
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[1] = 0x11; /* rev */
+    if (msg->data[0] & 0x80) {
+	*rdata_len = 2;
+    } else if (data) {
+	memcpy(rdata + 2, data, length);
+	*rdata_len = length + 2;
+    } else {
+	rdata[2] = databyte;
+	*rdata_len = 3;
+    }
+}
+
+static void
 handle_sensor_event_netfn(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
@@ -2758,6 +3592,18 @@ handle_sensor_event_netfn(lmc_data_t    *mc,
 
     case IPMI_GET_SENSOR_READING_CMD:
 	handle_get_sensor_reading(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_PEF_CAPABILITIES_CMD:
+	handle_ipmi_get_pef_capabilities(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_PEF_CONFIG_PARMS_CMD:
+	handle_ipmi_set_pef_config_parms(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_PEF_CONFIG_PARMS_CMD:
+	handle_ipmi_get_pef_config_parms(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_GET_SENSOR_EVENT_STATUS_CMD:
@@ -4020,6 +4866,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     switch (msg->netfn) {
     case IPMI_APP_NETFN:
 	handle_app_netfn(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_TRANSPORT_NETFN:
+	handle_transport_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SENSOR_EVENT_NETFN:

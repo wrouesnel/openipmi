@@ -75,8 +75,12 @@
 
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/lanserv.h>
-#include <OpenIPMI/serv_config.h>
+
+/* Stolen from ipmi_mc.h can't include that and linux/ipmi.h */
+#define IPMI_CHANNEL_MEDIUM_8023_LAN	4
 
 #include <linux/ipmi.h>
 
@@ -90,9 +94,12 @@ static void lanserv_log(int logtype, msg_t *msg, char *format, ...);
 
 typedef struct misc_data
 {
-    int lan_fd[MAX_ADDR];
     int smi_fd;
-    char *config_file;
+    bmc_data_t *bmc;
+    os_handler_t *os_hnd;
+    os_handler_waiter_factory_t *waiter_factory;
+    os_hnd_timer_id_t *timer;
+
     unsigned char bmc_ipmb;
 } misc_data_t;
 
@@ -116,13 +123,13 @@ dump_hex(void *vdata, int len, int left)
 }
 
 static void *
-ialloc(channel_t *lan, int size)
+balloc(bmc_data_t *bmc, int size)
 {
     return malloc(size);
 }
 
 static void
-ifree(channel_t *lan, void *data)
+bfree(bmc_data_t *bmc, void *data)
 {
     return free(data);
 }
@@ -237,9 +244,10 @@ smi_send_dev(channel_t *chan, msg_t *msg)
     req.msgid = (long) msg;
 
     rv = ioctl(info->smi_fd, IPMICTL_SEND_COMMAND, &req);
-    if (rv == -1)
+    if (rv == -1) {
+	free(msg);
 	return errno;
-    else
+    } else
 	return 0;
 }
 
@@ -280,8 +288,9 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 }
 
 static void
-handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
+handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 {
+    misc_data_t      *info = cb_data;
     struct ipmi_recv rsp;
     char             addr_data[sizeof(struct ipmi_addr)];
     struct ipmi_addr *addr = (struct ipmi_addr *) addr_data;
@@ -289,7 +298,6 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
     unsigned char    rdata[IPMI_MAX_MSG_LENGTH];
     int              rv;
     msg_t            *msg;
-    misc_data_t      *info = lan->user_info;
 
     rsp.addr = (unsigned char *) addr;
     rsp.addr_len = sizeof(struct ipmi_addr);
@@ -309,15 +317,19 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	}
     }
 
-    if (rdata[0] == IPMI_TIMEOUT_CC)
+    msg = (msg_t *) rsp.msgid;
+
+    if (rdata[0] == IPMI_TIMEOUT_CC) {
 	/* Ignore timeouts, we let the LAN code do the timeouts. */
+	free(msg);
 	return;
+    }
 
     /* We only handle responses. */
-    if (rsp.recv_type != IPMI_RESPONSE_RECV_TYPE)
+    if (rsp.recv_type != IPMI_RESPONSE_RECV_TYPE) {
+	free(msg);
 	return;
-
-    msg = (msg_t *) rsp.msgid;
+    }
 
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* Nothing to do. */
@@ -340,12 +352,14 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	return;
     }
 
-    ipmi_handle_smi_rsp(&lan->channel, msg, rsp.msg.data, rsp.msg.data_len);
+    ipmi_handle_smi_rsp(info->bmc->channels[msg->channel], msg,
+			rsp.msg.data, rsp.msg.data_len);
 }
 
 static void
-handle_msg_lan(int lan_fd, lan_data_t *lan)
+lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 {
+    lan_data_t *lan = cb_data;
     int                len;
     lan_addr_t         l;
     unsigned char      data[256];
@@ -424,49 +438,26 @@ ipmi_open(char *ipmi_dev)
 }
 
 static int
-open_lan_fd(sockaddr_ip_t *addr, socklen_t addr_len)
+open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
     int                fd;
     int                rv;
 
-    fd = socket(addr->s_ipsock.s_addr4.sin_family, SOCK_DGRAM, IPPROTO_UDP);
+    fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
 	perror("Unable to create socket");
-	return fd;
+	exit(1);
     }
-    rv = bind(fd, (struct sockaddr *)&(addr->s_ipsock.s_addr4), addr_len);
+
+    rv = bind(fd, addr, addr_len);
     if (rv == -1)
     {
 	fprintf(stderr, "Unable to bind to LAN port: %s\n",
 		strerror(errno));
-	return -1;
+	exit(1);
     }
 
     return fd;
-}
-
-static void
-diff_timeval(struct timeval *dest,
-	     struct timeval *left,
-	     struct timeval *right)
-{
-    if (   (left->tv_sec < right->tv_sec)
-	|| (   (left->tv_sec == right->tv_sec)
-	    && (left->tv_usec < right->tv_usec)))
-    {
-	/* If left < right, just force to zero, don't allow negative
-           numbers. */
-	dest->tv_sec = 0;
-	dest->tv_usec = 0;
-	return;
-    }
-
-    dest->tv_sec = left->tv_sec - right->tv_sec;
-    dest->tv_usec = left->tv_usec - right->tv_usec;
-    while (dest->tv_usec < 0) {
-	dest->tv_usec += 1000000;
-	dest->tv_sec--;
-    }
 }
 
 static void
@@ -560,28 +551,62 @@ static struct poptOption poptOpts[]=
 };
 
 static void
-write_config(lan_data_t *lan)
+write_config(bmc_data_t *chan)
 {
 //    misc_data_t *info = lan->user_info;
 }
 
 void init_oem_force(void);
 
+static void
+tick(void *cb_data, os_hnd_timer_id_t *id)
+{
+    misc_data_t *data = cb_data;
+    struct timeval tv;
+    int err;
+    unsigned int i;
+
+    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
+	channel_t *chan = data->bmc->channels[i];
+
+	if (chan && (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)) {
+	    ipmi_lan_tick(chan->chan_info, 1);
+	}
+    }
+
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    err = data->os_hnd->start_timer(data->os_hnd, data->timer, &tv, tick, data);
+    if (err) {
+	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
+	exit(1);
+    }
+}
+
+static void *
+ialloc(channel_t *chan, int size)
+{
+    return malloc(size);
+}
+
+static void
+ifree(channel_t *chan, void *data)
+{
+    return free(data);
+}
+
 int
 main(int argc, const char *argv[])
 {
-    lan_data_t  lan;
     bmc_data_t  bmcinfo;
     misc_data_t data;
-    int max_fd;
-    int rv;
     int o;
     int i;
+    int err;
     poptContext poptCtx;
-    struct timeval timeout;
-    struct timeval time_next;
-    struct timeval time_now;
-    void (*handle_msg_ipmi)(int smi_fd, lan_data_t *lan);
+    struct timeval tv;
+    int lan_fd;
+    os_hnd_fd_id_t *fd_id;
 
 #if HAVE_SYSLOG
     openlog(argv[0], LOG_CONS, LOG_DAEMON);
@@ -598,61 +623,109 @@ main(int argc, const char *argv[])
 		break;
 	}
     }
+    poptFreeContext(poptCtx);
 
     data.bmc_ipmb = 0x20;
-    data.config_file = config_file;
+    data.bmc = &bmcinfo;
+    data.os_hnd = ipmi_posix_setup_os_handler();
+    if (!data.os_hnd) {
+	fprintf(stderr, "Unable to allocate OS handler\n");
+	exit(1);
+    }
+
+    err = os_handler_alloc_waiter_factory(data.os_hnd, 0, 0,
+					  &data.waiter_factory);
+    if (err) {
+	fprintf(stderr, "Unable to allocate waiter factory: 0x%x\n", err);
+	exit(1);
+    }
+
+    err = data.os_hnd->alloc_timer(data.os_hnd, &data.timer);
+    if (err) {
+	fprintf(stderr, "Unable to allocate timer: 0x%x\n", err);
+	exit(1);
+    }
 
     /* Call the OEM init code. */
     init_oem_force();
 
-    memset(&bmcinfo, 0, sizeof(bmcinfo));
-    memset(&lan, 0, sizeof(lan));
-    lan.conn.bmcinfo = &bmcinfo;
-    lan.user_info = &data;
-    lan.channel.alloc = ialloc;
-    lan.channel.free = ifree;
+    bmcinfo_init(&bmcinfo);
+    bmcinfo.alloc = balloc;
+    bmcinfo.free = bfree;
+    bmcinfo.write_config = write_config;
 
-    if (read_config(&lan, data.config_file))
+    if (read_config(&bmcinfo, config_file))
 	exit(1);
 
     data.smi_fd = ipmi_open(ipmi_dev);
     if (data.smi_fd == -1)
 	exit(1);
-
-    lan.send_out = lan_send;
-    handle_msg_ipmi = handle_msg_ipmi_dev;
-    lan.channel.smi_send = smi_send_dev;
-    lan.channel.oem.user_data = &data;
-    lan.channel.oem.ipmb_addr_change = ipmb_addr_change_dev;
-    lan.gen_rand = gen_rand;
-    lan.write_config = write_config;
-    lan.channel.log = lanserv_log;
-    lan.debug = debug;
-
-    if (lan.num_lan_addrs == 0) {
-	struct sockaddr_in *ipaddr = (void *) &lan.lan_addrs[0].addr;
-	ipaddr->sin_family = AF_INET;
-	ipaddr->sin_port = htons(623);
-	ipaddr->sin_addr.s_addr = INADDR_ANY;
-	lan.lan_addrs[0].addr_len = sizeof(*ipaddr);
-	lan.num_lan_addrs++;
+    err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, data.smi_fd,
+					  handle_msg_ipmi_dev, &data,
+					  NULL, &fd_id);
+    if (err) {
+	fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
+	exit(1);
     }
 
-    for (i=0; i<lan.num_lan_addrs; i++) {
-	if (lan.lan_addrs[i].addr_len == 0)
-	    break;
+    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
+	channel_t *chan = bmcinfo.channels[i];
 
-	data.lan_fd[i] = open_lan_fd(&lan.lan_addrs[i].addr,
-				     lan.lan_addrs[i].addr_len);
-	if (data.lan_fd[i] == -1) {
-	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
-	    exit(1);
-	}
+	if (!chan)
+	    continue;
+
+	chan->smi_send = smi_send_dev;
+	chan->oem.user_data = &data;
+	chan->oem.ipmb_addr_change = ipmb_addr_change_dev;
+	chan->log = lanserv_log;
+	chan->alloc = ialloc;
+	chan->free = ifree;
+
+	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN) {
+	    lan_data_t *lan = chan->chan_info;
+
+	    lan->user_info = &data;
+	    lan->send_out = lan_send;
+	    lan->gen_rand = gen_rand;
+	    lan->debug = debug;
+
+	    err = ipmi_lan_init(lan);
+	    if (err) {
+		fprintf(stderr, "Unable to init lan: 0x%x\n", err);
+		exit(1);
+	    }
+
+	    if (lan->num_lan_addrs == 0) {
+		struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
+		ipaddr->sin_family = AF_INET;
+		ipaddr->sin_port = htons(623);
+		ipaddr->sin_addr.s_addr = INADDR_ANY;
+		lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
+		lan->num_lan_addrs++;
+	    }
+
+	    for (i=0; i<lan->num_lan_addrs; i++) {
+		if (lan->lan_addrs[i].addr_len == 0)
+		    break;
+
+		lan_fd = open_lan_fd(&lan->lan_addrs[i].addr.s_ipsock.s_addr,
+				     lan->lan_addrs[i].addr_len);
+		if (lan_fd == -1) {
+		    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+		    exit(1);
+		}
+
+		err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd,
+						      lan_data_ready, lan,
+						      NULL, &fd_id);
+		if (err) {
+		    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+		    exit(1);
+		}
+	    }
+	} else 
+	    chan_init(chan);
     }
-
-    rv = ipmi_lan_init(&lan);
-    if (rv)
-	return 1;
 
     if (daemonize) {
 	int pid;
@@ -677,41 +750,14 @@ main(int argc, const char *argv[])
 
     lanserv_log(LAN_ERR, NULL, "%s startup", argv[0]);
 
-    max_fd = data.smi_fd;
-    for (i=0; i<lan.num_lan_addrs; i++) {
-	if (data.lan_fd[i] > max_fd)
-	    max_fd = data.lan_fd[i];
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);
+    if (err) {
+	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
+	exit(1);
     }
-    max_fd++;
 
-    gettimeofday(&time_next, NULL);
-    time_next.tv_sec += 10;
-    for (;;) {
-	fd_set readfds;
-
-	FD_ZERO(&readfds);
-	FD_SET(data.smi_fd, &readfds);
-	for (i=0; i<lan.num_lan_addrs; i++)
-	    FD_SET(data.lan_fd[i], &readfds);
-
-	gettimeofday(&time_now, NULL);
-	diff_timeval(&timeout, &time_next, &time_now);
-	rv = select(max_fd, &readfds, NULL, NULL, &timeout);
-	if ((rv == -1) && (errno == EINTR))
-	    continue;
-
-	if (rv == 0) {
-	    ipmi_lan_tick(&lan, 10);
-	    time_next.tv_sec += 10;
-	} else {
-	    if (FD_ISSET(data.smi_fd, &readfds)) {
-		handle_msg_ipmi(data.smi_fd, &lan);
-	    }
-
-	    for (i=0; i<lan.num_lan_addrs; i++) {
-		if (FD_ISSET(data.lan_fd[i], &readfds))
-		    handle_msg_lan(data.lan_fd[i], &lan);
-	    }
-	}
-    }
+    data.os_hnd->operation_loop(data.os_hnd);
+    return 0;
 }
