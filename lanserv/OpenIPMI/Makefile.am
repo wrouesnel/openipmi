@@ -1,2 +1,2 @@
 
-pkginclude_HEADERS = lanserv.h
+pkginclude_HEADERS = lanserv.h serserv.h serv.h

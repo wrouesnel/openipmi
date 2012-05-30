@@ -125,7 +125,7 @@ is_authval_null(uint8_t *val)
 }
 
 static user_t *
-find_user(lan_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
+find_user(lanserv_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
 {
     int    i;
     user_t *rv = NULL;
@@ -158,7 +158,7 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 
 
 static session_t *
-sid_to_session(lan_data_t *lan, unsigned int sid)
+sid_to_session(lanserv_data_t *lan, unsigned int sid)
 {
     int       idx;
     session_t *session;
@@ -177,7 +177,7 @@ sid_to_session(lan_data_t *lan, unsigned int sid)
 }
 
 static void
-close_session(lan_data_t *lan, session_t *session)
+close_session(lanserv_data_t *lan, session_t *session)
 {
     session->active = 0;
     if (session->authtype <= 4)
@@ -238,7 +238,7 @@ auth_check(session_t *ses,
 }
 	 
 static int
-gen_challenge(lan_data_t *lan,
+gen_challenge(lanserv_data_t *lan,
 	      uint8_t    *out,
 	      uint32_t   sid)
 {
@@ -253,7 +253,7 @@ gen_challenge(lan_data_t *lan,
 }
 
 static int
-check_challenge(lan_data_t *lan,
+check_challenge(lanserv_data_t *lan,
 		uint32_t   sid,
 		uint8_t    *code)
 {
@@ -271,7 +271,7 @@ check_challenge(lan_data_t *lan,
 #define IPMI_LAN_MAX_TRAILER_SIZE 64
 
 static void
-return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
+return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
 		 unsigned int payload, unsigned char *data, unsigned int len,
 		 unsigned char iana[3], unsigned int payload_id)
 {
@@ -421,7 +421,7 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 }
 
 static void
-return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
+return_rsp(lanserv_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 {
     uint8_t      data[IPMI_LAN_MAX_HEADER_SIZE];
     struct iovec vec[3];
@@ -505,11 +505,41 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 static void
 lan_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 {
-    return_rsp(chan->chan_info, msg, NULL, rsp);
+    bmc_data_t   *bmc;
+    lanserv_data_t *lan = chan->chan_info;
+    rsp_msg_t    rrsp;
+
+    return_rsp(lan, msg, NULL, rsp);
+
+    bmc = lan->bmcinfo;
+    while (bmc->recv_q_head) {
+	msg = bmc->recv_q_head;
+	bmc->recv_q_head = msg->next;
+	if (!msg->next) {
+	    bmc->recv_q_tail = NULL;
+	    if (bmc->channels[15]->recv_in_q)
+		bmc->channels[15]->recv_in_q(bmc->channels[15], 0);
+	}
+
+	/* Extract relevant header information and remove the header and
+	   checksum. */
+	msg->rq_addr = msg->data[0];
+	msg->rq_lun = msg->data[1] & 0x3;
+	msg->rs_addr = msg->data[3];
+	msg->rs_lun = msg->data[4] & 0x3;
+	rrsp.netfn = msg->netfn | 1;
+	rrsp.cmd = msg->data[5];
+	rrsp.data = msg->data + 6;
+	rrsp.data_len = msg->len - 7;
+
+	return_rsp(lan, msg, NULL, &rrsp);
+
+	chan->free(chan, msg);
+    }
 }
 
 static void
-return_rsp_data(lan_data_t *lan, msg_t *msg, session_t *session,
+return_rsp_data(lanserv_data_t *lan, msg_t *msg, session_t *session,
 		uint8_t *data, int len)
 {
     rsp_msg_t rsp;
@@ -523,7 +553,7 @@ return_rsp_data(lan_data_t *lan, msg_t *msg, session_t *session,
 }
 
 static void
-return_err(lan_data_t *lan, msg_t *msg, session_t *session, uint8_t err)
+return_err(lanserv_data_t *lan, msg_t *msg, session_t *session, uint8_t err)
 {
     rsp_msg_t rsp;
 
@@ -535,7 +565,7 @@ return_err(lan_data_t *lan, msg_t *msg, session_t *session, uint8_t err)
 }
 
 static void
-handle_get_system_guid(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_get_system_guid(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     unsigned char rdata[17];
     unsigned int rdata_len = sizeof(rdata);
@@ -558,7 +588,7 @@ handle_get_system_guid(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void
-handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
+handle_get_channel_auth_capabilities(lanserv_data_t *lan, msg_t *msg)
 {
     uint8_t   data[9];
     uint8_t   chan;
@@ -611,7 +641,7 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 }
 
 static void
-handle_get_session_challenge(lan_data_t *lan, msg_t *msg)
+handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
 {
     uint8_t  data[21];
     user_t   *user;
@@ -669,7 +699,7 @@ handle_get_session_challenge(lan_data_t *lan, msg_t *msg)
 }
 
 static void
-handle_no_session(lan_data_t *lan, msg_t *msg)
+handle_no_session(lanserv_data_t *lan, msg_t *msg)
 {
     /* Should be a session challenge, validate everything else. */
     if (msg->seq != 0) {
@@ -710,19 +740,19 @@ handle_no_session(lan_data_t *lan, msg_t *msg)
 static void *
 ialloc(void *info, int size)
 {
-    lan_data_t *lan = info;
+    lanserv_data_t *lan = info;
     return lan->channel.alloc(&lan->channel, size);
 }
 
 static void
 ifree(void *info, void *data)
 {
-    lan_data_t *lan = info;
+    lanserv_data_t *lan = info;
     lan->channel.free(&lan->channel, data);
 }
 
 static session_t *
-find_free_session(lan_data_t *lan)
+find_free_session(lanserv_data_t *lan)
 {
     int i;
     /* Find a free session.  Session 0 is invalid. */
@@ -734,7 +764,7 @@ find_free_session(lan_data_t *lan)
 }
 
 static void
-handle_temp_session(lan_data_t *lan, msg_t *msg)
+handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 {
     uint8_t   seq_data[4];
     int       user_idx;
@@ -933,7 +963,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 /* The command handling below is for active sessions. */
 
 static void
-handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_smi_msg(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     msg_t *nmsg;
     int   rv;
@@ -968,7 +998,7 @@ handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void
-handle_activate_session_cmd(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_activate_session_cmd(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     uint8_t data[11];
 
@@ -995,7 +1025,7 @@ handle_activate_session_cmd(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void
-handle_set_session_privilege(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_set_session_privilege(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     uint8_t data[2];
     uint8_t priv;
@@ -1031,7 +1061,7 @@ handle_set_session_privilege(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void		
-handle_close_session(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_close_session(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     uint32_t  sid;
     session_t *nses = session;
@@ -1067,7 +1097,7 @@ handle_close_session(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 static void
-handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
+handle_get_session_info(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     uint8_t   idx;
     session_t *nses = NULL;
@@ -1152,7 +1182,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
     uint8_t    upd1, upd2;
     int        write_nonv = 0;
     uint8_t    newv;
-    lan_data_t *lan = chan->chan_info;
+    lanserv_data_t *lan = chan->chan_info;
 
     upd1 = (msg->data[1] >> 6) & 0x3;
     if ((upd1 == 1) || (upd1 == 2)) {
@@ -1229,7 +1259,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 {
     unsigned char err = 0;
     int           idx;
-    lan_data_t    *lan = chan->chan_info;
+    lanserv_data_t    *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1473,7 +1503,7 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
     unsigned char databyte = 0;
     unsigned char *data = NULL;
     unsigned int  length = 0;
-    lan_data_t    *lan = chan->chan_info;
+    lanserv_data_t    *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1642,7 +1672,7 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 }
 
 static void
-handle_normal_session(lan_data_t *lan, msg_t *msg)
+handle_normal_session(lanserv_data_t *lan, msg_t *msg)
 {
     session_t *session = sid_to_session(lan, msg->sid);
     int       rv;
@@ -1738,7 +1768,7 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
 }
 
 void
-handle_ipmi_payload(lan_data_t *lan, msg_t *msg)
+handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
 {
     if (msg->len < 7) {
 	lan->channel.log(LAN_ERR, msg,
@@ -1788,7 +1818,7 @@ handle_ipmi_payload(lan_data_t *lan, msg_t *msg)
 
 #ifdef HAVE_OPENSSL
 static int 
-rakp_hmac_sha1_init(lan_data_t *lan, session_t *session)
+rakp_hmac_sha1_init(lanserv_data_t *lan, session_t *session)
 {
     session->auth_data.akey = EVP_sha1();
     session->auth_data.akey_len = 20;
@@ -1797,7 +1827,7 @@ rakp_hmac_sha1_init(lan_data_t *lan, session_t *session)
 }
 
 static int 
-rakp_hmac_md5_init(lan_data_t *lan, session_t *session)
+rakp_hmac_md5_init(lanserv_data_t *lan, session_t *session)
 {
     session->auth_data.akey = EVP_md5();
     session->auth_data.akey_len = 16;
@@ -1806,7 +1836,7 @@ rakp_hmac_md5_init(lan_data_t *lan, session_t *session)
 }
 
 static int
-rakp_hmac_set2(lan_data_t *lan, session_t *session,
+rakp_hmac_set2(lanserv_data_t *lan, session_t *session,
 	       unsigned char *data,  unsigned int *data_len,
 	       unsigned int max_len)
 {
@@ -1856,7 +1886,7 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
 }
 
 static int
-rakp_hmac_check3(lan_data_t *lan, session_t *session,
+rakp_hmac_check3(lanserv_data_t *lan, session_t *session,
 		 unsigned char *data,  unsigned int *data_len)
 {
     unsigned char       idata[38];
@@ -1883,7 +1913,7 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
 }
 
 static int
-rakp_hmac_set4(lan_data_t *lan, session_t *session,
+rakp_hmac_set4(lanserv_data_t *lan, session_t *session,
 	       unsigned char *data,  unsigned int *data_len,
 	       unsigned int max_len)
 {
@@ -1924,7 +1954,7 @@ static auth_handlers_t rakp_hmac_md5 =
 #define RAKP_INIT , &rakp_hmac_sha1, &rakp_hmac_md5
 
 static int
-hmac_sha1_init(lan_data_t *lan, session_t *session)
+hmac_sha1_init(lanserv_data_t *lan, session_t *session)
 {
     session->auth_data.ikey2 = EVP_sha1();
     session->auth_data.ikey = session->auth_data.k1;
@@ -1934,7 +1964,7 @@ hmac_sha1_init(lan_data_t *lan, session_t *session)
 }
 
 static int
-hmac_md5_init(lan_data_t *lan, session_t *session)
+hmac_md5_init(lanserv_data_t *lan, session_t *session)
 {
     user_t *user = &(lan->bmcinfo->users[session->userid]);
     session->auth_data.ikey2 = EVP_md5();
@@ -1945,12 +1975,12 @@ hmac_md5_init(lan_data_t *lan, session_t *session)
 }
 
 static void
-hmac_cleanup(lan_data_t *lan, session_t *session)
+hmac_cleanup(lanserv_data_t *lan, session_t *session)
 {
 }
 
 static int 
-hmac_add(lan_data_t *lan, session_t *session,
+hmac_add(lanserv_data_t *lan, session_t *session,
 	 unsigned char *pos,
 	 unsigned int *data_len, unsigned int data_size)
 {
@@ -1968,7 +1998,7 @@ hmac_add(lan_data_t *lan, session_t *session,
 }
 
 static int
-hmac_check(lan_data_t *lan, session_t *session, msg_t *msg)
+hmac_check(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     unsigned char integ[20];
     auth_data_t   *a = &session->auth_data;
@@ -1997,7 +2027,7 @@ auth_free(void *info, void *data)
 }
 
 static int
-md5_init(lan_data_t *lan, session_t *session)
+md5_init(lanserv_data_t *lan, session_t *session)
 {
     user_t          *user = &(lan->bmcinfo->users[session->userid]);
     int             rv;
@@ -2013,14 +2043,14 @@ md5_init(lan_data_t *lan, session_t *session)
 }
 
 static void
-md5_cleanup(lan_data_t *lan, session_t *session)
+md5_cleanup(lanserv_data_t *lan, session_t *session)
 {
     ipmi_md5_authcode_cleanup(session->auth_data.idata);
     session->auth_data.idata = NULL;
 }
 
 static int 
-md5_add(lan_data_t *lan, session_t *session,
+md5_add(lanserv_data_t *lan, session_t *session,
 	 unsigned char *pos,
 	 unsigned int *data_len, unsigned int data_size)
 {
@@ -2042,7 +2072,7 @@ md5_add(lan_data_t *lan, session_t *session,
 }
 
 static int
-md5_check(lan_data_t *lan, session_t *session, msg_t *msg)
+md5_check(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     auth_data_t    *a = &session->auth_data;
     ipmi_auth_sg_t data[2];
@@ -2069,7 +2099,7 @@ static integ_handlers_t md5_integ =
 #define MD5_INIT , &md5_integ
 
 static int
-aes_cbc_init(lan_data_t *lan, session_t *session)
+aes_cbc_init(lanserv_data_t *lan, session_t *session)
 {
     session->auth_data.ckey = session->auth_data.k2;
     session->auth_data.ckey_len = 16;
@@ -2077,12 +2107,12 @@ aes_cbc_init(lan_data_t *lan, session_t *session)
 }
 
 static void
-aes_cbc_cleanup(lan_data_t *lan, session_t *session)
+aes_cbc_cleanup(lanserv_data_t *lan, session_t *session)
 {
 }
 
 static int
-aes_cbc_encrypt(lan_data_t *lan, session_t *session,
+aes_cbc_encrypt(lanserv_data_t *lan, session_t *session,
 		unsigned char **pos, unsigned int *hdr_left,
 		unsigned int *data_len, unsigned int *data_size)
 {
@@ -2161,7 +2191,7 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
 }
 
 static int
-aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
+aes_cbc_decrypt(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     auth_data_t    *a = &session->auth_data;
     unsigned int   l = msg->len;
@@ -2280,7 +2310,7 @@ struct valid_cypher_suites_s
 };
 
 void
-handle_open_session_payload(lan_data_t *lan, msg_t *msg)
+handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[36];
     unsigned char priv;
@@ -2458,7 +2488,7 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
 	close_session(lan, session);
 }
 
-void handle_rakp1_payload(lan_data_t *lan, msg_t *msg)
+void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[64];
     unsigned char priv;
@@ -2563,7 +2593,7 @@ void handle_rakp1_payload(lan_data_t *lan, msg_t *msg)
 	close_session(lan, session);
 }
 
-void handle_rakp3_payload(lan_data_t *lan, msg_t *msg)
+void handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[32];
     session_t     *session = NULL;
@@ -2623,7 +2653,7 @@ void handle_rakp3_payload(lan_data_t *lan, msg_t *msg)
 	session->in_startup = 0;
 }
 
-typedef void (*payload_handler_cb)(lan_data_t *lan, msg_t *msg);
+typedef void (*payload_handler_cb)(lanserv_data_t *lan, msg_t *msg);
 
 payload_handler_cb payload_handlers[64] =
 {
@@ -2634,7 +2664,7 @@ payload_handler_cb payload_handlers[64] =
 };
 
 int
-decrypt_message(lan_data_t *lan, session_t *session, msg_t *msg)
+decrypt_message(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.encrypted) {
 	if (session->conf != 0) {
@@ -2650,7 +2680,7 @@ decrypt_message(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 int
-check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
+check_message_integrity(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.authenticated) {
 	if (session->integ != 0) {
@@ -2671,7 +2701,7 @@ check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
 }
 
 void
-ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
+ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned int len;
     uint32_t     *seq;
@@ -2787,7 +2817,7 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 }
 
 void
-ipmi_handle_rmcp_msg(lan_data_t *lan, msg_t *msg)
+ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char *tsid;
     unsigned char *tseq;
@@ -2878,7 +2908,7 @@ ipmi_handle_rmcp_msg(lan_data_t *lan, msg_t *msg)
 }
 
 void
-ipmi_handle_lan_msg(lan_data_t *lan,
+ipmi_handle_lan_msg(lanserv_data_t *lan,
 		    uint8_t *data, int len,
 		    void *from_addr, int from_len)
 {
@@ -2915,7 +2945,7 @@ ipmi_handle_lan_msg(lan_data_t *lan,
 }
 
 void
-ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
+ipmi_lan_tick(lanserv_data_t *lan, unsigned int time_since_last)
 {
     int i;
 
@@ -2937,7 +2967,7 @@ ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
 }
 
 int
-ipmi_lan_init(lan_data_t *lan)
+ipmi_lan_init(lanserv_data_t *lan)
 {
     int     i;
     uint8_t challenge_data[16];

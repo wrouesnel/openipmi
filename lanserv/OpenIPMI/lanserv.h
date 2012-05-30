@@ -70,37 +70,37 @@ extern "C" {
 #define SESSION_MASK		0x3f
 
 typedef struct session_s session_t;
-typedef struct lan_data_s lan_data_t;
+typedef struct lanserv_data_s lanserv_data_t;
 
 typedef struct integ_handlers_s
 {
-    int (*init)(lan_data_t *lan, session_t *session);
-    void (*cleanup)(lan_data_t *lan, session_t *session);
-    int (*add)(lan_data_t *lan, session_t *session,
+    int (*init)(lanserv_data_t *lan, session_t *session);
+    void (*cleanup)(lanserv_data_t *lan, session_t *session);
+    int (*add)(lanserv_data_t *lan, session_t *session,
 	       unsigned char *pos,
 	       unsigned int *data_len, unsigned int data_size);
-    int (*check)(lan_data_t *lan, session_t *session, msg_t *msg);
+    int (*check)(lanserv_data_t *lan, session_t *session, msg_t *msg);
 } integ_handlers_t;
 
 typedef struct conf_handlers_s
 {
-    int (*init)(lan_data_t *lan, session_t *session);
-    void (*cleanup)(lan_data_t *lan, session_t *session);
-    int (*encrypt)(lan_data_t *lan, session_t *session,
+    int (*init)(lanserv_data_t *lan, session_t *session);
+    void (*cleanup)(lanserv_data_t *lan, session_t *session);
+    int (*encrypt)(lanserv_data_t *lan, session_t *session,
 		   unsigned char **pos, unsigned int *hdr_left,
 		   unsigned int *data_len, unsigned int *data_size);
-    int (*decrypt)(lan_data_t *lan, session_t *session, msg_t *msg);
+    int (*decrypt)(lanserv_data_t *lan, session_t *session, msg_t *msg);
 } conf_handlers_t;
 
 typedef struct auth_handlers_s
 {
-    int (*init)(lan_data_t *lan, session_t *session);
-    int (*set2)(lan_data_t *lan, session_t *session,
+    int (*init)(lanserv_data_t *lan, session_t *session);
+    int (*set2)(lanserv_data_t *lan, session_t *session,
 		unsigned char *data, unsigned int *data_len,
 		unsigned int max_len);
-    int (*check3)(lan_data_t *lan, session_t *session,
+    int (*check3)(lanserv_data_t *lan, session_t *session,
 		  unsigned char *data, unsigned int *data_len);
-    int (*set4)(lan_data_t *lan, session_t *session,
+    int (*set4)(lanserv_data_t *lan, session_t *session,
 		unsigned char *data, unsigned int *data_len,
 		unsigned int max_len);
 } auth_handlers_t;
@@ -179,7 +179,7 @@ typedef struct lanparm_data_s lanparm_data_t;
 struct lanparm_data_s
 {
     unsigned int set_in_progress : 2;
-    void (*commit)(lan_data_t *lan); /* Called when the commit occurs. */
+    void (*commit)(lanserv_data_t *lan); /* Called when the commit occurs. */
     unsigned int auth_type_support : 6; /* Read-only */
     unsigned int ip_addr_src : 4;
     unsigned int bmc_gen_arp_ctl : 2;
@@ -232,7 +232,7 @@ struct lanparm_data_s
     } changed;
 };
 
-struct lan_data_s
+struct lanserv_data_s
 {
     bmc_data_t *bmcinfo;
 
@@ -250,12 +250,12 @@ struct lan_data_s
 
     /* Set by the user code, used to actually send a raw message out
        the UDP socket */
-    void (*send_out)(lan_data_t *lan,
+    void (*send_out)(lanserv_data_t *lan,
 		     struct iovec *data, int vecs,
 		     void *addr, int addr_len);
 
     /* Generate 'size' bytes of random data into 'data'. */
-    int (*gen_rand)(lan_data_t *lan, void *data, int size);
+    int (*gen_rand)(lanserv_data_t *lan, void *data, int size);
 
     int debug;
 
@@ -273,16 +273,16 @@ struct lan_data_s
     lanparm_data_t lanparm;
     lanparm_data_t lanparm_rollback;
 
-    lanserv_addr_t *lan_addrs;
+    lan_addr_t *lan_addrs;
     int num_lan_addrs;
 };
 
 
-void handle_asf(lan_data_t *lan,
+void handle_asf(lanserv_data_t *lan,
 		unsigned char *data, int len,
 		void *from_addr, int from_len);
 
-void ipmi_handle_lan_msg(lan_data_t *lan,
+void ipmi_handle_lan_msg(lanserv_data_t *lan,
 			 unsigned char *data, int len,
 			 void *from_addr, int from_len);
 
@@ -294,9 +294,9 @@ int lanserv_read_config(bmc_data_t   *bmc,
 
 /* Call this periodically to time things.  time_since_last is the
    number of seconds since the last call to this. */
-void ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last);
+void ipmi_lan_tick(lanserv_data_t *lan, unsigned int time_since_last);
 
-int ipmi_lan_init(lan_data_t *lan);
+int ipmi_lan_init(lanserv_data_t *lan);
 
 #ifdef __cplusplus
 }

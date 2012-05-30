@@ -346,8 +346,18 @@ read_config(bmc_data_t *bmc,
 
 	if (strcmp(tok, "startlan") == 0) {
 	    err = get_uint(&tokptr, &val, &errstr);
+	    if (!err && (val >= IPMI_MAX_CHANNELS)) {
+		err = -1;
+		errstr = "Channel number out of range";
+	    }
+	    if (!err && bmc->channels[val]) {
+		err = -1;
+		errstr = "Channel already in use";
+	    }
 	    if (!err) {
 		err = lanserv_read_config(bmc, f, &line, val);
+		if (err)
+		    return err;
 	    }
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, bmc, &errstr);

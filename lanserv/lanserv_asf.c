@@ -93,7 +93,7 @@ rmcp_set_uint32(uint8_t *data, int val)
 
 #define ASF_IANA 4542
 void
-handle_asf(lan_data_t *lan,
+handle_asf(lanserv_data_t *lan,
 	   uint8_t *data, int len,
 	   void *from_addr, int from_len)
 {

@@ -62,6 +62,7 @@
 
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/serserv.h>
 
 #ifndef IPMI_LAN_STD_PORT_STR
 #define IPMI_LAN_STD_PORT_STR	"623"
@@ -79,7 +80,7 @@ lanserv_read_config(bmc_data_t    *bmc,
     unsigned int val;
     int          err = 0;
     char         *errstr;
-    lan_data_t   *lan;
+    lanserv_data_t *lan;
 
     lan = bmc->alloc(bmc, sizeof(*lan));
     if (!lan) {
@@ -133,8 +134,8 @@ lanserv_read_config(bmc_data_t    *bmc,
 	    err = get_auths(&tokptr, &val, &errstr);
 	    lan->channel.priv_info[3].allowed_auths = val;
 	} else if (strcmp(tok, "addr") == 0) {
-	    lanserv_addr_t *newa = malloc(sizeof(*newa) *
-					  (lan->num_lan_addrs + 1));
+	    lan_addr_t *newa = malloc(sizeof(*newa) *
+				      (lan->num_lan_addrs + 1));
 	    if (!newa) {
 	        fprintf(stderr, "Out of memory on line %d\n", *line);
 		return -1;
@@ -157,20 +158,16 @@ lanserv_read_config(bmc_data_t    *bmc,
 	    if (!lan->guid)
 		return -1;
 	    err = read_bytes(&tokptr, lan->guid, &errstr, 16);
-	    if (err) {
-	        fprintf(stderr, "Error on line %d: %s\n", *line, errstr);
-		return err;
-	    }	
+	    if (err)
+		goto out_err;
 	} else if (strcmp(tok, "bmc_key") == 0) {
 	    if (!lan->bmc_key)
 		lan->bmc_key = malloc(20);
 	    if (!lan->bmc_key)
 		return -1;
 	    err = read_bytes(&tokptr, lan->bmc_key, &errstr, 20);
-	    if (err) {
-	        fprintf(stderr, "Error on line %d: %s\n", *line, errstr);
-		return err;
-	    }	
+	    if (err)
+		goto out_err;
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

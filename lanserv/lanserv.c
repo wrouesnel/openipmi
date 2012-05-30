@@ -134,20 +134,20 @@ bfree(bmc_data_t *bmc, void *data)
     return free(data);
 }
 
-typedef struct lan_addr_s
+typedef struct lanserv_addr_s
 {
     sockaddr_ip_t   addr;
     socklen_t       addr_len;
     int             xmit_fd;
-} lan_addr_t;
+} lanserv_addr_t;
 
 static void
-lan_send(lan_data_t *lan,
+lan_send(lanserv_data_t *lan,
 	 struct iovec *data, int vecs,
 	 void *addr, int addr_len)
 {
     struct msghdr msg;
-    lan_addr_t    *l = addr;
+    lanserv_addr_t *l = addr;
     int           rv;
 
     if (debug) {
@@ -252,7 +252,7 @@ smi_send_dev(channel_t *chan, msg_t *msg)
 }
 
 static int
-gen_rand(lan_data_t *lan, void *data, int len)
+gen_rand(lanserv_data_t *lan, void *data, int len)
 {
     int fd = open("/dev/urandom", O_RDONLY);
     int rv;
@@ -359,9 +359,9 @@ handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 static void
 lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 {
-    lan_data_t *lan = cb_data;
+    lanserv_data_t *lan = cb_data;
     int                len;
-    lan_addr_t         l;
+    lanserv_addr_t     l;
     unsigned char      data[256];
 
     l.addr_len = sizeof(l.addr);
@@ -682,7 +682,7 @@ main(int argc, const char *argv[])
 	chan->free = ifree;
 
 	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN) {
-	    lan_data_t *lan = chan->chan_info;
+	    lanserv_data_t *lan = chan->chan_info;
 
 	    lan->user_info = &data;
 	    lan->send_out = lan_send;

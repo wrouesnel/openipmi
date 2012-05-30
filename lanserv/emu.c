@@ -182,6 +182,9 @@ struct lmc_data_s
 
     unsigned char ipmb;
 
+    unsigned char evq[16];
+    unsigned int  ev_in_q;
+
     /* Get Device Id contents. */
     unsigned char device_id;       /* byte 2 */
     unsigned char has_device_sdrs; /* byte 3, bit 7 */
@@ -398,6 +401,27 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     return 0;
 }
 
+static void
+mc_new_event(lmc_data_t *mc,
+	     unsigned char record_type,
+	     unsigned char event[13])
+{
+    unsigned int recid;
+    int rv;
+
+    rv = ipmi_mc_add_to_sel(mc, 0xc0, event, &recid);
+    if (rv)
+	recid = 0xffff;
+    if (!mc->ev_in_q) {
+	mc->ev_in_q = 1;
+	ipmi_set_uint16(mc->evq, recid);
+	mc->evq[2] = record_type;
+	memcpy(mc->evq + 3, event, 13);
+	if (mc->bmcinfo->channels[15]->event_q_full)
+	    mc->bmcinfo->channels[15]->event_q_full(mc->bmcinfo->channels[15],
+						    1);
+    }
+}
 
 static void
 handle_invalid_cmd(lmc_data_t    *mc,
@@ -2178,6 +2202,72 @@ handle_set_channel_access(lmc_data_t    *mc,
 }
 
 static void
+handle_read_event_msg_buffer(lmc_data_t    *mc,
+			     msg_t         *msg,
+			     unsigned char *rdata,
+			     unsigned int  *rdata_len)
+{
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->ev_in_q) {
+	rdata[0] = 0x80;
+	*rdata_len = 0;
+	return;
+    }
+
+    rdata[0] = 0;
+    memcpy(rdata + 1, mc->evq, 16);
+    *rdata_len = 17;
+    if (mc->bmcinfo->channels[15]->event_q_full)
+	mc->bmcinfo->channels[15]->event_q_full(mc->bmcinfo->channels[15], 0);
+}
+
+static void
+handle_get_msg(lmc_data_t    *mc,
+	       msg_t         *msg,
+	       unsigned char *rdata,
+	       unsigned int  *rdata_len)
+{
+    msg_t *qmsg;
+
+    if (!mc->bmcinfo) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    qmsg = mc->bmcinfo->recv_q_head;
+    if (!qmsg) {
+	rdata[0] = 0x80;
+	*rdata_len = 0;
+	return;
+    }
+
+    if (qmsg->len + 2 > *rdata_len) {
+	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    mc->bmcinfo->recv_q_head = qmsg->next;
+    if (!qmsg->next) {
+	mc->bmcinfo->recv_q_tail = NULL;
+	if (mc->bmcinfo->channels[15]->recv_in_q)
+	    mc->bmcinfo->channels[15]->recv_in_q(mc->bmcinfo->channels[15], 0);
+    }
+
+    rdata[0] = 0;
+    rdata[1] = 0; /* Always channel 0 for now, FIXME - privilege level? */
+    memcpy(rdata + 2, qmsg->data, qmsg->len);
+    *rdata_len = qmsg->len + 2;
+    free(qmsg);
+}
+
+static void
 handle_app_netfn(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
@@ -2218,6 +2308,14 @@ handle_app_netfn(lmc_data_t    *mc,
 
     case IPMI_SET_CHANNEL_ACCESS_CMD:
 	handle_set_channel_access(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_READ_EVENT_MSG_BUFFER_CMD:
+	handle_read_event_msg_buffer(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_MSG_CMD:
+	handle_get_msg(mc, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -2606,7 +2704,7 @@ do_event(lmc_data_t    *mc,
     data[11] = byte2;
     data[12] = byte3;
 
-    ipmi_mc_add_to_sel(dest_mc, 0x02, data, NULL);
+    mc_new_event(dest_mc, 0x02, data);
 }
 
 static void
@@ -3651,7 +3749,7 @@ ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
     data[11] = 0;
     data[12] = 0;
 
-    ipmi_mc_add_to_sel(dest_mc, 0xc0, data, NULL);
+    mc_new_event(dest_mc, 0xc0, data);
 	
     return 0;
 }
@@ -4803,49 +4901,72 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 
 void
 ipmi_emu_handle_msg(emu_data_t    *emu,
-		    msg_t         *msg,
-		    unsigned char *rdata,
-		    unsigned int  *rdata_len)
+		    msg_t         *omsg,
+		    unsigned char *ordata,
+		    unsigned int  *ordata_len)
 {
     lmc_data_t *mc;
-    msg_t smsg;
-    msg_t *omsg = msg;
-    unsigned int olen = *rdata_len;
+    msg_t smsg, *rmsg = NULL;
+    msg_t *msg;
     unsigned char *data = NULL;
+    unsigned char *rdata;
+    unsigned int  *rdata_len;
 
-    if (msg->cmd == IPMI_SEND_MSG_CMD) {
+    if (omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* Encapsulated IPMB, do special handling. */
 	unsigned char slave;
 	unsigned int  data_len;
 
-	if (check_msg_length(msg, 8, rdata, rdata_len))
+	if (check_msg_length(omsg, 8, ordata, ordata_len))
 	    return;
-	if ((msg->data[0] & 0x3f) != 0) {
-	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	    *rdata_len = 1;
+	if ((omsg->data[0] & 0x3f) != 0) {
+	    ordata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *ordata_len = 1;
 	    return;
 	}
 
-	data = msg->data + 1;
-	data_len = msg->len - 1;
+	data = omsg->data + 1;
+	data_len = omsg->len - 1;
 	if (data[0] == 0) {
 	    /* Broadcast, just skip the first byte, but check len. */
 	    data++;
 	    data_len--;
 	    if (data_len < 7) {
-		rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-		*rdata_len = 1;
+		ordata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+		*ordata_len = 1;
 		return;
 	    }
 	}
 	slave = data[0];
 	mc = emu->ipmb[slave >> 1];
 	if (!mc || !mc->enabled) {
-	    rdata[0] = 0x83; /* NAK on Write */
-	    *rdata_len = 1;
+	    ordata[0] = 0x83; /* NAK on Write */
+	    *ordata_len = 1;
 	    return;
 	}
 
+	rmsg = malloc(sizeof(*rmsg) + IPMI_SIM_MAX_MSG_LENGTH);
+	if (!rmsg) {
+	    ordata[0] = IPMI_OUT_OF_SPACE_CC;
+	    *ordata_len = 1;
+	    return;
+	}
+
+	*rmsg = *omsg;
+
+	rmsg->data = ((unsigned char *) rmsg) + sizeof(*rmsg);
+	rmsg->len = IPMI_SIM_MAX_MSG_LENGTH - 7; /* header and checksum */
+	rmsg->netfn = (data[1] & 0xfc) >> 2;
+	rmsg->cmd = data[5];
+	rdata = rmsg->data + 6;
+	rdata_len = &rmsg->len;
+	rmsg->data[0] = emu->bmcinfo->bmc_ipmb;
+	rmsg->data[1] = ((data[1] & 0xfc) | 0x4) | (data[4] & 0x3);
+	rmsg->data[2] = ipmb_checksum(rdata+1, 2, 0);
+	rmsg->data[3] = data[0];
+	rmsg->data[4] = (data[4] & 0xfc) | (data[1] & 0x03);
+	rmsg->data[5] = data[5];
+	    
 	smsg.netfn = data[1] >> 2;
 	smsg.rs_lun = data[1] & 0x3;
 	smsg.cmd = data[5];
@@ -4861,6 +4982,9 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    *rdata_len = 1;
 	    return;
 	}
+	rdata = ordata;
+	rdata_len = ordata_len;
+	msg = omsg;
     }
 
     switch (msg->netfn) {
@@ -4894,26 +5018,22 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     }
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
-	int i;
+	ordata[0] = 0;
+	*ordata_len = 1;
 
-	if (*rdata_len + 8 > olen) {
-	    rdata[0] = IPMI_CANNOT_RETURN_REQ_LENGTH_CC;
-	    *rdata_len = 1;
-	    return;
+	rmsg->len += 6;
+	rmsg->data[rmsg->len] = ipmb_checksum(rmsg->data, rmsg->len, 0);
+	rmsg->len += 1;
+	if (emu->bmcinfo->recv_q_tail) {
+	    rmsg->next = emu->bmcinfo->recv_q_tail;
+	    emu->bmcinfo->recv_q_tail = rmsg;
+	} else {
+	    rmsg->next = NULL;
+	    emu->bmcinfo->recv_q_head = rmsg;
+	    emu->bmcinfo->recv_q_tail = rmsg;
 	}
-
-	for (i=*rdata_len-1; i>=0; i--)
-	    rdata[i+7] = rdata[i];
-	rdata[0] = 0;
-	rdata[1] = emu->bmcinfo->bmc_ipmb;
-	rdata[2] = ((msg->netfn | 1) << 2) | (data[4] & 0x3);
-	rdata[3] = ipmb_checksum(rdata+1, 2, 0);
-	rdata[4] = data[0];
-	rdata[5] = (data[4] & 0xfc) | (data[1] & 0x03);
-	rdata[6] = data[5];
-	*rdata_len += 7;
-	rdata[*rdata_len] = ipmb_checksum(rdata, *rdata_len, 0);
-	*rdata_len += 1;
+	if (emu->bmcinfo->channels[15]->recv_in_q)
+	    emu->bmcinfo->channels[15]->recv_in_q(mc->bmcinfo->channels[15], 1);
     }
 }
 

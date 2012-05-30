@@ -55,7 +55,9 @@
 
 #include <ctype.h>
 #include <string.h>
-#include <OpenIPMI/lanserv.h>
+#include <stdlib.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/serserv.h>
 
 #define EVENT_BUFFER_GLOBAL_ENABLE	(1 << 2)
 #define EVENT_LOG_GLOBAL_ENABLE		(1 << 3)
@@ -138,27 +140,31 @@ format_ipmb_rsp(msg_t *msg, unsigned char *msgd,
 static void
 queue_ipmb(msg_t *msg, serserv_data_t *si)
 {
+#if 0
     msg->next = NULL;
     if (si->ipmb_q_tail)
 	si->ipmb_q_tail->next = msg;
     else
 	si->ipmb_q = msg;
     si->ipmb_q_tail = msg;
+#endif
     if (si->do_attn)
-	si->ser_send(si, si->attn_chars, si->attn_chars_len);
+	si->send_out(si, si->attn_chars, si->attn_chars_len);
 }
 
 static void
 queue_event(msg_t *emsg, serserv_data_t *si)
 {
+#if 0
     emsg->next = NULL;
     if (si->event_q_tail)
 	si->event_q_tail->next = emsg;
     else
 	si->event_q = emsg;
     si->event_q_tail = emsg;
+#endif
     if (si->do_attn)
-	si->ser_send(si, si->attn_chars, si->attn_chars_len);
+	si->send_out(si, si->attn_chars, si->attn_chars_len);
 }
 
 /***********************************************************************
@@ -192,7 +198,7 @@ static void ra_format_msg(const unsigned char *msg, unsigned int msg_len,
     c[len] = 0x0d;
     len++;
 
-    si->ser_send(si, c, len);
+    si->send_out(si, c, len);
 }
 
 static void
@@ -234,7 +240,7 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
     if (rv)
 	return rv;
     if ((msg.rs_addr == si->bmcinfo->bmc_ipmb) || (msg.rs_addr == 1))
-	si->smi_send(si, &msg);
+	si->channel.smi_send(&si->channel, &msg);
     else {
 	/* FIXME - handle_ipmb_msg(o + p, i, mi, mi); */
     }
@@ -337,7 +343,7 @@ dm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     rv = unformat_ipmb_msg(&msg, imsg, len, si);
     if (rv)
 	return;
-    si->smi_send(si, &msg);
+    si->channel.smi_send(&si->channel, &msg);
 }
 
 static void
@@ -373,7 +379,7 @@ dm_handle_char(unsigned char ch, serserv_data_t *si)
 	info->in_escape = 0;
 
 	c = DM_PACKET_HANDSHAKE;
-	si->ser_send(si, &c, 1);
+	si->send_out(si, &c, 1);
 	break;
 
     case DM_PACKET_HANDSHAKE:
@@ -464,7 +470,7 @@ dm_send(msg_t *imsg, serserv_data_t *si)
     }
     c[len++] = 0xA5;
 
-    si->ser_send(si, c, len);
+    si->send_out(si, c, len);
 }
 
 static int
@@ -545,7 +551,7 @@ tm_send(msg_t *msg, serserv_data_t *si)
     c[len] = 0x0a;
     len++;
 
-    si->ser_send(si, c, len);
+    si->send_out(si, c, len);
 }
 
 /*
@@ -595,7 +601,7 @@ static int tm_unformat_msg(unsigned char *r, unsigned int len,
 	msg.data = o + 3;
 	msg.len = i =- 3;
 
-	si->smi_send(si, &msg);
+	si->channel.smi_send(&si->channel, &msg);
 	return 0;
 #undef SKIP_SPACE
 #undef ENSURE_MORE
@@ -814,4 +820,140 @@ ser_lookup_oem(char *name)
 	    return &oem_handlers[i];
     }
     return NULL;
+}
+
+static void
+ser_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
+{
+}
+
+int
+serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
+{
+    serserv_data_t *ser;
+    char *tok, *tok2, *endp;
+    int err;
+    unsigned int chan_num;
+
+    ser = malloc(sizeof(*ser));
+    if (!ser) {
+	*errstr = "Out of memory";
+	return -1;
+    }
+    memset(ser, 0, sizeof(*ser));
+
+    tok = strtok_r(NULL, " \t\n", tokptr);
+    if (!tok) {
+	*errstr = "No channel given";
+	goto out_err;
+    }
+    ser->channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    ser->channel.medium_type = IPMI_CHANNEL_MEDIUM_RS232;
+    if (strcmp(tok, "kcs") == 0) {
+	chan_num = 15;
+	ser->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
+    } else if (strcmp(tok, "bt") == 0) {
+	chan_num = 15;
+	ser->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_BT_v15;
+    } else if (strcmp(tok, "smic") == 0) {
+	chan_num = 15;
+	ser->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_SMIC;
+    } else {
+	chan_num = strtoul(tok, &endp, 0);
+	if (*endp != '\0') {
+	    *errstr = "Channel not a valid number";
+	    goto out_err;
+	}
+	ser->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_TMODE;
+    }
+    if (chan_num != 15) {
+	*errstr = "Only BMC channel (channel 15, or kcs/bt/smic) is"
+	    " supported for serial";
+	goto out_err;
+    }
+
+    if (bmc->channels[chan_num] != &bmc->sys_channel) {
+	*errstr = "System channel already defined";
+	goto out_err;
+    }
+    ser->channel.channel_num = chan_num;
+
+    err = get_sock_addr(tokptr, &ser->addr.addr, &ser->addr.addr_len,
+			NULL, errstr);
+    if (err)
+	return err;
+
+    tok = strtok_r(NULL, " \t\n", tokptr);
+    while (tok) {
+	if (strcmp(tok, "connect") == 0) {
+	    ser->do_connect = 1;
+	    continue;
+	}
+
+	tok2 = strtok_r(NULL, " \t\n", tokptr);
+	if (strcmp(tok, "codec") == 0) {
+	    ser->codec = ser_lookup_codec(tok2);
+	    if (!ser->codec) {
+		*errstr = "Invalid codec";
+		return -1;
+	    }
+	} else if (strcmp(tok, "oem") == 0) {
+	    ser->oem = ser_lookup_oem(tok2);
+	    if (!ser->oem) {
+		*errstr = "Invalid oem setting";
+		return -1;
+	    }
+	} else if (strcmp(tok, "attn") == 0) {
+	    unsigned int pos = 0;
+	    char *tokptr2 = NULL;
+
+	    ser->do_attn = 1;
+	    tok2 = strtok_r(tok2, ",", &tokptr2);
+	    while (tok2) {
+		if (pos >= sizeof(ser->attn_chars)) {
+		    *errstr = "Too many attn characters";
+		    return -1;
+		}
+		ser->attn_chars[pos] = strtoul(tok2, &endp, 0);
+		if (*endp != '\0') {
+		    *errstr = "Invalid attn value";
+		    return -1;
+		}
+		pos++;
+		tok2 = strtok_r(NULL, ",", &tokptr2);
+	    }
+	    ser->attn_chars_len = pos;
+	} else if (strcmp(tok, "ipmb") == 0) {
+	    char *endp;
+	    ser->my_ipmb = strtoul(tok2, &endp, 0);
+	    if (*endp != '\0') {
+		*errstr = "Invalid IPMB address";
+		return -1;
+	    }
+	} else {
+	    *errstr = "Invalid setting, not connect, codec, oem, attn, or ipmb";
+	    return -1;
+	}
+    }
+
+    if (!ser->codec) {
+	*errstr = "codec not specified";
+	goto out_err;
+    }
+
+    ser->bmcinfo = bmc;
+    ser->channel.return_rsp = ser_return_rsp;
+    ser->channel.chan_info = ser;
+
+    /* FIXME - these should be in the main init code. */
+    ser->codec->setup(ser);
+    if (ser->oem)
+	ser->oem->init(ser);
+    
+    bmc->channels[chan_num] = &ser->channel;
+    return 0;
+
+ out_err:
+    free(ser);
+    return -1;
 }
