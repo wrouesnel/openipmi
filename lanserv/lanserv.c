@@ -601,7 +601,7 @@ main(int argc, const char *argv[])
     bmc_data_t  bmcinfo;
     misc_data_t data;
     int o;
-    int i;
+    unsigned int i;
     int err;
     poptContext poptCtx;
     struct timeval tv;

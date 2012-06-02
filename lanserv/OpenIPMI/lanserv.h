@@ -274,7 +274,7 @@ struct lanserv_data_s
     lanparm_data_t lanparm_rollback;
 
     lan_addr_t *lan_addrs;
-    int num_lan_addrs;
+    unsigned int num_lan_addrs;
 };
 
 

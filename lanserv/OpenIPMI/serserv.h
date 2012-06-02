@@ -57,6 +57,7 @@
 #define __SERSERV_H
 
 #include <OpenIPMI/serv.h>
+#include <OpenIPMI/os_handler.h>
 
 typedef struct serserv_data_s serserv_data_t;
 
@@ -71,9 +72,8 @@ typedef struct ser_codec_s {
 
 typedef struct ser_oem_handler_s {
     char *name;
-    int (*handler)(const unsigned char *msg, unsigned int len,
-		   serserv_data_t *si,
-		   unsigned char *rsp, unsigned int *rsp_len);
+    int (*handler)(channel_t *chan, msg_t *msg, unsigned char *rdata,
+		   unsigned int *rdata_len);
     void (*init)(serserv_data_t *si);
 } ser_oem_handler_t;
 
@@ -82,7 +82,14 @@ struct serserv_data_s {
 
     channel_t channel;
 
+    os_handler_t *os_hnd;
+
     bmc_data_t *bmcinfo;
+
+    void *user_info;
+
+    int bind_fd;
+    int con_fd;
 
     void (*send_out)(serserv_data_t *si, unsigned char *data,
 		     unsigned int data_len);
@@ -104,9 +111,8 @@ struct serserv_data_s {
     unsigned int  attn_chars_len;
 };
 
-ser_codec_t *ser_lookup_codec(char *name);
-ser_oem_handler_t *ser_lookup_oem(char *name);
-
 int serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr);
+int serserv_init(serserv_data_t *ser);
+void serserv_handle_data(serserv_data_t *ser, uint8_t *data, unsigned int len);
 
 #endif /* __SERSERV_H */

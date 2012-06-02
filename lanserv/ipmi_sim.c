@@ -80,6 +80,7 @@
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/serserv.h>
 
 #include "emu.h"
 
@@ -119,34 +120,6 @@ typedef struct sim_addr_s
     int             xmit_fd;
 } sim_addr_t;
 
-static void
-lan_send(lanserv_data_t *lan,
-	 struct iovec *data, int vecs,
-	 void *addr, int addr_len)
-{
-    struct msghdr msg;
-    sim_addr_t    *l = addr;
-    int           rv;
-
-    /* When we send messages to ourself, we set the address to NULL so
-       it won't be used. */
-    if (!l)
-	return;
-
-    msg.msg_name = &(l->addr);
-    msg.msg_namelen = l->addr_len;
-    msg.msg_iov = data;
-    msg.msg_iovlen = vecs;
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
-
-    rv = sendmsg(l->xmit_fd, &msg, 0);
-    if (rv) {
-	/* FIXME - log an error. */
-    }
-}
-
 static int
 smi_send(channel_t *chan, msg_t *msg)
 {
@@ -183,6 +156,34 @@ gen_rand(lanserv_data_t *lan, void *data, int len)
  out:
     close(fd);
     return rv;
+}
+
+static void
+lan_send(lanserv_data_t *lan,
+	 struct iovec *data, int vecs,
+	 void *addr, int addr_len)
+{
+    struct msghdr msg;
+    sim_addr_t    *l = addr;
+    int           rv;
+
+    /* When we send messages to ourself, we set the address to NULL so
+       it won't be used. */
+    if (!l)
+	return;
+
+    msg.msg_name = &(l->addr);
+    msg.msg_namelen = l->addr_len;
+    msg.msg_iov = data;
+    msg.msg_iovlen = vecs;
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
+
+    rv = sendmsg(l->xmit_fd, &msg, 0);
+    if (rv) {
+	/* FIXME - log an error. */
+    }
 }
 
 static void
@@ -241,8 +242,7 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     }
 
     rv = bind(fd, addr, addr_len);
-    if (rv == -1)
-    {
+    if (rv == -1) {
 	fprintf(stderr, "Unable to bind to LAN port: %s\n",
 		strerror(errno));
 	exit(1);
@@ -251,8 +251,223 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     return fd;
 }
 
+int
+lan_channel_init(misc_data_t *data, channel_t *chan)
+{
+    lanserv_data_t *lan = chan->chan_info;
+    int err;
+    unsigned int i;
+    int lan_fd;
+    os_hnd_fd_id_t *fd_id;
+
+    lan->user_info = data;
+    lan->send_out = lan_send;
+    lan->gen_rand = gen_rand;
+    lan->debug = debug;
+
+    err = ipmi_lan_init(lan);
+    if (err) {
+	fprintf(stderr, "Unable to init lan: 0x%x\n", err);
+	exit(1);
+    }
+
+    if (lan->guid) {
+	lmc_data_t *bmc = ipmi_emu_get_bmc_mc(data->emu);
+	if (bmc)
+	    ipmi_emu_set_mc_guid(bmc, lan->guid, 0);
+    }
+
+    if (lan->num_lan_addrs == 0) {
+	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
+	ipaddr->sin_family = AF_INET;
+	if (port > 0)
+	    ipaddr->sin_port = htons(port);
+	else
+	    ipaddr->sin_port = htons(623);
+	ipaddr->sin_addr.s_addr = INADDR_ANY;
+	lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
+	lan->num_lan_addrs++;
+    }
+
+    for (i=0; i<lan->num_lan_addrs; i++) {
+	unsigned char addr_data[6];
+
+	if (lan->lan_addrs[i].addr_len == 0)
+	    break;
+
+	lan_fd = open_lan_fd(&lan->lan_addrs[i].addr.s_ipsock.s_addr,
+			     lan->lan_addrs[i].addr_len);
+	if (lan_fd == -1) {
+	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+	    exit(1);
+	}
+
+	memcpy(addr_data,
+	       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_addr.s_addr,
+	       4);
+	memcpy(addr_data+4,
+	       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_port, 2);
+	ipmi_emu_set_addr(data->emu, i, 0, addr_data, 6);
+
+	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, lan_fd,
+					      lan_data_ready, lan,
+					      NULL, &fd_id);
+	if (err) {
+	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+	    exit(1);
+	}
+    }
+
+    return err;
+}
+
 static void
-lanserv_log(int logtype, msg_t *msg, char *format, ...)
+ser_send(serserv_data_t *ser, unsigned char *data, unsigned int data_len)
+{
+    int rv;
+
+    if (ser->con_fd == -1)
+	/* Not connected */
+	return;
+
+    rv = write(ser->con_fd, data, data_len);
+    if (rv) {
+	/* FIXME - log an error. */
+    }
+}
+
+static void
+ser_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    serserv_data_t *ser = cb_data;
+    int           len;
+    unsigned char msgd[256];
+
+    len = read(fd, msgd, sizeof(msgd));
+    if (len <= 0) {
+	if ((len < 0) && (errno == EINTR))
+	    return;
+
+	ser->os_hnd->remove_fd_to_wait_for(ser->os_hnd, id);
+	close(fd);
+	ser->con_fd = -1;
+	return;
+    }
+
+    serserv_handle_data(ser, msgd, len);
+}
+
+static void
+ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    serserv_data_t *ser = cb_data;
+    int rv;
+    int err;
+    os_hnd_fd_id_t *fd_id;
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+
+    rv = accept(fd, (struct sockaddr *) &addr, &addr_len);
+    if (rv < 0) {
+	perror("Error from accept");
+	exit(1);
+    }
+
+    if (ser->con_fd >= 0) {
+	printf("Already connected\n");
+	close(rv);
+	return;
+    }
+
+    ser->con_fd = rv;
+
+    err = ser->os_hnd->add_fd_to_wait_for(ser->os_hnd, ser->con_fd,
+					  ser_data_ready, ser,
+					  NULL, &fd_id);
+    if (err) {
+	fprintf(stderr, "Unable to add serial socket wait: 0x%x\n", err);
+	ser->con_fd = -1;
+	close(rv);
+    }
+}
+
+int
+ser_channel_init(misc_data_t *data, channel_t *chan)
+{
+    serserv_data_t *ser = chan->chan_info;
+    int err;
+    int fd;
+    struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
+    struct sockaddr_in *ipaddr = (struct sockaddr_in *) addr;
+    os_hnd_fd_id_t *fd_id;
+
+    ser->os_hnd = data->os_hnd;
+    ser->user_info = data;
+    ser->send_out = ser_send;
+
+    err = serserv_init(ser);
+    if (err) {
+	fprintf(stderr, "Unable to init serial: 0x%x\n", err);
+	exit(1);
+    }
+
+    fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd == -1) {
+	perror("Unable to create socket");
+	exit(1);
+    }
+
+    if (port > 0)
+	ipaddr->sin_port = htons(port);
+
+    if (ser->do_connect) {
+	err = connect(fd, addr, ser->addr.addr_len);
+	if (err == -1) {
+	    fprintf(stderr, "Unable to connect to serial TCP port: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
+	ser->con_fd = fd;
+	ser->bind_fd = -1;
+
+	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, ser->con_fd,
+					       ser_data_ready, ser,
+					       NULL, &fd_id);
+	if (err) {
+	    fprintf(stderr, "Unable to add serial socket wait: 0x%x\n", err);
+	    exit(1);
+	}
+    } else {
+	err = bind(fd, addr, ser->addr.addr_len);
+	if (err == -1) {
+	    fprintf(stderr, "Unable to bind to serial TCP port: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
+	ser->bind_fd = fd;
+	ser->con_fd = -1;
+
+	err = listen(fd, 1);
+	if (err == -1) {
+	    fprintf(stderr, "Unable to listen to serial TCP port: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
+
+	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, ser->bind_fd,
+					       ser_bind_ready, ser,
+					       NULL, &fd_id);
+	if (err) {
+	    fprintf(stderr, "Unable to add serial socket wait: 0x%x\n", err);
+	    exit(1);
+	}
+    }
+
+    return err;
+}
+
+static void
+sim_log(int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     struct timeval tod;
@@ -495,7 +710,6 @@ main(int argc, const char *argv[])
     int i;
     poptContext poptCtx;
     struct timeval tv;
-    int lan_fd;
     os_hnd_fd_id_t *fd_id;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
@@ -552,71 +766,15 @@ main(int argc, const char *argv[])
 
 	chan->smi_send = smi_send;
 	chan->oem.user_data = &data;
-	chan->log = lanserv_log;
+	chan->log = sim_log;
 	chan->alloc = ialloc;
 	chan->free = ifree;
 
-	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN) {
-	    lanserv_data_t *lan = chan->chan_info;
-
-	    lan->user_info = &data;
-	    lan->send_out = lan_send;
-	    lan->gen_rand = gen_rand;
-	    lan->debug = debug;
-
-	    err = ipmi_lan_init(lan);
-	    if (err) {
-		fprintf(stderr, "Unable to init lan: 0x%x\n", err);
-		exit(1);
-	    }
-
-	    if (lan->guid) {
-		lmc_data_t *bmc = ipmi_emu_get_bmc_mc(data.emu);
-		if (bmc)
-		    ipmi_emu_set_mc_guid(bmc, lan->guid, 0);
-	    }
-
-	    if (lan->num_lan_addrs == 0) {
-		struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
-		ipaddr->sin_family = AF_INET;
-		if (port > 0)
-		    ipaddr->sin_port = htons(port);
-		else
-		    ipaddr->sin_port = htons(623);
-		ipaddr->sin_addr.s_addr = INADDR_ANY;
-		lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
-		lan->num_lan_addrs++;
-	    }
-
-	    for (i=0; i<lan->num_lan_addrs; i++) {
-		unsigned char addr_data[6];
-
-		if (lan->lan_addrs[i].addr_len == 0)
-		    break;
-
-		lan_fd = open_lan_fd(&lan->lan_addrs[i].addr.s_ipsock.s_addr,
-				     lan->lan_addrs[i].addr_len);
-		if (lan_fd == -1) {
-		    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
-		    exit(1);
-		}
-
-		memcpy(addr_data,
-		       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_addr.s_addr,
-		       4);
-		memcpy(addr_data+4,
-		       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_port, 2);
-		ipmi_emu_set_addr(data.emu, i, 0, addr_data, 6);
-
-		err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd,
-						      lan_data_ready, lan,
-						      NULL, &fd_id);
-		if (err) {
-		    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
-		    exit(1);
-		}
-	    }
-	} else 
+	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)
+	    err = lan_channel_init(&data, bmcinfo.channels[i]);
+	else if (chan->medium_type == IPMI_CHANNEL_MEDIUM_RS232)
+	    err = ser_channel_init(&data, bmcinfo.channels[i]);
+	else 
 	    chan_init(chan);
     }
 

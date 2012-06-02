@@ -234,6 +234,13 @@ struct channel_s
 			    unsigned int *rdata_len);
 
     oem_handlers_t oem;
+
+    /*
+     * Set by the low-level interface code if it needs to handle
+     * received messages specially.
+     */
+    int (*oem_intf_recv_handler)(channel_t *chan, msg_t *msg,
+				 unsigned char *rdata, unsigned int *rdata_len);
 };
 
 typedef struct user_s
@@ -373,6 +380,8 @@ int ipmi_oem_send_msg(channel_t     *chan,
 
 void ipmi_handle_smi_rsp(channel_t *chan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
+
+int channel_smi_send(channel_t *chan, msg_t *msg);
 
 int chan_init(channel_t *chan);
 void bmcinfo_init(bmc_data_t *bmc);

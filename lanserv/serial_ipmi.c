@@ -57,6 +57,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/serserv.h>
 
 #define EVENT_BUFFER_GLOBAL_ENABLE	(1 << 2)
@@ -116,38 +117,31 @@ unformat_ipmb_msg(msg_t *msg, unsigned char *msgd, unsigned int len,
     msg->len = len - 6;
     msg->data = msgd + 6;
 
-    return 0;
-}
-
-int
-format_ipmb_rsp(msg_t *msg, unsigned char *msgd,
-		unsigned int *msgd_len, serserv_data_t *mi)
-{
-    msgd[0] = msg->rq_addr;
-    msgd[1] = (msg->netfn << 2) | msg->rq_lun;
-    msgd[2] = ipmb_checksum(msgd, 2);
-    msgd[3] = msg->rs_addr;
-    msgd[4] = (msg->rq_seq << 2) | msg->rs_lun;
-    msgd[5] = msg->cmd;
-    memcpy(msgd + 6, msg->data, msg->len);
-    *msgd_len = msg->len + 6;
-    msg->data[*msgd_len] = ipmb_checksum(msgd + 3, (*msgd_len) - 3);
-    (*msgd_len)++;
+    msg->src_addr = NULL;
+    msg->src_len = 0;
 
     return 0;
 }
 
 static void
+format_ipmb_rsp(msg_t *msg, unsigned char *msgd,
+		unsigned int *msgd_len, serserv_data_t *mi)
+{
+    msgd[0] = msg->rs_addr;
+    msgd[1] = (msg->netfn << 2) | msg->rs_lun;
+    msgd[2] = ipmb_checksum(msgd, 2);
+    msgd[3] = msg->rq_addr;
+    msgd[4] = (msg->rq_seq << 2) | msg->rq_lun;
+    msgd[5] = msg->cmd;
+    memcpy(msgd + 6, msg->data, msg->len);
+    *msgd_len = msg->len + 6;
+    msgd[*msgd_len] = ipmb_checksum(msgd + 3, (*msgd_len) - 3);
+    (*msgd_len)++;
+}
+
+static void
 queue_ipmb(msg_t *msg, serserv_data_t *si)
 {
-#if 0
-    msg->next = NULL;
-    if (si->ipmb_q_tail)
-	si->ipmb_q_tail->next = msg;
-    else
-	si->ipmb_q = msg;
-    si->ipmb_q_tail = msg;
-#endif
     if (si->do_attn)
 	si->send_out(si, si->attn_chars, si->attn_chars_len);
 }
@@ -155,14 +149,6 @@ queue_ipmb(msg_t *msg, serserv_data_t *si)
 static void
 queue_event(msg_t *emsg, serserv_data_t *si)
 {
-#if 0
-    emsg->next = NULL;
-    if (si->event_q_tail)
-	si->event_q_tail->next = emsg;
-    else
-	si->event_q = emsg;
-    si->event_q_tail = emsg;
-#endif
     if (si->do_attn)
 	si->send_out(si, si->attn_chars, si->attn_chars_len);
 }
@@ -236,11 +222,11 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
 	i++;
     }
 
-    rv = unformat_ipmb_msg(&msg, o, p, si);
+    rv = unformat_ipmb_msg(&msg, o, i, si);
     if (rv)
 	return rv;
     if ((msg.rs_addr == si->bmcinfo->bmc_ipmb) || (msg.rs_addr == 1))
-	si->channel.smi_send(&si->channel, &msg);
+	channel_smi_send(&si->channel, &msg);
     else {
 	/* FIXME - handle_ipmb_msg(o + p, i, mi, mi); */
     }
@@ -296,7 +282,7 @@ ra_send(msg_t *omsg, serserv_data_t *si)
     unsigned char msg[IPMI_SIM_MAX_MSG_LENGTH + 7];
     unsigned int msg_len;
 
-    msg_len = format_ipmb_rsp(omsg, msg, &msg_len, si);
+    format_ipmb_rsp(omsg, msg, &msg_len, si);
 
     ra_format_msg(msg, msg_len, si);
 }
@@ -343,7 +329,7 @@ dm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     rv = unformat_ipmb_msg(&msg, imsg, len, si);
     if (rv)
 	return;
-    si->channel.smi_send(&si->channel, &msg);
+    channel_smi_send(&si->channel, &msg);
 }
 
 static void
@@ -433,7 +419,7 @@ dm_send(msg_t *imsg, serserv_data_t *si)
     unsigned char msg[IPMI_SIM_MAX_MSG_LENGTH + 7];
     unsigned int msg_len;
 
-    msg_len = format_ipmb_rsp(imsg, msg, &msg_len, si);
+    format_ipmb_rsp(imsg, msg, &msg_len, si);
 
     c[len++] = 0xA0;
     for (i = 0; i < msg_len; i++) {
@@ -513,7 +499,7 @@ tm_send(msg_t *msg, serserv_data_t *si)
     c[len] = '[';
     len++;
 
-    t = msg->netfn << 2 | msg->rq_lun;
+    t = msg->netfn << 2 | msg->rs_lun;
     c[len] = hex2char[t >> 4];
     len++;
     c[len] = hex2char[t & 0xf];
@@ -599,9 +585,11 @@ static int tm_unformat_msg(unsigned char *r, unsigned int len,
 	msg.rq_seq = o[1] >> 2;
 	msg.cmd = o[2];
 	msg.data = o + 3;
-	msg.len = i =- 3;
+	msg.len = i - 3;
+	msg.src_addr = NULL;
+	msg.src_len = 0;
 
-	si->channel.smi_send(&si->channel, &msg);
+	channel_smi_send(&si->channel, &msg);
 	return 0;
 #undef SKIP_SPACE
 #undef ENSURE_MORE
@@ -700,7 +688,7 @@ static ser_codec_t codecs[] = {
     { NULL }
 };
 
-ser_codec_t *
+static ser_codec_t *
 ser_lookup_codec(char *name)
 {
     unsigned int i;
@@ -712,105 +700,95 @@ ser_lookup_codec(char *name)
     return NULL;
 }
 
-#if 0
 #define PP_GET_SERIAL_INTF_CMD	0x01
 #define PP_SET_SERIAL_INTF_CMD	0x02
 static unsigned char pp_oem_chars[] = { 0x00, 0x40, 0x0a };
 static int
-pp_oem_handler(const unsigned char *msg, unsigned int len,
-	       serserv_data_t *si,
-	       unsigned char *rsp, unsigned int *rsp_len)
+pp_oem_handler(channel_t *chan, msg_t *msg, unsigned char *rdata,
+	       unsigned int *rdata_len)
 {
-    if ((len < 3) || (memcmp(msg, pp_oem_chars, 3) != 0))
-	return -1;
-    msg += 3;
-    len -= 3;
+    serserv_data_t *ser = chan->chan_info;
+
+    if (msg->netfn != IPMI_OEM_GROUP_NETFN)
+	return 0;
+
+    if ((msg->len < 3) || (memcmp(msg->data, pp_oem_chars, 3) != 0))
+	return 0;
 		     
-    if (mi->netfn == IPMI_OEM_NETFN) {
-	switch (mi->cmd) {
-	case PP_GET_SERIAL_INTF_CMD:
-	    rsp[0] = 0;
-	    memcpy(rsp+1, pp_oem_chars, 3);
-	    rsp[4] = 0;
-	    if (msg[0] == 1)
-		rsp[4] |= mi->echo;
-	    *rsp_len = 5;
-	    break;
+    switch (msg->cmd) {
+    case PP_GET_SERIAL_INTF_CMD:
+	rdata[0] = 0;
+	memcpy(rdata + 1, pp_oem_chars, 3);
+	rdata[4] = 0;
+	if (msg->data[3] == 1)
+	    rdata[4] |= ser->echo;
+	*rdata_len = 5;
+	return 1;
 
-	case PP_SET_SERIAL_INTF_CMD:
-	    if (len < 2)
-		rsp[0] = 0xcc;
-	    else if (msg[0] == 1) {
-		mi->echo = msg[1] & 1;
-		rsp[0] = 0;
-	    }
-	    memcpy(rsp+1, pp_oem_chars, 3);
-	    *rsp_len = 4;
-	    break;
-
-	default:
-	    return -1;
+    case PP_SET_SERIAL_INTF_CMD:
+	if (msg->len < 5)
+	    rdata[0] = 0xcc;
+	else if (msg->data[3] == 1) {
+	    ser->echo = msg->data[4] & 1;
+	    rdata[0] = 0;
 	}
-    } else
-	return -1;
+	memcpy(rdata + 1, pp_oem_chars, 3);
+	*rdata_len = 4;
+	return 1;
+    }
 
     return 0;
 }
 
 static void
-pp_oem_init(serserv_data_t *si)
+pp_oem_init(serserv_data_t *ser)
 {
-    mi->echo = 1;
+    ser->echo = 1;
+    ser->channel.oem_intf_recv_handler = pp_oem_handler;
 }
 
 #define RA_CONTROLLER_OEM_NETFN	0x3e
 #define RA_GET_IPMB_ADDR_CMD	0x12
 static int
-ra_oem_handler(msg_t *msg, serserv_data_t *si)
+ra_oem_handler(channel_t *chan, msg_t *msg, unsigned char *rdata,
+	       unsigned int *rdata_len)
 {
-    if (mi->netfn == RA_CONTROLLER_OEM_NETFN) {
-	switch (mi->cmd) {
-	case RA_GET_IPMB_ADDR_CMD:
-	    rsp[0] = 0;
-	    rsp[1] = mi->my_ipmb;
-	    *rsp_len = 2;
-	    break;
+    serserv_data_t *ser = chan->chan_info;
 
-	default:
-	    return -1;
+    if (msg->netfn == RA_CONTROLLER_OEM_NETFN) {
+	switch (msg->cmd) {
+	case RA_GET_IPMB_ADDR_CMD:
+	    rdata[0] = 0;
+	    rdata[1] = ser->my_ipmb;
+	    *rdata_len = 2;
+	    return 1;
 	}
-    } else if (mi->netfn == IPMI_APP_NETFN) {
-	switch (mi->cmd) {
+    } else if (msg->netfn == IPMI_APP_NETFN) {
+	switch (msg->cmd) {
 	case IPMI_GET_MSG_FLAGS_CMD:
 	    /* No message flag support. */
-	    rsp[0] = 0xc1;
-	    *rsp_len = 1;
-	    break;
-
-	default:
-	    return -1;
+	    rdata[0] = 0xc1;
+	    *rdata_len = 1;
+	    return 1;
 	}
-    } else
-	return -1;
+    }
 
     return 0;
 }
 
 static void
-ra_oem_init(serserv_data_t *si)
+ra_oem_init(serserv_data_t *ser)
 {
+    ser->channel.oem_intf_recv_handler = ra_oem_handler;
 }
-#endif
 
 static ser_oem_handler_t oem_handlers[] = {
-#if 0
     { "PigeonPoint",		pp_oem_handler,		pp_oem_init },
     { "Radisys",		ra_oem_handler,		ra_oem_init },
-#endif
     { NULL }
 };
 
-ser_oem_handler_t *
+static ser_oem_handler_t *
 ser_lookup_oem(char *name)
 {
     unsigned int i;
@@ -823,8 +801,43 @@ ser_lookup_oem(char *name)
 }
 
 static void
-ser_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
+ser_return_rsp(channel_t *chan, msg_t *imsg, rsp_msg_t *rsp)
 {
+    serserv_data_t *ser = chan->chan_info;
+    msg_t msg;
+
+    msg.netfn = rsp->netfn;
+    msg.cmd = rsp->cmd;
+    msg.data = rsp->data;
+    msg.len = rsp->data_len;
+    msg.rq_lun = imsg->rs_lun;
+    msg.rq_addr = imsg->rs_addr;
+    msg.rs_lun = imsg->rq_lun;
+    msg.rs_addr = imsg->rq_addr;
+    msg.rq_seq = imsg->rq_seq;
+    ser->codec->send(&msg, ser);
+}
+
+void
+serserv_handle_data(serserv_data_t *ser, uint8_t *data, unsigned int len)
+{
+    unsigned int i;
+
+    for (i = 0; i < len; i++)
+	ser->codec->handle_char(data[i], ser);
+}
+
+int
+serserv_init(serserv_data_t *ser)
+{
+    ser->channel.return_rsp = ser_return_rsp;
+
+    ser->codec->setup(ser);
+    if (ser->oem)
+	ser->oem->init(ser);
+
+    chan_init(&ser->channel);
+    return 0;
 }
 
 int
@@ -835,6 +848,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     int err;
     unsigned int chan_num;
 
+printf("Reading config\n");
     ser = malloc(sizeof(*ser));
     if (!ser) {
 	*errstr = "Out of memory";
@@ -892,12 +906,20 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 
 	tok2 = strtok_r(NULL, " \t\n", tokptr);
 	if (strcmp(tok, "codec") == 0) {
+	    if (!tok2) {
+		*errstr = "Missing parameter for codec";
+		return -1;
+	    }
 	    ser->codec = ser_lookup_codec(tok2);
 	    if (!ser->codec) {
 		*errstr = "Invalid codec";
 		return -1;
 	    }
 	} else if (strcmp(tok, "oem") == 0) {
+	    if (!tok2) {
+		*errstr = "Missing parameter for oem";
+		return -1;
+	    }
 	    ser->oem = ser_lookup_oem(tok2);
 	    if (!ser->oem) {
 		*errstr = "Invalid oem setting";
@@ -906,6 +928,11 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	} else if (strcmp(tok, "attn") == 0) {
 	    unsigned int pos = 0;
 	    char *tokptr2 = NULL;
+
+	    if (!tok2) {
+		*errstr = "Missing parameter for attn";
+		return -1;
+	    }
 
 	    ser->do_attn = 1;
 	    tok2 = strtok_r(tok2, ",", &tokptr2);
@@ -934,6 +961,8 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	    *errstr = "Invalid setting, not connect, codec, oem, attn, or ipmb";
 	    return -1;
 	}
+
+	tok = strtok_r(NULL, " \t\n", tokptr);
     }
 
     if (!ser->codec) {
@@ -942,14 +971,8 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     }
 
     ser->bmcinfo = bmc;
-    ser->channel.return_rsp = ser_return_rsp;
     ser->channel.chan_info = ser;
 
-    /* FIXME - these should be in the main init code. */
-    ser->codec->setup(ser);
-    if (ser->oem)
-	ser->oem->init(ser);
-    
     bmc->channels[chan_num] = &ser->channel;
     return 0;
 

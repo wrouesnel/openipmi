@@ -60,6 +60,7 @@
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/serserv.h>
 
 int
 get_bool(char **tokptr, unsigned int *rval, char **err)
@@ -362,7 +363,7 @@ read_config(bmc_data_t *bmc,
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
-	  //err = get_serial(&tokptr, lan, &errstr);
+	    err = serserv_read_config(&tokptr, bmc, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

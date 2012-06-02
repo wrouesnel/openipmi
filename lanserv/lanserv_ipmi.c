@@ -965,36 +965,16 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 static void
 handle_smi_msg(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
-    msg_t *nmsg;
     int   rv;
 
-    nmsg = lan->channel.alloc(&lan->channel,
-			      sizeof(*nmsg)+msg->src_len+msg->len);
-    if (!nmsg) {
-	lan->channel.log(OS_ERROR, msg,
-		 "SMI message: out of memory");
+    rv = channel_smi_send(&lan->channel, msg);
+    if (rv == ENOMEM)
 	return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
-	return;
-    }
-
-    memcpy(nmsg, msg, sizeof(*nmsg));
-    nmsg->src_addr = ((char *) nmsg) + sizeof(*nmsg);
-    memcpy(nmsg->src_addr, msg->src_addr, msg->src_len);
-    nmsg->data  = ((uint8_t *) nmsg->src_addr) + msg->src_len;
-    memcpy(nmsg->data, msg->data, msg->len);
-    
-    rv = lan->channel.smi_send(&lan->channel, nmsg);
-    if (rv) {
-	lan->channel.log(OS_ERROR, msg,
-		 "SMI send: error %d", rv);
-	lan->channel.free(&lan->channel, nmsg);
-	if (rv == EMSGSIZE)
-	    return_err(lan, msg, session,
-		       IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC);
-	else
-	    return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
-	return;
-    }
+    else if (rv == EMSGSIZE)
+	return_err(lan, msg, session,
+		   IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC);
+    else if (rv)
+	return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
 }
 
 static void
