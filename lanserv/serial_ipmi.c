@@ -81,14 +81,14 @@ static int fromhex(unsigned char c)
 }
 
 static unsigned char
-ipmb_checksum(const unsigned char *data, int size)
+ipmb_checksum(const unsigned char *data, int size, unsigned char start)
 {
-	unsigned char csum = 0;
+	unsigned char csum = start;
 
 	for (; size > 0; size--, data++)
 		csum += *data;
 
-	return -csum;
+	return csum;
 }
 
 static int
@@ -100,7 +100,7 @@ unformat_ipmb_msg(msg_t *msg, unsigned char *msgd, unsigned int len,
 	return -1;
     }
 
-    if (ipmb_checksum(msgd, len) != 0) {
+    if (ipmb_checksum(msgd, len, 0) != 0) {
 	fprintf(stderr, "Message checksum failure\n");
 	return -1;
     }
@@ -129,13 +129,13 @@ format_ipmb_rsp(msg_t *msg, unsigned char *msgd,
 {
     msgd[0] = msg->rs_addr;
     msgd[1] = (msg->netfn << 2) | msg->rs_lun;
-    msgd[2] = ipmb_checksum(msgd, 2);
+    msgd[2] = -ipmb_checksum(msgd, 2, 0);
     msgd[3] = msg->rq_addr;
     msgd[4] = (msg->rq_seq << 2) | msg->rq_lun;
     msgd[5] = msg->cmd;
     memcpy(msgd + 6, msg->data, msg->len);
     *msgd_len = msg->len + 6;
-    msgd[*msgd_len] = ipmb_checksum(msgd + 3, (*msgd_len) - 3);
+    msgd[*msgd_len] = -ipmb_checksum(msgd + 3, (*msgd_len) - 3, 0);
     (*msgd_len)++;
 }
 
@@ -675,6 +675,186 @@ tm_setup(serserv_data_t *si)
 
 /***********************************************************************
  *
+ * VM Mode codec.
+ *
+ ***********************************************************************/
+
+/*
+ * This protocol has an end-of-message marker, everything from the
+ * beginning or the last end of message is a new message (or command).
+ * Messages are normal IPMI messages with the following header:
+ *
+ *   seq
+ *   netfn << 2 | lun
+ *   cmd
+ *   data....
+ *   checksum
+ *
+ * The sequence is return in the response as-is.
+ * Commands are special things to alert the other end of things like
+ * attn, requests for reset/nmi/etc.
+ */
+
+#define VM_MSG_CHAR	0xA0 /* Marks end of message */
+#define VM_CMD_CHAR	0xA1 /* Marks end of a command */
+#define VM_ESCAPE_CHAR	0xAA /* Set bit 4 from the next byte to 0 */
+
+#define VM_CMD_NOATTN		0x00
+#define VM_CMD_ATTN		0x01
+#define VM_CMD_POWEROFF		0x02
+#define VM_CMD_RESET		0x03
+#define VM_CMD_ENABLE_IRQ	0x04
+#define VM_CMD_DISABLE_IRQ	0x05
+
+struct vm_data {
+    unsigned char recv_msg[IPMI_SIM_MAX_MSG_LENGTH + 4];
+    unsigned int  recv_msg_len;
+    int           recv_msg_too_many;
+    int           in_escape;
+};
+
+static void
+vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
+{
+    msg_t msg;
+    
+    if (len < 4) {
+	fprintf(stderr, "Message too short\n");
+	return;
+    }
+
+    if (ipmb_checksum(imsg, len, 0) != 0) {
+	fprintf(stderr, "Message checksum failure\n");
+	return;
+    }
+    len--;
+
+    msg.rq_seq = imsg[0];
+    msg.netfn = imsg[1] >> 2;
+    msg.rs_lun = imsg[1] & 0x3;
+    msg.cmd = imsg[2];
+
+    channel_smi_send(&si->channel, &msg);
+}
+
+static void
+vm_handle_char(unsigned char ch, serserv_data_t *si)
+{
+    struct vm_data *info = si->codec_info;
+    unsigned int len = info->recv_msg_len;
+
+    switch (ch) {
+    case VM_MSG_CHAR:
+    case VM_CMD_CHAR:
+	if (info->in_escape) {
+	    fprintf(stderr, "Message ended in escape\n");
+	} else if (info->recv_msg_too_many) {
+	    fprintf(stderr, "Message too long\n");
+	} else if (info->recv_msg_len == 0) {
+	    /* Nothing to do */
+	} else if (ch == VM_MSG_CHAR) {
+	    vm_handle_msg(info->recv_msg, info->recv_msg_len, si);
+	} else if (ch == VM_CMD_CHAR) {
+	    /* FIXME - any commands? */
+	}
+	info->in_escape = 0;
+	info->recv_msg_len = 0;
+	info->recv_msg_too_many = 0;
+	break;
+
+    case VM_ESCAPE_CHAR:
+	if (!info->recv_msg_too_many)
+	    info->in_escape = 1;
+	break;
+
+    default:
+	if (info->in_escape) {
+	    info->in_escape = 0;
+	    ch &= ~0x10;
+	}
+
+	if (!info->recv_msg_too_many) {
+	    if (len >= sizeof(info->recv_msg)) {
+		info->recv_msg_too_many = 1;
+		break;
+	    }
+	    
+	    info->recv_msg[len] = ch;
+	    info->recv_msg_len++;
+	}
+	break;
+    }
+}
+
+static void
+vm_add_char(unsigned char ch, unsigned char *c, unsigned int *pos)
+{
+    switch (ch) {
+    case VM_MSG_CHAR:
+    case VM_CMD_CHAR:
+    case VM_ESCAPE_CHAR:
+	c[(*pos)++] = VM_ESCAPE_CHAR;
+	c[(*pos)++] = ch | 0x10;
+	break;
+	
+    default:
+	c[(*pos)++] = ch;
+    }
+}
+
+static void
+vm_send(msg_t *imsg, serserv_data_t *si)
+{
+    unsigned int i;
+    unsigned int len = 0;
+    unsigned char c[(IPMI_SIM_MAX_MSG_LENGTH + 7) * 2];
+    unsigned char csum;
+    unsigned char ch;
+
+    ch = imsg->rq_seq;
+    vm_add_char(ch, c, &len);
+    csum = ipmb_checksum(&ch, 1, 0);
+    ch = (imsg->netfn << 2) | imsg->rs_lun;
+    vm_add_char(ch, c, &len);
+    csum = ipmb_checksum(&ch, 1, csum);
+    vm_add_char(imsg->cmd, c, &len);
+    csum = ipmb_checksum(&imsg->cmd, 1, csum);
+    for (i = 0; i < imsg->len; i++)
+	vm_add_char(imsg->data[i], c, &len);
+    vm_add_char(-ipmb_checksum(imsg->data, imsg->len, csum), c, &len);
+    c[len++] = VM_MSG_CHAR;
+
+    si->send_out(si, c, len);
+}
+
+static void
+vm_event(msg_t *msg, serserv_data_t *si)
+{
+    unsigned int len = 0;
+    unsigned char c[10];
+
+    vm_add_char(VM_CMD_ATTN, c, &len);
+    c[len++] = VM_CMD_CHAR;
+
+    si->send_out(si, c, len);
+}
+
+static int
+vm_setup(serserv_data_t *si)
+{
+    struct vm_data *info;
+
+    info = malloc(sizeof(*info));
+    if (!info)
+	return -1;
+    memset(info, 0, sizeof(*info));
+    si->codec_info = info;
+    return 0;
+}
+
+
+/***********************************************************************
+ *
  * codec structure
  *
  ***********************************************************************/
@@ -685,6 +865,8 @@ static ser_codec_t codecs[] = {
       dm_handle_char, dm_send, dm_setup, queue_event, queue_ipmb },
     { "RadisysAscii",
       ra_handle_char, ra_send, ra_setup, NULL, ra_ipmb_handler },
+    { "VM",
+      vm_handle_char, vm_send, vm_setup, vm_event, vm_event },
     { NULL }
 };
 
@@ -848,7 +1030,6 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     int err;
     unsigned int chan_num;
 
-printf("Reading config\n");
     ser = malloc(sizeof(*ser));
     if (!ser) {
 	*errstr = "Out of memory";
