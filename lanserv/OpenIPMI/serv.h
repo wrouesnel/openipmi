@@ -206,11 +206,27 @@ struct channel_s
     /* Available for the specific channel code. */
     void *chan_info;
 
-    /* Set or clear the event queue being full. */
-    void (*event_q_full)(channel_t *chan, int val);
+    /* Set or clear the attn flag.  If irq is set, set/clear the irq. */
+    void (*set_atn)(channel_t *chan, int val, int irq);
 
-    /* Set or clear something in the receive_queue. */
-    int (*recv_in_q)(channel_t *chan, int val);
+    /* Something is about to be added to the receive queue.  If this returns
+       true, then this function consumed the message and it shouldn't
+       be queued. */
+    int (*recv_in_q)(channel_t *chan, msg_t *msg);
+
+    /* Perform some hardware operations. */
+#define HW_OP_RESET		0
+#define HW_OP_POWERON		1
+#define HW_OP_POWEROFF		2
+#define HW_OP_SEND_NMI		3
+#define HW_OP_IRQ_ENABLE	4
+#define HW_OP_IRQ_DISABLE	5
+    unsigned int hw_capabilities; /* Bitmask of above bits for capabilities. */
+#define HW_OP_CAN_RESET(chan) ((chan)->hw_capabilities & (1 << HW_OP_RESET))
+#define HW_OP_CAN_POWER(chan) ((chan)->hw_capabilities & (1 << HW_OP_POWERON))
+#define HW_OP_CAN_NMI(chan) ((chan)->hw_capabilities & (1 << HW_OP_SEND_NMI))
+#define HW_OP_CAN_IRQ(chan) ((chan)->hw_capabilities & (1 << HW_OP_IRQ_ENABLE))
+    void (*hw_op)(channel_t *chan, unsigned int op);
 
 #define NEW_SESSION			1
 #define NEW_SESSION_FAILED		2
@@ -223,7 +239,7 @@ struct channel_s
 #define LAN_ERR				9
 #define INFO				10
 #define DEBUG				11
-    void (*log)(int type, msg_t *msg, char *format, ...);
+    void (*log)(channel_t *chan, int type, msg_t *msg, char *format, ...);
 
     /* Special command handlers. */
     void (*set_lan_parms)(channel_t *chan, msg_t *msg, unsigned char *rdata,
@@ -312,6 +328,10 @@ typedef struct pef_data_s
  * required for all server types.
  */
 struct bmc_data_s {
+#define DEBUG_RAW_MSG	(1 << 0)
+#define DEBUG_MSG	(1 << 1)
+    unsigned int debug;
+
     /* user 0 is not used. */
     user_t users[MAX_USERS + 1];
 

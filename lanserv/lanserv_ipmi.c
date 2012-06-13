@@ -317,7 +317,7 @@ return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
 	    rv = session->confh->encrypt(lan, session,
 					 &pos, &hdr_left, &len, &dlen);
 	    if (rv) {
-		lan->channel.log(INVALID_MSG, msg,
+		lan->channel.log(&lan->channel, INVALID_MSG, msg,
 			 "Message failure:"
 			 " encryption failed: 0x%x", rv);
 		return;
@@ -401,7 +401,7 @@ return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
 	rv = session->integh->add(lan, session,
 				  pos, &mlen, dlen);
 	if (rv) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Message failure:"
 		     " encryption failed: 0x%x", rv);
 	    return;
@@ -650,7 +650,7 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
     int      rv;
 
     if (msg->len < 17) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Session challenge failed: message too short");
 	return_err(lan, msg, NULL, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
@@ -659,7 +659,7 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
     authtype = msg->data[0] & 0xf;
     user = find_user(lan, msg->data+1, 1, 0);
     if (!user) {
-	lan->channel.log(SESSION_CHALLENGE_FAILED, msg,
+	lan->channel.log(&lan->channel, SESSION_CHALLENGE_FAILED, msg,
 		 "Session challenge failed: Invalid user");
 	if (is_authval_null(msg->data+1))
 	    return_err(lan, msg, NULL, 0x82); /* no null user */
@@ -669,14 +669,14 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
     }
 
     if (!(user->allowed_auths & (1 << authtype))) {
-	lan->channel.log(SESSION_CHALLENGE_FAILED, msg,
+	lan->channel.log(&lan->channel, SESSION_CHALLENGE_FAILED, msg,
 		 "Session challenge failed: Invalid authorization type");
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
 	return;
     }
 
     if (lan->channel.active_sessions >= MAX_SESSIONS) {
-	lan->channel.log(SESSION_CHALLENGE_FAILED, msg,
+	lan->channel.log(&lan->channel, SESSION_CHALLENGE_FAILED, msg,
 		 "Session challenge failed: To many open sessions");
 	return_err(lan, msg, NULL, IPMI_OUT_OF_SPACE_CC);
 	return;
@@ -690,7 +690,7 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
 
     rv = gen_challenge(lan, data+5, sid);
     if (rv) {
-	lan->channel.log(SESSION_CHALLENGE_FAILED, msg,
+	lan->channel.log(&lan->channel, SESSION_CHALLENGE_FAILED, msg,
 		 "Session challenge failed: Error generating challenge");
 	return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
     } else {
@@ -703,13 +703,13 @@ handle_no_session(lanserv_data_t *lan, msg_t *msg)
 {
     /* Should be a session challenge, validate everything else. */
     if (msg->seq != 0) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "No session message failed: Invalid seq");
 	return;
     }
 
     if (msg->authtype != IPMI_AUTHTYPE_NONE) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "No session message failed: Invalid authtype: %d",
 		 msg->authtype);
 	return;
@@ -729,7 +729,7 @@ handle_no_session(lanserv_data_t *lan, msg_t *msg)
 	    break;
 
 	default:
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "No session message failed: Invalid command: 0x%x",
 		     msg->cmd);
 	    return_err(lan, msg, NULL, IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC);
@@ -779,27 +779,27 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     unsigned char tseq[4];
 
     if (msg->cmd != IPMI_ACTIVATE_SESSION_CMD) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 " message failed: Invalid command: 0x%x", msg->cmd);
 	return;
     }
 
     if (msg->len < 22) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Activate session failed: message too short");
 	return;
     }
 
     rv = check_challenge(lan, msg->sid, msg->data+2);
     if (rv) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: challenge failed");
 	return;
     }
 
     user_idx = (msg->sid >> 1) & USER_MASK;
     if ((user_idx > MAX_USERS) || (user_idx == 0)) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid sid: 0x%x", msg->sid);
 	return;
     }
@@ -807,19 +807,19 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     auth = msg->data[0] & 0xf;
     user = &(lan->bmcinfo->users[user_idx]);
     if (! (user->valid)) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
 	return;
     }
     if (! (user->allowed_auths & (1 << auth))) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Requested auth %d was invalid for"
 		 " user 0x%x",
 		 auth, user_idx);
 	return;
     }
     if (! (user->allowed_auths & (1 << msg->authtype))) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Message auth %d was invalid for"
 		 " user 0x%x",
 		 msg->authtype, user_idx);
@@ -827,7 +827,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     }
 
     if (lan->channel.active_sessions >= MAX_SESSIONS) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Session challenge failed: To many open sessions");
 	return;
     }
@@ -845,7 +845,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 						 lan,
 						 ialloc, ifree);
     if (rv) {
-	lan->channel.log(AUTH_FAILED, msg,
+	lan->channel.log(&lan->channel, AUTH_FAILED, msg,
 		 "Activate session failed: Message auth init failed");
 	return;
     }
@@ -857,7 +857,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     rv = auth_check(&dummy_session, tsid, tseq, msg->data-6, msg->len+7,
 		    msg->rmcp.authcode);
     if (rv) {
-	lan->channel.log(AUTH_FAILED, msg,
+	lan->channel.log(&lan->channel, AUTH_FAILED, msg,
 		 "Activate session failed: Message auth failed");
 	goto out_free;
     }
@@ -866,7 +866,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
        no way to generate an authcode for it. */
 
     if (xmit_seq == 0) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid sequence number");
 	return_err(lan, msg, &dummy_session, 0x85); /* Invalid seq id */
 	goto out_free;
@@ -877,7 +877,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 	|| (priv > user->privilege)
 	|| (priv > lan->channel.privilege_limit))
     {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Privilege %d for user 0x%d failed",
 		 priv, user_idx);
 	return_err(lan, msg, &dummy_session, 0x86); /* Privilege error */
@@ -887,7 +887,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     if (! (lan->channel.priv_info[priv-1].
 	   allowed_auths & (1 << auth))) {
 	/* Authentication level not permitted for this privilege */
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Auth level %d invalid for"
 		 " privilege %d",
 		 auth, priv);
@@ -898,7 +898,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     session = find_free_session(lan);
 
     if (!session) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: out of free sessions");
 	return_err(lan, msg, &dummy_session, 0x81); /* No session slot */
 	goto out_free;
@@ -906,7 +906,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 
     session->src_addr = lan->channel.alloc(&lan->channel, msg->src_len);
     if (!session->src_addr) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: out of memory");
 	return_err(lan, msg, &dummy_session, IPMI_UNKNOWN_ERR_CC);
 	goto out_free;
@@ -920,7 +920,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     session->authdata = dummy_session.authdata;
     rv = lan->gen_rand(lan, seq_data, 4);
     if (rv) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Could not generate random number");
 	return_err(lan, msg, &dummy_session, IPMI_UNKNOWN_ERR_CC);
 	goto out_free;
@@ -935,7 +935,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     session->time_left = lan->default_session_timeout;
 
     lan->channel.active_sessions++;
-    lan->channel.log(NEW_SESSION, msg,
+    lan->channel.log(&lan->channel, NEW_SESSION, msg,
 	     "Activate session: Session opened for user 0x%x, max priv %d",
 	     user_idx, priv);
 
@@ -983,7 +983,7 @@ handle_activate_session_cmd(lanserv_data_t *lan, session_t *session, msg_t *msg)
     uint8_t data[11];
 
     if (msg->len < 22) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Activate session failure: message too short");
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
@@ -1011,7 +1011,7 @@ handle_set_session_privilege(lanserv_data_t *lan, session_t *session, msg_t *msg
     uint8_t priv;
 
     if (msg->len < 1) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Set session priv failure: message too short");
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
@@ -1047,7 +1047,7 @@ handle_close_session(lanserv_data_t *lan, session_t *session, msg_t *msg)
     session_t *nses = session;
 
     if (msg->len < 4) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Close session failure: message too short");
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
@@ -1068,7 +1068,7 @@ handle_close_session(lanserv_data_t *lan, session_t *session, msg_t *msg)
 	}	    
     }
 
-    lan->channel.log(SESSION_CLOSED, msg,
+    lan->channel.log(&lan->channel, SESSION_CLOSED, msg,
 	     "Session closed: Closed due to request");
 
     return_err(lan, msg, session, 0);
@@ -1084,7 +1084,7 @@ handle_get_session_info(lanserv_data_t *lan, session_t *session, msg_t *msg)
     uint8_t   data[19];
 
     if (msg->len < 1) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Get session failure: message too short");
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
 	return;
@@ -1658,7 +1658,7 @@ handle_normal_session(lanserv_data_t *lan, msg_t *msg)
     int       rv;
 
     if (session == NULL) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Normal session message failure: Invalid SID");
 	return;
     }
@@ -1696,14 +1696,14 @@ handle_normal_session(lanserv_data_t *lan, msg_t *msg)
 
     case IPMI_PRIV_DENIED:
     case IPMI_PRIV_BOOT: /* FIXME - this can sometimes be permitted. */
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Normal session message failure: no privilege");
 	return_err(lan, msg, session, IPMI_INSUFFICIENT_PRIVILEGE_CC);
 	return;
 
     case IPMI_PRIV_INVALID:
     default:
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Normal session message failure: Internal error 1");
 	return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
 	return;
@@ -1751,18 +1751,18 @@ void
 handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
 {
     if (msg->len < 7) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: Length field too short");
 	return;
     }
 
     if (ipmb_checksum(msg->data, 3, 0) != 0) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: Checksum 1 failed");
 	return;
     }
     if (ipmb_checksum(msg->data+3, msg->len-3, 0) != 0) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: Checksum 2 failed");
 	return;
     }
@@ -1779,8 +1779,8 @@ handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
     msg->data += 6;
     msg->len -= 6;
 
-    if (lan->debug) {
-	lan->channel.log(DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
+    if (lan->bmcinfo->debug) {
+	lan->channel.log(&lan->channel, DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
 		 msg->netfn, msg->cmd);
     }
 
@@ -2387,7 +2387,7 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 
     session = find_free_session(lan);
     if (!session) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: out of free sessions");
 	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
 	goto out_err;
@@ -2395,7 +2395,7 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 
     session->src_addr = lan->channel.alloc(&lan->channel, msg->src_len);
     if (!session->src_addr) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: out of memory");
 	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
 	goto out_err;
@@ -2409,7 +2409,7 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
     session->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
     rv = lan->gen_rand(lan, session->auth_data.rand, 16);
     if (rv) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Could not generate random number");
 	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
 	goto out_err;
@@ -2436,7 +2436,7 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 		    | (session->handle << 1));
     lan->sid_seq++;
 
-    lan->channel.log(NEW_SESSION, msg,
+    lan->channel.log(&lan->channel, NEW_SESSION, msg,
 	     "Activate session: Session started, max priv %d", priv);
 
     memset(data, 0, sizeof(data));
@@ -2505,13 +2505,13 @@ void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 
     name_len = msg->data[27];
     if (name_len > 16) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "RAKP msg: name length too long: %d", name_len);
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
     }
     if ((unsigned int) (28+name_len) > msg->len) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "RAKP msg: name length doesn't match: %d", name_len);
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
@@ -2524,7 +2524,7 @@ void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
     memcpy(username, msg->data+28, name_len);
     user = find_user(lan, username, name_only_lookup, priv);
     if (!user) {
-	lan->channel.log(NEW_SESSION_FAILED, msg,
+	lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		 "RAKP msg: invalid user: %s", user);
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
@@ -2561,7 +2561,7 @@ void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 	int rv;
 	rv = session->authh->set2(lan, session, data, &len, sizeof(data));
 	if (rv) {
-	    lan->channel.log(NEW_SESSION_FAILED, msg,
+	    lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		     "RAKP msg: set2 failed: 0x%x", rv);
 	    return;
 	}
@@ -2597,7 +2597,7 @@ void handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
 	int rv;
 	rv = session->authh->check3(lan, session, msg->data, &msg->len);
 	if (rv) {
-	    lan->channel.log(NEW_SESSION_FAILED, msg,
+	    lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		     "RAKP msg: check3 failed: 0x%x", rv);
 	    err = 0x0f; /* Invalid integrity check */
 	    goto out_err;
@@ -2620,7 +2620,7 @@ void handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
 	int rv;
 	rv = session->authh->set4(lan, session, data, &len, sizeof(data));
 	if (rv) {
-	    lan->channel.log(NEW_SESSION_FAILED, msg,
+	    lan->channel.log(&lan->channel, NEW_SESSION_FAILED, msg,
 		     "RAKP msg: set4 failed: 0x%x", rv);
 	}
     }
@@ -2648,7 +2648,7 @@ decrypt_message(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.encrypted) {
 	if (session->conf != 0) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Message failure:"
 		     " Unencrypted msg on encrypted session");
 	    return EINVAL;
@@ -2664,14 +2664,14 @@ check_message_integrity(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.authenticated) {
 	if (session->integ != 0) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Message failure:"
 		     " Unauthenticated msg on authenticated session");
 	    return EINVAL;
 	}
 	return 0;
     } else if (session->integ == 0) {
-	lan->channel.log(INVALID_MSG, msg,
+	lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Message failure:"
 		 " Authenticated msg on unauthenticated session");
 	return EINVAL;
@@ -2691,7 +2691,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
     imsg.len = msg->len+1;
 
     if (msg->len < 11) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: message too short");
 	return;
     }
@@ -2701,7 +2701,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
     msg->data++;
     if (msg->rmcpp.payload == 2) {
 	if (msg->len < 17) {
-	    lan->channel.log(LAN_ERR, msg,
+	    lan->channel.log(&lan->channel, LAN_ERR, msg,
 		     "LAN msg failure: message too short");
 	    return;
 	}
@@ -2717,7 +2717,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
     len = ipmi_get_uint16(msg->data);
     msg->data += 2;
     if (len > msg->len) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: Length field invalid: %d, %d",
 		 len, msg->len);
 	return; /* The length field is not valid.  We allow extra
@@ -2730,7 +2730,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 
     if (msg->sid == 0) {
 	if (msg->rmcpp.authenticated || msg->rmcpp.encrypted) {
-	    lan->channel.log(LAN_ERR, msg,
+	    lan->channel.log(&lan->channel, LAN_ERR, msg,
 		     "LAN msg failure:"
 		     " Got encrypted or authenticated SID 0 msg");
 	    return;
@@ -2741,13 +2741,13 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 	int          diff;
 
 	if (session == NULL) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Normal session message failure: Invalid SID");
 	    return;
 	}
 
 	if (!session->rmcpplus) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Normal session message failure:"
 		     " RMCP+ msg on RMCP session");
 	    return;
@@ -2758,7 +2758,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 
 	rv = check_message_integrity(lan, session, &imsg);
 	if (rv) {
-	    lan->channel.log(LAN_ERR, msg,
+	    lan->channel.log(&lan->channel, LAN_ERR, msg,
 		     "LAN msg failure:"
 		     " Message integrity failed");
 	    return;
@@ -2766,7 +2766,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 
 	rv = decrypt_message(lan, session, msg);
 	if (rv) {
-	    lan->channel.log(LAN_ERR, msg,
+	    lan->channel.log(&lan->channel, LAN_ERR, msg,
 		     "LAN msg failure:"
 		     " Message decryption failed");
 	    return;
@@ -2781,7 +2781,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 	    seq = &session->unauth_recv_seq;
 	diff = msg->seq - *seq;
 	if ((diff < -16) || (diff > 15)) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Normal session message failure: SEQ out of range");
 	    return;
 	}
@@ -2803,7 +2803,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
     unsigned char *tseq;
 
     if (msg->len < 9) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: message too short");
 	return;
     }
@@ -2815,7 +2815,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 
     if (msg->authtype != IPMI_AUTHTYPE_NONE) {
 	if (msg->len < 25) {
-	    lan->channel.log(LAN_ERR, msg,
+	    lan->channel.log(&lan->channel, LAN_ERR, msg,
 		     "LAN msg failure: message too short");
 	    return;
 	}
@@ -2830,7 +2830,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 	msg->len -= 8;
     }
     if (msg->len < msg->data[0]) {
-	lan->channel.log(LAN_ERR, msg,
+	lan->channel.log(&lan->channel, LAN_ERR, msg,
 		 "LAN msg failure: Length field invalid");
 	return; /* The length field is not valid.  We allow extra
 		   bytes, but reject if not enough. */
@@ -2848,13 +2848,13 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 	int       diff;
 
 	if (session == NULL) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Normal session message failure: Invalid SID");
 	    return;
 	}
 
 	if (session->rmcpplus) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		     "Normal session message failure:"
 		     " RMCP msg on RMCP+ session");
 	    return;
@@ -2863,7 +2863,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 	rv = auth_check(session, tsid, tseq, msg->data, msg->len,
 			msg->rmcp.authcode);
 	if (rv) {
-	    lan->channel.log(AUTH_FAILED, msg,
+	    lan->channel.log(&lan->channel, AUTH_FAILED, msg,
 		     "Normal session message failure: auth failure");
 	    return;
 	}
@@ -2873,7 +2873,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 	   per the spec. */
 	diff = msg->seq - session->recv_seq;
 	if ((diff < -8) || (diff > 8)) {
-	    lan->channel.log(INVALID_MSG, msg,
+	    lan->channel.log(&lan->channel, INVALID_MSG, msg,
 		 "Normal session message failure: SEQ out of range");
 	    return;
 	}
@@ -2900,13 +2900,13 @@ ipmi_handle_lan_msg(lanserv_data_t *lan,
     msg.oem_data = 0;
 
     if (len < 5) {
-	lan->channel.log(LAN_ERR, &msg,
+	lan->channel.log(&lan->channel, LAN_ERR, &msg,
 		 "LAN msg failure: message too short");
 	return;
     }
 
     if (data[2] != 0xff) {
-	lan->channel.log(LAN_ERR, &msg,
+	lan->channel.log(&lan->channel, LAN_ERR, &msg,
 		 "LAN msg failure: seq not ff");
 	return; /* Sequence # must be ff (no ack) */
     }
@@ -2936,7 +2936,7 @@ ipmi_lan_tick(lanserv_data_t *lan, unsigned int time_since_last)
 
 		msg.src_addr = lan->sessions[i].src_addr;
 		msg.src_len = lan->sessions[i].src_len;
-		lan->channel.log(SESSION_CLOSED, &msg,
+		lan->channel.log(&lan->channel, SESSION_CLOSED, &msg,
 			 "Session closed: Closed due to timeout");
 		close_session(lan, &(lan->sessions[i]));
 	    } else {

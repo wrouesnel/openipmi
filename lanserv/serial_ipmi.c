@@ -139,17 +139,11 @@ format_ipmb_rsp(msg_t *msg, unsigned char *msgd,
     (*msgd_len)++;
 }
 
-static void
-queue_ipmb(msg_t *msg, serserv_data_t *si)
+static void handle_attn(channel_t *chan, int val, int irq)
 {
-    if (si->do_attn)
-	si->send_out(si, si->attn_chars, si->attn_chars_len);
-}
+    serserv_data_t *si = chan->chan_info;
 
-static void
-queue_event(msg_t *emsg, serserv_data_t *si)
-{
-    if (si->do_attn)
+    if (val && si->do_attn)
 	si->send_out(si, si->attn_chars, si->attn_chars_len);
 }
 
@@ -187,11 +181,14 @@ static void ra_format_msg(const unsigned char *msg, unsigned int msg_len,
     si->send_out(si, c, len);
 }
 
-static void
-ra_ipmb_handler(msg_t *msg, serserv_data_t *si)
+static int
+ra_ipmb_handler(channel_t *chan, msg_t *msg)
 {
-    /* FIXME - this is not right */
+    serserv_data_t *si = chan->chan_info;
+
     ra_format_msg(msg->data, msg->len, si);
+    free(msg);
+    return 1;
 }
 
 /*
@@ -200,7 +197,8 @@ ra_ipmb_handler(msg_t *msg, serserv_data_t *si)
 static int ra_unformat_msg(unsigned char *r, unsigned int len,
 			   serserv_data_t *si)
 {
-    unsigned char o[IPMI_SIM_MAX_MSG_LENGTH];
+    unsigned char real_o[IPMI_SIM_MAX_MSG_LENGTH + 1];
+    unsigned char *o = real_o + 1;
     msg_t msg;
     unsigned int p = 0;
     unsigned int i = 0;
@@ -222,14 +220,27 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
 	i++;
     }
 
-    rv = unformat_ipmb_msg(&msg, o, i, si);
-    if (rv)
-	return rv;
-    if ((msg.rs_addr == si->bmcinfo->bmc_ipmb) || (msg.rs_addr == 1))
-	channel_smi_send(&si->channel, &msg);
-    else {
-	/* FIXME - handle_ipmb_msg(o + p, i, mi, mi); */
+    if (i < 1)
+	return -1;
+
+    if ((o[0] == si->bmcinfo->bmc_ipmb) || (o[0] == 1)) {
+	rv = unformat_ipmb_msg(&msg, o, i, si);
+	if (rv)
+	    return rv;
+    } else {
+	msg.rs_addr = 1;
+	msg.netfn = IPMI_APP_NETFN;
+	msg.rs_lun = 0;
+	msg.rq_addr = 1;
+	msg.rq_seq = 0;
+	msg.rq_lun = 0;
+	msg.cmd = IPMI_SEND_MSG_CMD;
+
+	msg.len = i + 1;
+	msg.data = real_o;
+	real_o[0] = 0;
     }
+    channel_smi_send(&si->channel, &msg);
     return 0;
 }
 
@@ -282,6 +293,9 @@ ra_send(msg_t *omsg, serserv_data_t *si)
     unsigned char msg[IPMI_SIM_MAX_MSG_LENGTH + 7];
     unsigned int msg_len;
 
+    if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD)
+	return; /* These are dummies, ignore them. */
+
     format_ipmb_rsp(omsg, msg, &msg_len, si);
 
     ra_format_msg(msg, msg_len, si);
@@ -298,6 +312,7 @@ ra_setup(serserv_data_t *si)
     info->recv_chars_len = 0;
     info->recv_chars_too_many = 0;
     si->codec_info = info;
+    si->channel.recv_in_q = ra_ipmb_handler;
     return 0;
 }
 
@@ -468,6 +483,7 @@ dm_setup(serserv_data_t *si)
     if (!info)
 	return -1;
     memset(info, 0, sizeof(*info));
+    si->channel.set_atn = handle_attn;
     si->codec_info = info;
     return 0;
 }
@@ -668,6 +684,7 @@ tm_setup(serserv_data_t *si)
 
     info->recv_chars_len = 0;
     info->recv_chars_too_many = 0;
+    si->channel.set_atn = handle_attn;
     si->codec_info = info;
     return 0;
 }
@@ -701,16 +718,25 @@ tm_setup(serserv_data_t *si)
 
 #define VM_CMD_NOATTN		0x00
 #define VM_CMD_ATTN		0x01
-#define VM_CMD_POWEROFF		0x02
-#define VM_CMD_RESET		0x03
-#define VM_CMD_ENABLE_IRQ	0x04
-#define VM_CMD_DISABLE_IRQ	0x05
+#define VM_CMD_ATTN_IRQ		0x02
+#define VM_CMD_POWEROFF		0x03
+#define VM_CMD_RESET		0x04
+#define VM_CMD_ENABLE_IRQ	0x05 /* Enable/disable the messaging irq */
+#define VM_CMD_DISABLE_IRQ	0x06
+#define VM_CMD_SEND_NMI		0x07
+#define VM_CMD_CAPABILITIES	0x08
+#define   VM_CAPABILITIES_POWER	0x01
+#define   VM_CAPABILITIES_RESET	0x02
+#define   VM_CAPABILITIES_IRQ	0x04
+#define   VM_CAPABILITIES_NMI	0x08
+#define   VM_CAPABILITIES_ATTN	0x10
 
 struct vm_data {
     unsigned char recv_msg[IPMI_SIM_MAX_MSG_LENGTH + 4];
     unsigned int  recv_msg_len;
     int           recv_msg_too_many;
     int           in_escape;
+    int		  attn_works;
 };
 
 static void
@@ -738,6 +764,27 @@ vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 }
 
 static void
+vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
+{
+    struct vm_data *info = si->codec_info;
+
+    if (len < 2)
+	return;
+    if (imsg[0] == VM_CMD_CAPABILITIES) {
+	if (imsg[1] & VM_CAPABILITIES_POWER)
+	    si->channel.hw_capabilities |= (1 << HW_OP_POWERON);
+	if (imsg[1] & VM_CAPABILITIES_RESET)
+	    si->channel.hw_capabilities |= (1 << HW_OP_RESET);
+	if (imsg[1] & VM_CAPABILITIES_IRQ)
+	    si->channel.hw_capabilities |= (1 << HW_OP_IRQ_ENABLE);
+	if (imsg[1] & VM_CAPABILITIES_NMI)
+	    si->channel.hw_capabilities |= (1 << HW_OP_SEND_NMI);
+	if (imsg[1] & VM_CAPABILITIES_ATTN)
+	    info->attn_works = 1;
+    }
+}
+
+static void
 vm_handle_char(unsigned char ch, serserv_data_t *si)
 {
     struct vm_data *info = si->codec_info;
@@ -755,7 +802,7 @@ vm_handle_char(unsigned char ch, serserv_data_t *si)
 	} else if (ch == VM_MSG_CHAR) {
 	    vm_handle_msg(info->recv_msg, info->recv_msg_len, si);
 	} else if (ch == VM_CMD_CHAR) {
-	    /* FIXME - any commands? */
+	    vm_handle_cmd(info->recv_msg, info->recv_msg_len, si);
 	}
 	info->in_escape = 0;
 	info->recv_msg_len = 0;
@@ -828,12 +875,60 @@ vm_send(msg_t *imsg, serserv_data_t *si)
 }
 
 static void
-vm_event(msg_t *msg, serserv_data_t *si)
+vm_set_attn(channel_t *chan, int val, int irq)
 {
+    serserv_data_t *si = chan->chan_info;
     unsigned int len = 0;
-    unsigned char c[10];
+    unsigned char c[3];
 
-    vm_add_char(VM_CMD_ATTN, c, &len);
+    if (!val)
+	vm_add_char(VM_CMD_NOATTN, c, &len);
+    else if (irq)
+	vm_add_char(VM_CMD_ATTN_IRQ, c, &len);
+    else
+	vm_add_char(VM_CMD_ATTN, c, &len);
+
+    c[len++] = VM_CMD_CHAR;
+
+    si->send_out(si, c, len);
+}
+
+static void
+vm_hw_op(channel_t *chan, unsigned int op)
+{
+    serserv_data_t *si = chan->chan_info;
+    unsigned int len = 0;
+    unsigned char c[3];
+
+    switch(op) {
+    case HW_OP_RESET:
+	vm_add_char(VM_CMD_RESET, c, &len);
+	break;
+	
+    case HW_OP_POWERON:
+	/* FIXME - add starting the VM */
+	return;
+
+    case HW_OP_POWEROFF:
+	vm_add_char(VM_CMD_POWEROFF, c, &len);
+	break;
+	
+    case HW_OP_SEND_NMI:
+	vm_add_char(VM_CMD_SEND_NMI, c, &len);
+	break;
+	
+    case HW_OP_IRQ_ENABLE:
+	vm_add_char(VM_CMD_ENABLE_IRQ, c, &len);
+	break;
+	
+    case HW_OP_IRQ_DISABLE:
+	vm_add_char(VM_CMD_DISABLE_IRQ, c, &len);
+	break;
+
+    default:
+	return;
+    }	
+
     c[len++] = VM_CMD_CHAR;
 
     si->send_out(si, c, len);
@@ -849,6 +944,9 @@ vm_setup(serserv_data_t *si)
 	return -1;
     memset(info, 0, sizeof(*info));
     si->codec_info = info;
+    si->channel.hw_op = vm_hw_op;
+    si->channel.set_atn = vm_set_attn;
+    si->channel.hw_capabilities = (1 << HW_OP_POWERON);
     return 0;
 }
 
@@ -860,13 +958,13 @@ vm_setup(serserv_data_t *si)
  ***********************************************************************/
 static ser_codec_t codecs[] = {
     { "TerminalMode",
-      tm_handle_char, tm_send, tm_setup, queue_event, queue_ipmb },
+      tm_handle_char, tm_send, tm_setup },
     { "Direct",
-      dm_handle_char, dm_send, dm_setup, queue_event, queue_ipmb },
+      dm_handle_char, dm_send, dm_setup },
     { "RadisysAscii",
-      ra_handle_char, ra_send, ra_setup, NULL, ra_ipmb_handler },
+      ra_handle_char, ra_send, ra_setup },
     { "VM",
-      vm_handle_char, vm_send, vm_setup, vm_event, vm_event },
+      vm_handle_char, vm_send, vm_setup },
     { NULL }
 };
 

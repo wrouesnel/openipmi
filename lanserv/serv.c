@@ -76,7 +76,7 @@ ipmi_oem_send_msg(channel_t     *chan,
 
     nmsg = chan->alloc(chan, sizeof(*nmsg)+len);
     if (!nmsg) {
-	chan->log(OS_ERROR, NULL,
+	chan->log(chan, OS_ERROR, NULL,
 		  "SMI message: out of memory");
 	return ENOMEM;
     }
@@ -92,7 +92,7 @@ ipmi_oem_send_msg(channel_t     *chan,
     
     rv = chan->smi_send(chan, nmsg);
     if (rv) {
-	chan->log(OS_ERROR, nmsg,
+	chan->log(chan, OS_ERROR, nmsg,
 		  "SMI send: error %d", rv);
 	chan->free(chan, nmsg);
     }
@@ -178,7 +178,7 @@ channel_smi_send(channel_t *chan, msg_t *msg)
     msg->channel = chan->channel_num;
     nmsg = chan->alloc(chan, sizeof(*nmsg)+msg->src_len+msg->len);
     if (!nmsg) {
-	chan->log(OS_ERROR, msg, "SMI message: out of memory");
+	chan->log(chan, OS_ERROR, msg, "SMI message: out of memory");
 	return ENOMEM;
     }
 
@@ -197,7 +197,7 @@ channel_smi_send(channel_t *chan, msg_t *msg)
 
 	if (chan->oem_intf_recv_handler(chan, nmsg, msgd, &msgd_len)) {
 	    ipmi_handle_smi_rsp(chan, nmsg, msgd, msgd_len);
-	    return;
+	    return 0;
 	}
     }
     

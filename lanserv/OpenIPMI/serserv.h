@@ -66,8 +66,6 @@ typedef struct ser_codec_s {
     void (*handle_char)(unsigned char ch, serserv_data_t *si);
     void (*send)(msg_t *msg, serserv_data_t *si);
     int (*setup)(serserv_data_t *si);
-    void (*handle_event)(msg_t *emsg, serserv_data_t *si);
-    void (*handle_ipmb)(msg_t *emsg, serserv_data_t *si);
 } ser_codec_t;
 
 typedef struct ser_oem_handler_s {

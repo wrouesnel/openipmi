@@ -225,4 +225,6 @@ void ipmi_emu_shutdown(void);
 int ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);
 int read_command_file(emu_data_t *emu, char *command_file);
 
+void emu_set_debug_level(emu_data_t *emu, unsigned int debug_level);
+
 #endif /* __EMU_IPMI_ */

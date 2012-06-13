@@ -257,8 +257,6 @@ struct lanserv_data_s
     /* Generate 'size' bytes of random data into 'data'. */
     int (*gen_rand)(lanserv_data_t *lan, void *data, int size);
 
-    int debug;
-
     /* Don't fill in the below in the user code. */
 
     /* session 0 is not used. */

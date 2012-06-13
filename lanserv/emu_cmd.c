@@ -837,6 +837,33 @@ sleep_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+debug_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned int   level = 0;
+    char           *tok;
+    int            rv;
+
+    while ((tok = strtok_r(NULL, " \t\n", toks))) {
+	if (strcmp(tok, "raw") == 0) {
+	    level |= DEBUG_RAW_MSG;
+	} else if (strcmp(tok, "msg") == 0) {
+	    level |= DEBUG_MSG;
+	} else {
+	    printf("Invalid debug level '%s', options are 'raw' and 'msg'\n",
+		   tok);
+	    return EINVAL;
+	}
+    }
+    
+    rv = emu_get_uint(toks, &level, "debuglevel");
+    if (rv)
+	return rv;
+
+    emu_set_debug_level(emu, level);
+    return 0;
+}
+
+static int
 quit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     ipmi_emu_shutdown();
@@ -877,6 +904,7 @@ static struct {
     { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },
     { "sleep",		NOMC,		sleep_cmd },
+    { "debug",		NOMC,		debug_cmd },
     { NULL }
 };
 

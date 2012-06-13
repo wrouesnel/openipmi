@@ -195,6 +195,31 @@ struct lmc_data_s
     unsigned char mfg_id[3];	   /* bytes 8-10 */
     unsigned char product_id[2];   /* bytes 11-12 */
 
+#define IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK	(1 << 3)
+#define IPMI_BMC_MSG_FLAG_EVT_BUF_FULL		(1 << 1)
+#define IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE		(1 << 0)
+#define IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK_SET(mc) \
+    (IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK & (mc)->msg_flags)
+#define IPMI_BMC_MSG_FLAG_EVT_BUF_FULL_SET(mc) \
+    (IPMI_BMC_MSG_FLAG_EVT_BUF_FULL & (mc)->msg_flags)
+#define IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE_SET(mc) \
+    (IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE & (mc)->msg_flags)
+    unsigned char msg_flags;
+
+#define IPMI_BMC_RCV_MSG_QUEUE_INT_BIT	0
+#define IPMI_BMC_EVBUF_FULL_INT_BIT	1
+#define IPMI_BMC_EVENT_MSG_BUF_BIT	2
+#define IPMI_BMC_EVENT_LOG_BIT		3
+#define IPMI_BMC_MSG_INTS_ON(mc) ((mc)->global_enables & \
+				 (1 << IPMI_BMC_RCV_MSG_QUEUE_INT_BIT))
+#define IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc) ((mc)->global_enables & \
+					(1 << IPMI_BMC_EVBUF_FULL_INT_BIT))
+#define IPMI_BMC_EVENT_LOG_ENABLED(mc) ((mc)->global_enables & \
+				       (1 << IPMI_BMC_EVENT_LOG_BIT))
+#define IPMI_BMC_EVENT_MSG_BUF_ENABLED(mc) ((mc)->global_enables & \
+					   (1 << IPMI_BMC_EVENT_MSG_BUF_BIT))
+    unsigned char global_enables;
+
     bmc_data_t *bmcinfo;
 
     sel_t sel;
@@ -409,17 +434,21 @@ mc_new_event(lmc_data_t *mc,
     unsigned int recid;
     int rv;
 
-    rv = ipmi_mc_add_to_sel(mc, 0xc0, event, &recid);
-    if (rv)
+    if (IPMI_BMC_EVENT_LOG_ENABLED(mc)) {
+	rv = ipmi_mc_add_to_sel(mc, 0xc0, event, &recid);
+	if (rv)
+	    recid = 0xffff;
+    } else
 	recid = 0xffff;
-    if (!mc->ev_in_q) {
+    if (!mc->ev_in_q && IPMI_BMC_EVENT_MSG_BUF_ENABLED(mc)) {
+	channel_t *chan = mc->bmcinfo->channels[15];
 	mc->ev_in_q = 1;
 	ipmi_set_uint16(mc->evq, recid);
 	mc->evq[2] = record_type;
 	memcpy(mc->evq + 3, event, 13);
-	if (mc->bmcinfo->channels[15]->event_q_full)
-	    mc->bmcinfo->channels[15]->event_q_full(mc->bmcinfo->channels[15],
-						    1);
+	mc->msg_flags |= IPMI_BMC_MSG_FLAG_EVT_BUF_FULL;
+	if (chan->set_atn)
+	    chan->set_atn(chan, 1, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
     }
 }
 
@@ -1898,6 +1927,45 @@ handle_get_channel_access(lmc_data_t    *mc,
 }
 
 static void
+handle_set_global_enables(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    unsigned char old_evint = IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc);
+    unsigned char old_int = IPMI_BMC_MSG_INTS_ON(mc);
+    channel_t *bchan;
+
+    if (check_msg_length(msg, 1, rdata, rdata_len))
+	return;
+
+    mc->global_enables = msg->data[0];
+    bchan = mc->bmcinfo->channels[15];
+    if (!bchan || !bchan->set_atn)
+	return;
+
+    if (!old_int && IPMI_BMC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
+	bchan->hw_op(bchan, HW_OP_IRQ_ENABLE);
+    else if (old_int && !IPMI_BMC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
+	bchan->hw_op(bchan, HW_OP_IRQ_DISABLE);
+
+    if ((!old_evint && IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc) && mc->ev_in_q) ||
+	(old_int && !IPMI_BMC_MSG_INTS_ON(mc) && mc->bmcinfo->recv_q_tail))
+	bchan->set_atn(bchan, 1, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
+}
+
+static void
+handle_get_global_enables(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = mc->global_enables;
+    *rdata_len = 2;
+}
+
+static void
 cleanup_ascii_16(uint8_t *c)
 {
     int i;
@@ -2207,6 +2275,8 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
+    channel_t *chan = mc->bmcinfo->channels[15];
+
     if (!mc->bmcinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
@@ -2222,8 +2292,9 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
     rdata[0] = 0;
     memcpy(rdata + 1, mc->evq, 16);
     *rdata_len = 17;
-    if (mc->bmcinfo->channels[15]->event_q_full)
-	mc->bmcinfo->channels[15]->event_q_full(mc->bmcinfo->channels[15], 0);
+    mc->msg_flags &= ~IPMI_BMC_MSG_FLAG_EVT_BUF_FULL;
+    if (chan->set_atn)
+	chan->set_atn(chan, 0, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
 static void
@@ -2255,9 +2326,10 @@ handle_get_msg(lmc_data_t    *mc,
 
     mc->bmcinfo->recv_q_head = qmsg->next;
     if (!qmsg->next) {
+	channel_t *bchan = mc->bmcinfo->channels[15];
 	mc->bmcinfo->recv_q_tail = NULL;
-	if (mc->bmcinfo->channels[15]->recv_in_q)
-	    mc->bmcinfo->channels[15]->recv_in_q(mc->bmcinfo->channels[15], 0);
+	if (bchan->set_atn)
+	    bchan->set_atn(bchan, 0, IPMI_BMC_MSG_INTS_ON(mc));
     }
 
     rdata[0] = 0;
@@ -2288,6 +2360,14 @@ handle_app_netfn(lmc_data_t    *mc,
 
     case IPMI_GET_CHANNEL_ACCESS_CMD:
 	handle_get_channel_access(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_BMC_GLOBAL_ENABLES_CMD:
+	handle_set_global_enables(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_BMC_GLOBAL_ENABLES_CMD:
+	handle_get_global_enables(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SET_USER_ACCESS_CMD:
@@ -5022,6 +5102,13 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     }
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
+	channel_t *bchan = emu->bmcinfo->channels[15];
+
+	if (bchan->recv_in_q) {
+	    if (bchan->recv_in_q(mc->bmcinfo->channels[15], rmsg))
+		return;
+	}
+
 	ordata[0] = 0;
 	*ordata_len = 1;
 
@@ -5032,12 +5119,14 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    rmsg->next = emu->bmcinfo->recv_q_tail;
 	    emu->bmcinfo->recv_q_tail = rmsg;
 	} else {
+	    channel_t *bchan = emu->bmcinfo->channels[15];
+
 	    rmsg->next = NULL;
 	    emu->bmcinfo->recv_q_head = rmsg;
 	    emu->bmcinfo->recv_q_tail = rmsg;
+	    if (bchan->set_atn)
+		bchan->set_atn(bchan, 1, IPMI_BMC_MSG_INTS_ON(mc));
 	}
-	if (emu->bmcinfo->channels[15]->recv_in_q)
-	    emu->bmcinfo->channels[15]->recv_in_q(mc->bmcinfo->channels[15], 1);
     }
 }
 
@@ -5367,4 +5456,10 @@ ipmi_emu_get_bmc_mc(emu_data_t *emu)
     if (!ipmi_emu_get_mc_by_addr(emu, emu->bmcinfo->bmc_ipmb, &mc))
 	return mc;
     return NULL;
+}
+
+void
+emu_set_debug_level(emu_data_t *emu, unsigned int debug_level)
+{
+    emu->bmcinfo->debug = debug_level;
 }

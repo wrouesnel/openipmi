@@ -263,7 +263,6 @@ lan_channel_init(misc_data_t *data, channel_t *chan)
     lan->user_info = data;
     lan->send_out = lan_send;
     lan->gen_rand = gen_rand;
-    lan->debug = debug;
 
     err = ipmi_lan_init(lan);
     if (err) {
@@ -467,7 +466,7 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 }
 
 static void
-sim_log(int logtype, msg_t *msg, char *format, ...)
+sim_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     struct timeval tod;
@@ -745,6 +744,7 @@ main(int argc, const char *argv[])
     bmcinfo.alloc = balloc;
     bmcinfo.free = bfree;
     bmcinfo.write_config = write_config;
+    bmcinfo.debug = debug;
     data.bmc = &bmcinfo;
 
     data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
