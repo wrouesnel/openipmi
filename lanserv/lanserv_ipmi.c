@@ -271,6 +271,44 @@ check_challenge(lanserv_data_t *lan,
 #define IPMI_LAN_MAX_TRAILER_SIZE 64
 
 static void
+raw_send(lanserv_data_t *lan,
+	 struct iovec *vec, unsigned int vecs,
+	 void *addr, int addr_len)
+{
+    if (lan->bmcinfo->debug & DEBUG_RAW_MSG) {
+	char *str;
+	int slen;
+	int pos;
+#define format "Raw LAN send:"
+	char dummy;
+	unsigned int i, j;
+	unsigned int len = 0;
+
+	for (i = 0; i < vecs; i++)
+	    len += vec[i].iov_len;
+	slen = snprintf(&dummy, 1, format);
+	slen += len * 3 + 2;
+	str = malloc(slen);
+	if (!str)
+	    goto send;
+	pos = sprintf(str, format);
+#undef format
+	str[pos++] = '\n';
+	str[pos++] = '\0';
+	for (i = 0; i < vecs; i++) {
+	    for (j = 0; j < vec[i].iov_len; j++)
+		pos += sprintf(str + pos, " %2.2x",
+			       ((unsigned char *) vec[i].iov_base)[j]);
+	}
+
+	lan->channel.log(&lan->channel, DEBUG, NULL, str);
+	free(str);
+    }
+ send:
+    lan->send_out(lan, vec, vecs, addr, addr_len);
+}
+
+static void
 return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
 		 unsigned int payload, unsigned char *data, unsigned int len,
 		 unsigned char iana[3], unsigned int payload_id)
@@ -417,7 +455,7 @@ return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
     vec[0].iov_base = pos;
     vec[0].iov_len = mlen;
 
-    lan->send_out(lan, vec, 1, msg->src_addr, msg->src_len);
+    raw_send(lan, vec, 1, msg->src_addr, msg->src_len);
 }
 
 static void
@@ -499,7 +537,7 @@ return_rsp(lanserv_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
     vec[2].iov_base = &csum;
     vec[2].iov_len = 1;
 
-    lan->send_out(lan, vec, 3, msg->src_addr, msg->src_len);
+    raw_send(lan, vec, 3, msg->src_addr, msg->src_len);
 }
 
 static void

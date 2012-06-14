@@ -425,4 +425,5 @@ int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 
 int read_config(bmc_data_t    *bmc,
 		char          *config_file);
+
 #endif /* __SERV_H_ */

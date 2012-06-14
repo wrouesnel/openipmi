@@ -267,4 +267,3 @@ bmcinfo_init(bmc_data_t *bmc)
 	bmc->pef.alert_string_keys[i][0] = i;
     }
 }
-

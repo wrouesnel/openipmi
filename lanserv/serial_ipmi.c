@@ -65,6 +65,36 @@
 #define SUPPORTED_GLOBAL_ENABLES	(EVENT_BUFFER_GLOBAL_ENABLE | \
 					 EVENT_LOG_GLOBAL_ENABLE)
 
+static void
+raw_send(serserv_data_t *si, unsigned char *data, unsigned int len)
+{
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG) {
+	char *str;
+	int slen;
+	int pos;
+#define format "Raw serial send:"
+	char dummy;
+	unsigned int i;
+
+	slen = snprintf(&dummy, 1, format);
+	slen += len * 3 + 2;
+	str = malloc(slen);
+	if (!str)
+	    goto send;
+	pos = sprintf(str, format);
+#undef format
+	str[pos++] = '\n';
+	str[pos++] = '\0';
+	for (i = 0; i < len; i++)
+	    pos += sprintf(str + pos, " %2.2x", data[i]);
+
+	si->channel.log(&si->channel, DEBUG, NULL, str);
+	free(str);
+    }
+ send:
+    si->send_out(si, data, len);
+}
+
 static unsigned char hex2char[16] = {
     '0', '1', '2', '3', '4', '5', '6', '7',
     '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
@@ -144,7 +174,7 @@ static void handle_attn(channel_t *chan, int val, int irq)
     serserv_data_t *si = chan->chan_info;
 
     if (val && si->do_attn)
-	si->send_out(si, si->attn_chars, si->attn_chars_len);
+	raw_send(si, si->attn_chars, si->attn_chars_len);
 }
 
 /***********************************************************************
@@ -178,7 +208,7 @@ static void ra_format_msg(const unsigned char *msg, unsigned int msg_len,
     c[len] = 0x0d;
     len++;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 static int
@@ -380,7 +410,7 @@ dm_handle_char(unsigned char ch, serserv_data_t *si)
 	info->in_escape = 0;
 
 	c = DM_PACKET_HANDSHAKE;
-	si->send_out(si, &c, 1);
+	raw_send(si, &c, 1);
 	break;
 
     case DM_PACKET_HANDSHAKE:
@@ -471,7 +501,7 @@ dm_send(msg_t *imsg, serserv_data_t *si)
     }
     c[len++] = 0xA5;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 static int
@@ -553,7 +583,7 @@ tm_send(msg_t *msg, serserv_data_t *si)
     c[len] = 0x0a;
     len++;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 /*
@@ -871,7 +901,7 @@ vm_send(msg_t *imsg, serserv_data_t *si)
     vm_add_char(-ipmb_checksum(imsg->data, imsg->len, csum), c, &len);
     c[len++] = VM_MSG_CHAR;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 static void
@@ -890,7 +920,7 @@ vm_set_attn(channel_t *chan, int val, int irq)
 
     c[len++] = VM_CMD_CHAR;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 static void
@@ -931,7 +961,7 @@ vm_hw_op(channel_t *chan, unsigned int op)
 
     c[len++] = VM_CMD_CHAR;
 
-    si->send_out(si, c, len);
+    raw_send(si, c, len);
 }
 
 static int
