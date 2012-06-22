@@ -55,6 +55,7 @@
 
 #include <config.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
 #include <netdb.h>
 
@@ -62,10 +63,103 @@
 #include <OpenIPMI/lanserv.h>
 #include <OpenIPMI/serserv.h>
 
+/*
+ * To parse more complex expressions, we really need to know what the
+ * save state is.  So we, unfortunately, have to create our own
+ * version of strtok so we know what it is.
+ */
+char *
+mystrtok(char *str, const char *delim, char **next)
+{
+    char *pos;
+    char *curr;
+
+    if (str)
+	curr = str;
+    else
+	curr = *next;
+
+    /* Skip initial delimiters. */
+    for (;;) {
+	const char *c = delim;
+	if (*curr == '\0') {
+	    *next = curr;
+	    return NULL;
+	}
+
+	while (*c != '\0') {
+	    if (*c == *curr)
+		break;
+	    c++;
+	}
+	if (*c == '\0')
+	    break;
+	curr++;
+    }
+
+    pos = curr;
+    /* Now collect until there is a delimiter. */
+    for (;;) {
+	const char *c = delim;
+	if (*curr == '\0') {
+	    *next = curr;
+	}
+	while (*c != '\0') {
+	    if (*c == *curr) {
+		*curr = '\0';
+		*next = curr + 1;
+		goto out;
+	    }
+	    c++;
+	}
+	curr++;
+    }
+ out:
+    return pos;
+}
+
+int
+get_delim_str(char **rtokptr, char **rval, char **err)
+{
+    char *tokptr = *rtokptr;
+    char endc;
+    char *rv;
+
+    while (isspace(*tokptr))
+	tokptr++;
+    if (*tokptr == '\0') {
+	*err = "missing string value";
+	return -1;
+    }
+    if (*tokptr != '"' && *tokptr != '\'') {
+	*err = "string value must start with '\"' or '''";
+	return -1;
+    }
+    endc = *tokptr;
+    tokptr++;
+    rv = tokptr;
+    while (*tokptr != endc) {
+	if (*tokptr == '\0') {
+	    *err = "End of line in string";
+	    return -1;
+	}
+	tokptr++;
+    }
+    *tokptr = '\0';
+    *rtokptr = tokptr + 1;
+    rv = strdup(rv);
+    if (!rv) {
+	*err = "Out of memory copying string";
+	return -1;
+    }
+    *rval = rv;
+    return 0;
+}
+
 int
 get_bool(char **tokptr, unsigned int *rval, char **err)
 {
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok)
 	return -1;
@@ -89,7 +183,7 @@ int
 get_uint(char **tokptr, unsigned int *rval, char **err)
 {
     char *end;
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     *rval = strtoul(tok, &end, 0);
     if (*end != '\0') {
@@ -102,7 +196,7 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
 int
 get_priv(char **tokptr, unsigned int *rval, char **err)
 {
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No privilege specified, must be 'callback', 'user',"
@@ -129,7 +223,7 @@ get_priv(char **tokptr, unsigned int *rval, char **err)
 int
 get_auths(char **tokptr, unsigned int *rval, char **err)
 {
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
     int  val = 0;
 
     while (tok) {
@@ -147,7 +241,7 @@ get_auths(char **tokptr, unsigned int *rval, char **err)
 	    return -1;
 	}
 
-	tok = strtok_r(NULL, " \t\n", tokptr);
+	tok = mystrtok(NULL, " \t\n", tokptr);
     }
 
     *rval = val;
@@ -158,7 +252,7 @@ get_auths(char **tokptr, unsigned int *rval, char **err)
 int
 read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 {
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
     char *end;
 
     if (!tok) {
@@ -208,12 +302,12 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 {
     char *s, *p;
 
-    s = strtok_r(NULL, " \t\n", tokptr);
+    s = mystrtok(NULL, " \t\n", tokptr);
     if (!s) {
 	*err = "No IP address specified";
 	return -1;
     }
-    p = strtok_r(NULL, " \t\n", tokptr);
+    p = mystrtok(NULL, " \t\n", tokptr);
 
 #ifdef HAVE_GETADDRINFO
     {
@@ -341,7 +435,7 @@ read_config(bmc_data_t *bmc,
 
 	if (buf[0] == '#')
 	    continue;
-	tok = strtok_r(buf, " \t\n", &tokptr);
+	tok = mystrtok(buf, " \t\n", &tokptr);
 	if (!tok)
 	    continue;
 

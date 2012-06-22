@@ -103,7 +103,7 @@ lanserv_read_config(bmc_data_t    *bmc,
 
 	if (buf[0] == '#')
 	    continue;
-	tok = strtok_r(buf, " \t\n", &tokptr);
+	tok = mystrtok(buf, " \t\n", &tokptr);
 	if (!tok)
 	    continue;
 

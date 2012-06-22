@@ -66,6 +66,8 @@ typedef struct ser_codec_s {
     void (*handle_char)(unsigned char ch, serserv_data_t *si);
     void (*send)(msg_t *msg, serserv_data_t *si);
     int (*setup)(serserv_data_t *si);
+    void (*connected)(serserv_data_t *si);
+    void (*disconnected)(serserv_data_t *si);
 } ser_codec_t;
 
 typedef struct ser_oem_handler_s {
@@ -107,6 +109,8 @@ struct serserv_data_s {
     unsigned char global_enables;
     unsigned char attn_chars[8];
     unsigned int  attn_chars_len;
+
+    char *startcmd;
 };
 
 int serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr);

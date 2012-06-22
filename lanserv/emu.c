@@ -44,6 +44,8 @@
 
 #include "emu.h"
 
+#define WATCHDOG_SENSOR_NUM 0
+
 /* Deal with multi-byte data, IPMI (little-endian) style. */
 static unsigned int ipmi_get_uint16(uint8_t *data)
 {
@@ -250,6 +252,32 @@ struct lmc_data_s
 
     /* Will be NULL if not valid. */
     sensor_t      *hs_sensor;
+
+#define IPMI_BMC_WATCHDOG_USE_MASK 0xc7
+#define IPMI_BMC_WATCHDOG_ACTION_MASK 0x77
+#define IPMI_BMC_WATCHDOG_GET_USE(s) ((s)->watchdog_use & 0x7)
+#define IPMI_BMC_WATCHDOG_GET_DONT_LOG(s) (((s)->watchdog_use >> 7) & 0x1)
+#define IPMI_BMC_WATCHDOG_GET_DONT_STOP(s) (((s)->watchdog_use >> 6) & 0x1)
+#define IPMI_BMC_WATCHDOG_GET_PRE_ACTION(s) (((s)->watchdog_action >> 4) & 0x7)
+#define IPMI_BMC_WATCHDOG_PRE_NONE		0
+#define IPMI_BMC_WATCHDOG_PRE_SMI		1
+#define IPMI_BMC_WATCHDOG_PRE_NMI		2
+#define IPMI_BMC_WATCHDOG_PRE_MSG_INT		3
+#define IPMI_BMC_WATCHDOG_GET_ACTION(s) ((s)->watchdog_action & 0x7)
+#define IPMI_BMC_WATCHDOG_ACTION_NONE		0
+#define IPMI_BMC_WATCHDOG_ACTION_RESET		1
+#define IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN	2
+#define IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE	3
+    unsigned char watchdog_use;
+    unsigned char watchdog_action;
+    unsigned char watchdog_pretimeout;
+    unsigned char watchdog_expired;
+    int watchdog_running;
+    int watchdog_preaction_ran;
+    int watchdog_initialized;
+    struct timeval watchdog_time; /* Set time */
+    struct timeval watchdog_expiry; /* Timeout time */
+    ipmi_timer_t *watchdog_timer;
 };
 
 typedef struct atca_site_s
@@ -294,6 +322,10 @@ struct emu_data_s
 };
 
 static void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
+static void set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
+		    unsigned char value,
+		    unsigned char evd1, unsigned char evd2, unsigned char evd3,
+		    int gen_event);
 
 /* Device ID support bits */
 #define IPMI_DEVID_CHASSIS_DEVICE	(1 << 7)
@@ -931,7 +963,7 @@ ipmi_mc_add_main_sdr(lmc_data_t    *mc,
 		     unsigned char *data,
 		     unsigned int  data_len)
 {
-    sdr_t          *entry;
+    sdr_t *entry;
 
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV))
 	return ENOSYS;
@@ -1810,6 +1842,286 @@ handle_get_device_id(lmc_data_t    *mc,
     *rdata_len = 12;
 }
 
+/* Returns tenths of a second (deciseconds). */
+static long
+diff_timeval_dc(struct timeval *tv1, struct timeval *tv2)
+{
+    long rv;
+
+    rv = (tv1->tv_sec - tv2->tv_sec) * 10;
+    rv += (tv1->tv_usec - tv2->tv_usec + 50000) / 100000;
+    return rv;
+}
+
+static void
+add_timeval(struct timeval *tv1, struct timeval *tv2)
+{
+    tv1->tv_sec += tv2->tv_sec;
+    tv1->tv_usec += tv2->tv_usec;
+    while (tv1->tv_usec >= 1000000) {
+	tv1->tv_usec -= 1000000;
+	tv1->tv_sec += 1;
+    }
+    while (tv1->tv_usec <= 0) {
+	tv1->tv_usec += 1000000;
+	tv1->tv_sec -= 1;
+    }
+}
+
+static void
+sub_timeval(struct timeval *tv1, struct timeval *tv2)
+{
+    tv1->tv_sec -= tv2->tv_sec;
+    tv1->tv_usec -= tv2->tv_usec;
+    while (tv1->tv_usec >= 1000000) {
+	tv1->tv_usec -= 1000000;
+	tv1->tv_sec += 1;
+    }
+    while (tv1->tv_usec <= 0) {
+	tv1->tv_usec += 1000000;
+	tv1->tv_sec -= 1;
+    }
+}
+
+static void
+handle_get_watchdog_timer(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    long v = 0;
+    static struct timeval zero_tv = {0, 0};
+
+    if (!mc->watchdog_timer) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (mc->watchdog_running) {
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	v = diff_timeval_dc(&mc->watchdog_expiry, &now);
+	if (v < 0)
+	    v = 0;
+    }
+    rdata[0] = 0;
+    rdata[1] = mc->watchdog_use;
+    rdata[2] = mc->watchdog_action;
+    rdata[3] = mc->watchdog_pretimeout;
+    rdata[4] = mc->watchdog_expired;
+    ipmi_set_uint16(rdata + 7, v);
+    v = diff_timeval_dc(&mc->watchdog_time, &zero_tv);
+    ipmi_set_uint16(rdata + 5, v);
+    *rdata_len = 7;
+}
+
+static void
+watchdog_timeout(void *cb_data)
+{
+    lmc_data_t *mc = cb_data;
+    channel_t *bchan = mc->bmcinfo->channels[15];
+    sensor_t *sens = mc->sensors[0][WATCHDOG_SENSOR_NUM];
+
+    if (!mc->watchdog_running)
+	goto out;
+
+    if (! mc->watchdog_preaction_ran) {
+	struct timeval tv, now;
+
+	switch (IPMI_BMC_WATCHDOG_GET_PRE_ACTION(mc)) {
+	case IPMI_BMC_WATCHDOG_PRE_NMI:
+	    mc->msg_flags |= IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
+	    bchan->hw_op(bchan, HW_OP_SEND_NMI);
+	    set_bit(mc, sens, 8, 1, 0xc8, (2 << 4) | 0xf, 0xff, 1);
+	    break;
+
+	case IPMI_BMC_WATCHDOG_PRE_MSG_INT:
+	    mc->msg_flags |= IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
+	    if (bchan->set_atn && !IPMI_BMC_MSG_FLAG_EVT_BUF_FULL_SET(mc))
+		bchan->set_atn(bchan, 1, IPMI_BMC_MSG_INTS_ON(mc));
+	    set_bit(mc, sens, 8, 1, 0xc8, (3 << 4) | 0xf, 0xff, 1);
+	    break;
+
+	default:
+	    goto do_full_expiry;
+	}
+
+	mc->watchdog_preaction_ran = 1;
+	/* Issued the pretimeout, do the rest of the timeout now. */
+	gettimeofday(&now, NULL);
+	tv = mc->watchdog_expiry;
+	sub_timeval(&tv, &now);
+	if (tv.tv_sec == 0) {
+	    tv.tv_sec = 0;
+	    tv.tv_usec = 0;
+	}
+	mc->bmcinfo->start_timer(mc->watchdog_timer, &tv);
+	goto out;
+    }
+
+ do_full_expiry:
+    mc->watchdog_running = 0; /* Stop the watchdog on a timeout */
+    mc->watchdog_expired |= (1 << IPMI_BMC_WATCHDOG_GET_USE(mc));
+    switch (IPMI_BMC_WATCHDOG_GET_ACTION(mc)) {
+    case IPMI_BMC_WATCHDOG_ACTION_NONE:
+	set_bit(mc, sens, 0, 1, 0xc0, mc->watchdog_use & 0xf, 0xff, 1);
+	break;
+
+    case IPMI_BMC_WATCHDOG_ACTION_RESET:
+	set_bit(mc, sens, 1, 1, 0xc1, mc->watchdog_use & 0xf, 0xff, 1);
+	bchan->hw_op(bchan, HW_OP_RESET);
+	break;
+
+    case IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN:
+	set_bit(mc, sens, 2, 1, 0xc2, mc->watchdog_use & 0xf, 0xff, 1);
+	bchan->hw_op(bchan, HW_OP_POWEROFF);
+	break;
+
+    case IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE:
+	set_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
+	bchan->hw_op(bchan, HW_OP_POWEROFF);
+	/* FIXME - add poweron. */
+	break;
+    }
+
+ out:
+    return;
+}
+
+static void
+do_watchdog_reset(lmc_data_t *mc)
+{
+    struct timeval tv;
+
+    if (IPMI_BMC_WATCHDOG_GET_ACTION(mc) ==
+	IPMI_BMC_WATCHDOG_ACTION_NONE) {
+	mc->watchdog_running = 0;
+	return;
+    }
+    mc->watchdog_preaction_ran = 0;
+
+    /* Timeout is in tenths of a second, offset is in seconds */
+    gettimeofday(&mc->watchdog_expiry, NULL);
+    add_timeval(&mc->watchdog_expiry, &mc->watchdog_time);
+    tv = mc->watchdog_time;
+    if (IPMI_BMC_WATCHDOG_GET_PRE_ACTION(mc) != IPMI_BMC_WATCHDOG_PRE_NONE) {
+	tv.tv_sec -= mc->watchdog_pretimeout;
+	if (tv.tv_sec < 0) {
+	    tv.tv_sec = 0;
+	    tv.tv_usec = 0;
+	}
+    }
+    mc->watchdog_running = 1;
+    mc->bmcinfo->start_timer(mc->watchdog_timer, &tv);
+}
+
+static void
+handle_set_watchdog_timer(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    unsigned int val;
+    channel_t *bchan;
+
+    if (!mc->watchdog_timer) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (check_msg_length(msg, 6, rdata, rdata_len))
+	return;
+
+    val = msg->data[0] & 0x7; /* Validate use */
+    if (val == 0 || val > 5) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+
+    bchan = mc->bmcinfo->channels[15];
+    val = msg->data[1] & 0x7; /* Validate action */
+    switch (val) {
+    case IPMI_BMC_WATCHDOG_ACTION_NONE:
+	break;
+	
+    case IPMI_BMC_WATCHDOG_ACTION_RESET:
+	rdata[0] = !HW_OP_CAN_RESET(bchan);
+	break;
+	
+    case IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN:
+    case IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE:
+	rdata[0] = !HW_OP_CAN_POWER(bchan);
+	break;
+	
+    default:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+    }
+    if (rdata[0]) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    
+    val = (msg->data[1] >> 4) & 0x7; /* Validate preaction */
+    switch (val) {
+    case IPMI_BMC_WATCHDOG_PRE_MSG_INT:
+    case IPMI_BMC_WATCHDOG_PRE_NONE:
+	break;
+	
+    case IPMI_BMC_WATCHDOG_PRE_NMI:
+	if (!HW_OP_CAN_NMI(bchan)) {
+	    /* NMI not supported. */
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    default:
+	/* We don't support PRE_SMI */
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    
+    mc->watchdog_initialized = 1;
+    mc->watchdog_use = msg->data[0] & IPMI_BMC_WATCHDOG_USE_MASK;
+    mc->watchdog_action = msg->data[1] & IPMI_BMC_WATCHDOG_ACTION_MASK;
+    mc->watchdog_pretimeout = msg->data[2];
+    mc->watchdog_expired &= ~msg->data[3];
+    val = msg->data[4] | (((uint16_t) msg->data[5]) << 8);
+    mc->watchdog_time.tv_sec = val / 10;
+    mc->watchdog_time.tv_usec = (val % 10) * 100000;
+    if (mc->watchdog_running & IPMI_BMC_WATCHDOG_GET_DONT_STOP(mc))
+	do_watchdog_reset(mc);
+    else
+	mc->watchdog_running = 0;
+}
+
+static void
+handle_reset_watchdog_timer(lmc_data_t    *mc,
+			    msg_t         *msg,
+			    unsigned char *rdata,
+			    unsigned int  *rdata_len)
+{
+    if (!mc->watchdog_timer) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->watchdog_initialized) {
+	rdata[0] = 0x80;
+	*rdata_len = 1;
+	return;
+    }
+
+    do_watchdog_reset(mc);
+}
+
 static void
 handle_get_channel_info(lmc_data_t    *mc,
 			msg_t         *msg,
@@ -2285,16 +2597,42 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
 
     if (!mc->ev_in_q) {
 	rdata[0] = 0x80;
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
     rdata[0] = 0;
     memcpy(rdata + 1, mc->evq, 16);
     *rdata_len = 17;
+    mc->ev_in_q = 0;
     mc->msg_flags &= ~IPMI_BMC_MSG_FLAG_EVT_BUF_FULL;
     if (chan->set_atn)
 	chan->set_atn(chan, 0, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
+}
+
+static void
+handle_get_msg_flags(lmc_data_t    *mc,
+		     msg_t         *msg,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = mc->msg_flags;
+    *rdata_len = 2;
+}
+
+static void
+handle_clear_msg_flags(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 1, rdata, rdata_len))
+	return;
+
+    mc->msg_flags &= ~msg->data[0];
+    rdata[0] = 0;
+    *rdata_len = 1;
 }
 
 static void
@@ -2354,6 +2692,18 @@ handle_app_netfn(lmc_data_t    *mc,
 	handle_get_device_id(mc, msg, rdata, rdata_len);
 	break;
 
+    case IPMI_GET_WATCHDOG_TIMER_CMD:
+	handle_get_watchdog_timer(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_WATCHDOG_TIMER_CMD:
+	handle_set_watchdog_timer(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_RESET_WATCHDOG_TIMER_CMD:
+	handle_reset_watchdog_timer(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_GET_CHANNEL_INFO_CMD:
 	handle_get_channel_info(mc, msg, rdata, rdata_len);
 	break;
@@ -2400,6 +2750,117 @@ handle_app_netfn(lmc_data_t    *mc,
 
     case IPMI_GET_MSG_CMD:
 	handle_get_msg(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_MSG_FLAGS_CMD:
+	handle_get_msg_flags(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_CLEAR_MSG_FLAGS_CMD:
+	handle_clear_msg_flags(mc, msg, rdata, rdata_len);
+	break;
+
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+    }
+}
+
+static void
+handle_get_chassis_capabilities(lmc_data_t    *mc,
+				msg_t         *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = 0;
+    rdata[2] = mc->bmcinfo->bmc_ipmb;
+    rdata[3] = mc->bmcinfo->bmc_ipmb;
+    rdata[4] = mc->bmcinfo->bmc_ipmb;
+    rdata[5] = mc->bmcinfo->bmc_ipmb;
+}
+
+static void
+handle_get_chassis_status(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = mc->bmcinfo->power_on;
+    rdata[2] = 0;
+    rdata[3] = 0;
+}
+
+static void
+handle_chassis_control(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    if (msg->len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+
+    switch(msg->data[0] & 0xf) {
+    case 0: /* power down */
+	if (!HW_OP_CAN_POWER(mc->bmcinfo->channels[15]))
+	    goto no_support;
+	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+					 HW_OP_POWEROFF);
+	break;
+
+    case 1: /* power up */
+	if (!HW_OP_CAN_POWER(mc->bmcinfo->channels[15]))
+	    goto no_support;
+	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+					 HW_OP_POWERON);
+	break;
+
+    case 3: /* hard reset */
+	if (!HW_OP_CAN_RESET(mc->bmcinfo->channels[15]))
+	    goto no_support;
+	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+					 HW_OP_RESET);
+	break;
+
+    case 2: /* power cycle */
+    case 4: /* pulse diag interrupt */
+    case 5: /* initiate soft-shutdown via overtemp */
+    no_support:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+}
+
+static void
+handle_chassis_netfn(lmc_data_t    *mc,
+		     msg_t         *msg,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len)
+{
+    if (!(mc->device_support & IPMI_DEVID_CHASSIS_DEVICE)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    switch(msg->cmd) {
+    case IPMI_GET_CHASSIS_CAPABILITIES_CMD:
+	handle_get_chassis_capabilities(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_CHASSIS_STATUS_CMD:
+	handle_get_chassis_status(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_CHASSIS_CONTROL_CMD:
+	handle_chassis_control(mc, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -2793,7 +3254,9 @@ do_event(lmc_data_t    *mc,
 
 static void
 set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
-	unsigned char value, int gen_event)
+	unsigned char value,
+	unsigned char evd1, unsigned char evd2, unsigned char evd3,
+	int gen_event)
 {
     if (value != sensor->event_status[bit]) {
 	/* The bit value has changed. */
@@ -3200,7 +3663,7 @@ ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 
     sensor = mc->sensors[lun][sens_num];
 
-    set_bit(mc, sensor, bit, value, gen_event);
+    set_bit(mc, sensor, bit, value, 0, 0, 0, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -3229,11 +3692,11 @@ ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
     /* Clear all the other bits. */
     for (i=0; i<15; i++) {
 	if ((i != bit) && (sensor->event_status[i]))
-	    set_bit(mc, sensor, i, 0, gen_event);
+	    set_bit(mc, sensor, i, 0, 0, 0, 0, gen_event);
     }
 
     sensor->value = bit;
-    set_bit(mc, sensor, bit, 1, gen_event);
+    set_bit(mc, sensor, bit, 1, 0, 0, 0, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -4996,7 +5459,9 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     unsigned char *rdata;
     unsigned int  *rdata_len;
 
-    if (omsg->cmd == IPMI_SEND_MSG_CMD) {
+    if (emu->bmcinfo->debug & DEBUG_MSG)
+	emu->bmcinfo->log(emu->bmcinfo, DEBUG, omsg, "Receive message:");
+    if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* Encapsulated IPMB, do special handling. */
 	unsigned char slave;
 	unsigned int  data_len;
@@ -5062,8 +5527,8 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     } else {
 	mc = emu->ipmb[emu->bmcinfo->bmc_ipmb >> 1];
 	if (!mc || !mc->enabled) {
-	    rdata[0] = 0xff;
-	    *rdata_len = 1;
+	    ordata[0] = 0xff;
+	    *ordata_len = 1;
 	    return;
 	}
 	rdata = ordata;
@@ -5074,6 +5539,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     switch (msg->netfn) {
     case IPMI_APP_NETFN:
 	handle_app_netfn(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_CHASSIS_NETFN:
+	handle_chassis_netfn(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_TRANSPORT_NETFN:
@@ -5128,6 +5597,9 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 		bchan->set_atn(bchan, 1, IPMI_BMC_MSG_INTS_ON(mc));
 	}
     }
+    if (emu->bmcinfo->debug & DEBUG_MSG)
+	debug_log_raw_msg(emu->bmcinfo, ordata, *ordata_len,
+			  "Response message:");
 }
 
 emu_data_t *
@@ -5242,6 +5714,122 @@ ipmi_mc_set_num_leds(lmc_data_t   *mc,
     return 0;
 }
 
+static void
+unpack_bitmask(unsigned char *bits, unsigned int mask, unsigned int len)
+{
+    while (len) {
+	*bits = mask & 1;
+	bits++;
+	mask >>= 1;
+	len--;
+    }
+}
+
+static int
+init_sensor_from_sdr(lmc_data_t *mc, sdr_t *sdr)
+{
+    int err;
+    unsigned int len = sdr->data[4];
+    unsigned char num = sdr->data[7];
+    unsigned char lun = sdr->data[6] & 0x3;
+    unsigned char type = sdr->data[12];
+    unsigned char ev_read_code = sdr->data[13];
+    unsigned char assert_sup[15], deassert_sup[15];
+    unsigned char assert_en[15], deassert_en[15];
+    unsigned char scan_on = (sdr->data[10] >> 6) & 1;
+    unsigned char events_on = (sdr->data[10] >> 5) & 1;
+    unsigned char event_sup = sdr->data[11] & 0x3;
+
+    if (len < 20)
+	return 0;
+    if ((sdr->data[3] < 1) || (sdr->data[3] > 2))
+	return 0; /* Not a sensor SDR we set from */
+    
+    err = ipmi_mc_add_sensor(mc, lun, num, type, ev_read_code);
+    if (err)
+	return err;
+
+    unpack_bitmask(assert_sup, sdr->data[14] | (sdr->data[15] << 8), 15);
+    unpack_bitmask(deassert_sup, sdr->data[16] | (sdr->data[17] << 8), 15);
+    unpack_bitmask(assert_en, sdr->data[14] | (sdr->data[15] << 8), 15);
+    unpack_bitmask(deassert_en, sdr->data[16] | (sdr->data[17] << 8), 15);
+
+    err = ipmi_mc_sensor_set_event_support(mc, lun, num,
+					   events_on,
+					   scan_on,
+					   event_sup,
+					   assert_sup,
+					   deassert_sup,
+					   assert_en,
+					   deassert_en);
+    return err;
+}
+
+static const uint8_t init_sdrs[] = {
+    /* Watchdog device */
+    0x00, 0x00, 0x51, 0x02,   40, 0x20, 0x00, WATCHDOG_SENSOR_NUM,
+    0x23, 0x01, 0x63, 0x00, 0x23, 0x6f, 0x0f, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc8,
+    'W',  'a',  't',  'c',  'h',  'd',  'o',  'g',
+    /* End */
+    0xff, 0xff, 0x00, 0x00, 0x00
+};
+
+static int
+init_bmc(emu_data_t *emu, lmc_data_t *mc)
+{
+    unsigned int i;
+    int err;
+
+    err = mc->bmcinfo->alloc_timer(mc->bmcinfo, watchdog_timeout,
+				   mc, &mc->watchdog_timer);
+    if (err) {
+	free(mc);
+	return err;
+    }
+
+    for (i = 0;;) {
+	unsigned int len;
+	unsigned int recid;
+	sdr_t *entry;
+
+	if ((i + 5) > sizeof(init_sdrs)) {
+	    //printf("IPMI: Problem with recid 0x%4.4x\n", i);
+	    err = -1;
+	    break;
+	}
+	len = init_sdrs[i + 4];
+	recid = init_sdrs[i] | (init_sdrs[i + 1] << 8);
+	if (recid == 0xffff)
+	    break;
+	if ((i + len) > sizeof(init_sdrs)) {
+	    //printf("IPMI: Problem with recid 0x%4.4x\n", i);
+	    err = -1;
+	    break;
+	}
+
+	entry = new_sdr_entry(mc, &mc->main_sdrs, len);
+	if (!entry) {
+	    err = ENOMEM;
+	    break;
+	}
+
+	add_sdr_entry(mc, &mc->main_sdrs, entry);
+
+	memcpy(entry->data + 2, init_sdrs + i + 2, len - 2);
+	entry->data[5] = mc->ipmb;
+
+	err = init_sensor_from_sdr(mc, entry);
+	if (err)
+	    break;
+
+	i += len;
+    }
+
+    return err;
+}
+
 int
 ipmi_emu_add_mc(emu_data_t    *emu,
 		unsigned char ipmb,
@@ -5322,8 +5910,12 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
     emu->ipmb[ipmb >> 1] = mc;
 
-    if (ipmb == emu->bmcinfo->bmc_ipmb)
+    if (ipmb == emu->bmcinfo->bmc_ipmb) {
+	int err;
+
 	mc->bmcinfo = emu->bmcinfo;
+	err = init_bmc(emu, mc);
+    }
 
     return 0;
 }

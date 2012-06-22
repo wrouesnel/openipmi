@@ -841,7 +841,6 @@ debug_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned int   level = 0;
     char           *tok;
-    int            rv;
 
     while ((tok = strtok_r(NULL, " \t\n", toks))) {
 	if (strcmp(tok, "raw") == 0) {
@@ -855,10 +854,6 @@ debug_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	}
     }
     
-    rv = emu_get_uint(toks, &level, "debuglevel");
-    if (rv)
-	return rv;
-
     emu_set_debug_level(emu, level);
     return 0;
 }

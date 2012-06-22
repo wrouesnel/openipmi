@@ -58,6 +58,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdarg.h>
 
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -145,30 +146,6 @@ check_oem_handlers(channel_t *chan)
     }
 }
 
-static int
-look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
-{
-    if ((rsp->netfn == (IPMI_APP_NETFN | 1))
-	&& (rsp->cmd == IPMI_GET_DEVICE_ID_CMD)
-	&& (rsp->data_len >= 12)
-	&& (rsp->data[0] == 0))
-    {
-	chan->oem.oem_handle_rsp = NULL;
-	chan->manufacturer_id = (rsp->data[7]
-				 | (rsp->data[8] << 8)
-				 | (rsp->data[9] << 16));
-	chan->product_id = rsp->data[10] | (rsp->data[11] << 8);
-	check_oem_handlers(chan);
-
-	/* Will be set to 1 if we sent it. */
-	if (msg->oem_data) {
-	    chan->free(chan, msg);
-	    return 1;
-	}
-    }
-    return 0;
-}
-
 int
 channel_smi_send(channel_t *chan, msg_t *msg)
 {
@@ -207,6 +184,30 @@ channel_smi_send(channel_t *chan, msg_t *msg)
     return rv;
 }
 
+static int
+look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
+{
+    if ((rsp->netfn == (IPMI_APP_NETFN | 1))
+	&& (rsp->cmd == IPMI_GET_DEVICE_ID_CMD)
+	&& (rsp->data_len >= 12)
+	&& (rsp->data[0] == 0))
+    {
+	chan->oem.oem_handle_rsp = NULL;
+	chan->manufacturer_id = (rsp->data[7]
+				 | (rsp->data[8] << 8)
+				 | (rsp->data[9] << 16));
+	chan->product_id = rsp->data[10] | (rsp->data[11] << 8);
+	check_oem_handlers(chan);
+
+	/* Will be set to 1 if we sent it. */
+	if (msg->oem_data) {
+	    chan->free(chan, msg);
+	    return 1;
+	}
+    }
+    return 0;
+}
+
 int
 chan_init(channel_t *chan)
 {
@@ -216,7 +217,7 @@ chan_init(channel_t *chan)
        set up our own to look for a get device id.  When we find a get
        device ID, we call the OEM code to install their own.  Hijack
        channel 0 for this. */
-    if ((chan->channel_num == 0) && (chan->oem.oem_handle_rsp == NULL)) {
+    if ((chan->channel_num == 15) && (chan->oem.oem_handle_rsp == NULL)) {
 	chan->oem.oem_handle_rsp = look_for_get_devid;
 
 	/* Send a get device id to the low-level code so we can
@@ -235,6 +236,8 @@ bmcinfo_init(bmc_data_t *bmc)
     unsigned int i;
 
     memset(bmc, 0, sizeof(*bmc));
+
+    bmc->power_on = 1; /* Assume on, let the BMC connection override. */
 
     bmc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
     bmc->sys_channel.channel_num = 0xf;
@@ -266,4 +269,35 @@ bmcinfo_init(bmc_data_t *bmc)
     for (i=0; i<MAX_ALERT_STRINGS; i++) {
 	bmc->pef.alert_string_keys[i][0] = i;
     }
+}
+
+void
+debug_log_raw_msg(bmc_data_t *bmc,
+		  unsigned char *data, unsigned int len,
+		  char *format, ...)
+{
+    va_list ap;
+    char *str;
+    int slen;
+    int pos;
+    char dummy;
+    unsigned int i;
+
+    va_start(ap, format);
+    slen = vsnprintf(&dummy, 1, format, ap);
+    va_end(ap);
+    slen += len * 3 + 2;
+    str = malloc(slen);
+    if (!str)
+	return;
+    va_start(ap, format);
+    pos = vsprintf(str, format, ap);
+    va_end(ap);
+    str[pos++] = '\n';
+    str[pos] = '\0';
+    for (i = 0; i < len; i++)
+	pos += sprintf(str + pos, " %2.2x", data[i]);
+
+    bmc->log(bmc, DEBUG, NULL, str);
+    free(str);
 }

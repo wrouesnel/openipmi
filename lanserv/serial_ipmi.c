@@ -56,6 +56,9 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/serserv.h>
@@ -68,30 +71,8 @@
 static void
 raw_send(serserv_data_t *si, unsigned char *data, unsigned int len)
 {
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG) {
-	char *str;
-	int slen;
-	int pos;
-#define format "Raw serial send:"
-	char dummy;
-	unsigned int i;
-
-	slen = snprintf(&dummy, 1, format);
-	slen += len * 3 + 2;
-	str = malloc(slen);
-	if (!str)
-	    goto send;
-	pos = sprintf(str, format);
-#undef format
-	str[pos++] = '\n';
-	str[pos++] = '\0';
-	for (i = 0; i < len; i++)
-	    pos += sprintf(str + pos, " %2.2x", data[i]);
-
-	si->channel.log(&si->channel, DEBUG, NULL, str);
-	free(str);
-    }
- send:
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, data, len, "Raw serial send:");
     si->send_out(si, data, len);
 }
 
@@ -234,6 +215,9 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
     unsigned int i = 0;
     int          rv;
 
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, r, len, "Raw serial receive:");
+
     while (p < len) {
 	rv = fromhex(r[p]);
 	if (rv < 0)
@@ -253,6 +237,7 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
     if (i < 1)
 	return -1;
 
+    memset(&msg, 0, sizeof(msg));
     if ((o[0] == si->bmcinfo->bmc_ipmb) || (o[0] == 1)) {
 	rv = unformat_ipmb_msg(&msg, o, i, si);
 	if (rv)
@@ -371,6 +356,10 @@ dm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     int rv;
     msg_t msg;
 
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial receive:");
+
+    memset(&msg, 0, sizeof(msg));
     rv = unformat_ipmb_msg(&msg, imsg, len, si);
     if (rv)
 	return;
@@ -600,6 +589,9 @@ static int tm_unformat_msg(unsigned char *r, unsigned int len,
     unsigned int  i = 0;
     int           rv;
 
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, r, len, "Raw serial receive:");
+
 #define SKIP_SPACE if (isspace(r[p])) p++
 #define ENSURE_MORE if (p >= len) return -1
 
@@ -626,6 +618,7 @@ static int tm_unformat_msg(unsigned char *r, unsigned int len,
 	if (i < 3)
 	    return -1;
 
+	memset(&msg, 0, sizeof(msg));
 	msg.netfn = o[0] >> 2;
 	msg.rq_lun = o[0] & 3;
 	msg.rq_seq = o[1] >> 2;
@@ -774,6 +767,9 @@ vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 {
     msg_t msg;
     
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial receive:");
+
     if (len < 4) {
 	fprintf(stderr, "Message too short\n");
 	return;
@@ -785,10 +781,13 @@ vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     }
     len--;
 
+    memset(&msg, 0, sizeof(msg));
     msg.rq_seq = imsg[0];
     msg.netfn = imsg[1] >> 2;
     msg.rs_lun = imsg[1] & 0x3;
     msg.cmd = imsg[2];
+    msg.len = len - 3;
+    msg.data = imsg + 3;
 
     channel_smi_send(&si->channel, &msg);
 }
@@ -797,6 +796,9 @@ static void
 vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 {
     struct vm_data *info = si->codec_info;
+
+    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial cmd:");
 
     if (len < 2)
 	return;
@@ -936,7 +938,29 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	break;
 	
     case HW_OP_POWERON:
-	/* FIXME - add starting the VM */
+	if (!si->startcmd) {
+	    si->channel.log(&si->channel, OS_ERROR, NULL,
+			    "Power on issued, no start command set");
+	    return;
+	}
+	{
+	    int pid = fork();
+	    int status;
+	    char *startcmd = malloc(strlen(si->startcmd) + 6);
+
+	    strcpy(startcmd, "exec ");
+	    strcpy(startcmd + 5, si->startcmd);
+	    if (pid == 0) {
+		if (fork() == 0) {
+		    char *args[4] = { "/bin/sh", "-c", startcmd, NULL };
+		    execvp(args[0], args);
+		    exit(1);
+		} else {
+		    exit(0);
+		}
+	    }
+	    waitpid(pid, &status, 0);
+	}
 	return;
 
     case HW_OP_POWEROFF:
@@ -964,6 +988,18 @@ vm_hw_op(channel_t *chan, unsigned int op)
     raw_send(si, c, len);
 }
 
+static void
+vm_connected(serserv_data_t *si)
+{
+    si->bmcinfo->power_on = 1;
+}
+
+static void
+vm_disconnected(serserv_data_t *si)
+{
+    si->bmcinfo->power_on = 0;
+}
+
 static int
 vm_setup(serserv_data_t *si)
 {
@@ -977,6 +1013,7 @@ vm_setup(serserv_data_t *si)
     si->channel.hw_op = vm_hw_op;
     si->channel.set_atn = vm_set_attn;
     si->channel.hw_capabilities = (1 << HW_OP_POWERON);
+    si->bmcinfo->power_on = 0;
     return 0;
 }
 
@@ -994,7 +1031,7 @@ static ser_codec_t codecs[] = {
     { "RadisysAscii",
       ra_handle_char, ra_send, ra_setup },
     { "VM",
-      vm_handle_char, vm_send, vm_setup },
+      vm_handle_char, vm_send, vm_setup, vm_connected, vm_disconnected },
     { NULL }
 };
 
@@ -1165,7 +1202,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     }
     memset(ser, 0, sizeof(*ser));
 
-    tok = strtok_r(NULL, " \t\n", tokptr);
+    tok = mystrtok(NULL, " \t\n", tokptr);
     if (!tok) {
 	*errstr = "No channel given";
 	goto out_err;
@@ -1206,14 +1243,21 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     if (err)
 	return err;
 
-    tok = strtok_r(NULL, " \t\n", tokptr);
-    while (tok) {
+    for (tok = mystrtok(NULL, " \t\n", tokptr); tok;
+	 tok = mystrtok(NULL, " \t\n", tokptr)) {
 	if (strcmp(tok, "connect") == 0) {
 	    ser->do_connect = 1;
 	    continue;
 	}
 
-	tok2 = strtok_r(NULL, " \t\n", tokptr);
+	if (strcmp(tok, "startcmd") == 0) {
+	    err = get_delim_str(tokptr, &ser->startcmd, errstr);
+	    if (err)
+		return err;
+	    continue;
+	}
+
+	tok2 = mystrtok(NULL, " \t\n", tokptr);
 	if (strcmp(tok, "codec") == 0) {
 	    if (!tok2) {
 		*errstr = "Missing parameter for codec";
@@ -1244,7 +1288,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	    }
 
 	    ser->do_attn = 1;
-	    tok2 = strtok_r(tok2, ",", &tokptr2);
+	    tok2 = mystrtok(tok2, ",", &tokptr2);
 	    while (tok2) {
 		if (pos >= sizeof(ser->attn_chars)) {
 		    *errstr = "Too many attn characters";
@@ -1256,7 +1300,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 		    return -1;
 		}
 		pos++;
-		tok2 = strtok_r(NULL, ",", &tokptr2);
+		tok2 = mystrtok(NULL, ",", &tokptr2);
 	    }
 	    ser->attn_chars_len = pos;
 	} else if (strcmp(tok, "ipmb") == 0) {
@@ -1270,8 +1314,6 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	    *errstr = "Invalid setting, not connect, codec, oem, attn, or ipmb";
 	    return -1;
 	}
-
-	tok = strtok_r(NULL, " \t\n", tokptr);
     }
 
     if (!ser->codec) {

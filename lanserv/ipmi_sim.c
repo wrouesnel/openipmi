@@ -57,6 +57,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/stat.h>
 #include <sys/poll.h>
 #include <time.h>
@@ -205,6 +206,13 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     }
     l.xmit_fd = lan_fd;
 
+    if (lan->bmcinfo->debug & DEBUG_RAW_MSG) {
+	debug_log_raw_msg(lan->bmcinfo, (void *) &l.addr, l.addr_len,
+			  "Raw LAN receive from:");
+	debug_log_raw_msg(lan->bmcinfo, msgd, len,
+			  " Receive message:");
+    }
+
     if (len < 4)
 	goto out;
 
@@ -347,6 +355,8 @@ ser_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	if ((len < 0) && (errno == EINTR))
 	    return;
 
+	if (ser->codec->disconnected)
+	    ser->codec->disconnected(ser);
 	ser->os_hnd->remove_fd_to_wait_for(ser->os_hnd, id);
 	close(fd);
 	ser->con_fd = -1;
@@ -365,6 +375,7 @@ ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     os_hnd_fd_id_t *fd_id;
     struct sockaddr_storage addr;
     socklen_t addr_len = sizeof(addr);
+    int val = 1;
 
     rv = accept(fd, (struct sockaddr *) &addr, &addr_len);
     if (rv < 0) {
@@ -378,6 +389,8 @@ ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	return;
     }
 
+    setsockopt(rv, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
     ser->con_fd = rv;
 
     err = ser->os_hnd->add_fd_to_wait_for(ser->os_hnd, ser->con_fd,
@@ -387,6 +400,9 @@ ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	fprintf(stderr, "Unable to add serial socket wait: 0x%x\n", err);
 	ser->con_fd = -1;
 	close(rv);
+    } else {
+	if (ser->codec->connected)
+	    ser->codec->connected(ser);
     }
 }
 
@@ -466,31 +482,79 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 }
 
 static void
-sim_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
+	 int len)
+{
+    if (msg) {
+	char *str, dummy;
+	int pos;
+	unsigned int i;
+
+#define mformat " channel=%d netfn=0x%x cmd=0x%x rs_addr=0x%x rs_lun=0x%x" \
+	    " rq_addr=0x%x\n rq_lun=0x%x rq_seq=0x%x\n"
+
+	len += snprintf(&dummy, 1, mformat, msg->channel, msg->netfn,
+			msg->cmd, msg->rs_addr, msg->rs_lun, msg->rq_addr,
+			msg->rq_lun, msg->rq_seq);
+	len += 3 * msg->len + 3;
+	str = malloc(len);
+	if (!str)
+	    goto print_no_msg;
+	pos = vsprintf(str, format, ap);
+	str[pos++] = '\n';
+	pos += sprintf(str + pos, mformat, msg->channel, msg->netfn, msg->cmd,
+		       msg->rs_addr, msg->rs_lun, msg->rq_addr, msg->rq_lun,
+		       msg->rq_seq);
+#undef mformat
+	printf("Msglen = %d\n", msg->len);
+	for (i = 0; i < msg->len; i++)
+	    pos += sprintf(str + pos, " %2.2x", msg->data[i]);
+	
+	printf("%s\n", str);
+#if HAVE_SYSLOG
+	if (logtype != DEBUG)
+	    syslog(LOG_NOTICE, "%s", str);
+#endif
+	free(str);
+	return;
+    }
+
+ print_no_msg:
+    vprintf(format, ap);
+    printf("\n");
+#if HAVE_SYSLOG
+    if (logtype != DEBUG)
+	vsyslog(LOG_NOTICE, format, ap);
+#endif
+}
+
+static void
+sim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
-    struct timeval tod;
-    struct tm ltime;
-    char timebuf[30];
-    int timelen;
-    char fullformat[256];
+    char dummy;
+    int len;
 
     va_start(ap, format);
-    gettimeofday(&tod, NULL);
-    localtime_r(&tod.tv_sec, &ltime);
-    asctime_r(&ltime, timebuf);
-    timelen = strlen(timebuf);
-    timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
-    timelen--;
-    if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
-	vprintf(format, ap);
-    } else {
-	strcpy(fullformat, timebuf);
-	strcat(fullformat, ": ");
-	strcat(fullformat, format);
-	vprintf(fullformat, ap);
-    }
-    printf("\n");
+    len = vsnprintf(&dummy, 1, format, ap);
+    va_end(ap);
+    va_start(ap, format);
+    isim_log(bmc, logtype, msg, format, ap, len);
+    va_end(ap);
+}
+
+static void
+sim_chan_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+{
+    va_list ap;
+    char dummy;
+    int len;
+
+    va_start(ap, format);
+    len = vsnprintf(&dummy, 1, format, ap);
+    va_end(ap);
+    va_start(ap, format);
+    isim_log(NULL, logtype, msg, format, ap, len);
     va_end(ap);
 }
 
@@ -662,6 +726,66 @@ sleeper(emu_data_t *emu, struct timeval *time)
     os_handler_waiter_release(waiter);
 }
 
+struct ipmi_timer_s
+{
+    os_hnd_timer_id_t *id;
+    misc_data_t *data;
+    void (*cb)(void *cb_data);
+    void *cb_data;
+};
+
+static int
+ipmi_alloc_timer(bmc_data_t *bmc, void (*cb)(void *cb_data),
+		 void *cb_data, ipmi_timer_t **rtimer)
+{
+    misc_data_t *data = bmc->info;
+    ipmi_timer_t *timer;
+    int err;
+
+    timer = malloc(sizeof(ipmi_timer_t));
+    if (!timer)
+	return ENOMEM;
+
+    timer->cb = cb;
+    timer->cb_data = cb_data;
+    timer->data = data;
+    err = data->os_hnd->alloc_timer(data->os_hnd, &timer->id);
+    if (err) {
+	free(timer);
+	return err;
+    }
+
+    *rtimer = timer;
+    return 0;
+}
+
+static void
+timer_cb(void *cb_data, os_hnd_timer_id_t *id)
+{
+    ipmi_timer_t *timer = cb_data;
+
+    timer->cb(timer->cb_data);
+}
+
+static int
+ipmi_start_timer(ipmi_timer_t *timer, struct timeval *timeout)
+{
+    return timer->data->os_hnd->start_timer(timer->data->os_hnd, timer->id,
+					    timeout, timer_cb, timer);
+}
+
+static int
+ipmi_stop_timer(ipmi_timer_t *timer)
+{
+    return timer->data->os_hnd->stop_timer(timer->data->os_hnd, timer->id);
+}
+
+static void
+ipmi_free_timer(ipmi_timer_t *timer)
+{
+    timer->data->os_hnd->free_timer(timer->data->os_hnd, timer->id);
+}
+
 static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
@@ -741,10 +865,16 @@ main(int argc, const char *argv[])
     }
 
     bmcinfo_init(&bmcinfo);
+    bmcinfo.info = &data;
     bmcinfo.alloc = balloc;
     bmcinfo.free = bfree;
+    bmcinfo.alloc_timer = ipmi_alloc_timer;
+    bmcinfo.start_timer = ipmi_start_timer;
+    bmcinfo.stop_timer = ipmi_stop_timer;
+    bmcinfo.free_timer = ipmi_free_timer;
     bmcinfo.write_config = write_config;
     bmcinfo.debug = debug;
+    bmcinfo.log = sim_log;
     data.bmc = &bmcinfo;
 
     data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
@@ -766,9 +896,9 @@ main(int argc, const char *argv[])
 
 	chan->smi_send = smi_send;
 	chan->oem.user_data = &data;
-	chan->log = sim_log;
 	chan->alloc = ialloc;
 	chan->free = ifree;
+	chan->log = sim_chan_log;
 
 	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)
 	    err = lan_channel_init(&data, bmcinfo.channels[i]);
@@ -779,6 +909,7 @@ main(int argc, const char *argv[])
     }
 
     init_term();
+
     printf("> ");
     fflush(stdout);
     err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, 0,

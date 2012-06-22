@@ -89,7 +89,7 @@ static int daemonize = 1;
 
 #define MAX_ADDR 4
 
-static void lanserv_log(channel_t *chan, int logtype, msg_t *msg,
+static void lanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg,
 			char *format, ...);
 
 typedef struct misc_data
@@ -102,25 +102,6 @@ typedef struct misc_data
 
     unsigned char bmc_ipmb;
 } misc_data_t;
-
-static int
-dump_hex(void *vdata, int len, int left)
-{
-    unsigned char *data = vdata;
-
-    int i;
-    for (i=0; i<len; i++) {
-	if (left == 0) {
-	    lanserv_log(NULL, DEBUG,  NULL, "\n  ");
-	    left = 15;
-	} else {
-	    left--;
-	}
-	lanserv_log(NULL, DEBUG, NULL, " %2.2x", data[i]);
-    }
-
-    return left;
-}
 
 static void *
 balloc(bmc_data_t *bmc, int size)
@@ -149,18 +130,6 @@ lan_send(lanserv_data_t *lan,
     struct msghdr msg;
     lanserv_addr_t *l = addr;
     int           rv;
-
-    if (lan->bmcinfo->debug) {
-	int left, i;
-	lanserv_log(NULL, DEBUG, NULL, "Sending message to:\n  ");
-	dump_hex(&l->addr, l->addr_len, 16);
-	lanserv_log(NULL, DEBUG, NULL, "\nMsg:\n  ");
-	left = 16;
-	for (i=0; i<vecs; i++) {
-	    left = dump_hex(data[i].iov_base, data[i].iov_len, left);
-	}
-	lanserv_log(NULL, DEBUG, NULL, "\n");
-    }
 
     msg.msg_name = &(l->addr);
     msg.msg_namelen = l->addr_len;
@@ -376,12 +345,11 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     }
     l.xmit_fd = lan_fd;
 
-    if (lan->bmcinfo->debug) {
-	lanserv_log(NULL, DEBUG, NULL, "Got message from:\n  ");
-	dump_hex(&l.addr, l.addr_len, 16);
-	lanserv_log(NULL, DEBUG, NULL, "\nMsg:\n  ");
-	dump_hex(data, len, 16);
-	lanserv_log(NULL, DEBUG, NULL, "\n");
+    if (lan->bmcinfo->debug & DEBUG_RAW_MSG) {
+	debug_log_raw_msg(lan->bmcinfo, (void *) &l.addr, l.addr_len,
+			  "Raw LAN receive from:");
+	debug_log_raw_msg(lan->bmcinfo, data, len,
+			  " Receive message:");
     }
 
     if (len < 4)
@@ -461,41 +429,81 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 }
 
 static void
-lanserv_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+ilanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
+	     int len)
 {
-    va_list ap;
-    struct timeval tod;
-    struct tm ltime;
-    char timebuf[30];
-    int timelen;
-    char fullformat[256];
+    if (msg) {
+	char *str, dummy;
+	int pos;
+	unsigned int i;
 
-    va_start(ap, format);
-    gettimeofday(&tod, NULL);
-    localtime_r(&tod.tv_sec, &ltime);
-    asctime_r(&ltime, timebuf);
-    timelen = strlen(timebuf);
-    if (timelen > 0) {
-	timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
-	timelen--;
-    }
-    if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
-#if HAVE_SYSLOG
-	vsyslog(LOG_NOTICE, format, ap);
-#endif
-    } else {
-	strcpy(fullformat, timebuf);
-	strcat(fullformat, ": ");
-	strcat(fullformat, format);
-	if (!daemonize || (logtype == DEBUG)) {
-	    vprintf(fullformat, ap);
-	    printf("\n");
-	}
+#define mformat " channel=%d netfn=0x%x cmd=0x%x rs_addr=0x%x rs_lun=0x%x" \
+	    " rq_addr=0x%x\n rq_lun=0x%x rq_seq=0x%x\n"
+
+	len += snprintf(&dummy, 1, mformat, msg->channel, msg->netfn,
+			msg->cmd, msg->rs_addr, msg->rs_lun, msg->rq_addr,
+			msg->rq_lun, msg->rq_seq);
+	len += 3 * msg->len + 3;
+	str = malloc(len);
+	if (!str)
+	    goto print_no_msg;
+	pos = vsprintf(str, format, ap);
+	str[pos++] = '\n';
+	pos += sprintf(str + pos, mformat, msg->channel, msg->netfn, msg->cmd,
+		       msg->rs_addr, msg->rs_lun, msg->rq_addr, msg->rq_lun,
+		       msg->rq_seq);
+#undef mformat
+	for (i = 0; i < msg->len; i++)
+	    pos += sprintf(str + pos, " %2.2x", msg->data[i]);
+	
+	if (!daemonize || (logtype == DEBUG))
+	    printf("%s\n", str);
 #if HAVE_SYSLOG
 	if (logtype != DEBUG)
-	    vsyslog(LOG_NOTICE, fullformat, ap);
+	    syslog(LOG_NOTICE, "%s", str);
 #endif
+	free(str);
+	return;
     }
+
+ print_no_msg:
+    if (!daemonize || (logtype == DEBUG)) {
+	vprintf(format, ap);
+	printf("\n");
+    }
+#if HAVE_SYSLOG
+    if (logtype != DEBUG)
+	vsyslog(LOG_NOTICE, format, ap);
+#endif
+}
+
+static void
+lanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
+{
+    va_list ap;
+    char dummy;
+    int len;
+
+    va_start(ap, format);
+    len = vsnprintf(&dummy, 1, format, ap);
+    va_end(ap);
+    va_start(ap, format);
+    ilanserv_log(bmc, logtype, msg, format, ap, len);
+    va_end(ap);
+}
+
+static void
+lanserv_chan_log(channel_t *bmc, int logtype, msg_t *msg, char *format, ...)
+{
+    va_list ap;
+    char dummy;
+    int len;
+
+    va_start(ap, format);
+    len = vsnprintf(&dummy, 1, format, ap);
+    va_end(ap);
+    va_start(ap, format);
+    ilanserv_log(NULL, logtype, msg, format, ap, len);
     va_end(ap);
 }
 
@@ -654,6 +662,7 @@ main(int argc, const char *argv[])
     bmcinfo.alloc = balloc;
     bmcinfo.free = bfree;
     bmcinfo.write_config = write_config;
+    bmcinfo.log = lanserv_log;
     bmcinfo.debug = debug;
 
 
@@ -680,9 +689,9 @@ main(int argc, const char *argv[])
 	chan->smi_send = smi_send_dev;
 	chan->oem.user_data = &data;
 	chan->oem.ipmb_addr_change = ipmb_addr_change_dev;
-	chan->log = lanserv_log;
 	chan->alloc = ialloc;
 	chan->free = ifree;
+	chan->log = lanserv_chan_log;
 
 	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN) {
 	    lanserv_data_t *lan = chan->chan_info;

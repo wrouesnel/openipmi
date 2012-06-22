@@ -197,6 +197,8 @@ struct channel_s
     unsigned int channel_num;
 
     /* Used by channel code. */
+    void (*log)(channel_t *chan, int logtype, msg_t *msg, char *format, ...);
+
     int (*smi_send)(channel_t *chan, msg_t *msg);
     void *(*alloc)(channel_t *chan, int size);
     void (*free)(channel_t *chan, void *data);
@@ -227,19 +229,6 @@ struct channel_s
 #define HW_OP_CAN_NMI(chan) ((chan)->hw_capabilities & (1 << HW_OP_SEND_NMI))
 #define HW_OP_CAN_IRQ(chan) ((chan)->hw_capabilities & (1 << HW_OP_IRQ_ENABLE))
     void (*hw_op)(channel_t *chan, unsigned int op);
-
-#define NEW_SESSION			1
-#define NEW_SESSION_FAILED		2
-#define SESSION_CLOSED			3
-#define SESSION_CHALLENGE		4
-#define SESSION_CHALLENGE_FAILED	5
-#define AUTH_FAILED			6
-#define INVALID_MSG			7
-#define OS_ERROR			8
-#define LAN_ERR				9
-#define INFO				10
-#define DEBUG				11
-    void (*log)(channel_t *chan, int type, msg_t *msg, char *format, ...);
 
     /* Special command handlers. */
     void (*set_lan_parms)(channel_t *chan, msg_t *msg, unsigned char *rdata,
@@ -323,6 +312,8 @@ typedef struct pef_data_s
     } changed;
 } pef_data_t;
 
+typedef struct ipmi_timer_s ipmi_timer_t;
+
 /*
  * Generic data about the BMC that is global for the whole BMC and
  * required for all server types.
@@ -331,6 +322,19 @@ struct bmc_data_s {
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)
     unsigned int debug;
+
+#define NEW_SESSION			1
+#define NEW_SESSION_FAILED		2
+#define SESSION_CLOSED			3
+#define SESSION_CHALLENGE		4
+#define SESSION_CHALLENGE_FAILED	5
+#define AUTH_FAILED			6
+#define INVALID_MSG			7
+#define OS_ERROR			8
+#define LAN_ERR				9
+#define INFO				10
+#define DEBUG				11
+    void (*log)(bmc_data_t *bmc, int type, msg_t *msg, char *format, ...);
 
     /* user 0 is not used. */
     user_t users[MAX_USERS + 1];
@@ -342,14 +346,24 @@ struct bmc_data_s {
     msg_t *recv_q_head;
     msg_t *recv_q_tail;
 
+    unsigned char power_on; /* For the power control */
+
     channel_t sys_channel;
     channel_t ipmb_channel;
 
     pef_data_t pef;
     pef_data_t pef_rollback;
 
+    void *info;
+
     void *(*alloc)(bmc_data_t *bmc, int size);
     void (*free)(bmc_data_t *bmc, void *data);
+
+    int (*alloc_timer)(bmc_data_t *bmc, void (*cb)(void *cb_data),
+		       void *cb_data, ipmi_timer_t **timer);
+    int (*start_timer)(ipmi_timer_t *timer, struct timeval *timeout);
+    int (*stop_timer)(ipmi_timer_t *timer);
+    void (*free_timer)(ipmi_timer_t *timer);
 
     /* Write the configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
@@ -407,7 +421,11 @@ int chan_init(channel_t *chan);
 void bmcinfo_init(bmc_data_t *bmc);
 
 
-#define MAX_CONFIG_LINE 256
+#define MAX_CONFIG_LINE 1024
+
+char *mystrtok(char *str, const char *delim, char **next);
+
+int get_delim_str(char **rtokptr, char **rval, char **err);
 
 int get_bool(char **tokptr, unsigned int *rval, char **err);
 
@@ -425,5 +443,9 @@ int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 
 int read_config(bmc_data_t    *bmc,
 		char          *config_file);
+
+void debug_log_raw_msg(bmc_data_t *bmc,
+		       unsigned char *data, unsigned int len,
+		       char *format, ...);
 
 #endif /* __SERV_H_ */
