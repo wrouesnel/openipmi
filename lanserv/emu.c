@@ -2251,6 +2251,9 @@ handle_set_global_enables(lmc_data_t    *mc,
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
 
+    rdata[0] = 0;
+    *rdata_len = 1;
+
     mc->global_enables = msg->data[0];
     bchan = mc->bmcinfo->channels[15];
     if (!bchan || !bchan->set_atn)
