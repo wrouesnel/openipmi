@@ -415,6 +415,7 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
     struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
     struct sockaddr_in *ipaddr = (struct sockaddr_in *) addr;
     os_hnd_fd_id_t *fd_id;
+    int val = 1;
 
     ser->os_hnd = data->os_hnd;
     ser->user_info = data;
@@ -468,6 +469,8 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 		    strerror(errno));
 	    exit(1);
 	}
+
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&val, sizeof(val));
 
 	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, ser->bind_fd,
 					       ser_bind_ready, ser,
