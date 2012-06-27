@@ -336,6 +336,9 @@ struct bmc_data_s {
 #define DEBUG				11
     void (*log)(bmc_data_t *bmc, int type, msg_t *msg, char *format, ...);
 
+    /* Command to start a VM */
+    char *startcmd;
+
     /* user 0 is not used. */
     user_t users[MAX_USERS + 1];
 

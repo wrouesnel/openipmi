@@ -938,7 +938,7 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	break;
 	
     case HW_OP_POWERON:
-	if (!si->startcmd) {
+	if (!si->bmcinfo->startcmd) {
 	    si->channel.log(&si->channel, OS_ERROR, NULL,
 			    "Power on issued, no start command set");
 	    return;
@@ -946,10 +946,10 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	{
 	    int pid = fork();
 	    int status;
-	    char *startcmd = malloc(strlen(si->startcmd) + 6);
+	    char *startcmd = malloc(strlen(si->bmcinfo->startcmd) + 6);
 
 	    strcpy(startcmd, "exec ");
-	    strcpy(startcmd + 5, si->startcmd);
+	    strcpy(startcmd + 5, si->bmcinfo->startcmd);
 	    if (pid == 0) {
 		if (fork() == 0) {
 		    char *args[4] = { "/bin/sh", "-c", startcmd, NULL };
@@ -1247,13 +1247,6 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	 tok = mystrtok(NULL, " \t\n", tokptr)) {
 	if (strcmp(tok, "connect") == 0) {
 	    ser->do_connect = 1;
-	    continue;
-	}
-
-	if (strcmp(tok, "startcmd") == 0) {
-	    err = get_delim_str(tokptr, &ser->startcmd, errstr);
-	    if (err)
-		return err;
 	    continue;
 	}
 

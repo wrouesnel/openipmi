@@ -433,10 +433,8 @@ read_config(bmc_data_t *bmc,
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	line++;
 
-	if (buf[0] == '#')
-	    continue;
 	tok = mystrtok(buf, " \t\n", &tokptr);
-	if (!tok)
+	if (!tok || (tok[0] == '#'))
 	    continue;
 
 	if (strcmp(tok, "startlan") == 0) {
@@ -458,6 +456,8 @@ read_config(bmc_data_t *bmc,
 	    err = get_user(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
 	    err = serserv_read_config(&tokptr, bmc, &errstr);
+	} else if (strcmp(tok, "startcmd") == 0) {
+	    err = get_delim_str(&tokptr, &bmc->startcmd, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

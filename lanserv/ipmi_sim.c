@@ -87,7 +87,7 @@
 
 #define MAX_ADDR 4
 
-static char *config_file = "/etc/ipmi_lan.conf";
+static char *config_file = "/etc/ipmi/lan.conf";
 static char *command_string = NULL;
 static char *command_file = NULL;
 static int debug = 0;

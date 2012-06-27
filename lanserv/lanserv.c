@@ -507,7 +507,7 @@ lanserv_chan_log(channel_t *bmc, int logtype, msg_t *msg, char *format, ...)
     va_end(ap);
 }
 
-static char *config_file = "/etc/ipmi_lan.conf";
+static char *config_file = "/etc/ipmi/lan.conf";
 static char *ipmi_dev = NULL;
 
 static struct poptOption poptOpts[]=

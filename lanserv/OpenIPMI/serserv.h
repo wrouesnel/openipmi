@@ -109,8 +109,6 @@ struct serserv_data_s {
     unsigned char global_enables;
     unsigned char attn_chars[8];
     unsigned int  attn_chars_len;
-
-    char *startcmd;
 };
 
 int serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr);

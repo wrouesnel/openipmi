@@ -7,9 +7,9 @@ AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
 
 lib_LTLIBRARIES = libIPMIlanserv.la
 
-bin_PROGRAMS = ipmilan
+bin_PROGRAMS = ipmi_sim ipmilan
 
-noinst_PROGRAMS = ipmi_sim ipmi_checksum
+noinst_PROGRAMS = ipmi_checksum
 
 noinst_HEADERS = emu.h
 

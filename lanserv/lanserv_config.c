@@ -101,10 +101,8 @@ lanserv_read_config(bmc_data_t    *bmc,
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	(*line)++;
 
-	if (buf[0] == '#')
-	    continue;
 	tok = mystrtok(buf, " \t\n", &tokptr);
-	if (!tok)
+	if (!tok || (tok[0] == '#'))
 	    continue;
 
 	if (strcmp(tok, "endlan") == 0) {
