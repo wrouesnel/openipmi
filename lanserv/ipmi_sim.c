@@ -1,8 +1,8 @@
 /*
- * lanserv_emu.c
+ * ipmi_sim.c
  *
- * MontaVista IPMI code for creating a LAN interface to an emulated
- * SMI interface.
+ * MontaVista IPMI code for creating a LAN interface, emulated system
+ * interfaces, and a full BMC emulator.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -91,16 +91,37 @@ static char *config_file = "/etc/ipmi/lan.conf";
 static char *command_string = NULL;
 static char *command_file = NULL;
 static int debug = 0;
-static int port = -1;
+static int nostdio = 0;
 
-typedef struct misc_data
+
+typedef struct misc_data misc_data_t;
+
+typedef struct console_info_s
+{
+    char buffer[1024];
+    unsigned int pos;
+    int telnet;
+    int echo;
+    int shutdown_on_close;
+    misc_data_t *data;
+    int outfd;
+    os_hnd_fd_id_t *conid;
+    unsigned int tn_pos;
+    unsigned char tn_buf[4];
+    emu_out_t out;
+    struct console_info_s *prev;
+    struct console_info_s *next;
+} console_info_t;
+
+struct misc_data
 {
     bmc_data_t *bmc;
     emu_data_t *emu;
     os_handler_t *os_hnd;
     os_handler_waiter_factory_t *waiter_factory;
     os_hnd_timer_id_t *timer;
-} misc_data_t;
+    console_info_t *consoles;
+};
 
 static void *
 balloc(bmc_data_t *bmc, int size)
@@ -236,12 +257,8 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
 static int
 open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
-    int                fd;
-    int                rv;
-    struct sockaddr_in *ipaddr = (struct sockaddr_in *) addr;
-
-    if (port > 0)
-	ipaddr->sin_port = htons(port);
+    int fd;
+    int rv;
 
     fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
@@ -287,10 +304,7 @@ lan_channel_init(misc_data_t *data, channel_t *chan)
     if (lan->num_lan_addrs == 0) {
 	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
 	ipaddr->sin_family = AF_INET;
-	if (port > 0)
-	    ipaddr->sin_port = htons(port);
-	else
-	    ipaddr->sin_port = htons(623);
+	ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
 	lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
 	lan->num_lan_addrs++;
@@ -384,12 +398,12 @@ ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     }
 
     if (ser->con_fd >= 0) {
-	printf("Already connected\n");
 	close(rv);
 	return;
     }
 
     setsockopt(rv, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+    setsockopt(rv, SOL_SOCKET, SO_KEEPALIVE, (char *)&val, sizeof(val));
 
     ser->con_fd = rv;
 
@@ -413,9 +427,8 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
     int err;
     int fd;
     struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
-    struct sockaddr_in *ipaddr = (struct sockaddr_in *) addr;
     os_hnd_fd_id_t *fd_id;
-    int val = 1;
+    int val;
 
     ser->os_hnd = data->os_hnd;
     ser->user_info = data;
@@ -432,9 +445,6 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 	perror("Unable to create socket");
 	exit(1);
     }
-
-    if (port > 0)
-	ipaddr->sin_port = htons(port);
 
     if (ser->do_connect) {
 	err = connect(fd, addr, ser->addr.addr_len);
@@ -470,7 +480,15 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 	    exit(1);
 	}
 
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&val, sizeof(val));
+	val = 1;
+	err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&val,
+			 sizeof(val));
+	if (err == -1) {
+	    fprintf(stderr, "Unable to set SO_REUSEADDR on socket: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
+	
 
 	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, ser->bind_fd,
 					       ser_bind_ready, ser,
@@ -509,13 +527,17 @@ isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
 		       msg->rs_addr, msg->rs_lun, msg->rq_addr, msg->rq_lun,
 		       msg->rq_seq);
 #undef mformat
-	printf("Msglen = %d\n", msg->len);
-	for (i = 0; i < msg->len; i++)
-	    pos += sprintf(str + pos, " %2.2x", msg->data[i]);
+	if (!nostdio) {
+	    printf("Msglen = %d\n", msg->len);
+	    for (i = 0; i < msg->len; i++)
+		pos += sprintf(str + pos, " %2.2x", msg->data[i]);
 	
-	printf("%s\n", str);
+	    printf("%s\n", str);
+	}
 #if HAVE_SYSLOG
-	if (logtype != DEBUG)
+	if (logtype == DEBUG)
+	    syslog(LOG_DEBUG, "%s", str);
+	else
 	    syslog(LOG_NOTICE, "%s", str);
 #endif
 	free(str);
@@ -523,10 +545,14 @@ isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
     }
 
  print_no_msg:
-    vprintf(format, ap);
-    printf("\n");
+    if (!nostdio) {
+	vprintf(format, ap);
+	printf("\n");
+    }
 #if HAVE_SYSLOG
-    if (logtype != DEBUG)
+    if (logtype == DEBUG)
+	vsyslog(LOG_DEBUG, format, ap);
+    else
 	vsyslog(LOG_NOTICE, format, ap);
 #endif
 }
@@ -600,12 +626,12 @@ static struct poptOption poptOpts[]=
 	""
     },
     {
-	"port",
-	'p',
-	POPT_ARG_INT,
-	&port,
-	'p',
-	"port",
+	"nostdio",
+	'n',
+	POPT_ARG_NONE,
+	NULL,
+	'n',
+	"nostdio",
 	""
     },
     POPT_AUTOHELP
@@ -624,67 +650,266 @@ write_config(bmc_data_t *bmc)
 //    misc_data_t *info = lan->user_info;
 }
 
-static char buffer[1024];
-static unsigned int pos = 0;
-static int echo = 1;
+static void
+emu_printf(emu_out_t *out, char *format, ...)
+{
+    console_info_t *info = out->data;
+    va_list ap;
+    int rv;
+    char buffer[500];
+    int start = 0;
+    int pos;
+
+    va_start(ap, format);
+    vsnprintf(buffer, sizeof(buffer), format, ap);
+    va_end(ap);
+    for (pos = 0; buffer[pos]; pos++) {
+	if (buffer[pos] == '\n') {
+	    rv = write(info->outfd, buffer + start, pos - start + 1);
+	    rv = write(info->outfd, "\r", 1);
+	    start = pos + 1;
+	}
+    }
+    if (pos != start)
+	rv = write(info->outfd, buffer + start, pos - start);
+}
 
 static void
-handle_user_char(misc_data_t *data, char c)
+dummy_printf(emu_out_t *out, char *format, ...)
 {
+}
+
+#define TN_IAC  255
+#define TN_WILL	251
+#define TN_WONT	252
+#define TN_DO	253
+#define TN_DONT	254
+#define TN_OPT_SUPPRESS_GO_AHEAD	3
+#define TN_OPT_ECHO			1
+
+static unsigned char
+handle_telnet(console_info_t *info, unsigned char c)
+{
+    int err;
+
+    info->tn_buf[info->tn_pos++] = c;
+    if ((info->tn_pos == 2) && (info->tn_buf[1] == TN_IAC))
+	/* Double IAC, just send it on. */
+	return TN_IAC;
+    if ((info->tn_pos == 2) && (info->tn_buf[1] < 250))
+	/* Ignore 1-byte commands */
+	goto cmd_done;
+    if ((info->tn_pos == 3) && (info->tn_buf[1] != 250)) {
+	/* Two byte commands */
+	switch (info->tn_buf[1]) {
+	case TN_WILL:
+	    goto send_dont;
+	case TN_WONT:
+	    break;
+	case TN_DO:
+	    if ((info->tn_buf[2] == TN_OPT_ECHO)
+		|| (info->tn_buf[2] == TN_OPT_SUPPRESS_GO_AHEAD))
+		break;
+	    goto send_wont;
+	}
+	goto cmd_done;
+    }
+
+    if (info->tn_pos < 4)
+	return 0;
+
+    /*
+     * We are in a suboption, which we ignore.  Just look for
+     * IAC 240 for the end.  Use tn_buf[2] to track the last
+     * character we got.
+     */
+    if ((info->tn_buf[2] == TN_IAC) && (info->tn_buf[3] == 240))
+	goto cmd_done;
+    info->tn_buf[2] = info->tn_buf[3];
+    info->tn_pos--;
+
+ send_wont:
+    info->tn_buf[1] = TN_WONT;
+    err = write(info->outfd, info->tn_buf, 3);
+    goto cmd_done;
+
+ send_dont:
+    info->tn_buf[1] = TN_DONT;
+    err = write(info->outfd, info->tn_buf, 3);
+    goto cmd_done;
+
+ cmd_done:
+    info->tn_pos = 0;
+    return 0;
+}
+
+static int
+handle_user_char(console_info_t *info, unsigned char c)
+{
+    int rv;
+
+    if (info->tn_pos)
+	c = handle_telnet(info, c);
+
+    if (!c)
+	return 0;
+
     switch(c) {
+    case TN_IAC:
+	if (info->telnet) {
+	    info->tn_buf[0] = c;
+	    info->tn_pos = 1;
+	} else
+	    goto handle_char;
+	break;
+
     case 8:
     case 0x7f:
-	if (pos > 0) {
-	    pos--;
-	    if (echo)
-		printf("\b \b");
+	if (info->pos > 0) {
+	    info->pos--;
+	    if (info->echo)
+		rv = write(info->outfd, "\b \b", 3);
 	}
 	break;
 
     case 4:
-	if (pos == 0) {
-	    if (echo)
-		printf("\n");
-	    ipmi_emu_shutdown();
+	if (info->pos == 0) {
+	    if (info->echo)
+		rv = write(info->outfd, "\n", 1);
+	    return 1;
 	}
 	break;
 
     case 10:
     case 13:
-	printf("\n");
-	buffer[pos] = '\0';
-	if (strcmp(buffer, "noecho") == 0)
-	    echo = 0;
-	else
-	    ipmi_emu_cmd(data->emu, buffer);
-	printf("> ");
-	pos = 0;
+	if (info->echo) {
+	    rv = write(info->outfd, "\n", 1);
+	    if (info->telnet)
+		rv = write(info->outfd, "\r", 1);
+	}
+	info->buffer[info->pos] = '\0';
+	if (strcmp(info->buffer, "noecho") == 0) {
+	    info->echo = 0;
+	} else {
+	    ipmi_emu_cmd(&info->out, info->data->emu, info->buffer);
+	}
+	if (info->echo)
+	    rv = write(info->outfd, "> ", 2);
+	info->pos = 0;
 	break;
 
+    handle_char:
     default:
-	if (pos >= sizeof(buffer)-1) {
-	    printf("\nCommand is too long, max of %d characters\n",
-		   (int) sizeof(buffer)-1);
+	if (info->pos >= sizeof(info->buffer)-1) {
+	    char *msg = "\nCommand is too long, max of %d characters\n";
+	    rv = write(info->outfd, msg, strlen(msg));
 	} else {
-	    buffer[pos] = c;
-	    pos++;
-	    if (echo)
-		printf("%c", c);
+	    info->buffer[info->pos] = c;
+	    info->pos++;
+	    if (info->echo)
+		rv = write(info->outfd, &c, 1);
 	}
     }
-    fflush(stdout);
+
+    return 0;
 }
 
 static void
 user_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
-    misc_data_t *data = cb_data;
-    char        rc;
+    console_info_t *info = cb_data;
+    unsigned char  rc[50];
+    unsigned char  *c = rc;
     int         count;
 
-    count = read(fd, &rc, 1);
-    if (count > 0)
-	handle_user_char(data, rc);
+    count = read(fd, rc, sizeof(rc));
+    if (count == 0)
+	goto closeit;
+    while (count > 0) {
+	if (handle_user_char(info, *c))
+	    goto closeit;
+	c++;
+	count--;
+    }
+    return;
+
+ closeit:
+    if (info->shutdown_on_close) {
+	ipmi_emu_shutdown(info->data->emu);
+	return;
+    }
+
+    info->data->os_hnd->remove_fd_to_wait_for(info->data->os_hnd, info->conid);
+    close(fd);
+    if (info->prev)
+	info->prev->next = info->next;
+    else
+	info->data->consoles = info->next;
+    if (info->next)
+	info->next->prev = info->prev;
+    free(info);
+}
+
+static void
+console_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    misc_data_t *misc = cb_data;
+    console_info_t *newcon;
+    int rv;
+    int err;
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+    int val = 1;
+    static unsigned char telnet_init_seq[] = {
+	TN_IAC, TN_WILL, TN_OPT_SUPPRESS_GO_AHEAD,
+	TN_IAC, TN_WILL, TN_OPT_ECHO,
+	TN_IAC, TN_DONT, TN_OPT_ECHO,
+    };
+
+    rv = accept(fd, (struct sockaddr *) &addr, &addr_len);
+    if (rv < 0) {
+	perror("Error from accept");
+	exit(1);
+    }
+
+    newcon = malloc(sizeof(*newcon));
+    if (!newcon) {
+	char *msg = "Out of memory\n";
+	err = write(rv, msg, strlen(msg));
+	close(rv);
+	return;
+    }
+
+    newcon->data = misc;
+    newcon->outfd = rv;
+    newcon->pos = 0;
+    newcon->echo = 1;
+    newcon->shutdown_on_close = 0;
+    newcon->telnet = 1;
+    newcon->out.printf = emu_printf;
+    newcon->out.data = newcon;
+
+    setsockopt(rv, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+    setsockopt(rv, SOL_SOCKET, SO_KEEPALIVE, (char *)&val, sizeof(val));
+
+    err = misc->os_hnd->add_fd_to_wait_for(misc->os_hnd, rv,
+					   user_data_ready, newcon,
+					   NULL, &newcon->conid);
+    if (err) {
+	char *msg = "Unable to add socket wait\n";
+	err = write(rv, msg, strlen(msg));
+	close(rv);
+	free(newcon);
+    }
+
+    newcon->next = misc->consoles;
+    if (newcon->next)
+	newcon->next->prev = newcon;
+    newcon->prev = NULL;
+    misc->consoles = newcon;
+
+    err = write(rv, telnet_init_seq, sizeof(telnet_init_seq));
+    err = write(rv, "> ", 2);
 }
 
 struct termios old_termios;
@@ -704,9 +929,22 @@ init_term(void)
 }
 
 void
-ipmi_emu_shutdown(void)
+ipmi_emu_shutdown(emu_data_t *emu)
 {
-    tcsetattr(0, TCSADRAIN, &old_termios);
+    misc_data_t *data = ipmi_emu_get_user_data(emu);
+    console_info_t *con;
+    
+    if (data->bmc->console_fd != -1)
+	close(data->bmc->console_fd);
+    con = data->consoles;
+    while (con) {
+	data->os_hnd->remove_fd_to_wait_for(data->os_hnd, con->conid);
+	close(con->outfd);
+	con = con->next;
+    }
+	
+    if (!nostdio)
+	tcsetattr(0, TCSADRAIN, &old_termios);
     fcntl(0, F_SETFL, old_flags);
     tcdrain(0);
     exit(0);
@@ -836,13 +1074,16 @@ main(int argc, const char *argv[])
     int i;
     poptContext poptCtx;
     struct timeval tv;
-    os_hnd_fd_id_t *fd_id;
+    console_info_t stdio_console;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
 	switch (i) {
 	    case 'd':
 		debug++;
+		break;
+	    case 'n':
+		nostdio = 1;
 		break;
 	}
     }
@@ -882,14 +1123,29 @@ main(int argc, const char *argv[])
 
     data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
 
+    /* Set this up for console I/O, even if we don't use it. */
+    stdio_console.data = &data;
+    stdio_console.outfd = 1;
+    stdio_console.pos = 0;
+    stdio_console.echo = 1;
+    stdio_console.shutdown_on_close = 1;
+    stdio_console.telnet = 0;
+    if (nostdio) {
+	stdio_console.out.printf = dummy_printf;
+	stdio_console.out.data = &stdio_console;
+    } else {
+	stdio_console.out.printf = emu_printf;
+	stdio_console.out.data = &stdio_console;
+    }
+
     if (read_config(&bmcinfo, config_file))
 	exit(1);
 
     if (command_string)
-	ipmi_emu_cmd(data.emu, command_string);
+	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
 
     if (command_file)
-	read_command_file(data.emu, command_file);
+	read_command_file(&stdio_console.out, data.emu, command_file);
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
 	channel_t *chan = bmcinfo.channels[i];
@@ -911,16 +1167,58 @@ main(int argc, const char *argv[])
 	    chan_init(chan);
     }
 
-    init_term();
+    bmcinfo.console_fd = -1;
+    if (bmcinfo.console_addr_len) {
+	int nfd;
+	int val;
+	os_hnd_fd_id_t *conid;
 
-    printf("> ");
-    fflush(stdout);
-    err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, 0,
-					  user_data_ready, &data,
-					  NULL, &fd_id);
-    if (err) {
-	fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
-	exit(1);
+	nfd = socket(bmcinfo.console_addr.s_ipsock.s_addr.sa_family,
+		     SOCK_STREAM, IPPROTO_TCP);
+	if (nfd == -1) {
+	    perror("Console socket open");
+	    exit(1);
+	}
+	err = bind(nfd, (struct sockaddr *) &bmcinfo.console_addr,
+		   bmcinfo.console_addr_len);
+	if (err) {
+	    perror("bind to console socket");
+	    exit(1);
+	}
+	err = listen(nfd, 1);
+	if (err == -1) {
+	    perror("listen to console socket");
+	    exit(1);
+	}
+	val = 1;
+	err = setsockopt(nfd, SOL_SOCKET, SO_REUSEADDR,
+			 (char *)&val, sizeof(val));
+	if (err) {
+	    perror("console setsockopt reuseaddr");
+	    exit(1);
+	}
+	bmcinfo.console_fd = nfd;
+
+	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, nfd,
+					      console_bind_ready, &data,
+					      NULL, &conid);
+	if (err) {
+	    fprintf(stderr, "Unable to add console wait: 0x%x\n", err);
+	    exit(1);
+	}
+    }
+
+    if (!nostdio) {
+	init_term();
+
+	err = write(1, "> ", 2);
+	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, 0,
+					      user_data_ready, &stdio_console,
+					      NULL, &stdio_console.conid);
+	if (err) {
+	    fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
+	    exit(1);
+	}
     }
 
     tv.tv_sec = 1;

@@ -220,10 +220,16 @@ int ipmi_emu_set_addr(emu_data_t *emu, unsigned int addr_num,
 		      void *addr_data, unsigned int addr_len);
 int ipmi_emu_clear_addr(emu_data_t *emu, unsigned int addr_num);
 
+typedef struct emu_out_s
+{
+    void (*printf)(struct emu_out_s *out, char *format, ...);
+    void *data;
+} emu_out_t;
+
 /* In emu_cmd.c */
-void ipmi_emu_shutdown(void);
-int ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);
-int read_command_file(emu_data_t *emu, char *command_file);
+void ipmi_emu_shutdown(emu_data_t *emu);
+int ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str);
+int read_command_file(emu_out_t *out, emu_data_t *emu, char *command_file);
 
 void emu_set_debug_level(emu_data_t *emu, unsigned int debug_level);
 

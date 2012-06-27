@@ -314,6 +314,23 @@ typedef struct pef_data_s
 
 typedef struct ipmi_timer_s ipmi_timer_t;
 
+typedef struct sockaddr_ip_s {
+    union
+        {
+    	    struct sockaddr s_addr;
+            struct sockaddr_in  s_addr4;
+#ifdef PF_INET6
+            struct sockaddr_in6 s_addr6;
+#endif
+        } s_ipsock;
+/*    socklen_t addr_len;*/
+} sockaddr_ip_t;
+
+typedef struct lan_addr_s {
+    sockaddr_ip_t addr;
+    socklen_t     addr_len;
+} lan_addr_t;
+
 /*
  * Generic data about the BMC that is global for the whole BMC and
  * required for all server types.
@@ -338,6 +355,11 @@ struct bmc_data_s {
 
     /* Command to start a VM */
     char *startcmd;
+
+    /* Console port.  Length is zero if not set. */
+    sockaddr_ip_t console_addr;
+    socklen_t console_addr_len;
+    int console_fd;
 
     /* user 0 is not used. */
     user_t users[MAX_USERS + 1];
@@ -372,23 +394,6 @@ struct bmc_data_s {
        change is done, or when a user name/password is written. */
     void (*write_config)(bmc_data_t *chan);
 };
-
-typedef struct sockaddr_ip_s {
-    union
-        {
-    	    struct sockaddr s_addr;
-            struct sockaddr_in  s_addr4;
-#ifdef PF_INET6
-            struct sockaddr_in6 s_addr6;
-#endif
-        } s_ipsock;
-/*    socklen_t addr_len;*/
-} sockaddr_ip_t;
-
-typedef struct lan_addr_s {
-    sockaddr_ip_t addr;
-    socklen_t     addr_len;
-} lan_addr_t;
 
 static inline void
 zero_extend_ascii(uint8_t *c, unsigned int len)

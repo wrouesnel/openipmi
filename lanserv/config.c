@@ -458,6 +458,10 @@ read_config(bmc_data_t *bmc,
 	    err = serserv_read_config(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
 	    err = get_delim_str(&tokptr, &bmc->startcmd, &errstr);
+	} else if (strcmp(tok, "console") == 0) {
+	    err = get_sock_addr(&tokptr,
+				&bmc->console_addr, &bmc->console_addr_len,
+				NULL, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;
