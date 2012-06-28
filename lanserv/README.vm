@@ -1,0 +1,56 @@
+The ipmi_sim command can be used as an IPMI simulator for a virtual
+machine.  The virtual machine talks to the simulator over a TCP
+socket, and the simulator can control the virtual machine aspects that
+it needs to be able to control.
+
+The VM interface is a much simplified interface similar to the direct
+mode IPMI serial codec.
+
+The framing is done with special characters.  A 0xa0 character says
+that all characters since the last framing character (or beginning of
+the session) is an IPMI message.  A 0xa1 character says that the
+preceding characters are a control command.
+
+An IPMI message has the following format:
+
+  seq
+  netfn << 2 | lun
+  cmd
+  data...
+  checksum
+  0xa0
+
+The sequence is a one-byte sequence number, it will be returned in the
+response.  The response is the same as above, except a completion code
+is added after the cmd byte.  This is much like the KCS interface with
+a sequence number at the beginning.
+
+Commands are pretty simple.  The first byte of a command is the command
+id.  The rest is data for the command.
+
+There is only one command from the VM to the simulator.  Command 0x08
+is followed by a single byte with the following bits telling the simulator
+the capabilities of the VM.  These bits are:
+
+  bit 0 - can do a power off.
+  bit 1 - can do a target reset.
+  bit 2 - can enable/disable the IPMI interrupt.
+  bit 3 - can generate an NMI.
+  bit 4 - can set the ATTN bit on the interface.
+
+The commands from the simulator to the VM are based on the above
+capabilities.  The simulator will not send a command where the VM does
+not have the capability.  None of these have any data with them.  The
+commands are:
+
+  0x00 - Clear ATTN
+  0x01 - Set ATTN without an interrupt
+  0x02 - Set ATTN with an interrupt
+  0x03 - Power off (shut down) the VM
+  0x04 - Reset the target in the VM
+  0x05 - Enable the IPMI messaging interrupt
+  0x06 - Disable the IPMI messaging interrupt
+  0x07 - Send an NMI from the BMC.
+
+
+That's pretty much it.  The idea was to keep it simple.

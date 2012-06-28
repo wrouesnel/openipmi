@@ -20,6 +20,8 @@
 	* swig/python/openipmigui/gui_setdialog.py: BooleanVar will return
 	an integer in some cases, account for that.
 
+	* configure.in: Move to version 2.0.20.
+
 2012-05-24 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/ipmi_sim_info.h, lanserv/OpenIPMI/lanserv.h:
