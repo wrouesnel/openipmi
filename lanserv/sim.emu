@@ -1,9 +1,31 @@
+# This is an example simulation setup for ipmi_sim.  It creates a single
+# management controller as a BMC.  That will have the standard watchdog
+# sensor and we add a temperature sensor.
+
 # The BMC is the MC at address 20
 mc_setbmc 20
 
 # Now add the BMC
-mc_add 20 0 0 23 9 8 9f 1291 f02
-sensor_add 20 0 1 01 6f
-main_sdr_add 20 00 00 51 02 21 20 01 01 03 01 67 45 01 01 18 00 18 00 3F 3F C0 01 00 00 00 00 00 00 00 00 00 c6 'D 'J 't 'e 'm 'p
-sensor_set_value 20 0 0 60 0
+mc_add 20 0 no-device-sdrs 23 9 8 9f 1291 f02
+sel_enable 20 50 0a
+
+# Add a temperature sensor and its SDR.  Note that sensor 0 is already
+# taken as the watchdog sensor.
+sensor_add 20 0 1 01 01
+main_sdr_add 20 \
+             00 00 51 01 31 \
+             20 00 01 03 01 67 88 01 01 c0 0f c0 7f 38 38 00 \
+	     01 00 00 01 00 00 00 00 00 03 60 b0 00 b0 00 a0 \
+	     90 70 00 00 00 00 00 00 00 00 c6 'D 'J 't 'e 'm \
+	     'p
+# Start with the value set to 0x60
+sensor_set_value 20 0 1 60 0
+# Set just the upper thresholds with the values 0x70, 0x90, and 0xa0
+sensor_set_threshold 20 0 1 settable 111000 a0 90 70 00 00 00
+# Enable all upper threshold events events
+sensor_set_event_support 20 0 1 enable scanning per-state \
+	000111111000000 000111111000000 \
+	000111111000000 000111111000000
+
+# Turn on the BMC
 mc_enable 20

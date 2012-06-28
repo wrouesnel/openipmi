@@ -454,7 +454,7 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     mc->sel.last_add_time = t.tv_sec + mc->sel.time_offset;
 
     if (recid)
-      *recid = e->record_id;
+	*recid = e->record_id;
     return 0;
 }
 
@@ -467,7 +467,7 @@ mc_new_event(lmc_data_t *mc,
     int rv;
 
     if (IPMI_BMC_EVENT_LOG_ENABLED(mc)) {
-	rv = ipmi_mc_add_to_sel(mc, 0xc0, event, &recid);
+	rv = ipmi_mc_add_to_sel(mc, record_type, event, &recid);
 	if (rv)
 	    recid = 0xffff;
     } else
@@ -967,6 +967,9 @@ ipmi_mc_add_main_sdr(lmc_data_t    *mc,
 
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV))
 	return ENOSYS;
+
+    if ((data_len < 5) || (data_len != (((unsigned int) data[4]) + 5)))
+	return EINVAL;
 
     entry = new_sdr_entry(mc, &mc->main_sdrs, data_len);
     if (!entry)
@@ -3767,7 +3770,6 @@ ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
 	return EINVAL;
 
     sensor = mc->sensors[lun][sens_num];
-
     sensor->threshold_support = support;
     memcpy(sensor->threshold_supported, supported, 6);
     memcpy(sensor->thresholds, values, 6);
@@ -5871,14 +5873,17 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     memcpy(mc->mfg_id, mfg_id, 3);
     memcpy(mc->product_id, product_id, 2);
 
+    /* Enable the event log by default. */
+    mc->global_enables = 1 << IPMI_BMC_EVENT_LOG_BIT;
+
     /* Start the time at zero. */
     gettimeofday(&t, NULL);
-    mc->sel.time_offset = -t.tv_sec;
-    mc->main_sdrs.time_offset = -t.tv_sec;
+    mc->sel.time_offset = 0;
+    mc->main_sdrs.time_offset = 0;
     mc->main_sdrs.next_entry = 1;
     mc->main_sdrs.flags |= IPMI_SDR_RESERVE_SDR_SUPPORTED;
     for (i=0; i<4; i++) {
-	mc->device_sdrs[i].time_offset = -t.tv_sec;
+	mc->device_sdrs[i].time_offset = 0;
 	mc->device_sdrs[i].next_entry = 1;
     }
 

@@ -9,7 +9,7 @@ DIST_SUBDIRS = include utils lib unix glib tcl libedit cmdlang \
 
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec ipmi.init ipmi.sysconf COPYING.BSD \
-	     CONFIGURING_FOR_LAN lan.conf sim.emu
+	     CONFIGURING_FOR_LAN
 
 PKGCONFIGS = OpenIPMIutils.pc OpenIPMI.pc OpenIPMIui.pc OpenIPMIposix.pc \
 	     OpenIPMIpthread.pc OpenIPMIcmdlang.pc $(GLIB_PKGCONF) \

@@ -14,6 +14,12 @@
 	* lanserv, man: Did a massive restructure of lanserv and the
 	IPMI simulator for supporting a VM interface.
 
+	* swig/python/openipmigui/_sensor.py: Fix a reference error
+	causing a failure in some cases when setting event thresholds.
+
+	* swig/python/openipmigui/gui_setdialog.py: BooleanVar will return
+	an integer in some cases, account for that.
+
 2012-05-24 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/ipmi_sim_info.h, lanserv/OpenIPMI/lanserv.h:

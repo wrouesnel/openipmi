@@ -170,6 +170,11 @@ smi_send_dev(channel_t *chan, msg_t *msg)
     misc_data_t      *info = chan->oem.user_data;
     int              rv;
 
+    if (info->bmc->debug & DEBUG_MSG) {
+	info->bmc->log(info->bmc, DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
+		 msg->netfn, msg->cmd);
+    }
+
     req.addr = (unsigned char *) addr;
     
     if (msg->cmd == IPMI_SEND_MSG_CMD) {

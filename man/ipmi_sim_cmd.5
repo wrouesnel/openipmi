@@ -55,6 +55,8 @@ Note that some of these values control the capabilities of the MC.  For
 instance, HasDeviceSDRs sets whether device SDR repository commands will
 work.
 
+You may use has-device-sdrs or no-device-sdrs in the HasDeviceSDRs field.
+
 .TP
 \fBmc_add_fru_data\fP \fImc-addr\fP \fIDeviceID\fP \fIFRUSize\fP [\fIbyte1\fP [\fIbyte2\fP [...]]]
 Set the FRU data for a given MC and device id.
@@ -85,7 +87,7 @@ Set the GUID value.  The guid may be a string (in quotes) or a hexadecimal
 string.
 
 .TP
-\fBsel_enable\fP \fImc-addr\fP \fIflags\fP
+\fBsel_enable\fP \fImc-addr\fP \fImax-entries\fP \fIflags\fP
 Enable the System Event Log on the given MC.  The flags is a byte
 this is returned from the ``Get SEL Info'' command; it controls various
 aspects of the SEL.  See the spec for details.
@@ -105,7 +107,7 @@ Add an entry to the device SDR of the MC.
 .SH SENSOR COMMANDS
 
 .TP
-\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIevent-reading-code\fP
+\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIsensor-type\fP \fIevent-reading-code\fP
 Add a sensor to the given MC and LUN.  The type of sensor is set by the
 event reading code.
 
@@ -133,15 +135,40 @@ sensor.  The support value is the hysteresis capability, the same as
 the hysteresis support value in the sensor SDR.  The positive and
 negative hysteresis values are also set by this command.
 
+The support value may also be none, readable, settable, or fixed instead
+of the numbers.
+
 .TP
-\fBsensor_set_threshold\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIthreshold-support\fP \fIthreshold-enabled\fP [\fIvalue1\fP [\fIvalue2\fP [... [\fIvalue6\fP]]]]
+\fBsensor_set_threshold\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIthreshold-support\fP \fIthreshold-enabled\fP [\fIvalue5\fP [\fIvalue4\fP [... [\fIvalue0\fP]]]]
 
 Set the threshold support for a sensor.  It must be an analog sensor.
 The threshold-support value is the same as the threshold access
 support value in the sensor SDR.  The threshold-enabled values is a
 string of ``0'' and ``1'' characters that enable the 6 corresponding
-thresholds.  Optionally, the threshold values may be specified as
-their byte values.
+thresholds; the rightmost value is value 0, the leftmost is value 5.
+Optionally, the threshold values may be specified as their byte
+values.
+
+The threshold-support value may also be none, readable, settable, or fixed
+to make it a bit more readable.  The thresholds are:
+
+.I 0
+- lower non critical
+
+.I 1
+- lower critical
+
+.I 2
+- lower non recoverable
+
+.I 3
+- upper non critical
+
+.I 4
+- upper critical
+
+.I 5
+- upper non recoverable
 
 .TP
 \fBsensor_set_event_support\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIevents-enable\fP \fIscanning\fP \fIevent-support\fP \fIassert-support\fP \fIdeassert-support\fP \fIassert-enabled\fP \fIdeassert-enabled\fP 
@@ -150,11 +177,63 @@ Set the event support of a sensor.  The events-enable will enable
 global events ont the sensor if non-zero, otherwise they are disabled.
 The scanning values set the scanning value for the sensor.  The
 event-support value sets the event capabilities in the sensor, this is
-the same as the ``event support'' value in the sensor SDR.  The
-assert-support, deassert-support, assert-enabled, and deassert-enabled
-are all bitmasks (a string of ``0'' and ``1'' characters) that set
-their corresponding sensor bit's capability to generate events
-(support) and whether it will generate events now (enabled).
+the same as the ``sensor event message control support'' value in the
+sensor SDR.  The assert-support, deassert-support, assert-enabled, and
+deassert-enabled are all bitmasks (a string of ``0'' and ``1''
+characters) that set their corresponding sensor bit's capability to
+generate events (support) and whether it will generate events now
+(enabled).
+
+Note that all bitmasks have the rightmost digit as the zeroth bit, and
+the leftmost digit as the highest order bit.  Note that you must
+specify 15 bits here, even if you don't use all of them.
+
+Note that you may use enable or disable in the events-enable field, 
+and you may use scanning or no-scanning in the scanning field.
+
+For event-support, you may use per-state, entire-sensor, global or none
+instead of a number.
+
+For a threshold sensor, the values are:
+
+.I 0
+ - lower non-critical going low
+
+.I 1
+ - lower non-critical going high
+
+.I 2
+ - lower critical going low
+
+.I 3
+ - lower critical going high
+
+.I 4
+ - lower non-recoverable going low
+
+.I 5
+ - lower non-recoverable going high
+
+.I 6
+ - upper non-critical going low
+
+.I 7
+ - upper non-critical going high
+
+.I 8
+ - upper critical going low
+
+.I 9
+ - upper critical going high
+
+.I 1
+ - upper non-recoverable going low
+
+.I 1
+ - upper non-recoverable going high
+
+Note that the "lower going high" and "upper going low" values are
+not supported, since they are simply stupid.
 
 
 .SH ATCA OEM COMMANDS
@@ -164,9 +243,20 @@ These are for emulation of special ATCA capabilities.
 \fBatca_enable\fP
 The system is an ATCA system, enables the other ATCA capabilities.
 
+Note that you should do this *before* creating any MCs (this should
+really be first) because the MCs are set up a little differently for
+ATCA mode.  This causes the MCs to be able to handle PICMG commands
+properly, sets up 2 LEDs by default, and enables proper hot-swap
+handling, including the blue LED.  By default the blue LED supports
+local control and the other LEDs do not and are red.
+
+In ATCA mode, to drive the hot-swap state machine, you should use
+sensor_set_bit_clr_rest to set the hot-swap state.
+
 .TP
 \fBatca_set_site\fP \fIhardware-address\fP \fIsite-type\fP \fIsite-number\fP 
-Sets the given values for an ATCA system.
+Sets the given values for an ATCA system, the values returned by the
+get address commands.
 
 .TP
 \fBmc_set_num_leds\fP \fImc-addr\fP \fIcount\fP

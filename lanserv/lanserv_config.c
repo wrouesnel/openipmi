@@ -149,7 +149,7 @@ lanserv_read_config(bmc_data_t    *bmc,
 	    memset(newa, 0, sizeof(*newa));
 
 	    err = get_sock_addr(&tokptr, &newa->addr, &newa->addr_len,
-				IPMI_LAN_STD_PORT_STR, &errstr);
+				IPMI_LAN_STD_PORT_STR, SOCK_DGRAM, &errstr);
 	} else if (strcmp(tok, "guid") == 0) {
 	    if (!lan->guid)
 		lan->guid = malloc(16);

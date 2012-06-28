@@ -35,6 +35,8 @@ import gui_errstr
 
 def isbool(v):
     return type(v) == type(True)
+def isint(v):
+    return type(v) == type(0)
 
 class SetDialog(Tix.Toplevel):
     def __init__(self, name, default, count, handler, labels=None,
@@ -134,7 +136,10 @@ class SetDialog(Tix.Toplevel):
             else:
                 v = f.get()
                 pass
-            if (not isbool(v)):
+            if (isint(v)):
+                # Sometime the values from BooleanVar come back as ints.
+                v = bool(v)
+            elif (not isbool(v)):
                 v = v.strip()
                 pass
             vals.append(v)

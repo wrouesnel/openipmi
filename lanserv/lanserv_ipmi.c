@@ -1804,11 +1804,6 @@ handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
     msg->data += 6;
     msg->len -= 6;
 
-    if (lan->bmcinfo->debug) {
-	lan->bmcinfo->log(lan->bmcinfo, DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
-		 msg->netfn, msg->cmd);
-    }
-
     if (msg->sid == 0) {
 	handle_no_session(lan, msg);
     } else if (msg->sid & 1) {

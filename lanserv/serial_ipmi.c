@@ -1239,7 +1239,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
     ser->channel.channel_num = chan_num;
 
     err = get_sock_addr(tokptr, &ser->addr.addr, &ser->addr.addr_len,
-			NULL, errstr);
+			NULL, SOCK_STREAM, errstr);
     if (err)
 	return err;
 

@@ -447,7 +447,7 @@ int read_bytes(char **tokptr, unsigned char *data, char **err,
 	       unsigned int len);
 
 int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
-		  char *def_port, char **err);
+		  char *def_port, int socktype, char **err);
 
 int read_config(bmc_data_t    *bmc,
 		char          *config_file);

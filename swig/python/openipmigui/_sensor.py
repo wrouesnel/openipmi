@@ -308,7 +308,7 @@ class SensorEventEnablesSet:
             if (self.s.is_threshold):
                 labels.append(threshold_event_str_to_full(i))
             else:
-                name = s.events_supported_name[i]
+                name = self.s.events_supported_name[i]
                 labels.append(discrete_event_str_to_full(i, name))
                 pass
             pass

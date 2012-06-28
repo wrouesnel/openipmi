@@ -298,7 +298,7 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 
 int
 get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
-	      char *def_port, char **err)
+	      char *def_port, int socktype, char **err)
 {
     char *s, *p;
 
@@ -316,7 +316,7 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = PF_UNSPEC;
-	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_socktype = socktype;
 	hints.ai_flags = AI_PASSIVE;
 	if (!p)
 	    p = def_port;
@@ -461,7 +461,7 @@ read_config(bmc_data_t *bmc,
 	} else if (strcmp(tok, "console") == 0) {
 	    err = get_sock_addr(&tokptr,
 				&bmc->console_addr, &bmc->console_addr_len,
-				NULL, &errstr);
+				NULL, SOCK_STREAM, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

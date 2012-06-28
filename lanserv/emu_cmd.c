@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include "emu.h"
 
 typedef int (*ipmi_emu_cmd_handler)(emu_out_t  *out,
@@ -35,6 +36,50 @@ emu_get_uchar(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 	return EINVAL;
     }
 
+    return 0;
+}
+
+static int
+emu_get_uchar_with_vals(emu_out_t *out, char **toks,
+			unsigned char *val, char *errstr,
+			int empty_ok, unsigned int numopts, ...)
+{
+    char *str, *tmpstr;
+    va_list ap;
+    unsigned int i;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (empty_ok)
+	    return ENOSPC;
+	if (errstr)
+	    out->printf(out, "**No %s given\n", errstr);
+	return EINVAL;
+    }
+    if (str[0] == '\'') {
+	*val = str[1];
+	return 0;
+    }
+
+    va_start(ap, numopts);
+    for (i = 0; i < numopts; i++) {
+	char *v = va_arg(ap, char *);
+	unsigned char vval = va_arg(ap, unsigned int);
+	if (strcmp(v, str) == 0) {
+	    *val = vval;
+	    va_end(ap);
+	    goto out;
+	}
+    }
+    va_end(ap);
+
+    *val = strtoul(str, &tmpstr, 16);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    out->printf(out, "**Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+ out:
     return 0;
 }
 
@@ -440,9 +485,16 @@ sensor_set_hysteresis(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **to
     if (rv)
 	return rv;
 
-    rv = emu_get_uchar(out, toks, &support, "hysteresis support", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &support, "hysteresis support", 0,
+				 4,
+				 "none", 0,
+				 "readable", 1,
+				 "settable", 2,
+				 "fixed", 3);
     if (rv)
 	return rv;
+
+    printf("Hysteresis: %d\n", support);
 
     rv = emu_get_uchar(out, toks, &positive, "positive hysteresis", 0);
     if (rv)
@@ -478,7 +530,12 @@ sensor_set_threshold(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **tok
     if (rv)
 	return rv;
 
-    rv = emu_get_uchar(out, toks, &support, "threshold support", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &support, "threshold support", 0,
+				 4,
+				 "none", 0,
+				 "readable", 1,
+				 "settable", 2,
+				 "fixed", 3);
     if (rv)
 	return rv;
 
@@ -521,15 +578,30 @@ sensor_set_event_support(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char *
     if (rv)
 	return rv;
 
-    rv = emu_get_uchar(out, toks, &events_enable, "events enable", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &events_enable, "events enable", 0,
+				 4,
+				 "enable", 1,
+				 "true", 1,
+				 "disable", 0,
+				 "false", 0);
     if (rv)
 	return rv;
 
-    rv = emu_get_uchar(out, toks, &scanning, "scanning", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &scanning, "scanning", 0,
+				 4,
+				 "scanning", 1,
+				 "true", 1,
+				 "no-scanning", 0,
+				 "false", 0);
     if (rv)
 	return rv;
 
-    rv = emu_get_uchar(out, toks, &support, "event support", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &support, "event support", 0,
+				 4,
+				 "per-state", 0,
+				 "entire-sensor", 1,
+				 "global", 2,
+				 "none", 3);
     if (rv)
 	return rv;
 
@@ -582,7 +654,11 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     rv = emu_get_uchar(out, toks, &device_id, "Device ID", 0);
     if (rv)
 	return rv;
-    rv = emu_get_uchar(out, toks, &has_device_sdrs, "Has Device SDRs", 0);
+    rv = emu_get_uchar_with_vals(out, toks, &has_device_sdrs,
+				 "Has Device SDRs", 0,
+				 2,
+				 "has-device-sdrs", 1,
+				 "no-device-sdrs", 0);
     if (rv)
 	return rv;
     rv = emu_get_uchar(out, toks, &device_revision, "Device Revision", 0);

@@ -31,7 +31,17 @@ ipmi_sim_SOURCES = ipmi_sim.c emu.c emu_cmd.c
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
 
-EXTRA_DIST = atca.emu README.emulator
+EXTRA_DIST = atca.emu README.emulator lan.conf sim.emu
+
+install-data-local:
+	$(INSTALL) -m 755 -d "$(DESTDIR)$(sysconfdir)/ipmi/"; \
+	$(INSTALL) -m 644 $(srcdir)/lan.conf "$(DESTDIR)$(sysconfdir)/ipmi/"; 
+	$(INSTALL) -m 644 $(srcdir)/sim.emu "$(DESTDIR)$(sysconfdir)/ipmi/"; 
+
+uninstall-local:
+	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/lan.conf"
+	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/sim.emu"
+	-rmdir "$(DESTDIR)$(sysconfdir)/ipmi" 2>/dev/null
 
 CLEANFILES = libIPMIlanserv.map
 
