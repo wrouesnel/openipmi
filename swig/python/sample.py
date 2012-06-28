@@ -38,6 +38,7 @@ import OpenIPMI
 # Used to count things waiting for shutdown
 stop_count = 1
 main_handler = None
+stop_list = {}
 
 class MC_Nameget:
     def __init__(self):
@@ -630,51 +631,60 @@ class Handlers:
 	print "MC " + mc.get_name() + " active set to " + str(active)
         return
 
-    def mc_events_enable_cb(self, mc, err, domain):
-        global stop_count
+    def mc_events_enable_cb(self, mc, err):
+        global stop_count, stop_list
 	print "Events enabled for " + mc.get_name() + " err = " + str(err)
+        stop_list["mc_set_events_enable"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
+            domain = mc.get_domain()
 	    domain.close(main_handler)
             pass
         return
 
     def mc_reread_sel_cb(self, mc, err):
-        global stop_count
+        global stop_count, stop_list
 	domain = mc.get_domain()
 
 	print "SEL reread for " + mc.get_name() + " err = " + str(err)
+        stop_list["mc_reread_sel"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    domain.close(main_handler)
             pass
         return
 
     def mc_reread_sensors_cb(self, mc, err):
-        global stop_count
+        global stop_count, stop_list
 	domain = mc.get_domain()
 
 	print "Sensors reread for " + mc.get_name() + " err = " + str(err)
+        stop_list["mc_reread_sensors"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    domain.close(main_handler)
             pass
         return
 
     def mc_get_sel_time_cb(self, mc, err, time):
-        global stop_count
+        global stop_count, stop_list
 	domain = mc.get_domain()
 
 	print("SEL time for " + mc.get_name() + " is " + str(time) + ", err = "
               + str(err))
+        stop_list["mc_get_sel_time"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    domain.close(main_handler)
             pass
         return
 
     def mc_update_cb(self, op, domain, mc):
-        global stop_count
+        global stop_count, stop_list
 	print op + " MC " + mc.get_name()
         if ((op == "added") or (op == "changed")):
 	    print("  provides_device_sdrs = " +
@@ -729,6 +739,7 @@ class Handlers:
 		  str(mc.get_sel_rescan_time()))
 
 	    stop_count += 2
+            stop_list["mc_set_events_enable"] = 1
 	    rv = mc.set_events_enable(1, self)
 	    if rv:
 		print "***Error enabling MC events: " + str(rv)
@@ -736,22 +747,27 @@ class Handlers:
                 pass
 
 	    stop_count += 1
+            stop_list["mc_reread_sensors"] = 1
 	    rv = mc.reread_sensors(self)
             if rv:
 		print "***Error rereading MC sensors: " + str(rv)
+                stop_list["mc_reread_sensors"] = 0
 		stop_count -= 1
                 pass
 
 	    mc.set_sel_rescan_time(5)
 
 	    stop_count += 1
+            stop_list["mc_reread_sel"] = 1
 	    rv = mc.reread_sel(self)
             if rv:
 		print "***Error rereading MC SEL: " + str(rv)
+                stop_list["mc_reread_sel"] = 0
 		stop_count -= 1
                 pass
 
 	    stop_count += 1
+            stop_list["mc_get_sel_time"] = 1
 	    rv = mc.get_current_sel_time(self)
             if rv:
 		print "***Error getting current MC SEL time: " + str(rv)
@@ -759,6 +775,7 @@ class Handlers:
                 pass
 
 	    # Stop count for this incremented at first.
+            stop_list["mc_send_command"] = 1
 	    rv = mc.send_command(0, 10, 0x43,
                                  [ 0, 0, 0, 0, 0, 0xff ], self)
             if rv:
@@ -793,7 +810,7 @@ class Handlers:
         return
 
     def mc_cmd_cb(self, mc, netfn, cmd, data):
-        global stop_count
+        global stop_count, stop_list
 	print "Got message from " + mc.get_name()
 	print " netfn=%d, cmd=%d" % (netfn, cmd)
 	tstr = " data:"
@@ -801,7 +818,9 @@ class Handlers:
 	    tstr += " %2.2x" % b
             pass
 	print tstr
+        stop_list["mc_send_command"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    mc.get_domain().close(main_handler)
             pass
@@ -848,7 +867,7 @@ class Handlers:
         return
 
     def domain_up_cb(self, domain):
-        global stop_count
+        global stop_count, stop_list
 	print "Domain up: " + domain.get_name()
 	print "  type = " + domain.get_type()
 	print "  sel_rescan_type = " + str(domain.get_sel_rescan_time())
@@ -866,12 +885,14 @@ class Handlers:
 
 	# stop count is incremented at domain startup, don't need another.
 	stop_count += 1
+        stop_list["mc_ipmb_mc_scan"] = 1
 	rv = domain.start_ipmb_mc_scan(0, 0x20, 0x20, self)
         if rv:
 	    print "Error starting IPMB scan: " + str(rv)
 	    stop_count -= 1
             pass
 
+        stop_list["domain_reread_sels"] = 1
 	rv = domain.reread_sels(self)
         if rv:
 	    print "Error starting IPMB scan: " + str(rv)
@@ -880,9 +901,11 @@ class Handlers:
         return
 
     def domain_reread_sels_cb(self, domain, err):
-        global stop_count
+        global stop_count, stop_list
 	print "SEL rescan done for " + domain.get_name() + " err=" + str(err)
+        stop_list["domain_reread_sels"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    domain.close(main_handler)
             pass
@@ -893,9 +916,11 @@ class Handlers:
         return
 
     def domain_ipmb_mc_scan_cb(self, domain, err):
-        global stop_count
+        global stop_count, stop_list
 	print "IPMB scan done for " + domain.get_name() + " err=" + str(err)
+        stop_list["mc_ipmb_mc_scan"] = 0
 	stop_count -= 1
+        print str(stop_list)
         if stop_count == 0:
 	    domain.close(main_handler)
             pass
@@ -954,11 +979,21 @@ if not a:
     print "open failed"
     sys.exit(1)
     pass
+del a
 
 while main_handler.name != "done":
     OpenIPMI.wait_io(1000)
     pass
 
+class DummyLogHandler:
+    def __init__(self):
+        pass
+
+    def log(self, level, log):
+        sys.stderr.write(level + ": " + log + "\n")
+
+OpenIPMI.set_log_handler(DummyLogHandler())
 OpenIPMI.shutdown_everything()
 print "done"
 sys.exit(0)
+

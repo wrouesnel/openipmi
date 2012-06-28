@@ -1,3 +1,19 @@
+2012-06-28 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/sample.py, swig/python/sample2.py: Fix some issues
+	with proper shutdown and cleanup.
+
+	* sample/ipmicmd.c: Don't free the response, let the system do it
+	in the normal case.
+
+	* lib/ipmi_lan.c: Fix issues with locking and reporting connection
+	failure status.
+
+	* sample/ipmi_serial_bmc_emu.c: Convert to work with IPv6.
+
+	* lanserv, man: Did a massive restructure of lanserv and the
+	IPMI simulator for supporting a VM interface.
+
 2012-05-24 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/ipmi_sim_info.h, lanserv/OpenIPMI/lanserv.h:

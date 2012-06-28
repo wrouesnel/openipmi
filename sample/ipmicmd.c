@@ -290,7 +290,6 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 	       ((float) diff) / ((float)(data->total_count)),
 	       diff);
 	free(data);
-	free(rspi);
     } else {
 	int rv;
 
@@ -301,12 +300,12 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 			       timed_rsp_handler, rspi);
 	data->count--;
 	if (rv) {
-	    fprintf(stderr, "Error sending command: %x\n", rv);
+	    printf("Error sending command: %x\n", rv);
 	    free(data);
 	} else
-    	    return IPMI_MSG_ITEM_USED;
+	    return IPMI_MSG_ITEM_USED;
     }
-    return IPMI_MSG_ITEM_USED;
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 void

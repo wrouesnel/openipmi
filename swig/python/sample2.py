@@ -61,12 +61,6 @@ class Handlers:
             self.mc = mc.get_id();
         return
 
-    # This is here due to a bug in the swig interface, it will go away in
-    # the next release.  It doesn't actually do anything.
-    def mc_iter_cb(self, domain, mc):
-        print "MC2: " + mc.get_name()
-        return
-
     def domain_up_cb(self, domain):
 	domain.iterate_mcs(self)
         return
@@ -78,6 +72,22 @@ class Handlers:
     def mc_cb(self, mc):
         mc.send_command(0, 6, 1, [], self)
         return
+
+    def quit(self):
+        del self.mc
+        OpenIPMI.set_log_handler(DummyLogHandler())
+        OpenIPMI.shutdown_everything()
+        print "done"
+        sys.exit(0)
+        return
+
+class DummyLogHandler:
+    def __init__(self):
+        pass
+
+    def log(self, level, log):
+        sys.stderr.write(level + ": " + log + "\n")
+
 
 OpenIPMI.enable_debug_malloc()
 OpenIPMI.init_posix()
@@ -92,16 +102,18 @@ if not a:
     print "open failed"
     sys.exit(1)
     pass
+del a
 
 nexttime = time.time()
-while main_handler.name != "done":
+num_poll = 1
+while main_handler.name != "done" and num_poll <= 2:
     OpenIPMI.wait_io(1000)
     now = time.time()
     if main_handler.mc and now >= nexttime:
         nexttime += 5
-        main_handler.mc.to_mc(main_handler)
+	num_poll += 1
+        if num_poll < 2:
+	    main_handler.mc.to_mc(main_handler)
     pass
 
-OpenIPMI.shutdown_everything()
-print "done"
-sys.exit(0)
+main_handler.quit()

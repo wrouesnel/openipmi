@@ -2422,26 +2422,25 @@ rsp_timeout_handler(void              *cb_data,
 		    lan->ip[ip_num].failure_time.tv_usec -= 1000000;
 		}
 		lan->ip[ip_num].consecutive_failures = 1;
-		ipmi_unlock(lan->ip_lock);
 	    } else if (!lan->seq_table[seq].side_effects) {
 		/* Don't use messages with side effects for failure
 		   detection. */
 		lan->ip[ip_num].consecutive_failures++;
 		if (lan->ip[ip_num].consecutive_failures >= IP_FAIL_COUNT) {
-		    struct timeval now;
-		    ipmi_unlock(lan->ip_lock);
-		    gettimeofday(&now, NULL);
-		    if (cmp_timeval(&now, &lan->ip[ip_num].failure_time) > 0)
-		    {
-			/* Can't report yet, still holding locks. */
-			call_lost_con = 1;
-		    }
-		} else {
-		    ipmi_unlock(lan->ip_lock);
+		    /* Consider this for a failure, check after unlocking */
+		    call_lost_con = 1;
 		}
 	    }
-	} else {
-	    ipmi_unlock(lan->ip_lock);
+	}
+	ipmi_unlock(lan->ip_lock);
+
+	if (call_lost_con) {
+	    struct timeval now;
+	    gettimeofday(&now, NULL);
+	    if (cmp_timeval(&now, &lan->ip[ip_num].failure_time) <= 0) {
+		/* Not a failure yet. */
+		call_lost_con = 0;
+	    }
 	}
     }
 
@@ -5603,10 +5602,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
  
         memset(&hints, 0, sizeof(hints));
         if (count == 0)
-            hints.ai_family = PF_UNSPEC;
+            hints.ai_family = AF_UNSPEC;
         else
 	{
-            /* Make sure all ip address is in the same protocol family*/
+            /* Make sure all ip address are in the same protocol family*/
 	    struct sockaddr_in *paddr;
 	    paddr = (struct sockaddr_in *)&(cparm.ip_addr[0]);
             hints.ai_family = paddr->sin_family;

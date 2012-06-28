@@ -137,7 +137,7 @@ bfree(bmc_data_t *bmc, void *data)
 
 typedef struct sim_addr_s
 {
-    struct sockaddr addr;
+    struct sockaddr_storage addr;
     socklen_t       addr_len;
     int             xmit_fd;
 } sim_addr_t;
@@ -217,7 +217,8 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     unsigned char msgd[256];
 
     l.addr_len = sizeof(l.addr);
-    len = recvfrom(lan_fd, msgd, sizeof(msgd), 0, &(l.addr), &(l.addr_len));
+    len = recvfrom(lan_fd, msgd, sizeof(msgd), 0,
+		   (struct sockaddr *) &(l.addr), &(l.addr_len));
     if (len < 0) {
 	if (errno != EINTR) {
 	    perror("Error receiving message");
@@ -260,7 +261,7 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     int fd;
     int rv;
 
-    fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    fd = socket(addr->sa_family, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
 	perror("Unable to create socket");
 	exit(1);
@@ -302,10 +303,15 @@ lan_channel_init(misc_data_t *data, channel_t *chan)
     }
 
     if (lan->num_lan_addrs == 0) {
+#ifdef AF_INET6
+	struct sockaddr_in6 *ipaddr = (void *) &lan->lan_addrs[0].addr;
+	memcpy(ipaddr, &in6addr_any, sizeof(*ipaddr));
+#else
 	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
 	ipaddr->sin_family = AF_INET;
 	ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
+#endif
 	lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
 	lan->num_lan_addrs++;
     }
@@ -440,7 +446,7 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 	exit(1);
     }
 
-    fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    fd = socket(addr->sa_family, SOCK_STREAM, IPPROTO_TCP);
     if (fd == -1) {
 	perror("Unable to create socket");
 	exit(1);
@@ -886,6 +892,7 @@ console_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     newcon->echo = 1;
     newcon->shutdown_on_close = 0;
     newcon->telnet = 1;
+    newcon->tn_pos = 0;
     newcon->out.printf = emu_printf;
     newcon->out.data = newcon;
 
@@ -1130,6 +1137,7 @@ main(int argc, const char *argv[])
     stdio_console.echo = 1;
     stdio_console.shutdown_on_close = 1;
     stdio_console.telnet = 0;
+    stdio_console.tn_pos = 0;
     if (nostdio) {
 	stdio_console.out.printf = dummy_printf;
 	stdio_console.out.data = &stdio_console;

@@ -47,18 +47,6 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
-typedef struct sockaddr_ip_s {
-    union
-        {
-	    struct sockaddr	s_addr;
-            struct sockaddr_in  s_addr4;
-#ifdef PF_INET6
-            struct sockaddr_in6 s_addr6;
-#endif
-        } s_ipsock;
-} sockaddr_ip_t;
-
-
 #define IPMB_MAX_MSG_LENGTH 32
 #define IPMI_MAX_MSG_LENGTH 36
 
@@ -1328,7 +1316,8 @@ main(int argc, char *argv[])
 {
     unsigned int i;
     struct addrinfo hints, *res0;
-    sockaddr_ip_t addr;
+    struct sockaddr_storage saddr;
+    struct sockaddr *addr = (struct sockaddr *) &saddr;
     struct msg_info *mi = &main_mi;
     int rv;
     char *s, *e;
@@ -1421,16 +1410,17 @@ main(int argc, char *argv[])
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
+    hints.ai_family = AF_UNSPEC;
     rv = getaddrinfo(argv[i], argv[i+1], &hints, &res0);
     if (rv) {
 	perror("getaddrinfo");
 	usage();
     }
     /* Only get the first choices */
-    memcpy(&addr, res0->ai_addr, res0->ai_addrlen);
+    memcpy(addr, res0->ai_addr, res0->ai_addrlen);
     freeaddrinfo(res0);
 
-    mi->sock = socket(PF_INET, SOCK_STREAM, 0);
+    mi->sock = socket(addr->sa_family, SOCK_STREAM, 0);
     if (mi->sock < 0) {
 	perror("socket");
 	usage();

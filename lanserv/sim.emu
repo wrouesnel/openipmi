@@ -1,0 +1,9 @@
+# The BMC is the MC at address 20
+mc_setbmc 20
+
+# Now add the BMC
+mc_add 20 0 0 23 9 8 9f 1291 f02
+sensor_add 20 0 1 01 6f
+main_sdr_add 20 00 00 51 02 21 20 01 01 03 01 67 45 01 01 18 00 18 00 3F 3F C0 01 00 00 00 00 00 00 00 00 00 c6 'D 'J 't 'e 'm 'p
+sensor_set_value 20 0 0 60 0
+mc_enable 20
