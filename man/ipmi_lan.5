@@ -70,6 +70,31 @@ are allowed, so if none are specified, the user will be disabled.
 \fBstartcmd\fP \fI"cmd"\fP
 specifies a command to execute when a power on is requested.  This lets
 a virtual machine be started that can then connect back to the simulator.
+The simulator does management of the process here, and the power on
+state of the process depends on if the process exists or not.  If a
+poweroff is requested, if the process is connected to a VM serial
+interface, a graceful shutdown is first requested.  If the process
+does not terminate in a specified amount of time, a SIGTERM is sent
+to the process.  The SIGTERM is sent immediately if there is no
+connection.  If the process doesn't go way in another specified amount
+of time, a SIGKILL is sent.
+
+.TP
+\fBpoweroff_wait\fP \fIseconds\fP
+specifies the amount of time to wait for the startcmd to do a graceful shutdown
+on a powerdown request.  The simulator will send a request to the
+target, wait this amount of time, and then do a SIGTERM kill on the
+process.  If this is zero, a SIGTERM will not be done (nor will a SIGKILL).
+Note that if the simulator does not have a connection to the VM, the
+graceful shutdown is skipped and a SIGTERM is done immediately.
+Default time is 60 seconds.
+
+.TP
+\fBkill_wait\fP \fIseconds\fP
+specifies the amount of time to wait for SIGTERM to kill the process.
+If the process does not terminate in this period of time, send a
+SIGKILL kill.  If this is zero, don't send the SIGKILL.  Default time
+is 20 seconds.
 
 .TP
 \fBconsole\fP \fIaddress\fP \fIport\fP

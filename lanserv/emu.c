@@ -2793,7 +2793,7 @@ handle_get_chassis_status(lmc_data_t    *mc,
 			  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->bmcinfo->power_on;
+    rdata[1] = mc->bmcinfo->vmpid != 0;
     rdata[2] = 0;
     rdata[3] = 0;
 }

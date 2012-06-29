@@ -800,9 +800,13 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     if (si->bmcinfo->debug & DEBUG_RAW_MSG)
 	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial cmd:");
 
-    if (len < 2)
+    if (len < 1)
 	return;
-    if (imsg[0] == VM_CMD_CAPABILITIES) {
+
+    switch (imsg[0]) {
+    case VM_CMD_CAPABILITIES:
+	if (len < 2)
+	    return;
 	if (imsg[1] & VM_CAPABILITIES_POWER)
 	    si->channel.hw_capabilities |= (1 << HW_OP_POWERON);
 	if (imsg[1] & VM_CAPABILITIES_RESET)
@@ -813,6 +817,13 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 	    si->channel.hw_capabilities |= (1 << HW_OP_SEND_NMI);
 	if (imsg[1] & VM_CAPABILITIES_ATTN)
 	    info->attn_works = 1;
+	break;
+
+    case VM_CMD_RESET:
+	/* The remote end reset, report it. */
+	if (si->bmcinfo->target_reset)
+	    si->bmcinfo->target_reset(si->bmcinfo);
+	break;
     }
 }
 
@@ -938,33 +949,18 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	break;
 	
     case HW_OP_POWERON:
-	if (!si->bmcinfo->startcmd) {
-	    si->channel.log(&si->channel, OS_ERROR, NULL,
-			    "Power on issued, no start command set");
-	    return;
-	}
-	{
-	    int pid = fork();
-	    int status;
-	    char *startcmd = malloc(strlen(si->bmcinfo->startcmd) + 6);
-
-	    strcpy(startcmd, "exec ");
-	    strcpy(startcmd + 5, si->bmcinfo->startcmd);
-	    if (pid == 0) {
-		if (fork() == 0) {
-		    char *args[4] = { "/bin/sh", "-c", startcmd, NULL };
-		    execvp(args[0], args);
-		    exit(1);
-		} else {
-		    exit(0);
-		}
-	    }
-	    waitpid(pid, &status, 0);
-	}
+	bmc_start_cmd(si->bmcinfo);
 	return;
 
     case HW_OP_POWEROFF:
-	vm_add_char(VM_CMD_POWEROFF, c, &len);
+	if (si->bmcinfo->wait_poweroff)
+	    /* Already powering off. */
+	    return;
+	if (si->bmcinfo->connected) {
+	    vm_add_char(VM_CMD_POWEROFF, c, &len);
+	    si->bmcinfo->wait_poweroff = si->bmcinfo->poweroff_wait_time;
+	} else
+	    si->bmcinfo->wait_poweroff = 1; /* Just power off now. */
 	break;
 	
     case HW_OP_SEND_NMI:
@@ -991,13 +987,13 @@ vm_hw_op(channel_t *chan, unsigned int op)
 static void
 vm_connected(serserv_data_t *si)
 {
-    si->bmcinfo->power_on = 1;
+    si->bmcinfo->connected = 1;
 }
 
 static void
 vm_disconnected(serserv_data_t *si)
 {
-    si->bmcinfo->power_on = 0;
+    si->bmcinfo->connected = 0;
 }
 
 static int
@@ -1013,7 +1009,6 @@ vm_setup(serserv_data_t *si)
     si->channel.hw_op = vm_hw_op;
     si->channel.set_atn = vm_set_attn;
     si->channel.hw_capabilities = (1 << HW_OP_POWERON);
-    si->bmcinfo->power_on = 0;
     return 0;
 }
 

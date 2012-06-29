@@ -72,6 +72,8 @@
 #include <popt.h> /* Option parsing made easy */
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -1038,6 +1040,7 @@ static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
     misc_data_t *data = cb_data;
+    bmc_data_t *bmc = data->bmc;
     struct timeval tv;
     int err;
     unsigned int i;
@@ -1050,6 +1053,23 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
 	}
     }
     ipmi_emu_tick(data->emu, 1);
+
+    if (bmc->wait_poweroff) {
+	if (bmc->vmpid == 0) {
+	    bmc->wait_poweroff = 0;
+	} else if (bmc->wait_poweroff > 0) {
+	    /* Waiting for the first kill */
+	    bmc->wait_poweroff--;
+	    if (bmc->wait_poweroff == 0) {
+		kill(bmc->vmpid, SIGTERM);
+		bmc->wait_poweroff = -bmc->kill_wait_time;
+	    }
+	} else {
+	    bmc->wait_poweroff++;
+	    if (bmc->wait_poweroff == 0)
+		kill(bmc->vmpid, SIGKILL);
+	}
+    }
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;
@@ -1072,6 +1092,70 @@ ifree(channel_t *chan, void *data)
     return free(data);
 }
 
+void
+bmc_start_cmd(bmc_data_t *bmc)
+{
+    int pid;
+    char *startcmd;
+
+    if (!bmc->startcmd) {
+	bmc->log(bmc, OS_ERROR, NULL, "Power on issued, no start command set");
+	return;
+    }
+
+    if (bmc->vmpid)
+	/* Already running */
+	return;
+
+    startcmd = malloc(strlen(bmc->startcmd) + 6);
+    if (!startcmd)
+	return;
+    strcpy(startcmd, "exec ");
+    strcpy(startcmd + 5, bmc->startcmd);
+
+    pid = fork();
+    if (pid == -1) {
+	free(startcmd);
+	return;
+    }
+
+    if (pid == 0) {
+	char *args[4] = { "/bin/sh", "-c", startcmd, NULL };
+
+	execvp(args[0], args);
+	exit(1);
+    }
+    bmc->vmpid = pid;
+    free(startcmd);
+}
+
+static int sigpipeh[2] = {-1, -1};
+
+static void
+handle_sigchld(int sig)
+{
+    unsigned char c = 1;
+    int rv;
+    rv = write(sigpipeh[1], &c, 1);
+}
+
+static void
+sigchld_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    char buf;
+    misc_data_t *data = cb_data;
+    bmc_data_t  *bmc = data->bmc;
+    int err;
+    int status;
+
+    err = read(sigpipeh[0], &buf, 1);
+    err = waitpid(bmc->vmpid, &status, WNOHANG);
+    if (err == -1)
+	return;
+    bmc->vmpid = 0;
+    bmc->wait_poweroff = 0;
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -1082,7 +1166,9 @@ main(int argc, const char *argv[])
     poptContext poptCtx;
     struct timeval tv;
     console_info_t stdio_console;
-
+    struct sigaction act;
+    os_hnd_fd_id_t *conid;
+	
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
 	switch (i) {
@@ -1126,7 +1212,33 @@ main(int argc, const char *argv[])
     bmcinfo.write_config = write_config;
     bmcinfo.debug = debug;
     bmcinfo.log = sim_log;
+    bmcinfo.poweroff_wait_time = 60;
+    bmcinfo.kill_wait_time = 20;
     data.bmc = &bmcinfo;
+
+    err = pipe(sigpipeh);
+    if (err) {
+	perror("Creating signal handling pipe");
+	exit(1);
+    }
+
+    act.sa_handler = handle_sigchld;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+    
+    err = sigaction(SIGCHLD, &act, NULL);
+    if (err) {
+	perror("setting up sigchld sigaction");
+	exit(1);
+    }
+
+    err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, sigpipeh[0],
+					  sigchld_ready, &data,
+					  NULL, &conid);
+    if (err) {
+	fprintf(stderr, "Unable to sigchld pipe wait: 0x%x\n", err);
+	exit(1);
+    }
 
     data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
 
@@ -1179,7 +1291,6 @@ main(int argc, const char *argv[])
     if (bmcinfo.console_addr_len) {
 	int nfd;
 	int val;
-	os_hnd_fd_id_t *conid;
 
 	nfd = socket(bmcinfo.console_addr.s_ipsock.s_addr.sa_family,
 		     SOCK_STREAM, IPPROTO_TCP);

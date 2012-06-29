@@ -458,6 +458,10 @@ read_config(bmc_data_t *bmc,
 	    err = serserv_read_config(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
 	    err = get_delim_str(&tokptr, &bmc->startcmd, &errstr);
+	} else if (strcmp(tok, "poweroff_wait") == 0) {
+	    err = get_uint(&tokptr, &bmc->poweroff_wait_time, &errstr);
+	} else if (strcmp(tok, "kill_wait") == 0) {
+	    err = get_uint(&tokptr, &bmc->kill_wait_time, &errstr);
 	} else if (strcmp(tok, "console") == 0) {
 	    err = get_sock_addr(&tokptr,
 				&bmc->console_addr, &bmc->console_addr_len,

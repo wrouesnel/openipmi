@@ -237,8 +237,6 @@ bmcinfo_init(bmc_data_t *bmc)
 
     memset(bmc, 0, sizeof(*bmc));
 
-    bmc->power_on = 1; /* Assume on, let the BMC connection override. */
-
     bmc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
     bmc->sys_channel.channel_num = 0xf;
     /* Assume this for now, override with config */

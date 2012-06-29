@@ -11,6 +11,9 @@ that all characters since the last framing character (or beginning of
 the session) is an IPMI message.  A 0xa1 character says that the
 preceding characters are a control command.
 
+A 0xaa character says to change bit 4 of the next character from a '1'
+to a '0'.  This way, a 0xa0 data character is sent as 0xaa 0xb0.
+
 An IPMI message has the following format:
 
   seq
@@ -28,7 +31,7 @@ a sequence number at the beginning.
 Commands are pretty simple.  The first byte of a command is the command
 id.  The rest is data for the command.
 
-There is only one command from the VM to the simulator.  Command 0x08
+There are two commands sent from the VM to the simulator.  Command 0x08
 is followed by a single byte with the following bits telling the simulator
 the capabilities of the VM.  These bits are:
 
@@ -37,6 +40,9 @@ the capabilities of the VM.  These bits are:
   bit 2 - can enable/disable the IPMI interrupt.
   bit 3 - can generate an NMI.
   bit 4 - can set the ATTN bit on the interface.
+
+A reset command is sent from the VM to the simulator to say that a
+reset has occurred.
 
 The commands from the simulator to the VM are based on the above
 capabilities.  The simulator will not send a command where the VM does

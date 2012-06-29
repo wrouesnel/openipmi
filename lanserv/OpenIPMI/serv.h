@@ -355,6 +355,10 @@ struct bmc_data_s {
 
     /* Command to start a VM */
     char *startcmd;
+    unsigned int poweroff_wait_time;
+    unsigned int kill_wait_time;
+    int vmpid; /* Process id of the VM, 0 if not running. */
+    int wait_poweroff;
 
     /* Console port.  Length is zero if not set. */
     sockaddr_ip_t console_addr;
@@ -371,7 +375,7 @@ struct bmc_data_s {
     msg_t *recv_q_head;
     msg_t *recv_q_tail;
 
-    unsigned char power_on; /* For the power control */
+    int connected; /* For VM serial connections */
 
     channel_t sys_channel;
     channel_t ipmb_channel;
@@ -389,6 +393,9 @@ struct bmc_data_s {
     int (*start_timer)(ipmi_timer_t *timer, struct timeval *timeout);
     int (*stop_timer)(ipmi_timer_t *timer);
     void (*free_timer)(ipmi_timer_t *timer);
+
+    /* Called by interface code to report that the target did a reset. */
+    void (*target_reset)(bmc_data_t *bmc);
 
     /* Write the configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
@@ -424,6 +431,11 @@ void ipmi_handle_smi_rsp(channel_t *chan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
 
 int channel_smi_send(channel_t *chan, msg_t *msg);
+
+/*
+ * Start the "startcmd" specified in the configuration file.
+ */
+void bmc_start_cmd(bmc_data_t *bmc);
 
 int chan_init(channel_t *chan);
 void bmcinfo_init(bmc_data_t *bmc);

@@ -608,6 +608,11 @@ ifree(channel_t *chan, void *data)
     return free(data);
 }
 
+void
+bmc_start_cmd(bmc_data_t *bmc)
+{
+}
+
 int
 main(int argc, const char *argv[])
 {
