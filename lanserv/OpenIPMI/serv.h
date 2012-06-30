@@ -355,6 +355,7 @@ struct bmc_data_s {
 
     /* Command to start a VM */
     char *startcmd;
+    unsigned int startnow; /* Start startcmd at simulator startup? */
     unsigned int poweroff_wait_time;
     unsigned int kill_wait_time;
     int vmpid; /* Process id of the VM, 0 if not running. */

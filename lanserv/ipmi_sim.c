@@ -514,8 +514,12 @@ static void
 isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
 	 int len)
 {
+    misc_data_t *data = bmc->info;
+    char *str;
+    console_info_t *con;
+
     if (msg) {
-	char *str, dummy;
+	char dummy;
 	int pos;
 	unsigned int i;
 
@@ -528,41 +532,35 @@ isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
 	len += 3 * msg->len + 3;
 	str = malloc(len);
 	if (!str)
-	    goto print_no_msg;
+	    return;
 	pos = vsprintf(str, format, ap);
 	str[pos++] = '\n';
 	pos += sprintf(str + pos, mformat, msg->channel, msg->netfn, msg->cmd,
 		       msg->rs_addr, msg->rs_lun, msg->rq_addr, msg->rq_lun,
 		       msg->rq_seq);
 #undef mformat
-	if (!nostdio) {
-	    printf("Msglen = %d\n", msg->len);
-	    for (i = 0; i < msg->len; i++)
-		pos += sprintf(str + pos, " %2.2x", msg->data[i]);
-	
-	    printf("%s\n", str);
-	}
-#if HAVE_SYSLOG
-	if (logtype == DEBUG)
-	    syslog(LOG_DEBUG, "%s", str);
-	else
-	    syslog(LOG_NOTICE, "%s", str);
-#endif
-	free(str);
-	return;
+	for (i = 0; i < msg->len; i++)
+	    pos += sprintf(str + pos, " %2.2x", msg->data[i]);
+    } else {
+	str = malloc(len + 1);
+	if (!str)
+	    return;
+	vsprintf(str, format, ap);
     }
 
- print_no_msg:
-    if (!nostdio) {
-	vprintf(format, ap);
-	printf("\n");
+    con = data->consoles;
+    while (con) {
+	con->out.printf(&con->out, "%s", str);
+	con->out.printf(&con->out, "\n");
+	con = con->next;
     }
 #if HAVE_SYSLOG
     if (logtype == DEBUG)
-	vsyslog(LOG_DEBUG, format, ap);
+	syslog(LOG_DEBUG, str);
     else
-	vsyslog(LOG_NOTICE, format, ap);
+	syslog(LOG_NOTICE, str);
 #endif
+    free(str);
 }
 
 static void
@@ -1214,6 +1212,7 @@ main(int argc, const char *argv[])
     bmcinfo.log = sim_log;
     bmcinfo.poweroff_wait_time = 60;
     bmcinfo.kill_wait_time = 20;
+    bmcinfo.startnow = 1;
     data.bmc = &bmcinfo;
 
     err = pipe(sigpipeh);
@@ -1256,6 +1255,9 @@ main(int argc, const char *argv[])
     } else {
 	stdio_console.out.printf = emu_printf;
 	stdio_console.out.data = &stdio_console;
+	stdio_console.next = NULL;
+	stdio_console.prev = NULL;
+	data.consoles = &stdio_console;
     }
 
     if (read_config(&bmcinfo, config_file))
@@ -1347,6 +1349,9 @@ main(int argc, const char *argv[])
 	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
 	exit(1);
     }
+
+    if (bmcinfo.startnow && bmcinfo.startcmd)
+	bmc_start_cmd(&bmcinfo);
 
     data.os_hnd->operation_loop(data.os_hnd);
     return 0;
