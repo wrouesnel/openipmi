@@ -58,6 +58,13 @@ ipmi_devintf" and talk to the simulated BMC from there.  A full
 watchdog is also simulated, so you can do a "modprobe ipmi_watchdog"
 and get a watchdog timer running.
 
+If you have the watchdog loaded, go to the OpenIPMI GUI window and
+right click on the "test" entry (the topmost one).  Choose "Display
+SELS".  Then in the target login, do "echo 1 >/dev/watchdog".  In
+about 10 seconds, the VM will reset and you will see the reset log in
+the IPMI SEL display window.
+
+
 The VM Interface
 ----------------
 
@@ -107,6 +114,7 @@ capabilities.  The simulator will not send a command where the VM does
 not have the capability.  None of these have any data with them.  The
 commands are:
 
+  0xFF - The next byte is the version of the protocol, currently 1
   0x00 - Clear ATTN
   0x01 - Set ATTN without an interrupt
   0x02 - Set ATTN with an interrupt
