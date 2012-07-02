@@ -456,6 +456,8 @@ read_config(bmc_data_t *bmc,
 	    err = get_user(&tokptr, bmc, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
 	    err = serserv_read_config(&tokptr, bmc, &errstr);
+	} else if (strcmp(tok, "name") == 0) {
+	    err = get_delim_str(&tokptr, &bmc->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
 	    err = get_delim_str(&tokptr, &bmc->startcmd, &errstr);
 	} else if (strcmp(tok, "startnow") == 0) {

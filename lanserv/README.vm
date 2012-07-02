@@ -3,6 +3,64 @@ machine.  The virtual machine talks to the simulator over a TCP
 socket, and the simulator can control the virtual machine aspects that
 it needs to be able to control.
 
+A Quick Start
+-------------
+
+This section describes a quick start for getting running using the
+OpenIPMI simulator with qemu-kvm.  This assume you have qemu-kvm
+patched with the IPMI patches, or they have been included.
+
+You will need:
+  OpenIPMI-2.0.21-rc1 or later
+  A qemu bootable disk with Linux (or something else that can use IPMI)
+	installed on it.
+  qemu-kvm compiled with the proper IPMI patches
+
+First, configure OpenIPMI to install someplace.  We will assume this
+is $HOME/x3.  Do this with:
+
+./configure --prefix=$HOME/x3/usr --sysconfdir=$HOME/x3/etc \
+	    --with-perlinstall=$HOME/x3/usr/lib/perl \
+	    --with-pythoninstall=$HOME/x3/usr/lib/python
+
+then "make", then "make install".  Note that I also had to add
+
+--with-tclcflags="-I/usr/include/tcl8.5" --with-tcllibs="-ltcl8.5"
+
+to the configure line for the gui to work because the TCL
+configuration was screwed up on my machine.
+
+Then edit $HOME/x3/etc/ipmi/lan.conf and find the "startcmd" variable.
+Edit that for your configuration of qemu.  You need to leave the -ipmi
+option as is, of course.
+
+Run $HOME/x3/usr/bin/ipmi_sim.  This will start the simulator and it
+will also automatically start ("Power on") the VM.  You can telnet to
+port 9003 to get a console to the VM.
+
+In the OpenIPMI build directory, type "make rungui".  This will run
+the OpenIPMI GUI.  Pull down "File" and select "OpenDomain".  In the
+dialog that comes up, enter "test" for the Domain name, "localhost"
+for the Address, "9001" for the Port, "ipmiusr" for the Username, and
+"test" for the Password.  Then select "Ok".  (Note that the username
+and password are configured in the lan.conf file that gets installed
+in $HOME/x3/etc/ipmi.)
+
+You should have "test" in the list of domains.  Open it up, then open
+"Entities", then "test(23.1 system_chassis)", then "Controls".  You
+will see a power and reset control.  Right click on those; you can set
+them to "0" or "1" to perform the obvious functions.  You will see
+that the VM is already powered on as it was started when ipmi_sim
+started up.
+
+If you log in to the VM, you can do a "modprobe ipmi_si" and "modprobe
+ipmi_devintf" and talk to the simulated BMC from there.  A full
+watchdog is also simulated, so you can do a "modprobe ipmi_watchdog"
+and get a watchdog timer running.
+
+The VM Interface
+----------------
+
 The VM interface is a much simplified interface similar to the direct
 mode IPMI serial codec.
 

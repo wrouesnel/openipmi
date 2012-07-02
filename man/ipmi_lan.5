@@ -38,6 +38,11 @@ Blank lines and lines starting with `#' are ignored.
 The following commands are allowed the configuration file:
 
 .TP
+\fBname\fP \fI"name"\fP
+Set a name for the BMC.  This will control other things, like the
+default value of the ipmi_sim startup command file.
+
+.TP
 \fBuser\fP \fIusernum\fP \fIenabled\fP \fIusername\fP \fIpassword\fP \fImax-priv\fP \fImax-session\fP [\fIauth\fP [\fIauth\fP [...]]]
 .I usernum
 specifies the user number for the user.  Note that user number \fB0\fP is
@@ -78,6 +83,11 @@ does not terminate in a specified amount of time, a SIGTERM is sent
 to the process.  The SIGTERM is sent immediately if there is no
 connection.  If the process doesn't go way in another specified amount
 of time, a SIGKILL is sent.
+
+.TP
+\fBstartnow\fPtrue|false\fI\fP
+If true, start the startcmd at the startup of the simulator.  Otherwise
+wait until a poweron is issued.
 
 .TP
 \fBpoweroff_wait\fP \fIseconds\fP

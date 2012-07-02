@@ -1,3 +1,11 @@
+2012-07-01 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlan/Makefile.am, glib/Makefile.am, lib/Makefile.am:
+	Fix some build issues with libraries.
+	* tcl/Makefile.am, unix/Makefile.am: ditto
+
+	* configure.in: Move to version 2.0.20-rc1.
+
 2012-06-28 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/sample.py, swig/python/sample2.py: Fix some issues
@@ -19,8 +27,6 @@
 
 	* swig/python/openipmigui/gui_setdialog.py: BooleanVar will return
 	an integer in some cases, account for that.
-
-	* configure.in: Move to version 2.0.20.
 
 2012-05-24 Corey Minyard <cminyard@mvista.com>
 

@@ -739,6 +739,8 @@ tm_setup(serserv_data_t *si)
 #define VM_CMD_CHAR	0xA1 /* Marks end of a command */
 #define VM_ESCAPE_CHAR	0xAA /* Set bit 4 from the next byte to 0 */
 
+#define VM_PROTOCOL_VERSION	1
+#define VM_CMD_VERSION		0xff /* A version number byte follows */
 #define VM_CMD_NOATTN		0x00
 #define VM_CMD_ATTN		0x01
 #define VM_CMD_ATTN_IRQ		0x02
@@ -804,6 +806,10 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 	return;
 
     switch (imsg[0]) {
+    case VM_CMD_VERSION:
+	/* We only support one version for now. */
+	break;
+
     case VM_CMD_CAPABILITIES:
 	if (len < 2)
 	    return;
@@ -987,6 +993,13 @@ vm_hw_op(channel_t *chan, unsigned int op)
 static void
 vm_connected(serserv_data_t *si)
 {
+    unsigned int len = 0;
+    unsigned char c[5];
+
+    vm_add_char(VM_CMD_VERSION, c, &len);
+    vm_add_char(VM_PROTOCOL_VERSION, c, &len);
+    c[len++] = VM_CMD_CHAR;
+    raw_send(si, c, len);
     si->bmcinfo->connected = 1;
 }
 

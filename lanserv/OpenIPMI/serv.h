@@ -336,6 +336,8 @@ typedef struct lan_addr_s {
  * required for all server types.
  */
 struct bmc_data_s {
+    char *name;
+
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)
     unsigned int debug;

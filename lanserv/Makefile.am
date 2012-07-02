@@ -5,6 +5,8 @@ LD_VERSION = 0:1:0
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
 	$(OPENSSLINCS)
 
+AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"'
+
 lib_LTLIBRARIES = libIPMIlanserv.la
 
 bin_PROGRAMS = ipmi_sim ipmilan
@@ -31,12 +33,12 @@ ipmi_sim_SOURCES = ipmi_sim.c emu.c emu_cmd.c
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
 
-EXTRA_DIST = atca.emu README.vm lan.conf sim.emu
+EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
 
 install-data-local:
 	$(INSTALL) -m 755 -d "$(DESTDIR)$(sysconfdir)/ipmi/"; \
 	$(INSTALL) -m 644 $(srcdir)/lan.conf "$(DESTDIR)$(sysconfdir)/ipmi/"; 
-	$(INSTALL) -m 644 $(srcdir)/sim.emu "$(DESTDIR)$(sysconfdir)/ipmi/"; 
+	$(INSTALL) -m 644 $(srcdir)/ipmisim1.emu "$(DESTDIR)$(sysconfdir)/ipmi/"; 
 
 uninstall-local:
 	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/lan.conf"

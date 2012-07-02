@@ -89,7 +89,8 @@
 
 #define MAX_ADDR 4
 
-static char *config_file = "/etc/ipmi/lan.conf";
+#define BASE_CONF_STR SYSCONFDIR "/ipmi"
+static char *config_file = BASE_CONF_STR "/lan.conf";
 static char *command_string = NULL;
 static char *command_file = NULL;
 static int debug = 0;
@@ -1263,11 +1264,31 @@ main(int argc, const char *argv[])
     if (read_config(&bmcinfo, config_file))
 	exit(1);
 
-    if (command_string)
-	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
+    if (!command_file && bmcinfo.name) {
+	FILE *tf;
+	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(bmcinfo.name));
+	if (!command_file) {
+	    fprintf(stderr, "Out of memory\n");
+	    exit(1);
+	}
+	strcpy(command_file, BASE_CONF_STR);
+	strcat(command_file, "/");
+	strcat(command_file, bmcinfo.name);
+	strcat(command_file, ".emu");
+	tf = fopen(command_file, "r");
+	if (!tf) {
+	    free(command_file);
+	    command_file = NULL;
+	} else {
+	    fclose(tf);
+	}
+    }
 
     if (command_file)
 	read_command_file(&stdio_console.out, data.emu, command_file);
+
+    if (command_string)
+	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
 	channel_t *chan = bmcinfo.channels[i];

@@ -19,6 +19,6 @@ libOpenIPMI_la_SOURCES = entity.c ipmi.c domain.c mc.c sdr.c \
 libOpenIPMI_la_LIBADD = -lm $(top_builddir)/utils/libOpenIPMIutils.la \
 	$(OPENSSLLIBS)
 libOpenIPMI_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libOpenIPMI.map
+	-Wl,-Map -Wl,libOpenIPMI.map -L$(libdir)
 
 CLEANFILES = libOpenIPMI.map
