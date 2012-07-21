@@ -388,22 +388,31 @@ remove_cmd_registration(ipmi_con_t    *ipmi,
 }
 
 static int
-open_smi_fd(int if_num)
+open_smi_fd(int if_num, int *reterr)
 {
     char devname[30];
     int  fd;
+    int  err;
 
     sprintf(devname, "/dev/ipmidev/%d", if_num);
     fd = open(devname, O_RDWR);
     if (fd == -1) {
+	err = errno;
 	sprintf(devname, "/dev/ipmi/%d", if_num);
 	fd = open(devname, O_RDWR);
 	if (fd == -1) {
+	    if (errno != ENOENT)
+		err = errno;
 	    sprintf(devname, "/dev/ipmi%d", if_num);
 	    fd = open(devname, O_RDWR);
+	    if (fd == -1) {
+		if (errno != ENOENT)
+		    err = errno;
+	    }
 	}
     }
 
+    *reterr = err;
     return fd;
 }
 
@@ -1461,9 +1470,8 @@ setup(int          if_num,
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
 	smi->slave_addr[i] = 0x20; /* Assume this until told otherwise. */
 
-    smi->fd = open_smi_fd(if_num);
+    smi->fd = open_smi_fd(if_num, &rv);
     if (smi->fd == -1) {
-	rv = errno;
 	goto out_err;
     }
 

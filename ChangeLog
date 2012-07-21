@@ -9,6 +9,11 @@
 	pointer.  This was used when copying a MAC address, and was thus
 	incorrect.  Change the memcpy to use "6".
 
+	* lib/ipmi_smi.c: Someone noticed that the return values from
+	opening an IPMI device could be inconsistent because it tries a
+	bunch of possibilities and returns the last error.  So ignore
+	ENOENT as it is meaningless unless everything return ENOENT.
+
 2012-07-21 Bob Cagle <rcagle@ccpu.com>
 
 	* lib/normal_fru.c: The length can exceed a char size in a board
