@@ -1,3 +1,8 @@
+2012-07-21 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/lan.conf: Fix the startcmd example to match changes
+	made in the qemu code.
+
 2012-07-01 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlan/Makefile.am, glib/Makefile.am, lib/Makefile.am:
