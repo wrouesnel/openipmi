@@ -1339,7 +1339,7 @@ ipmi_pet_get_ip_addr(ipmi_pet_t *pet, struct in_addr *ip_addr)
 unsigned char *
 ipmi_pet_get_mac_addr(ipmi_pet_t *pet, unsigned char mac_addr[6])
 {
-    memcpy(mac_addr, pet->mac_addr, sizeof(mac_addr));
+    memcpy(mac_addr, pet->mac_addr, 6);
     return mac_addr;
 }
 

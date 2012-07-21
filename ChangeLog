@@ -3,6 +3,12 @@
 	* lanserv/lan.conf: Fix the startcmd example to match changes
 	made in the qemu code.
 
+	* lib/pet.c: Someone running static analysis (they didn't give
+	their name, just a sourceforge login) reported that the sizeof
+	operator for an array parameter always returns the size of a
+	pointer.  This was used when copying a MAC address, and was thus
+	incorrect.  Change the memcpy to use "6".
+
 2012-07-01 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlan/Makefile.am, glib/Makefile.am, lib/Makefile.am:
