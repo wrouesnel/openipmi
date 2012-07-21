@@ -1705,9 +1705,10 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
     ipmi_msg_t          cmd_msg;
 
     DEBUG_INFO(sdrs);
+    if (sdrs->fetch_state == IDLE)
+        sdrs->sdrs_changed = 0;
     sdrs->working_sdrs = NULL;
     sdrs->fetch_state = FETCHING;
-    sdrs->sdrs_changed = 0;
 
     if (!ilist_empty(sdrs->outstanding_fetch)) {
 	DEBUG_INFO(sdrs);

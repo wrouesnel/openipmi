@@ -1666,6 +1666,10 @@ fetch_fru_leds(atca_fru_t *finfo)
 {
     int rv;
 
+    if (finfo->minfo->ipmb_address == 0x20)
+        /* We ignore the floating IPMB address if it comes up. */
+        return;
+
     if (finfo->leds)
 	/* We already have the LEDs fetched. */
 	return;
@@ -1964,6 +1968,10 @@ fetch_fru_control_handling(atca_fru_t *finfo)
 
     if (finfo->cold_reset)
 	return;
+
+    if (finfo->minfo->ipmb_address == 0x20)
+        /* We ignore the floating IPMB address if it comes up. */
+        return;
     
     rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, fetch_fru_control_mc_cb, finfo);
     if (rv) {
@@ -3082,6 +3090,10 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     unsigned char data[1];
     int           rv;
     atca_ipmc_t   *minfo;
+
+    if (ipmi_mc_get_address(mc) == 0x20)
+        /* We ignore the floating IPMB address if it comes up. */
+        return;
 
     minfo = atca_find_minfo_from_mc(mc, info);
     if (!minfo) {

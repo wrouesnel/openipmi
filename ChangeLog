@@ -9,6 +9,20 @@
 	pointer.  This was used when copying a MAC address, and was thus
 	incorrect.  Change the memcpy to use "6".
 
+2012-07-21 Stephane Blain <stblain@sf.net>
+
+	* lib/sensor.c: If there are not valid sensors in the SDR, don't
+	return an error from scanning the SDRs.  There's just no sensors.
+
+	* lib/oem_atca.c: Fix an issue with invalid severe errors coming
+	out due to the floating IPMB address being picked up.
+
+	* lib/sdr.c: In oem_atca.c (atca_event_handler),
+	ipmi_start_ipmb_mc_scan is called each time an 0xf0 event is
+	received. because of the race condition, the MC callback is called
+	with wrong information (sdr_fetch_info_t->changed is not set
+	correctly).
+
 2012-07-01 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlan/Makefile.am, glib/Makefile.am, lib/Makefile.am:

@@ -1229,6 +1229,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
 	p += incr;
     }
+    if (!p)
+	return 0;
 
     /* Setup memory to hold the sensors. */
     s = ipmi_mem_alloc(sizeof(*s) * p);
