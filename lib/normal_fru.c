@@ -1370,7 +1370,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
     ipmi_fru_record_t          *rec;
     int                        err;
     unsigned char              version;
-    unsigned char              length;
+    unsigned int               length;
     unsigned char              *orig_data = data;
 
     version = *data;

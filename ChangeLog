@@ -9,6 +9,12 @@
 	pointer.  This was used when copying a MAC address, and was thus
 	incorrect.  Change the memcpy to use "6".
 
+2012-07-21 Bob Cagle <rcagle@ccpu.com>
+
+	* lib/normal_fru.c: The length can exceed a char size in a board
+	info area, but a char was used to hold the length.  Change it to
+	an int.
+
 2012-07-21 Stephane Blain <stblain@sf.net>
 
 	* lib/sensor.c: If there are not valid sensors in the SDR, don't
