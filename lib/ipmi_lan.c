@@ -4518,13 +4518,11 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     lan = (lan_data_t *) ipmi->con_data;
 
     privilege = msg->data[2] & 0xf;
-    if (privilege != lan->cparm.privilege) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
+    if (privilege < lan->cparm.privilege) {
+	ipmi_log(IPMI_LOG_WARNING,
 		 "%sipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "Expected privilege %d, got %d",
 		 IPMI_CONN_NAME(ipmi), lan->cparm.privilege, privilege);
-	handle_connected(ipmi, EINVAL, addr_num);
-	goto out;
     }
 
     session_id = ipmi_get_uint32(msg->data+4);
