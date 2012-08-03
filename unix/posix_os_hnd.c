@@ -203,7 +203,10 @@ start_timer(os_handler_t      *handler,
 static int
 stop_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
-    return sel_stop_timer(timer_data->timer);
+    int rv = sel_stop_timer(timer_data->timer);
+    if (rv == 0)
+	timer_data->running = 0;
+    return rv;
 }
 
 static int

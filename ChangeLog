@@ -1,3 +1,15 @@
+2012-08-03 Jim Mankovich
+
+	* unix/posix_os_hnd.c: The unix/posix_os_hnd.c stop_timer function
+	will stop the timer correctly, but it can never be restarted again
+	because the os_hnd_timer_id_t running status is not reset to zero
+	(0 == !running).  I ran into this problem when trying to change
+	the ipmb rescan timer value via ipmi_domain_set_ipmb_rescan_time).
+	If you ever call this function, the ipmb rescan timer will be
+	stopped and you can never restart it again.  This function should
+	really check the result of start_timer and report an error if it
+	can't restart the timer.
+
 2012-07-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/lan.conf: Fix the startcmd example to match changes
