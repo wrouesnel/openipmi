@@ -231,46 +231,46 @@ chan_init(channel_t *chan)
 }
 
 void
-bmcinfo_init(bmc_data_t *bmc)
+sysinfo_init(sys_data_t *sys)
 {
     unsigned int i;
 
-    memset(bmc, 0, sizeof(*bmc));
+    memset(sys, 0, sizeof(*sys));
 
-    bmc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
-    bmc->sys_channel.channel_num = 0xf;
+    sys->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
+    sys->sys_channel.channel_num = 0xf;
     /* Assume this for now, override with config */
-    bmc->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
-    bmc->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    bmc->sys_channel.active_sessions = 0;
-    bmc->channels[0xf] = &bmc->sys_channel;
+    sys->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
+    sys->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    sys->sys_channel.active_sessions = 0;
+    sys->channels[0xf] = &sys->sys_channel;
 
-    bmc->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
-    bmc->ipmb_channel.channel_num = 0;
-    bmc->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
-    bmc->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    bmc->ipmb_channel.active_sessions = 0;
-    bmc->channels[0] = &bmc->ipmb_channel;
+    sys->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
+    sys->ipmb_channel.channel_num = 0;
+    sys->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+    sys->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    sys->ipmb_channel.active_sessions = 0;
+    sys->channels[0] = &sys->ipmb_channel;
 
     for (i=0; i<=MAX_USERS; i++) {
-	bmc->users[i].idx = i;
+	sys->users[i].idx = i;
     }
-    bmc->pef.num_event_filters = MAX_EVENT_FILTERS;
+    sys->pef.num_event_filters = MAX_EVENT_FILTERS;
     for (i=0; i<MAX_EVENT_FILTERS; i++) {
-	bmc->pef.event_filter_table[i][0] = i;
-	bmc->pef.event_filter_data1[i][0] = i;
+	sys->pef.event_filter_table[i][0] = i;
+	sys->pef.event_filter_data1[i][0] = i;
     }
-    bmc->pef.num_alert_policies = MAX_ALERT_POLICIES;
+    sys->pef.num_alert_policies = MAX_ALERT_POLICIES;
     for (i=0; i<MAX_ALERT_POLICIES; i++)
-	bmc->pef.alert_policy_table[i][0] = i;
-    bmc->pef.num_alert_strings = MAX_ALERT_STRINGS;
+	sys->pef.alert_policy_table[i][0] = i;
+    sys->pef.num_alert_strings = MAX_ALERT_STRINGS;
     for (i=0; i<MAX_ALERT_STRINGS; i++) {
-	bmc->pef.alert_string_keys[i][0] = i;
+	sys->pef.alert_string_keys[i][0] = i;
     }
 }
 
 void
-debug_log_raw_msg(bmc_data_t *bmc,
+debug_log_raw_msg(sys_data_t *sys,
 		  unsigned char *data, unsigned int len,
 		  char *format, ...)
 {
@@ -296,6 +296,6 @@ debug_log_raw_msg(bmc_data_t *bmc,
     for (i = 0; i < len; i++)
 	pos += sprintf(str + pos, " %2.2x", data[i]);
 
-    bmc->log(bmc, DEBUG, NULL, str);
+    sys->log(sys, DEBUG, NULL, str);
     free(str);
 }

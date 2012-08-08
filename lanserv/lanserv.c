@@ -89,13 +89,13 @@ static int daemonize = 1;
 
 #define MAX_ADDR 4
 
-static void lanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg,
+static void lanserv_log(sys_data_t *sys, int logtype, msg_t *msg,
 			char *format, ...);
 
 typedef struct misc_data
 {
     int smi_fd;
-    bmc_data_t *bmc;
+    sys_data_t *sys;
     os_handler_t *os_hnd;
     os_handler_waiter_factory_t *waiter_factory;
     os_hnd_timer_id_t *timer;
@@ -104,13 +104,13 @@ typedef struct misc_data
 } misc_data_t;
 
 static void *
-balloc(bmc_data_t *bmc, int size)
+balloc(sys_data_t *sys, int size)
 {
     return malloc(size);
 }
 
 static void
-bfree(bmc_data_t *bmc, void *data)
+bfree(sys_data_t *sys, void *data)
 {
     return free(data);
 }
@@ -170,8 +170,8 @@ smi_send_dev(channel_t *chan, msg_t *msg)
     misc_data_t      *info = chan->oem.user_data;
     int              rv;
 
-    if (info->bmc->debug & DEBUG_MSG) {
-	info->bmc->log(info->bmc, DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
+    if (info->sys->debug & DEBUG_MSG) {
+	info->sys->log(info->sys, DEBUG, msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
 		 msg->netfn, msg->cmd);
     }
 
@@ -326,7 +326,7 @@ handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 	return;
     }
 
-    ipmi_handle_smi_rsp(info->bmc->channels[msg->channel], msg,
+    ipmi_handle_smi_rsp(info->sys->channels[msg->channel], msg,
 			rsp.msg.data, rsp.msg.data_len);
 }
 
@@ -350,10 +350,10 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     }
     l.xmit_fd = lan_fd;
 
-    if (lan->bmcinfo->debug & DEBUG_RAW_MSG) {
-	debug_log_raw_msg(lan->bmcinfo, (void *) &l.addr, l.addr_len,
+    if (lan->sysinfo->debug & DEBUG_RAW_MSG) {
+	debug_log_raw_msg(lan->sysinfo, (void *) &l.addr, l.addr_len,
 			  "Raw LAN receive from:");
-	debug_log_raw_msg(lan->bmcinfo, data, len,
+	debug_log_raw_msg(lan->sysinfo, data, len,
 			  " Receive message:");
     }
 
@@ -434,7 +434,7 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 }
 
 static void
-ilanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
+ilanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
 	     int len)
 {
     if (msg) {
@@ -483,7 +483,7 @@ ilanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
 }
 
 static void
-lanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
+lanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -493,12 +493,12 @@ lanserv_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
     len = vsnprintf(&dummy, 1, format, ap);
     va_end(ap);
     va_start(ap, format);
-    ilanserv_log(bmc, logtype, msg, format, ap, len);
+    ilanserv_log(sys, logtype, msg, format, ap, len);
     va_end(ap);
 }
 
 static void
-lanserv_chan_log(channel_t *bmc, int logtype, msg_t *msg, char *format, ...)
+lanserv_chan_log(channel_t *sys, int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -564,7 +564,7 @@ static struct poptOption poptOpts[]=
 };
 
 static void
-write_config(bmc_data_t *chan)
+write_config(sys_data_t *chan)
 {
 //    misc_data_t *info = lan->user_info;
 }
@@ -580,7 +580,7 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
     unsigned int i;
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = data->bmc->channels[i];
+	channel_t *chan = data->sys->channels[i];
 
 	if (chan && (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)) {
 	    ipmi_lan_tick(chan->chan_info, 1);
@@ -609,14 +609,14 @@ ifree(channel_t *chan, void *data)
 }
 
 void
-bmc_start_cmd(bmc_data_t *bmc)
+sys_start_cmd(sys_data_t *sys)
 {
 }
 
 int
 main(int argc, const char *argv[])
 {
-    bmc_data_t  bmcinfo;
+    sys_data_t  sysinfo;
     misc_data_t data;
     int o;
     unsigned int i;
@@ -645,7 +645,7 @@ main(int argc, const char *argv[])
     poptFreeContext(poptCtx);
 
     data.bmc_ipmb = 0x20;
-    data.bmc = &bmcinfo;
+    data.sys = &sysinfo;
     data.os_hnd = ipmi_posix_setup_os_handler();
     if (!data.os_hnd) {
 	fprintf(stderr, "Unable to allocate OS handler\n");
@@ -668,15 +668,15 @@ main(int argc, const char *argv[])
     /* Call the OEM init code. */
     init_oem_force();
 
-    bmcinfo_init(&bmcinfo);
-    bmcinfo.alloc = balloc;
-    bmcinfo.free = bfree;
-    bmcinfo.write_config = write_config;
-    bmcinfo.log = lanserv_log;
-    bmcinfo.debug = debug;
+    sysinfo_init(&sysinfo);
+    sysinfo.alloc = balloc;
+    sysinfo.free = bfree;
+    sysinfo.write_config = write_config;
+    sysinfo.log = lanserv_log;
+    sysinfo.debug = debug;
 
 
-    if (read_config(&bmcinfo, config_file))
+    if (read_config(&sysinfo, config_file))
 	exit(1);
 
     data.smi_fd = ipmi_open(ipmi_dev);
@@ -691,7 +691,7 @@ main(int argc, const char *argv[])
     }
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = bmcinfo.channels[i];
+	channel_t *chan = sysinfo.channels[i];
 
 	if (!chan)
 	    continue;

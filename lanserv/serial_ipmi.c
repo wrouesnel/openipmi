@@ -71,8 +71,8 @@
 static void
 raw_send(serserv_data_t *si, unsigned char *data, unsigned int len)
 {
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, data, len, "Raw serial send:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, data, len, "Raw serial send:");
     si->send_out(si, data, len);
 }
 
@@ -215,8 +215,8 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
     unsigned int i = 0;
     int          rv;
 
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, r, len, "Raw serial receive:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, r, len, "Raw serial receive:");
 
     while (p < len) {
 	rv = fromhex(r[p]);
@@ -238,7 +238,7 @@ static int ra_unformat_msg(unsigned char *r, unsigned int len,
 	return -1;
 
     memset(&msg, 0, sizeof(msg));
-    if ((o[0] == si->bmcinfo->bmc_ipmb) || (o[0] == 1)) {
+    if ((o[0] == si->sysinfo->bmc_ipmb) || (o[0] == 1)) {
 	rv = unformat_ipmb_msg(&msg, o, i, si);
 	if (rv)
 	    return rv;
@@ -356,8 +356,8 @@ dm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     int rv;
     msg_t msg;
 
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial receive:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, imsg, len, "Raw serial receive:");
 
     memset(&msg, 0, sizeof(msg));
     rv = unformat_ipmb_msg(&msg, imsg, len, si);
@@ -589,8 +589,8 @@ static int tm_unformat_msg(unsigned char *r, unsigned int len,
     unsigned int  i = 0;
     int           rv;
 
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, r, len, "Raw serial receive:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, r, len, "Raw serial receive:");
 
 #define SKIP_SPACE if (isspace(r[p])) p++
 #define ENSURE_MORE if (p >= len) return -1
@@ -769,8 +769,8 @@ vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 {
     msg_t msg;
     
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial receive:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, imsg, len, "Raw serial receive:");
 
     if (len < 4) {
 	fprintf(stderr, "Message too short\n");
@@ -799,8 +799,8 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 {
     struct vm_data *info = si->codec_info;
 
-    if (si->bmcinfo->debug & DEBUG_RAW_MSG)
-	debug_log_raw_msg(si->bmcinfo, imsg, len, "Raw serial cmd:");
+    if (si->sysinfo->debug & DEBUG_RAW_MSG)
+	debug_log_raw_msg(si->sysinfo, imsg, len, "Raw serial cmd:");
 
     if (len < 1)
 	return;
@@ -827,8 +827,8 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 
     case VM_CMD_RESET:
 	/* The remote end reset, report it. */
-	if (si->bmcinfo->target_reset)
-	    si->bmcinfo->target_reset(si->bmcinfo);
+	if (si->sysinfo->target_reset)
+	    si->sysinfo->target_reset(si->sysinfo);
 	break;
     }
 }
@@ -955,18 +955,18 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	break;
 	
     case HW_OP_POWERON:
-	bmc_start_cmd(si->bmcinfo);
+	sys_start_cmd(si->sysinfo);
 	return;
 
     case HW_OP_POWEROFF:
-	if (si->bmcinfo->wait_poweroff)
+	if (si->sysinfo->wait_poweroff)
 	    /* Already powering off. */
 	    return;
-	if (si->bmcinfo->connected) {
+	if (si->sysinfo->connected) {
 	    vm_add_char(VM_CMD_POWEROFF, c, &len);
-	    si->bmcinfo->wait_poweroff = si->bmcinfo->poweroff_wait_time;
+	    si->sysinfo->wait_poweroff = si->sysinfo->poweroff_wait_time;
 	} else
-	    si->bmcinfo->wait_poweroff = 1; /* Just power off now. */
+	    si->sysinfo->wait_poweroff = 1; /* Just power off now. */
 	break;
 	
     case HW_OP_SEND_NMI:
@@ -1000,13 +1000,13 @@ vm_connected(serserv_data_t *si)
     vm_add_char(VM_PROTOCOL_VERSION, c, &len);
     c[len++] = VM_CMD_CHAR;
     raw_send(si, c, len);
-    si->bmcinfo->connected = 1;
+    si->sysinfo->connected = 1;
 }
 
 static void
 vm_disconnected(serserv_data_t *si)
 {
-    si->bmcinfo->connected = 0;
+    si->sysinfo->connected = 0;
 }
 
 static int
@@ -1196,7 +1196,7 @@ serserv_init(serserv_data_t *ser)
 }
 
 int
-serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
+serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
 {
     serserv_data_t *ser;
     char *tok, *tok2, *endp;
@@ -1240,7 +1240,7 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	goto out_err;
     }
 
-    if (bmc->channels[chan_num] != &bmc->sys_channel) {
+    if (sys->channels[chan_num] != &sys->sys_channel) {
 	*errstr = "System channel already defined";
 	goto out_err;
     }
@@ -1322,10 +1322,10 @@ serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr)
 	goto out_err;
     }
 
-    ser->bmcinfo = bmc;
+    ser->sysinfo = sys;
     ser->channel.chan_info = ser;
 
-    bmc->channels[chan_num] = &ser->channel;
+    sys->channels[chan_num] = &ser->channel;
     return 0;
 
  out_err:

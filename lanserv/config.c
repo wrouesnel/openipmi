@@ -364,7 +364,7 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 }
 
 static int
-get_user(char **tokptr, bmc_data_t *bmc, char **err)
+get_user(char **tokptr, sys_data_t *sys, char **err)
 {
     unsigned int num;
     unsigned int val;
@@ -382,36 +382,36 @@ get_user(char **tokptr, bmc_data_t *bmc, char **err)
     rv = get_bool(tokptr, &val, err);
     if (rv)
 	return rv;
-    bmc->users[num].valid = val;
+    sys->users[num].valid = val;
 
-    rv = read_bytes(tokptr, bmc->users[num].username, err, 16);
+    rv = read_bytes(tokptr, sys->users[num].username, err, 16);
     if (rv)
 	return rv;
 
-    rv = read_bytes(tokptr, bmc->users[num].pw, err, 20);
+    rv = read_bytes(tokptr, sys->users[num].pw, err, 20);
     if (rv)
 	return rv;
 
     rv = get_priv(tokptr, &val, err);
     if (rv)
 	return rv;
-    bmc->users[num].privilege = val;
+    sys->users[num].privilege = val;
 
     rv = get_uint(tokptr, &val, err);
     if (rv)
 	return rv;
-    bmc->users[num].max_sessions = val;
+    sys->users[num].max_sessions = val;
 
     rv = get_auths(tokptr, &val, err);
     if (rv)
 	return rv;
-    bmc->users[num].allowed_auths = val;
+    sys->users[num].allowed_auths = val;
 
     return 0;
 }
 
 int
-read_config(bmc_data_t *bmc,
+read_config(sys_data_t *sys,
 	    char       *config_file)
 {
     FILE         *f = fopen(config_file, "r");
@@ -443,32 +443,32 @@ read_config(bmc_data_t *bmc,
 		err = -1;
 		errstr = "Channel number out of range";
 	    }
-	    if (!err && bmc->channels[val]) {
+	    if (!err && sys->channels[val]) {
 		err = -1;
 		errstr = "Channel already in use";
 	    }
 	    if (!err) {
-		err = lanserv_read_config(bmc, f, &line, val);
+		err = lanserv_read_config(sys, f, &line, val);
 		if (err)
 		    return err;
 	    }
 	} else if (strcmp(tok, "user") == 0) {
-	    err = get_user(&tokptr, bmc, &errstr);
+	    err = get_user(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
-	    err = serserv_read_config(&tokptr, bmc, &errstr);
+	    err = serserv_read_config(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "name") == 0) {
-	    err = get_delim_str(&tokptr, &bmc->name, &errstr);
+	    err = get_delim_str(&tokptr, &sys->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
-	    err = get_delim_str(&tokptr, &bmc->startcmd, &errstr);
+	    err = get_delim_str(&tokptr, &sys->startcmd, &errstr);
 	} else if (strcmp(tok, "startnow") == 0) {
-	    err = get_bool(&tokptr, &bmc->startnow, &errstr);
+	    err = get_bool(&tokptr, &sys->startnow, &errstr);
 	} else if (strcmp(tok, "poweroff_wait") == 0) {
-	    err = get_uint(&tokptr, &bmc->poweroff_wait_time, &errstr);
+	    err = get_uint(&tokptr, &sys->poweroff_wait_time, &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
-	    err = get_uint(&tokptr, &bmc->kill_wait_time, &errstr);
+	    err = get_uint(&tokptr, &sys->kill_wait_time, &errstr);
 	} else if (strcmp(tok, "console") == 0) {
 	    err = get_sock_addr(&tokptr,
-				&bmc->console_addr, &bmc->console_addr_len,
+				&sys->console_addr, &sys->console_addr_len,
 				NULL, SOCK_STREAM, &errstr);
 	} else {
 	    errstr = "Invalid configuration option";

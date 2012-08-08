@@ -69,7 +69,7 @@
 #endif
 
 int
-lanserv_read_config(bmc_data_t    *bmc,
+lanserv_read_config(sys_data_t    *sys,
 		    FILE          *f,
 		    int           *line,
 		    unsigned int  channel_num)
@@ -82,7 +82,7 @@ lanserv_read_config(bmc_data_t    *bmc,
     char         *errstr;
     lanserv_data_t *lan;
 
-    lan = bmc->alloc(bmc, sizeof(*lan));
+    lan = sys->alloc(sys, sizeof(*lan));
     if (!lan) {
 	err = -1;
 	errstr = "Out of memory allocating lan data";
@@ -90,13 +90,13 @@ lanserv_read_config(bmc_data_t    *bmc,
     }
     memset(lan, 0, sizeof(*lan));
 
-    lan->bmcinfo = bmc;
+    lan->sysinfo = sys;
     lan->channel.chan_info = lan;
     lan->channel.channel_num = channel_num;
     lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
     lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
     lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
-    lan->bmcinfo->channels[channel_num] = &lan->channel;
+    lan->sysinfo->channels[channel_num] = &lan->channel;
 
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	(*line)++;
@@ -106,7 +106,7 @@ lanserv_read_config(bmc_data_t    *bmc,
 	    continue;
 
 	if (strcmp(tok, "endlan") == 0) {
-	    bmc->channels[channel_num] = &lan->channel;
+	    sys->channels[channel_num] = &lan->channel;
 	    return 0;
 	}
 
@@ -173,13 +173,13 @@ lanserv_read_config(bmc_data_t    *bmc,
 
 	if (err) {
 	out_err:
-	    bmc->free(bmc, lan);
+	    sys->free(sys, lan);
 	    fprintf(stderr, "Error on line %d: %s\n", *line, errstr);
 	    return err;
 	}
     }
 
-    bmc->free(bmc, lan);
+    sys->free(sys, lan);
     fprintf(stderr, "End of file in lan section\n");
     return -1;
 }

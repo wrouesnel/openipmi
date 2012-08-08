@@ -271,7 +271,7 @@ typedef struct user_s
 #define USER_BITS_REQ		6 /* Bits required to hold a user. */
 #define USER_MASK		0x3f
 
-typedef struct bmc_data_s bmc_data_t;
+typedef struct sys_data_s sys_data_t;
 
 #define MAX_EVENT_FILTERS 16
 #define MAX_ALERT_POLICIES 16
@@ -281,7 +281,7 @@ typedef struct bmc_data_s bmc_data_t;
 typedef struct pef_data_s
 {
     unsigned int set_in_progress : 2;
-    void (*commit)(bmc_data_t *bmc); /* Called when the commit occurs. */
+    void (*commit)(sys_data_t *sys); /* Called when the commit occurs. */
 
     unsigned char pef_control;
     unsigned char pef_action_global_control;
@@ -332,10 +332,10 @@ typedef struct lan_addr_s {
 } lan_addr_t;
 
 /*
- * Generic data about the BMC that is global for the whole BMC and
+ * Generic data about the system that is global for the whole system and
  * required for all server types.
  */
-struct bmc_data_s {
+struct sys_data_s {
     char *name;
 
 #define DEBUG_RAW_MSG	(1 << 0)
@@ -353,7 +353,7 @@ struct bmc_data_s {
 #define LAN_ERR				9
 #define INFO				10
 #define DEBUG				11
-    void (*log)(bmc_data_t *bmc, int type, msg_t *msg, char *format, ...);
+    void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...);
 
     /* Command to start a VM */
     char *startcmd;
@@ -373,10 +373,10 @@ struct bmc_data_s {
 
     unsigned char bmc_ipmb;
 
-    channel_t *channels[IPMI_MAX_CHANNELS];
-
     msg_t *recv_q_head;
     msg_t *recv_q_tail;
+
+    channel_t *channels[IPMI_MAX_CHANNELS];
 
     int connected; /* For VM serial connections */
 
@@ -388,21 +388,22 @@ struct bmc_data_s {
 
     void *info;
 
-    void *(*alloc)(bmc_data_t *bmc, int size);
-    void (*free)(bmc_data_t *bmc, void *data);
+    void *(*alloc)(sys_data_t *sys, int size);
+    void (*free)(sys_data_t *sys, void *data);
 
-    int (*alloc_timer)(bmc_data_t *bmc, void (*cb)(void *cb_data),
+    int (*alloc_timer)(sys_data_t *sys, void (*cb)(void *cb_data),
 		       void *cb_data, ipmi_timer_t **timer);
     int (*start_timer)(ipmi_timer_t *timer, struct timeval *timeout);
     int (*stop_timer)(ipmi_timer_t *timer);
     void (*free_timer)(ipmi_timer_t *timer);
 
     /* Called by interface code to report that the target did a reset. */
-    void (*target_reset)(bmc_data_t *bmc);
+    /* FIXME - move */
+    void (*target_reset)(sys_data_t *sys);
 
     /* Write the configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
-    void (*write_config)(bmc_data_t *chan);
+    void (*write_config)(sys_data_t *chan);
 };
 
 static inline void
@@ -438,10 +439,10 @@ int channel_smi_send(channel_t *chan, msg_t *msg);
 /*
  * Start the "startcmd" specified in the configuration file.
  */
-void bmc_start_cmd(bmc_data_t *bmc);
+void sys_start_cmd(sys_data_t *sys);
 
 int chan_init(channel_t *chan);
-void bmcinfo_init(bmc_data_t *bmc);
+void sysinfo_init(sys_data_t *sys);
 
 
 #define MAX_CONFIG_LINE 1024
@@ -464,10 +465,10 @@ int read_bytes(char **tokptr, unsigned char *data, char **err,
 int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 		  char *def_port, int socktype, char **err);
 
-int read_config(bmc_data_t    *bmc,
+int read_config(sys_data_t    *sys,
 		char          *config_file);
 
-void debug_log_raw_msg(bmc_data_t *bmc,
+void debug_log_raw_msg(sys_data_t *sys,
 		       unsigned char *data, unsigned int len,
 		       char *format, ...);
 

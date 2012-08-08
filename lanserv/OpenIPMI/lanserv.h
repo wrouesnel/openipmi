@@ -234,7 +234,7 @@ struct lanparm_data_s
 
 struct lanserv_data_s
 {
-    bmc_data_t *bmcinfo;
+    sys_data_t *sysinfo;
 
     unsigned char *guid;
 
@@ -285,7 +285,7 @@ void ipmi_handle_lan_msg(lanserv_data_t *lan,
 			 void *from_addr, int from_len);
 
 /* Read in a configuration file and fill in the lan and address info. */
-int lanserv_read_config(bmc_data_t   *bmc,
+int lanserv_read_config(sys_data_t   *sys,
 			FILE         *f,
 			int          *line,
 			unsigned int channel_num);

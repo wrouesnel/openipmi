@@ -118,7 +118,7 @@ typedef struct console_info_s
 
 struct misc_data
 {
-    bmc_data_t *bmc;
+    sys_data_t *sys;
     emu_data_t *emu;
     os_handler_t *os_hnd;
     os_handler_waiter_factory_t *waiter_factory;
@@ -127,13 +127,13 @@ struct misc_data
 };
 
 static void *
-balloc(bmc_data_t *bmc, int size)
+balloc(sys_data_t *sys, int size)
 {
     return malloc(size);
 }
 
 static void
-bfree(bmc_data_t *bmc, void *data)
+bfree(sys_data_t *sys, void *data)
 {
     return free(data);
 }
@@ -231,10 +231,10 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     }
     l.xmit_fd = lan_fd;
 
-    if (lan->bmcinfo->debug & DEBUG_RAW_MSG) {
-	debug_log_raw_msg(lan->bmcinfo, (void *) &l.addr, l.addr_len,
+    if (lan->sysinfo->debug & DEBUG_RAW_MSG) {
+	debug_log_raw_msg(lan->sysinfo, (void *) &l.addr, l.addr_len,
 			  "Raw LAN receive from:");
-	debug_log_raw_msg(lan->bmcinfo, msgd, len,
+	debug_log_raw_msg(lan->sysinfo, msgd, len,
 			  " Receive message:");
     }
 
@@ -300,9 +300,9 @@ lan_channel_init(misc_data_t *data, channel_t *chan)
     }
 
     if (lan->guid) {
-	lmc_data_t *bmc = ipmi_emu_get_bmc_mc(data->emu);
-	if (bmc)
-	    ipmi_emu_set_mc_guid(bmc, lan->guid, 0);
+	lmc_data_t *sys = ipmi_emu_get_bmc_mc(data->emu);
+	if (sys)
+	    ipmi_emu_set_mc_guid(sys, lan->guid, 0);
     }
 
     if (lan->num_lan_addrs == 0) {
@@ -512,10 +512,10 @@ ser_channel_init(misc_data_t *data, channel_t *chan)
 }
 
 static void
-isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
+isim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
 	 int len)
 {
-    misc_data_t *data = bmc->info;
+    misc_data_t *data = sys->info;
     char *str;
     console_info_t *con;
 
@@ -565,7 +565,7 @@ isim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, va_list ap,
 }
 
 static void
-sim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
+sim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -575,7 +575,7 @@ sim_log(bmc_data_t *bmc, int logtype, msg_t *msg, char *format, ...)
     len = vsnprintf(&dummy, 1, format, ap);
     va_end(ap);
     va_start(ap, format);
-    isim_log(bmc, logtype, msg, format, ap, len);
+    isim_log(sys, logtype, msg, format, ap, len);
     va_end(ap);
 }
 
@@ -652,7 +652,7 @@ static struct poptOption poptOpts[]=
 };
 
 static void
-write_config(bmc_data_t *bmc)
+write_config(sys_data_t *sys)
 {
 //    misc_data_t *info = lan->user_info;
 }
@@ -942,8 +942,8 @@ ipmi_emu_shutdown(emu_data_t *emu)
     misc_data_t *data = ipmi_emu_get_user_data(emu);
     console_info_t *con;
     
-    if (data->bmc->console_fd != -1)
-	close(data->bmc->console_fd);
+    if (data->sys->console_fd != -1)
+	close(data->sys->console_fd);
     con = data->consoles;
     while (con) {
 	data->os_hnd->remove_fd_to_wait_for(data->os_hnd, con->conid);
@@ -984,10 +984,10 @@ struct ipmi_timer_s
 };
 
 static int
-ipmi_alloc_timer(bmc_data_t *bmc, void (*cb)(void *cb_data),
+ipmi_alloc_timer(sys_data_t *sys, void (*cb)(void *cb_data),
 		 void *cb_data, ipmi_timer_t **rtimer)
 {
-    misc_data_t *data = bmc->info;
+    misc_data_t *data = sys->info;
     ipmi_timer_t *timer;
     int err;
 
@@ -1039,13 +1039,13 @@ static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
     misc_data_t *data = cb_data;
-    bmc_data_t *bmc = data->bmc;
+    sys_data_t *sys = data->sys;
     struct timeval tv;
     int err;
     unsigned int i;
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = data->bmc->channels[i];
+	channel_t *chan = data->sys->channels[i];
 
 	if (chan && (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)) {
 	    ipmi_lan_tick(chan->chan_info, 1);
@@ -1053,20 +1053,20 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
     }
     ipmi_emu_tick(data->emu, 1);
 
-    if (bmc->wait_poweroff) {
-	if (bmc->vmpid == 0) {
-	    bmc->wait_poweroff = 0;
-	} else if (bmc->wait_poweroff > 0) {
+    if (sys->wait_poweroff) {
+	if (sys->vmpid == 0) {
+	    sys->wait_poweroff = 0;
+	} else if (sys->wait_poweroff > 0) {
 	    /* Waiting for the first kill */
-	    bmc->wait_poweroff--;
-	    if (bmc->wait_poweroff == 0) {
-		kill(bmc->vmpid, SIGTERM);
-		bmc->wait_poweroff = -bmc->kill_wait_time;
+	    sys->wait_poweroff--;
+	    if (sys->wait_poweroff == 0) {
+		kill(sys->vmpid, SIGTERM);
+		sys->wait_poweroff = -sys->kill_wait_time;
 	    }
 	} else {
-	    bmc->wait_poweroff++;
-	    if (bmc->wait_poweroff == 0)
-		kill(bmc->vmpid, SIGKILL);
+	    sys->wait_poweroff++;
+	    if (sys->wait_poweroff == 0)
+		kill(sys->vmpid, SIGKILL);
 	}
     }
 
@@ -1092,25 +1092,25 @@ ifree(channel_t *chan, void *data)
 }
 
 void
-bmc_start_cmd(bmc_data_t *bmc)
+sys_start_cmd(sys_data_t *sys)
 {
     int pid;
     char *startcmd;
 
-    if (!bmc->startcmd) {
-	bmc->log(bmc, OS_ERROR, NULL, "Power on issued, no start command set");
+    if (!sys->startcmd) {
+	sys->log(sys, OS_ERROR, NULL, "Power on issued, no start command set");
 	return;
     }
 
-    if (bmc->vmpid)
+    if (sys->vmpid)
 	/* Already running */
 	return;
 
-    startcmd = malloc(strlen(bmc->startcmd) + 6);
+    startcmd = malloc(strlen(sys->startcmd) + 6);
     if (!startcmd)
 	return;
     strcpy(startcmd, "exec ");
-    strcpy(startcmd + 5, bmc->startcmd);
+    strcpy(startcmd + 5, sys->startcmd);
 
     pid = fork();
     if (pid == -1) {
@@ -1124,7 +1124,7 @@ bmc_start_cmd(bmc_data_t *bmc)
 	execvp(args[0], args);
 	exit(1);
     }
-    bmc->vmpid = pid;
+    sys->vmpid = pid;
     free(startcmd);
 }
 
@@ -1143,22 +1143,22 @@ sigchld_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
     char buf;
     misc_data_t *data = cb_data;
-    bmc_data_t  *bmc = data->bmc;
+    sys_data_t  *sys = data->sys;
     int err;
     int status;
 
     err = read(sigpipeh[0], &buf, 1);
-    err = waitpid(bmc->vmpid, &status, WNOHANG);
+    err = waitpid(sys->vmpid, &status, WNOHANG);
     if (err == -1)
 	return;
-    bmc->vmpid = 0;
-    bmc->wait_poweroff = 0;
+    sys->vmpid = 0;
+    sys->wait_poweroff = 0;
 }
 
 int
 main(int argc, const char *argv[])
 {
-    bmc_data_t  bmcinfo;
+    sys_data_t  sysinfo;
     misc_data_t data;
     int err;
     int i;
@@ -1200,21 +1200,21 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    bmcinfo_init(&bmcinfo);
-    bmcinfo.info = &data;
-    bmcinfo.alloc = balloc;
-    bmcinfo.free = bfree;
-    bmcinfo.alloc_timer = ipmi_alloc_timer;
-    bmcinfo.start_timer = ipmi_start_timer;
-    bmcinfo.stop_timer = ipmi_stop_timer;
-    bmcinfo.free_timer = ipmi_free_timer;
-    bmcinfo.write_config = write_config;
-    bmcinfo.debug = debug;
-    bmcinfo.log = sim_log;
-    bmcinfo.poweroff_wait_time = 60;
-    bmcinfo.kill_wait_time = 20;
-    bmcinfo.startnow = 1;
-    data.bmc = &bmcinfo;
+    sysinfo_init(&sysinfo);
+    sysinfo.info = &data;
+    sysinfo.alloc = balloc;
+    sysinfo.free = bfree;
+    sysinfo.alloc_timer = ipmi_alloc_timer;
+    sysinfo.start_timer = ipmi_start_timer;
+    sysinfo.stop_timer = ipmi_stop_timer;
+    sysinfo.free_timer = ipmi_free_timer;
+    sysinfo.write_config = write_config;
+    sysinfo.debug = debug;
+    sysinfo.log = sim_log;
+    sysinfo.poweroff_wait_time = 60;
+    sysinfo.kill_wait_time = 20;
+    sysinfo.startnow = 1;
+    data.sys = &sysinfo;
 
     err = pipe(sigpipeh);
     if (err) {
@@ -1240,7 +1240,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    data.emu = ipmi_emu_alloc(&data, sleeper, &bmcinfo);
+    data.emu = ipmi_emu_alloc(&data, sleeper, &sysinfo);
 
     /* Set this up for console I/O, even if we don't use it. */
     stdio_console.data = &data;
@@ -1261,19 +1261,19 @@ main(int argc, const char *argv[])
 	data.consoles = &stdio_console;
     }
 
-    if (read_config(&bmcinfo, config_file))
+    if (read_config(&sysinfo, config_file))
 	exit(1);
 
-    if (!command_file && bmcinfo.name) {
+    if (!command_file && sysinfo.name) {
 	FILE *tf;
-	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(bmcinfo.name));
+	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(sysinfo.name));
 	if (!command_file) {
 	    fprintf(stderr, "Out of memory\n");
 	    exit(1);
 	}
 	strcpy(command_file, BASE_CONF_STR);
 	strcat(command_file, "/");
-	strcat(command_file, bmcinfo.name);
+	strcat(command_file, sysinfo.name);
 	strcat(command_file, ".emu");
 	tf = fopen(command_file, "r");
 	if (!tf) {
@@ -1291,7 +1291,7 @@ main(int argc, const char *argv[])
 	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = bmcinfo.channels[i];
+	channel_t *chan = sysinfo.channels[i];
 
 	if (!chan)
 	    continue;
@@ -1303,26 +1303,26 @@ main(int argc, const char *argv[])
 	chan->log = sim_chan_log;
 
 	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)
-	    err = lan_channel_init(&data, bmcinfo.channels[i]);
+	    err = lan_channel_init(&data, sysinfo.channels[i]);
 	else if (chan->medium_type == IPMI_CHANNEL_MEDIUM_RS232)
-	    err = ser_channel_init(&data, bmcinfo.channels[i]);
+	    err = ser_channel_init(&data, sysinfo.channels[i]);
 	else 
 	    chan_init(chan);
     }
 
-    bmcinfo.console_fd = -1;
-    if (bmcinfo.console_addr_len) {
+    sysinfo.console_fd = -1;
+    if (sysinfo.console_addr_len) {
 	int nfd;
 	int val;
 
-	nfd = socket(bmcinfo.console_addr.s_ipsock.s_addr.sa_family,
+	nfd = socket(sysinfo.console_addr.s_ipsock.s_addr.sa_family,
 		     SOCK_STREAM, IPPROTO_TCP);
 	if (nfd == -1) {
 	    perror("Console socket open");
 	    exit(1);
 	}
-	err = bind(nfd, (struct sockaddr *) &bmcinfo.console_addr,
-		   bmcinfo.console_addr_len);
+	err = bind(nfd, (struct sockaddr *) &sysinfo.console_addr,
+		   sysinfo.console_addr_len);
 	if (err) {
 	    perror("bind to console socket");
 	    exit(1);
@@ -1339,7 +1339,7 @@ main(int argc, const char *argv[])
 	    perror("console setsockopt reuseaddr");
 	    exit(1);
 	}
-	bmcinfo.console_fd = nfd;
+	sysinfo.console_fd = nfd;
 
 	err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, nfd,
 					      console_bind_ready, &data,
@@ -1371,8 +1371,8 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    if (bmcinfo.startnow && bmcinfo.startcmd)
-	bmc_start_cmd(&bmcinfo);
+    if (sysinfo.startnow && sysinfo.startcmd)
+	sys_start_cmd(&sysinfo);
 
     data.os_hnd->operation_loop(data.os_hnd);
     return 0;

@@ -84,7 +84,7 @@ struct serserv_data_s {
 
     os_handler_t *os_hnd;
 
-    bmc_data_t *bmcinfo;
+    sys_data_t *sysinfo;
 
     void *user_info;
 
@@ -111,7 +111,7 @@ struct serserv_data_s {
     unsigned int  attn_chars_len;
 };
 
-int serserv_read_config(char **tokptr, bmc_data_t *bmc, char **errstr);
+int serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr);
 int serserv_init(serserv_data_t *ser);
 void serserv_handle_data(serserv_data_t *ser, uint8_t *data, unsigned int len);
 

@@ -1,7 +1,7 @@
 /*
  * emu.c
  *
- * MontaVista IPMI code for emulating a BMC.
+ * MontaVista IPMI code for emulating a MC.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -197,32 +197,32 @@ struct lmc_data_s
     unsigned char mfg_id[3];	   /* bytes 8-10 */
     unsigned char product_id[2];   /* bytes 11-12 */
 
-#define IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK	(1 << 3)
-#define IPMI_BMC_MSG_FLAG_EVT_BUF_FULL		(1 << 1)
-#define IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE		(1 << 0)
-#define IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK_SET(mc) \
-    (IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK & (mc)->msg_flags)
-#define IPMI_BMC_MSG_FLAG_EVT_BUF_FULL_SET(mc) \
-    (IPMI_BMC_MSG_FLAG_EVT_BUF_FULL & (mc)->msg_flags)
-#define IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE_SET(mc) \
-    (IPMI_BMC_MSG_FLAG_RCV_MSG_QUEUE & (mc)->msg_flags)
+#define IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK	(1 << 3)
+#define IPMI_MC_MSG_FLAG_EVT_BUF_FULL		(1 << 1)
+#define IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE		(1 << 0)
+#define IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK_SET(mc) \
+    (IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK & (mc)->msg_flags)
+#define IPMI_MC_MSG_FLAG_EVT_BUF_FULL_SET(mc) \
+    (IPMI_MC_MSG_FLAG_EVT_BUF_FULL & (mc)->msg_flags)
+#define IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE_SET(mc) \
+    (IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE & (mc)->msg_flags)
     unsigned char msg_flags;
 
-#define IPMI_BMC_RCV_MSG_QUEUE_INT_BIT	0
-#define IPMI_BMC_EVBUF_FULL_INT_BIT	1
-#define IPMI_BMC_EVENT_MSG_BUF_BIT	2
-#define IPMI_BMC_EVENT_LOG_BIT		3
-#define IPMI_BMC_MSG_INTS_ON(mc) ((mc)->global_enables & \
-				 (1 << IPMI_BMC_RCV_MSG_QUEUE_INT_BIT))
-#define IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc) ((mc)->global_enables & \
-					(1 << IPMI_BMC_EVBUF_FULL_INT_BIT))
-#define IPMI_BMC_EVENT_LOG_ENABLED(mc) ((mc)->global_enables & \
-				       (1 << IPMI_BMC_EVENT_LOG_BIT))
-#define IPMI_BMC_EVENT_MSG_BUF_ENABLED(mc) ((mc)->global_enables & \
-					   (1 << IPMI_BMC_EVENT_MSG_BUF_BIT))
+#define IPMI_MC_RCV_MSG_QUEUE_INT_BIT	0
+#define IPMI_MC_EVBUF_FULL_INT_BIT	1
+#define IPMI_MC_EVENT_MSG_BUF_BIT	2
+#define IPMI_MC_EVENT_LOG_BIT		3
+#define IPMI_MC_MSG_INTS_ON(mc) ((mc)->global_enables & \
+				 (1 << IPMI_MC_RCV_MSG_QUEUE_INT_BIT))
+#define IPMI_MC_EVBUF_FULL_INT_ENABLED(mc) ((mc)->global_enables & \
+					(1 << IPMI_MC_EVBUF_FULL_INT_BIT))
+#define IPMI_MC_EVENT_LOG_ENABLED(mc) ((mc)->global_enables & \
+				       (1 << IPMI_MC_EVENT_LOG_BIT))
+#define IPMI_MC_EVENT_MSG_BUF_ENABLED(mc) ((mc)->global_enables & \
+					   (1 << IPMI_MC_EVENT_MSG_BUF_BIT))
     unsigned char global_enables;
 
-    bmc_data_t *bmcinfo;
+    sys_data_t *sysinfo;
 
     sel_t sel;
 
@@ -253,21 +253,21 @@ struct lmc_data_s
     /* Will be NULL if not valid. */
     sensor_t      *hs_sensor;
 
-#define IPMI_BMC_WATCHDOG_USE_MASK 0xc7
-#define IPMI_BMC_WATCHDOG_ACTION_MASK 0x77
-#define IPMI_BMC_WATCHDOG_GET_USE(s) ((s)->watchdog_use & 0x7)
-#define IPMI_BMC_WATCHDOG_GET_DONT_LOG(s) (((s)->watchdog_use >> 7) & 0x1)
-#define IPMI_BMC_WATCHDOG_GET_DONT_STOP(s) (((s)->watchdog_use >> 6) & 0x1)
-#define IPMI_BMC_WATCHDOG_GET_PRE_ACTION(s) (((s)->watchdog_action >> 4) & 0x7)
-#define IPMI_BMC_WATCHDOG_PRE_NONE		0
-#define IPMI_BMC_WATCHDOG_PRE_SMI		1
-#define IPMI_BMC_WATCHDOG_PRE_NMI		2
-#define IPMI_BMC_WATCHDOG_PRE_MSG_INT		3
-#define IPMI_BMC_WATCHDOG_GET_ACTION(s) ((s)->watchdog_action & 0x7)
-#define IPMI_BMC_WATCHDOG_ACTION_NONE		0
-#define IPMI_BMC_WATCHDOG_ACTION_RESET		1
-#define IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN	2
-#define IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE	3
+#define IPMI_MC_WATCHDOG_USE_MASK 0xc7
+#define IPMI_MC_WATCHDOG_ACTION_MASK 0x77
+#define IPMI_MC_WATCHDOG_GET_USE(s) ((s)->watchdog_use & 0x7)
+#define IPMI_MC_WATCHDOG_GET_DONT_LOG(s) (((s)->watchdog_use >> 7) & 0x1)
+#define IPMI_MC_WATCHDOG_GET_DONT_STOP(s) (((s)->watchdog_use >> 6) & 0x1)
+#define IPMI_MC_WATCHDOG_GET_PRE_ACTION(s) (((s)->watchdog_action >> 4) & 0x7)
+#define IPMI_MC_WATCHDOG_PRE_NONE		0
+#define IPMI_MC_WATCHDOG_PRE_SMI		1
+#define IPMI_MC_WATCHDOG_PRE_NMI		2
+#define IPMI_MC_WATCHDOG_PRE_MSG_INT		3
+#define IPMI_MC_WATCHDOG_GET_ACTION(s) ((s)->watchdog_action & 0x7)
+#define IPMI_MC_WATCHDOG_ACTION_NONE		0
+#define IPMI_MC_WATCHDOG_ACTION_RESET		1
+#define IPMI_MC_WATCHDOG_ACTION_POWER_DOWN	2
+#define IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE	3
     unsigned char watchdog_use;
     unsigned char watchdog_action;
     unsigned char watchdog_pretimeout;
@@ -300,7 +300,7 @@ typedef struct emu_addr_s
 
 struct emu_data_s
 {
-    bmc_data_t *bmcinfo;
+    sys_data_t *sysinfo;
     lmc_data_t *ipmb[128];
 
     int          atca_mode;
@@ -466,21 +466,23 @@ mc_new_event(lmc_data_t *mc,
     unsigned int recid;
     int rv;
 
-    if (IPMI_BMC_EVENT_LOG_ENABLED(mc)) {
+    /* FIXME - event forwarding */
+
+    if (IPMI_MC_EVENT_LOG_ENABLED(mc)) {
 	rv = ipmi_mc_add_to_sel(mc, record_type, event, &recid);
 	if (rv)
 	    recid = 0xffff;
     } else
 	recid = 0xffff;
-    if (!mc->ev_in_q && IPMI_BMC_EVENT_MSG_BUF_ENABLED(mc)) {
-	channel_t *chan = mc->bmcinfo->channels[15];
+    if (!mc->ev_in_q && IPMI_MC_EVENT_MSG_BUF_ENABLED(mc)) {
+	channel_t *chan = mc->sysinfo->channels[15];
 	mc->ev_in_q = 1;
 	ipmi_set_uint16(mc->evq, recid);
 	mc->evq[2] = record_type;
 	memcpy(mc->evq + 3, event, 13);
-	mc->msg_flags |= IPMI_BMC_MSG_FLAG_EVT_BUF_FULL;
+	mc->msg_flags |= IPMI_MC_MSG_FLAG_EVT_BUF_FULL;
 	if (chan->set_atn)
-	    chan->set_atn(chan, 1, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
+	    chan->set_atn(chan, 1, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
     }
 }
 
@@ -1923,7 +1925,7 @@ static void
 watchdog_timeout(void *cb_data)
 {
     lmc_data_t *mc = cb_data;
-    channel_t *bchan = mc->bmcinfo->channels[15];
+    channel_t *bchan = mc->sysinfo->channels[15];
     sensor_t *sens = mc->sensors[0][WATCHDOG_SENSOR_NUM];
 
     if (!mc->watchdog_running)
@@ -1932,17 +1934,17 @@ watchdog_timeout(void *cb_data)
     if (! mc->watchdog_preaction_ran) {
 	struct timeval tv, now;
 
-	switch (IPMI_BMC_WATCHDOG_GET_PRE_ACTION(mc)) {
-	case IPMI_BMC_WATCHDOG_PRE_NMI:
-	    mc->msg_flags |= IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
+	switch (IPMI_MC_WATCHDOG_GET_PRE_ACTION(mc)) {
+	case IPMI_MC_WATCHDOG_PRE_NMI:
+	    mc->msg_flags |= IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
 	    bchan->hw_op(bchan, HW_OP_SEND_NMI);
 	    set_bit(mc, sens, 8, 1, 0xc8, (2 << 4) | 0xf, 0xff, 1);
 	    break;
 
-	case IPMI_BMC_WATCHDOG_PRE_MSG_INT:
-	    mc->msg_flags |= IPMI_BMC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
-	    if (bchan->set_atn && !IPMI_BMC_MSG_FLAG_EVT_BUF_FULL_SET(mc))
-		bchan->set_atn(bchan, 1, IPMI_BMC_MSG_INTS_ON(mc));
+	case IPMI_MC_WATCHDOG_PRE_MSG_INT:
+	    mc->msg_flags |= IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
+	    if (bchan->set_atn && !IPMI_MC_MSG_FLAG_EVT_BUF_FULL_SET(mc))
+		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
 	    set_bit(mc, sens, 8, 1, 0xc8, (3 << 4) | 0xf, 0xff, 1);
 	    break;
 
@@ -1959,29 +1961,29 @@ watchdog_timeout(void *cb_data)
 	    tv.tv_sec = 0;
 	    tv.tv_usec = 0;
 	}
-	mc->bmcinfo->start_timer(mc->watchdog_timer, &tv);
+	mc->sysinfo->start_timer(mc->watchdog_timer, &tv);
 	goto out;
     }
 
  do_full_expiry:
     mc->watchdog_running = 0; /* Stop the watchdog on a timeout */
-    mc->watchdog_expired |= (1 << IPMI_BMC_WATCHDOG_GET_USE(mc));
-    switch (IPMI_BMC_WATCHDOG_GET_ACTION(mc)) {
-    case IPMI_BMC_WATCHDOG_ACTION_NONE:
+    mc->watchdog_expired |= (1 << IPMI_MC_WATCHDOG_GET_USE(mc));
+    switch (IPMI_MC_WATCHDOG_GET_ACTION(mc)) {
+    case IPMI_MC_WATCHDOG_ACTION_NONE:
 	set_bit(mc, sens, 0, 1, 0xc0, mc->watchdog_use & 0xf, 0xff, 1);
 	break;
 
-    case IPMI_BMC_WATCHDOG_ACTION_RESET:
+    case IPMI_MC_WATCHDOG_ACTION_RESET:
 	set_bit(mc, sens, 1, 1, 0xc1, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_RESET);
 	break;
 
-    case IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN:
+    case IPMI_MC_WATCHDOG_ACTION_POWER_DOWN:
 	set_bit(mc, sens, 2, 1, 0xc2, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
 	break;
 
-    case IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE:
+    case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
 	set_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
 	/* FIXME - add poweron. */
@@ -1997,8 +1999,8 @@ do_watchdog_reset(lmc_data_t *mc)
 {
     struct timeval tv;
 
-    if (IPMI_BMC_WATCHDOG_GET_ACTION(mc) ==
-	IPMI_BMC_WATCHDOG_ACTION_NONE) {
+    if (IPMI_MC_WATCHDOG_GET_ACTION(mc) ==
+	IPMI_MC_WATCHDOG_ACTION_NONE) {
 	mc->watchdog_running = 0;
 	return;
     }
@@ -2008,7 +2010,7 @@ do_watchdog_reset(lmc_data_t *mc)
     gettimeofday(&mc->watchdog_expiry, NULL);
     add_timeval(&mc->watchdog_expiry, &mc->watchdog_time);
     tv = mc->watchdog_time;
-    if (IPMI_BMC_WATCHDOG_GET_PRE_ACTION(mc) != IPMI_BMC_WATCHDOG_PRE_NONE) {
+    if (IPMI_MC_WATCHDOG_GET_PRE_ACTION(mc) != IPMI_MC_WATCHDOG_PRE_NONE) {
 	tv.tv_sec -= mc->watchdog_pretimeout;
 	if (tv.tv_sec < 0) {
 	    tv.tv_sec = 0;
@@ -2016,7 +2018,7 @@ do_watchdog_reset(lmc_data_t *mc)
 	}
     }
     mc->watchdog_running = 1;
-    mc->bmcinfo->start_timer(mc->watchdog_timer, &tv);
+    mc->sysinfo->start_timer(mc->watchdog_timer, &tv);
 }
 
 static void
@@ -2046,18 +2048,18 @@ handle_set_watchdog_timer(lmc_data_t    *mc,
 
     rdata[0] = 0;
 
-    bchan = mc->bmcinfo->channels[15];
+    bchan = mc->sysinfo->channels[15];
     val = msg->data[1] & 0x7; /* Validate action */
     switch (val) {
-    case IPMI_BMC_WATCHDOG_ACTION_NONE:
+    case IPMI_MC_WATCHDOG_ACTION_NONE:
 	break;
 	
-    case IPMI_BMC_WATCHDOG_ACTION_RESET:
+    case IPMI_MC_WATCHDOG_ACTION_RESET:
 	rdata[0] = !HW_OP_CAN_RESET(bchan);
 	break;
 	
-    case IPMI_BMC_WATCHDOG_ACTION_POWER_DOWN:
-    case IPMI_BMC_WATCHDOG_ACTION_POWER_CYCLE:
+    case IPMI_MC_WATCHDOG_ACTION_POWER_DOWN:
+    case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
 	rdata[0] = !HW_OP_CAN_POWER(bchan);
 	break;
 	
@@ -2072,11 +2074,11 @@ handle_set_watchdog_timer(lmc_data_t    *mc,
     
     val = (msg->data[1] >> 4) & 0x7; /* Validate preaction */
     switch (val) {
-    case IPMI_BMC_WATCHDOG_PRE_MSG_INT:
-    case IPMI_BMC_WATCHDOG_PRE_NONE:
+    case IPMI_MC_WATCHDOG_PRE_MSG_INT:
+    case IPMI_MC_WATCHDOG_PRE_NONE:
 	break;
 	
-    case IPMI_BMC_WATCHDOG_PRE_NMI:
+    case IPMI_MC_WATCHDOG_PRE_NMI:
 	if (!HW_OP_CAN_NMI(bchan)) {
 	    /* NMI not supported. */
 	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
@@ -2091,14 +2093,14 @@ handle_set_watchdog_timer(lmc_data_t    *mc,
     }
     
     mc->watchdog_initialized = 1;
-    mc->watchdog_use = msg->data[0] & IPMI_BMC_WATCHDOG_USE_MASK;
-    mc->watchdog_action = msg->data[1] & IPMI_BMC_WATCHDOG_ACTION_MASK;
+    mc->watchdog_use = msg->data[0] & IPMI_MC_WATCHDOG_USE_MASK;
+    mc->watchdog_action = msg->data[1] & IPMI_MC_WATCHDOG_ACTION_MASK;
     mc->watchdog_pretimeout = msg->data[2];
     mc->watchdog_expired &= ~msg->data[3];
     val = msg->data[4] | (((uint16_t) msg->data[5]) << 8);
     mc->watchdog_time.tv_sec = val / 10;
     mc->watchdog_time.tv_usec = (val % 10) * 100000;
-    if (mc->watchdog_running & IPMI_BMC_WATCHDOG_GET_DONT_STOP(mc))
+    if (mc->watchdog_running & IPMI_MC_WATCHDOG_GET_DONT_STOP(mc))
 	do_watchdog_reset(mc);
     else
 	mc->watchdog_running = 0;
@@ -2152,7 +2154,7 @@ handle_get_channel_info(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	if (lchan == 0) {
 	    /* The IPMB channel is always there. */
 	    medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
@@ -2165,10 +2167,10 @@ handle_get_channel_info(lmc_data_t    *mc,
 	    return;
 	}
     } else {
-	medium_type = mc->bmcinfo->channels[lchan]->medium_type;
-	protocol_type = mc->bmcinfo->channels[lchan]->protocol_type;
-	session_support = mc->bmcinfo->channels[lchan]->session_support;
-	active_sessions = mc->bmcinfo->channels[lchan]->active_sessions;
+	medium_type = mc->sysinfo->channels[lchan]->medium_type;
+	protocol_type = mc->sysinfo->channels[lchan]->protocol_type;
+	session_support = mc->sysinfo->channels[lchan]->session_support;
+	active_sessions = mc->sysinfo->channels[lchan]->active_sessions;
     }
 
     rdata[0] = 0;
@@ -2209,7 +2211,7 @@ handle_get_channel_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	if (lchan == 0) {
 	    rdata[0] = 0;
 	    rdata[1] = 0;
@@ -2221,7 +2223,7 @@ handle_get_channel_access(lmc_data_t    *mc,
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->bmcinfo->channels[lchan];
+    chan = mc->sysinfo->channels[lchan];
 
     upd = (msg->data[1] >> 6) & 0x3;
 
@@ -2247,8 +2249,8 @@ handle_set_global_enables(lmc_data_t    *mc,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
-    unsigned char old_evint = IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc);
-    unsigned char old_int = IPMI_BMC_MSG_INTS_ON(mc);
+    unsigned char old_evint = IPMI_MC_EVBUF_FULL_INT_ENABLED(mc);
+    unsigned char old_int = IPMI_MC_MSG_INTS_ON(mc);
     channel_t *bchan;
 
     if (check_msg_length(msg, 1, rdata, rdata_len))
@@ -2258,18 +2260,18 @@ handle_set_global_enables(lmc_data_t    *mc,
     *rdata_len = 1;
 
     mc->global_enables = msg->data[0];
-    bchan = mc->bmcinfo->channels[15];
+    bchan = mc->sysinfo->channels[15];
     if (!bchan || !bchan->set_atn)
 	return;
 
-    if (!old_int && IPMI_BMC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
+    if (!old_int && IPMI_MC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
 	bchan->hw_op(bchan, HW_OP_IRQ_ENABLE);
-    else if (old_int && !IPMI_BMC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
+    else if (old_int && !IPMI_MC_MSG_INTS_ON(mc) && HW_OP_CAN_IRQ(bchan))
 	bchan->hw_op(bchan, HW_OP_IRQ_DISABLE);
 
-    if ((!old_evint && IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc) && mc->ev_in_q) ||
-	(old_int && !IPMI_BMC_MSG_INTS_ON(mc) && mc->bmcinfo->recv_q_tail))
-	bchan->set_atn(bchan, 1, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
+    if ((!old_evint && IPMI_MC_EVBUF_FULL_INT_ENABLED(mc) && mc->ev_in_q) ||
+	(old_int && !IPMI_MC_MSG_INTS_ON(mc) && mc->sysinfo->recv_q_tail))
+	bchan->set_atn(bchan, 1, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
 static void
@@ -2317,7 +2319,7 @@ handle_set_user_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2340,38 +2342,38 @@ handle_set_user_access(lmc_data_t    *mc,
 
     if (msg->data[0] & 0x80) {
 	newv = (msg->data[0] >> 4) & 1;
-	if (newv != mc->bmcinfo->users[user].valid) {
-	    mc->bmcinfo->users[user].valid = newv;
+	if (newv != mc->sysinfo->users[user].valid) {
+	    mc->sysinfo->users[user].valid = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 5) & 1;
-	if (newv != mc->bmcinfo->users[user].link_auth) {
-	    mc->bmcinfo->users[user].link_auth = newv;
+	if (newv != mc->sysinfo->users[user].link_auth) {
+	    mc->sysinfo->users[user].link_auth = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 6) & 1;
-	if (newv != mc->bmcinfo->users[user].cb_only) {
-	    mc->bmcinfo->users[user].cb_only = newv;
+	if (newv != mc->sysinfo->users[user].cb_only) {
+	    mc->sysinfo->users[user].cb_only = newv;
 	    changed = 1;
 	}
     }
 
-    if (priv != mc->bmcinfo->users[user].privilege) {
-	mc->bmcinfo->users[user].privilege = priv;
+    if (priv != mc->sysinfo->users[user].privilege) {
+	mc->sysinfo->users[user].privilege = priv;
 	changed = 1;
     }
 
     if (msg->len >= 4) {
 	/* Got the session limit byte. */
 	newv = msg->data[3] & 0xf;
-	if (newv != mc->bmcinfo->users[user].max_sessions) {
-	    mc->bmcinfo->users[user].max_sessions = newv;
+	if (newv != mc->sysinfo->users[user].max_sessions) {
+	    mc->sysinfo->users[user].max_sessions = newv;
 	    changed = 1;
 	}
     }
 
     if (changed)
-	mc->bmcinfo->write_config(mc->bmcinfo);
+	mc->sysinfo->write_config(mc->sysinfo);
 
     rdata[0] = 0;
     *rdata_len = 1;
@@ -2392,7 +2394,7 @@ handle_get_user_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2411,17 +2413,17 @@ handle_get_user_access(lmc_data_t    *mc,
     /* Number of enabled users. */
     rdata[2] = 0;
     for (i=1; i<=MAX_USERS; i++) {
-	if (mc->bmcinfo->users[i].valid)
+	if (mc->sysinfo->users[i].valid)
 	    rdata[2]++;
     }
 
     /* Only fixed user name is user 1. */
-    rdata[3] = mc->bmcinfo->users[1].valid;
+    rdata[3] = mc->sysinfo->users[1].valid;
 
-    rdata[4] = ((mc->bmcinfo->users[user].valid << 4)
-		| (mc->bmcinfo->users[user].link_auth << 5)
-		| (mc->bmcinfo->users[user].cb_only << 6)
-		| mc->bmcinfo->users[user].privilege);
+    rdata[4] = ((mc->sysinfo->users[user].valid << 4)
+		| (mc->sysinfo->users[user].link_auth << 5)
+		| (mc->sysinfo->users[user].cb_only << 6)
+		| mc->sysinfo->users[user].privilege);
     *rdata_len = 5;
 }
 
@@ -2439,7 +2441,7 @@ handle_set_user_name(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2452,8 +2454,8 @@ handle_set_user_name(lmc_data_t    *mc,
 	return;
     }
 
-    memcpy(mc->bmcinfo->users[user].username, msg->data+1, 16);
-    cleanup_ascii_16(mc->bmcinfo->users[user].username);
+    memcpy(mc->sysinfo->users[user].username, msg->data+1, 16);
+    cleanup_ascii_16(mc->sysinfo->users[user].username);
     rdata[0] = 0;
     *rdata_len = 1;
 }
@@ -2473,7 +2475,7 @@ handle_get_user_name(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2487,7 +2489,7 @@ handle_get_user_name(lmc_data_t    *mc,
     }
 
     data[0] = 0;
-    memcpy(data+1, mc->bmcinfo->users[user].username, 16);
+    memcpy(data+1, mc->sysinfo->users[user].username, 16);
     *rdata_len = 17;
 }
 
@@ -2506,7 +2508,7 @@ handle_set_user_password(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2521,9 +2523,9 @@ handle_set_user_password(lmc_data_t    *mc,
 
     op = msg->data[1] & 0x3;
     if (op == 0) {
-	mc->bmcinfo->users[user].valid = 0;
+	mc->sysinfo->users[user].valid = 0;
     } else if (op == 1) {
-	mc->bmcinfo->users[user].valid = 1;
+	mc->sysinfo->users[user].valid = 1;
     } else {
 	if (msg->len < 18) {
 	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -2531,7 +2533,7 @@ handle_set_user_password(lmc_data_t    *mc,
 	    return;
 	}
 	if (op == 2) {
-	    memcpy(mc->bmcinfo->users[user].pw, msg->data+2, 16);
+	    memcpy(mc->sysinfo->users[user].pw, msg->data+2, 16);
 	} else {
 	    /* Nothing to do for test password, we accept anything. */
 	}
@@ -2565,18 +2567,18 @@ handle_set_channel_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->bmcinfo->channels[lchan];
+    chan = mc->sysinfo->channels[lchan];
 
     if (!chan->set_chan_access) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2593,9 +2595,9 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
-    channel_t *chan = mc->bmcinfo->channels[15];
+    channel_t *chan = mc->sysinfo->channels[15];
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -2611,9 +2613,9 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
     memcpy(rdata + 1, mc->evq, 16);
     *rdata_len = 17;
     mc->ev_in_q = 0;
-    mc->msg_flags &= ~IPMI_BMC_MSG_FLAG_EVT_BUF_FULL;
+    mc->msg_flags &= ~IPMI_MC_MSG_FLAG_EVT_BUF_FULL;
     if (chan->set_atn)
-	chan->set_atn(chan, 0, IPMI_BMC_EVBUF_FULL_INT_ENABLED(mc));
+	chan->set_atn(chan, 0, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
 static void
@@ -2649,13 +2651,13 @@ handle_get_msg(lmc_data_t    *mc,
 {
     msg_t *qmsg;
 
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    qmsg = mc->bmcinfo->recv_q_head;
+    qmsg = mc->sysinfo->recv_q_head;
     if (!qmsg) {
 	rdata[0] = 0x80;
 	*rdata_len = 0;
@@ -2668,12 +2670,12 @@ handle_get_msg(lmc_data_t    *mc,
 	return;
     }
 
-    mc->bmcinfo->recv_q_head = qmsg->next;
+    mc->sysinfo->recv_q_head = qmsg->next;
     if (!qmsg->next) {
-	channel_t *bchan = mc->bmcinfo->channels[15];
-	mc->bmcinfo->recv_q_tail = NULL;
+	channel_t *bchan = mc->sysinfo->channels[15];
+	mc->sysinfo->recv_q_tail = NULL;
 	if (bchan->set_atn)
-	    bchan->set_atn(bchan, 0, IPMI_BMC_MSG_INTS_ON(mc));
+	    bchan->set_atn(bchan, 0, IPMI_MC_MSG_INTS_ON(mc));
     }
 
     rdata[0] = 0;
@@ -2780,10 +2782,10 @@ handle_get_chassis_capabilities(lmc_data_t    *mc,
 {
     rdata[0] = 0;
     rdata[1] = 0;
-    rdata[2] = mc->bmcinfo->bmc_ipmb;
-    rdata[3] = mc->bmcinfo->bmc_ipmb;
-    rdata[4] = mc->bmcinfo->bmc_ipmb;
-    rdata[5] = mc->bmcinfo->bmc_ipmb;
+    rdata[2] = mc->sysinfo->bmc_ipmb;
+    rdata[3] = mc->sysinfo->bmc_ipmb;
+    rdata[4] = mc->sysinfo->bmc_ipmb;
+    rdata[5] = mc->sysinfo->bmc_ipmb;
 }
 
 static void
@@ -2793,7 +2795,7 @@ handle_get_chassis_status(lmc_data_t    *mc,
 			  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->bmcinfo->vmpid != 0;
+    rdata[1] = mc->sysinfo->vmpid != 0;
     rdata[2] = 0;
     rdata[3] = 0;
 }
@@ -2815,23 +2817,23 @@ handle_chassis_control(lmc_data_t    *mc,
 
     switch(msg->data[0] & 0xf) {
     case 0: /* power down */
-	if (!HW_OP_CAN_POWER(mc->bmcinfo->channels[15]))
+	if (!HW_OP_CAN_POWER(mc->sysinfo->channels[15]))
 	    goto no_support;
-	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
 					 HW_OP_POWEROFF);
 	break;
 
     case 1: /* power up */
-	if (!HW_OP_CAN_POWER(mc->bmcinfo->channels[15]))
+	if (!HW_OP_CAN_POWER(mc->sysinfo->channels[15]))
 	    goto no_support;
-	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
 					 HW_OP_POWERON);
 	break;
 
     case 3: /* hard reset */
-	if (!HW_OP_CAN_RESET(mc->bmcinfo->channels[15]))
+	if (!HW_OP_CAN_RESET(mc->sysinfo->channels[15]))
 	    goto no_support;
-	mc->bmcinfo->channels[15]->hw_op(mc->bmcinfo->channels[15],
+	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
 					 HW_OP_RESET);
 	break;
 
@@ -2899,12 +2901,12 @@ handle_ipmi_set_lan_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->bmcinfo->channels[lchan];
+    chan = mc->sysinfo->channels[lchan];
 
     if (!chan->set_lan_parms) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2939,18 +2941,18 @@ handle_ipmi_get_lan_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (!mc->bmcinfo || !mc->bmcinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->bmcinfo->channels[lchan];
+    chan = mc->sysinfo->channels[lchan];
 
     if (!chan->get_lan_parms) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -3845,7 +3847,7 @@ handle_ipmi_get_pef_capabilities(lmc_data_t    *mc,
 				 unsigned char *rdata,
 				 unsigned int  *rdata_len)
 {
-    if (!mc->bmcinfo) {
+    if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -3866,7 +3868,7 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 {
     unsigned char err = 0;
     int           set, block;
-    bmc_data_t    *bmc = mc->bmcinfo;
+    sys_data_t    *sys = mc->sysinfo;
 
     if (msg->len < 2) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -3874,7 +3876,7 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!bmc) {
+    if (!sys) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -3886,30 +3888,30 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	switch (msg->data[1] & 0x3)
 	{
 	case 0:
-	    if (bmc->pef.set_in_progress) {
+	    if (sys->pef.set_in_progress) {
 		/* rollback */
-		memcpy(&bmc->pef, &bmc->pef_rollback,
-		       sizeof(bmc->pef));
+		memcpy(&sys->pef, &sys->pef_rollback,
+		       sizeof(sys->pef));
 	    }
 	    /* No affect otherwise */
 	    break;
 
 	case 1:
-	    if (bmc->pef.set_in_progress)
+	    if (sys->pef.set_in_progress)
 		err = 0x81; /* Another user is writing. */
 	    else {
 		/* Save rollback data */
-		memcpy(&bmc->pef_rollback, &bmc->pef,
-		       sizeof(bmc->pef));
-		bmc->pef.set_in_progress = 1;
+		memcpy(&sys->pef_rollback, &sys->pef,
+		       sizeof(sys->pef));
+		sys->pef.set_in_progress = 1;
 	    }
 	    break;
 
 	case 2:
-	    if (bmc->pef.commit)
-		bmc->pef.commit(bmc);
-	    memset(&bmc->pef.changed, 0, sizeof(bmc->pef.changed));
-	    bmc->pef.set_in_progress = 0;
+	    if (sys->pef.commit)
+		sys->pef.commit(sys);
+	    memset(&sys->pef.changed, 0, sizeof(sys->pef.changed));
+	    sys->pef.set_in_progress = 0;
 	    break;
 
 	case 3:
@@ -3924,35 +3926,35 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	break;
 
     case 1:
-	bmc->pef.pef_control = msg->data[1];
-	bmc->pef.changed.pef_control = 1;
+	sys->pef.pef_control = msg->data[1];
+	sys->pef.changed.pef_control = 1;
 	break;
 
     case 2:
-	bmc->pef.pef_action_global_control = msg->data[1];
-	bmc->pef.changed.pef_action_global_control = 1;
+	sys->pef.pef_action_global_control = msg->data[1];
+	sys->pef.changed.pef_action_global_control = 1;
 	break;
 
     case 3:
-	bmc->pef.pef_startup_delay = msg->data[1];
-	bmc->pef.changed.pef_startup_delay = 1;
+	sys->pef.pef_startup_delay = msg->data[1];
+	sys->pef.changed.pef_startup_delay = 1;
 	break;
 
     case 4:
-	bmc->pef.pef_alert_startup_delay = msg->data[1];
-	bmc->pef.changed.pef_alert_startup_delay = 1;
+	sys->pef.pef_alert_startup_delay = msg->data[1];
+	sys->pef.changed.pef_alert_startup_delay = 1;
 	break;
 
     case 6:
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 22)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	else if ((set <= 0) || (set >= sys->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(bmc->pef.event_filter_table[set], msg->data+1, 21);
-	    bmc->pef.changed.event_filter_table[set] = 1;
+	    memcpy(sys->pef.event_filter_table[set], msg->data+1, 21);
+	    sys->pef.changed.event_filter_table[set] = 1;
 	}
 	break;
 
@@ -3960,12 +3962,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 3)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	else if ((set <= 0) || (set >= sys->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(bmc->pef.event_filter_data1[set], msg->data+1, 2);
-	    bmc->pef.changed.event_filter_data1[set] = 1;
+	    memcpy(sys->pef.event_filter_data1[set], msg->data+1, 2);
+	    sys->pef.changed.event_filter_data1[set] = 1;
 	}
 	break;
 
@@ -3973,12 +3975,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 5)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= bmc->pef.num_alert_policies))
+	else if ((set <= 0) || (set >= sys->pef.num_alert_policies))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(bmc->pef.alert_policy_table[set], msg->data+1, 4);
-	    bmc->pef.changed.alert_policy_table[set] = 1;
+	    memcpy(sys->pef.alert_policy_table[set], msg->data+1, 4);
+	    sys->pef.changed.alert_policy_table[set] = 1;
 	}
 	break;
 
@@ -3986,8 +3988,8 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	if (msg->len < 18)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
-	    memcpy(bmc->pef.system_guid, msg->data+1, 17);
-	    bmc->pef.changed.system_guid = 1;
+	    memcpy(sys->pef.system_guid, msg->data+1, 17);
+	    sys->pef.changed.system_guid = 1;
 	}
 	break;
 
@@ -3995,12 +3997,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 4)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= bmc->pef.num_alert_strings)
+	else if (set >= sys->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(bmc->pef.alert_string_keys[set], msg->data+1, 3);
-	    bmc->pef.changed.alert_string_keys[set] = 1;
+	    memcpy(sys->pef.alert_string_keys[set], msg->data+1, 3);
+	    sys->pef.changed.alert_string_keys[set] = 1;
 	}
 	break;
 
@@ -4008,7 +4010,7 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 4)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= bmc->pef.num_alert_strings)
+	else if (set >= sys->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else if (msg->data[2] == 0)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
@@ -4020,8 +4022,8 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 		break;
 	    }
-	    memcpy(bmc->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
-	    bmc->pef.changed.alert_strings[set] = 1;
+	    memcpy(sys->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
+	    sys->pef.changed.alert_strings[set] = 1;
 	}
 	break;
 
@@ -4046,7 +4048,7 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
     unsigned char err = 0;
     unsigned char tmpdata[18];
 
-    bmc_data_t    *bmc = mc->bmcinfo;
+    sys_data_t    *sys = mc->sysinfo;
 
     if (msg->len < 3) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -4054,7 +4056,7 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!bmc) {
+    if (!sys) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
@@ -4063,85 +4065,85 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
     switch (msg->data[0] & 0x7f)
     {
     case 0:
-	databyte = bmc->pef.set_in_progress;
+	databyte = sys->pef.set_in_progress;
 	break;
 
     case 5:
-	databyte = bmc->pef.num_event_filters - 1;
+	databyte = sys->pef.num_event_filters - 1;
 	break;
 
     case 8:
-	databyte = bmc->pef.num_alert_policies - 1;
+	databyte = sys->pef.num_alert_policies - 1;
 	break;
 
     case 11:
-	databyte = bmc->pef.num_alert_strings - 1;
+	databyte = sys->pef.num_alert_strings - 1;
 	break;
 
     case 1:
-	databyte = bmc->pef.pef_control;
+	databyte = sys->pef.pef_control;
 	break;
 
     case 2:
-	databyte = bmc->pef.pef_action_global_control;
+	databyte = sys->pef.pef_action_global_control;
 	break;
 
     case 3:
-	databyte = bmc->pef.pef_startup_delay;
+	databyte = sys->pef.pef_startup_delay;
 	break;
 
     case 4:
-	databyte = bmc->pef.pef_alert_startup_delay;
+	databyte = sys->pef.pef_alert_startup_delay;
 	break;
 
     case 6:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	if ((set <= 0) || (set >= sys->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = bmc->pef.event_filter_table[set];
+	    data = sys->pef.event_filter_table[set];
 	    length = 21;
 	}
 	break;
 
     case 7:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= bmc->pef.num_event_filters))
+	if ((set <= 0) || (set >= sys->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = bmc->pef.event_filter_data1[set];
+	    data = sys->pef.event_filter_data1[set];
 	    length = 2;
 	}
 	break;
 
     case 9:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= bmc->pef.num_alert_policies))
+	if ((set <= 0) || (set >= sys->pef.num_alert_policies))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = bmc->pef.alert_policy_table[set];
+	    data = sys->pef.alert_policy_table[set];
 	    length = 4;
 	}
 	break;
 
     case 10:
-	data = bmc->pef.system_guid;
+	data = sys->pef.system_guid;
 	length = 17;
 	break;
 
     case 12:
 	set = msg->data[1] & 0x7f;
-	if (set >= bmc->pef.num_alert_strings)
+	if (set >= sys->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = bmc->pef.alert_string_keys[set];
+	    data = sys->pef.alert_string_keys[set];
 	    length = 3;
 	}
 	break;
 
     case 13:
 	set = msg->data[1] & 0x7f;
-	if (set >= bmc->pef.num_alert_strings)
+	if (set >= sys->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else if (msg->data[2] == 0)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
@@ -4153,7 +4155,7 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
 	    }
 	    tmpdata[0] = set;
 	    tmpdata[1] = block + 1;
-	    memcpy(tmpdata+2, bmc->pef.alert_strings[set]+(block*16), 16);
+	    memcpy(tmpdata+2, sys->pef.alert_strings[set]+(block*16), 16);
 	    data = tmpdata;
 	    length = 18;
 	}
@@ -5464,8 +5466,8 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     unsigned char *rdata;
     unsigned int  *rdata_len;
 
-    if (emu->bmcinfo->debug & DEBUG_MSG)
-	emu->bmcinfo->log(emu->bmcinfo, DEBUG, omsg, "Receive message:");
+    if (emu->sysinfo->debug & DEBUG_MSG)
+	emu->sysinfo->log(emu->sysinfo, DEBUG, omsg, "Receive message:");
     if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* Encapsulated IPMB, do special handling. */
 	unsigned char slave;
@@ -5514,7 +5516,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	rmsg->cmd = data[5];
 	rdata = rmsg->data + 6;
 	rdata_len = &rmsg->len;
-	rmsg->data[0] = emu->bmcinfo->bmc_ipmb;
+	rmsg->data[0] = emu->sysinfo->bmc_ipmb;
 	rmsg->data[1] = ((data[1] & 0xfc) | 0x4) | (data[4] & 0x3);
 	rmsg->data[2] = ipmb_checksum(rdata+1, 2, 0);
 	rmsg->data[3] = data[0];
@@ -5530,7 +5532,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	smsg.channel = 0; /* IPMB channel is 0 */
 	msg = &smsg;
     } else {
-	mc = emu->ipmb[emu->bmcinfo->bmc_ipmb >> 1];
+	mc = emu->ipmb[emu->sysinfo->bmc_ipmb >> 1];
 	if (!mc || !mc->enabled) {
 	    ordata[0] = 0xff;
 	    *ordata_len = 1;
@@ -5576,10 +5578,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     }
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
-	channel_t *bchan = emu->bmcinfo->channels[15];
+	channel_t *bchan = emu->sysinfo->channels[15];
 
 	if (bchan->recv_in_q) {
-	    if (bchan->recv_in_q(mc->bmcinfo->channels[15], rmsg))
+	    if (bchan->recv_in_q(mc->sysinfo->channels[15], rmsg))
 		return;
 	}
 
@@ -5589,26 +5591,26 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	rmsg->len += 6;
 	rmsg->data[rmsg->len] = ipmb_checksum(rmsg->data, rmsg->len, 0);
 	rmsg->len += 1;
-	if (emu->bmcinfo->recv_q_tail) {
-	    rmsg->next = emu->bmcinfo->recv_q_tail;
-	    emu->bmcinfo->recv_q_tail = rmsg;
+	if (emu->sysinfo->recv_q_tail) {
+	    rmsg->next = emu->sysinfo->recv_q_tail;
+	    emu->sysinfo->recv_q_tail = rmsg;
 	} else {
-	    channel_t *bchan = emu->bmcinfo->channels[15];
+	    channel_t *bchan = emu->sysinfo->channels[15];
 
 	    rmsg->next = NULL;
-	    emu->bmcinfo->recv_q_head = rmsg;
-	    emu->bmcinfo->recv_q_tail = rmsg;
+	    emu->sysinfo->recv_q_head = rmsg;
+	    emu->sysinfo->recv_q_tail = rmsg;
 	    if (bchan->set_atn)
-		bchan->set_atn(bchan, 1, IPMI_BMC_MSG_INTS_ON(mc));
+		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
 	}
     }
-    if (emu->bmcinfo->debug & DEBUG_MSG)
-	debug_log_raw_msg(emu->bmcinfo, ordata, *ordata_len,
+    if (emu->sysinfo->debug & DEBUG_MSG)
+	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
 			  "Response message:");
 }
 
 emu_data_t *
-ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper, bmc_data_t *bmcinfo)
+ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper, sys_data_t *sysinfo)
 {
     emu_data_t *data = malloc(sizeof(*data));
 
@@ -5616,7 +5618,7 @@ ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper, bmc_data_t *bmcinfo)
 	memset(data, 0, sizeof(*data));
 	data->user_data = user_data;
 	data->sleeper = sleeper;
-	data->bmcinfo = bmcinfo;
+	data->sysinfo = sysinfo;
     }
 	
     return data;
@@ -5782,12 +5784,12 @@ static const uint8_t init_sdrs[] = {
 };
 
 static int
-init_bmc(emu_data_t *emu, lmc_data_t *mc)
+init_sys(emu_data_t *emu, lmc_data_t *mc)
 {
     unsigned int i;
     int err;
 
-    err = mc->bmcinfo->alloc_timer(mc->bmcinfo, watchdog_timeout,
+    err = mc->sysinfo->alloc_timer(mc->sysinfo, watchdog_timeout,
 				   mc, &mc->watchdog_timer);
     if (err) {
 	free(mc);
@@ -5874,7 +5876,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     memcpy(mc->product_id, product_id, 2);
 
     /* Enable the event log by default. */
-    mc->global_enables = 1 << IPMI_BMC_EVENT_LOG_BIT;
+    mc->global_enables = 1 << IPMI_MC_EVENT_LOG_BIT;
 
     /* Start the time at zero. */
     gettimeofday(&t, NULL);
@@ -5918,11 +5920,11 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
     emu->ipmb[ipmb >> 1] = mc;
 
-    if (ipmb == emu->bmcinfo->bmc_ipmb) {
+    if (ipmb == emu->sysinfo->bmc_ipmb) {
 	int err;
 
-	mc->bmcinfo = emu->bmcinfo;
-	err = init_bmc(emu, mc);
+	mc->sysinfo = emu->sysinfo;
+	err = init_sys(emu, mc);
     }
 
     return 0;
@@ -6042,9 +6044,9 @@ ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb)
 
     if (ipmb & 1)
 	return EINVAL;
-    emu->bmcinfo->bmc_ipmb = ipmb;
+    emu->sysinfo->bmc_ipmb = ipmb;
     if (!ipmi_emu_get_mc_by_addr(emu, ipmb, &mc))
-	mc->bmcinfo = emu->bmcinfo;
+	mc->sysinfo = emu->sysinfo;
     return 0;
 }
 
@@ -6053,7 +6055,7 @@ ipmi_emu_get_bmc_mc(emu_data_t *emu)
 {
     lmc_data_t *mc;
     
-    if (!ipmi_emu_get_mc_by_addr(emu, emu->bmcinfo->bmc_ipmb, &mc))
+    if (!ipmi_emu_get_mc_by_addr(emu, emu->sysinfo->bmc_ipmb, &mc))
 	return mc;
     return NULL;
 }
@@ -6061,5 +6063,5 @@ ipmi_emu_get_bmc_mc(emu_data_t *emu)
 void
 emu_set_debug_level(emu_data_t *emu, unsigned int debug_level)
 {
-    emu->bmcinfo->debug = debug_level;
+    emu->sysinfo->debug = debug_level;
 }

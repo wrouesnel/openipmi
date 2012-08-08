@@ -1,3 +1,12 @@
+2012-08-08 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/*: Rename "bmc_data_t" to "sys_data_t" because it's mostly
+	info about the whole emulator, not BMC-specific.  Also, move the
+	lmc_data_t structure and functions to a separate include file.
+	This is getting	ready to move some things that are in bmc_data_t
+	to the specific MCs, as some of the things are mc-specific, like
+	channels.
+
 2012-08-03 Jim Mankovich
 
 	* unix/posix_os_hnd.c: The unix/posix_os_hnd.c stop_timer function
