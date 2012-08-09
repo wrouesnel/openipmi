@@ -530,22 +530,15 @@ return_rsp(lanserv_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 static void
 lan_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 {
-    sys_data_t   *sys;
     lanserv_data_t *lan = chan->chan_info;
     rsp_msg_t    rrsp;
 
     return_rsp(lan, msg, NULL, rsp);
 
-    sys = lan->sysinfo;
-    while (sys->recv_q_head) {
-	msg = sys->recv_q_head;
-	sys->recv_q_head = msg->next;
-	if (!msg->next) {
-	    sys->recv_q_tail = NULL;
-	    if (sys->channels[15]->recv_in_q)
-		sys->channels[15]->recv_in_q(sys->channels[15], 0);
-	}
-
+    msg = ipmi_mc_get_next_recv_q(chan->mc);
+    if (!msg)
+	return;
+    while (msg) {
 	/* Extract relevant header information and remove the header and
 	   checksum. */
 	msg->rq_addr = msg->data[0];
@@ -560,7 +553,11 @@ lan_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 	return_rsp(lan, msg, NULL, &rrsp);
 
 	chan->free(chan, msg);
+
+	msg = ipmi_mc_get_next_recv_q(chan->mc);
     }
+    if (chan->recv_in_q)
+	chan->recv_in_q(chan, 0);
 }
 
 static void
@@ -3011,7 +3008,7 @@ ipmi_lan_init(lanserv_data_t *lan)
     if (lan->default_session_timeout == 0)
 	lan->default_session_timeout = 30;
 
-    chan_init(&lan->channel);
+    chan_init(&lan->channel, lan->sysinfo->ipmb[lan->sysinfo->bmc_ipmb >> 1]);
 
     return 0;
 }

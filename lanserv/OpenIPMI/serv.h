@@ -65,62 +65,8 @@
 #include <arpa/nameser.h>
 #include <resolv.h>
 #include <netdb.h>
-
-typedef struct msg_s
-{
-    void *src_addr;
-    int  src_len;
-
-    long oem_data; /* For use by OEM handlers.  This will be set to
-                      zero by the calling code. */
-
-    unsigned char channel;
-
-    unsigned char authtype;
-    uint32_t      seq;
-    uint32_t      sid;
-
-    union {
-	struct {
-	    /* RMCP parms */
-	    unsigned char *authcode;
-	    unsigned char authcode_data[16];
-	} rmcp;
-	struct {
-	    /* RMCP+ parms */
-	    unsigned char payload;
-	    unsigned char encrypted;
-	    unsigned char authenticated;
-	    unsigned char iana[3];
-	    uint16_t      payload_id;
-	    unsigned char *authdata;
-	    unsigned int  authdata_len;
-	} rmcpp;
-    };
-
-    unsigned char netfn;
-    unsigned char rs_addr;
-    unsigned char rs_lun;
-    unsigned char rq_addr;
-    unsigned char rq_lun;
-    unsigned char rq_seq;
-    unsigned char cmd;
-
-    unsigned char *data;
-    unsigned int  len;
-
-    struct msg_s *next;
-} msg_t;
-
-#define IPMI_SIM_MAX_MSG_LENGTH 36
-
-typedef struct rsp_msg
-{
-    uint8_t        netfn;
-    uint8_t        cmd;
-    unsigned short data_len;
-    uint8_t        *data;
-} rsp_msg_t;
+#include <OpenIPMI/msg.h>
+#include <OpenIPMI/mcserv.h>
 
 typedef struct channel_s channel_t;
 
@@ -169,6 +115,8 @@ typedef struct oem_handlers_s
 #define NUM_PRIV_LEVEL 4
 struct channel_s
 {
+    lmc_data_t *mc;
+
     unsigned char medium_type;
     unsigned char protocol_type;
     unsigned char session_support;
@@ -338,6 +286,9 @@ typedef struct lan_addr_s {
 struct sys_data_s {
     char *name;
 
+    /* The MCs in the system */
+    lmc_data_t *ipmb[128];
+
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)
     unsigned int debug;
@@ -353,6 +304,7 @@ struct sys_data_s {
 #define LAN_ERR				9
 #define INFO				10
 #define DEBUG				11
+#define SETUP_ERROR			12
     void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...);
 
     /* Command to start a VM */
@@ -372,9 +324,6 @@ struct sys_data_s {
     user_t users[MAX_USERS + 1];
 
     unsigned char bmc_ipmb;
-
-    msg_t *recv_q_head;
-    msg_t *recv_q_tail;
 
     channel_t *channels[IPMI_MAX_CHANNELS];
 
@@ -441,7 +390,7 @@ int channel_smi_send(channel_t *chan, msg_t *msg);
  */
 void sys_start_cmd(sys_data_t *sys);
 
-int chan_init(channel_t *chan);
+int chan_init(channel_t *chan, lmc_data_t *mc);
 void sysinfo_init(sys_data_t *sys);
 
 

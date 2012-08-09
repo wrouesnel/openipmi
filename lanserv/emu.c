@@ -224,6 +224,9 @@ struct lmc_data_s
 
     sys_data_t *sysinfo;
 
+    msg_t *recv_q_head;
+    msg_t *recv_q_tail;
+
     sel_t sel;
 
     sdrs_t main_sdrs;
@@ -301,7 +304,6 @@ typedef struct emu_addr_s
 struct emu_data_s
 {
     sys_data_t *sysinfo;
-    lmc_data_t *ipmb[128];
 
     int          atca_mode;
     atca_site_t  atca_sites[128]; /* Indexed by HW address. */
@@ -2270,7 +2272,7 @@ handle_set_global_enables(lmc_data_t    *mc,
 	bchan->hw_op(bchan, HW_OP_IRQ_DISABLE);
 
     if ((!old_evint && IPMI_MC_EVBUF_FULL_INT_ENABLED(mc) && mc->ev_in_q) ||
-	(old_int && !IPMI_MC_MSG_INTS_ON(mc) && mc->sysinfo->recv_q_tail))
+	(old_int && !IPMI_MC_MSG_INTS_ON(mc) && mc->recv_q_tail))
 	bchan->set_atn(bchan, 1, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
@@ -2657,7 +2659,7 @@ handle_get_msg(lmc_data_t    *mc,
 	return;
     }
 
-    qmsg = mc->sysinfo->recv_q_head;
+    qmsg = mc->recv_q_head;
     if (!qmsg) {
 	rdata[0] = 0x80;
 	*rdata_len = 0;
@@ -2670,10 +2672,10 @@ handle_get_msg(lmc_data_t    *mc,
 	return;
     }
 
-    mc->sysinfo->recv_q_head = qmsg->next;
+    mc->recv_q_head = qmsg->next;
     if (!qmsg->next) {
 	channel_t *bchan = mc->sysinfo->channels[15];
-	mc->sysinfo->recv_q_tail = NULL;
+	mc->recv_q_tail = NULL;
 	if (bchan->set_atn)
 	    bchan->set_atn(bchan, 0, IPMI_MC_MSG_INTS_ON(mc));
     }
@@ -5455,6 +5457,7 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 
 void
 ipmi_emu_handle_msg(emu_data_t    *emu,
+		    lmc_data_t    *srcmc,
 		    msg_t         *omsg,
 		    unsigned char *ordata,
 		    unsigned int  *ordata_len)
@@ -5494,7 +5497,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    }
 	}
 	slave = data[0];
-	mc = emu->ipmb[slave >> 1];
+	mc = emu->sysinfo->ipmb[slave >> 1];
 	if (!mc || !mc->enabled) {
 	    ordata[0] = 0x83; /* NAK on Write */
 	    *ordata_len = 1;
@@ -5532,7 +5535,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	smsg.channel = 0; /* IPMB channel is 0 */
 	msg = &smsg;
     } else {
-	mc = emu->ipmb[emu->sysinfo->bmc_ipmb >> 1];
+	mc = srcmc;
 	if (!mc || !mc->enabled) {
 	    ordata[0] = 0xff;
 	    *ordata_len = 1;
@@ -5578,6 +5581,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     }
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
+	/* An encapsulated command, put the response into the receive q. */
 	channel_t *bchan = emu->sysinfo->channels[15];
 
 	if (bchan->recv_in_q) {
@@ -5591,15 +5595,15 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	rmsg->len += 6;
 	rmsg->data[rmsg->len] = ipmb_checksum(rmsg->data, rmsg->len, 0);
 	rmsg->len += 1;
-	if (emu->sysinfo->recv_q_tail) {
-	    rmsg->next = emu->sysinfo->recv_q_tail;
-	    emu->sysinfo->recv_q_tail = rmsg;
+	if (srcmc->recv_q_tail) {
+	    rmsg->next = srcmc->recv_q_tail;
+	    srcmc->recv_q_tail = rmsg;
 	} else {
 	    channel_t *bchan = emu->sysinfo->channels[15];
 
 	    rmsg->next = NULL;
-	    emu->sysinfo->recv_q_head = rmsg;
-	    emu->sysinfo->recv_q_tail = rmsg;
+	    srcmc->recv_q_head = rmsg;
+	    srcmc->recv_q_tail = rmsg;
 	    if (bchan->set_atn)
 		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
 	}
@@ -5607,6 +5611,21 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     if (emu->sysinfo->debug & DEBUG_MSG)
 	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
 			  "Response message:");
+}
+
+msg_t *
+ipmi_mc_get_next_recv_q(lmc_data_t *mc)
+{
+    msg_t *rv;
+
+    if (!mc->recv_q_head)
+	return NULL;
+    rv = mc->recv_q_head;
+    mc->recv_q_head = rv->next;
+    if (!mc->recv_q_head) {
+	mc->recv_q_tail = NULL;
+    }
+    return rv;
 }
 
 emu_data_t *
@@ -5915,10 +5934,10 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
     }
 
-    if (emu->ipmb[ipmb >> 1])
-	ipmi_mc_destroy(emu->ipmb[ipmb >> 1]);
+    if (emu->sysinfo->ipmb[ipmb >> 1])
+	ipmi_mc_destroy(emu->sysinfo->ipmb[ipmb >> 1]);
 
-    emu->ipmb[ipmb >> 1] = mc;
+    emu->sysinfo->ipmb[ipmb >> 1] = mc;
 
     if (ipmb == emu->sysinfo->bmc_ipmb) {
 	int err;
@@ -6031,9 +6050,9 @@ ipmi_emu_get_mc_by_addr(emu_data_t *emu, unsigned char ipmb, lmc_data_t **mc)
 {
     if (ipmb & 1)
 	return EINVAL;
-    if (!emu->ipmb[ipmb >> 1])
+    if (!emu->sysinfo->ipmb[ipmb >> 1])
 	return ENOSYS;
-    *mc = emu->ipmb[ipmb >> 1];
+    *mc = emu->sysinfo->ipmb[ipmb >> 1];
     return 0;
 }
 

@@ -152,7 +152,7 @@ smi_send(channel_t *chan, msg_t *msg)
     unsigned char    msgd[36];
     unsigned int     msgd_len = sizeof(msgd);
 
-    ipmi_emu_handle_msg(data->emu, msg, msgd, &msgd_len);
+    ipmi_emu_handle_msg(data->emu, chan->mc, msg, msgd, &msgd_len);
 
     ipmi_handle_smi_rsp(chan, msg, msgd, msgd_len);
     return 0;
@@ -1290,6 +1290,12 @@ main(int argc, const char *argv[])
     if (command_string)
 	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
 
+    if (!sysinfo.bmc_ipmb || !sysinfo.ipmb[sysinfo.bmc_ipmb >> 1]) {
+	sysinfo.log(&sysinfo, SETUP_ERROR, NULL,
+		    "No bmc_ipmb specified or configured.");
+	exit(1);
+    }
+
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
 	channel_t *chan = sysinfo.channels[i];
 
@@ -1307,7 +1313,7 @@ main(int argc, const char *argv[])
 	else if (chan->medium_type == IPMI_CHANNEL_MEDIUM_RS232)
 	    err = ser_channel_init(&data, sysinfo.channels[i]);
 	else 
-	    chan_init(chan);
+	    chan_init(chan, sysinfo.ipmb[sysinfo.bmc_ipmb >> 1]);
     }
 
     sysinfo.console_fd = -1;
@@ -1375,5 +1381,5 @@ main(int argc, const char *argv[])
 	sys_start_cmd(&sysinfo);
 
     data.os_hnd->operation_loop(data.os_hnd);
-    return 0;
+    exit(0);
 }

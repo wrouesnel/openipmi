@@ -1191,7 +1191,7 @@ serserv_init(serserv_data_t *ser)
     if (ser->oem)
 	ser->oem->init(ser);
 
-    chan_init(&ser->channel);
+    chan_init(&ser->channel, ser->sysinfo->ipmb[ser->sysinfo->bmc_ipmb >> 1]);
     return 0;
 }
 

@@ -613,6 +613,12 @@ sys_start_cmd(sys_data_t *sys)
 {
 }
 
+msg_t *
+ipmi_mc_get_next_recv_q(lmc_data_t *mc)
+{
+    return NULL;
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -745,7 +751,7 @@ main(int argc, const char *argv[])
 		}
 	    }
 	} else 
-	    chan_init(chan);
+	    chan_init(chan, NULL);
     }
 
     if (daemonize) {

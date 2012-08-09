@@ -209,9 +209,11 @@ look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 }
 
 int
-chan_init(channel_t *chan)
+chan_init(channel_t *chan, lmc_data_t *mc)
 {
     int rv = 0;
+
+    chan->mc = mc;
 
     /* If the calling code already hasn't set up an OEM handler, we
        set up our own to look for a get device id.  When we find a get

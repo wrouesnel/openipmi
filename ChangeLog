@@ -1,3 +1,7 @@
+2012-08-09 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/*: Move the receive queue into the MC where it belongs.
+
 2012-08-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Rename "bmc_data_t" to "sys_data_t" because it's mostly
