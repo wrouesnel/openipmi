@@ -376,8 +376,10 @@ class MCChan(gui_treelist.TreeList):
         self.mc_id = mc.get_id()
         self.count = 0;
         self.info = []
-        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
+        for i in range(0, OpenIPMI.MAX_USED_CHANNELS) + [14, 15]:
             self.info.append({})
+            if (i == 14):
+                continue
             rv = mc.channel_get_info(i, MCChanInfo(self, i))
             if (not rv):
                 self.count += 1
@@ -458,7 +460,7 @@ class MCChan(gui_treelist.TreeList):
         return
     
     def setup(self):
-        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
+        for i in range(0, OpenIPMI.MAX_USED_CHANNELS) + [15]:
             chi = self.info[i]
             if (len(chi) > 0):
                 cdata = MCChanData(self, i)
@@ -502,7 +504,7 @@ class MCChan(gui_treelist.TreeList):
 
     def mc_cb(self, mc):
         # FIXME - add error handling
-        for i in range(0, OpenIPMI.MAX_USED_CHANNELS):
+        for i in range(0, OpenIPMI.MAX_USED_CHANNELS) + [15]:
             chi = self.info[i]
             if (len(chi) > 0):
                 if ("v" in chi):
