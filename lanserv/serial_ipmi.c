@@ -956,18 +956,15 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	break;
 	
     case HW_OP_POWERON:
-	sys_start_cmd(si->sysinfo);
+	if (chan->start_cmd)
+	    chan->start_cmd(chan);
 	return;
 
     case HW_OP_POWEROFF:
-	if (si->sysinfo->wait_poweroff)
-	    /* Already powering off. */
-	    return;
-	if (si->connected) {
+	if (si->connected)
 	    vm_add_char(VM_CMD_POWEROFF, c, &len);
-	    si->sysinfo->wait_poweroff = si->sysinfo->poweroff_wait_time;
-	} else
-	    si->sysinfo->wait_poweroff = 1; /* Just power off now. */
+	if (chan->stop_cmd)
+	    chan->stop_cmd(chan, !si->connected);
 	break;
 	
     case HW_OP_SEND_NMI:

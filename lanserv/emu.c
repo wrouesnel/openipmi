@@ -44,6 +44,8 @@
 
 #include "emu.h"
 
+static void ipmi_mc_start_cmd(lmc_data_t *mc);
+
 #define WATCHDOG_SENSOR_NUM 0
 
 /* Deal with multi-byte data, IPMI (little-endian) style. */
@@ -189,6 +191,10 @@ struct lmc_data_s
 
     channel_t sys_channel;
     channel_t ipmb_channel;
+
+    ipmi_tick_handler_t tick_handler;
+    ipmi_child_quit_t child_quit_handler;
+    startcmd_t startcmd;
 
     unsigned char evq[16];
     char  ev_in_q;
@@ -473,8 +479,6 @@ mc_new_event(lmc_data_t *mc,
 {
     unsigned int recid;
     int rv;
-
-    /* FIXME - event forwarding */
 
     if (IPMI_MC_EVENT_LOG_ENABLED(mc)) {
 	rv = ipmi_mc_add_to_sel(mc, record_type, event, &recid);
@@ -2803,7 +2807,7 @@ handle_get_chassis_status(lmc_data_t    *mc,
 			  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->sysinfo->vmpid != 0;
+    rdata[1] = mc->startcmd.vmpid != 0;
     rdata[2] = 0;
     rdata[3] = 0;
 }
@@ -5754,6 +5758,9 @@ ipmi_mc_enable(lmc_data_t *mc)
 		      mc->ipmb, chan->channel_num, err);
 	}
     }
+
+    if (mc->startcmd.startnow && mc->startcmd.startcmd)
+	ipmi_mc_start_cmd(mc);
 }
 
 int
@@ -5885,10 +5892,56 @@ init_sys(emu_data_t *emu, lmc_data_t *mc)
     return err;
 }
 
+static void
+ipmi_mc_start_cmd(lmc_data_t *mc)
+{
+    if (!mc->startcmd.startcmd) {
+	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			 "Power on issued, no start command set");
+	return;
+    }
+
+    if (mc->startcmd.vmpid)
+	/* Already running */
+	return;
+
+    ipmi_do_start_cmd(&mc->startcmd);
+}
+
+static void
+chan_start_cmd(channel_t *chan)
+{
+    ipmi_mc_start_cmd(chan->mc);
+}
+
+static void
+ipmi_mc_stop_cmd(lmc_data_t *mc, int do_it_now)
+{
+    if (mc->startcmd.wait_poweroff)
+	/* Already powering off. */
+	return;
+    if (!do_it_now)
+	mc->startcmd.wait_poweroff = mc->startcmd.poweroff_wait_time;
+    else
+	mc->startcmd.wait_poweroff = 1; /* Just power off now. */
+}
+
+static void
+chan_stop_cmd(channel_t *chan, int do_it_now)
+{
+    ipmi_mc_stop_cmd(chan->mc, do_it_now);
+}
+
 channel_t **
 ipmi_mc_get_channelset(lmc_data_t *mc)
 {
     return mc->channels;
+}
+
+startcmd_t *
+ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
+{
+    return &mc->startcmd;
 }
 
 int
@@ -5919,9 +5972,47 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
     memset(mc, 0, sizeof(*mc));
     sys->ipmb[ipmb >> 1] = mc;
 
+    mc->startcmd.poweroff_wait_time = 60;
+    mc->startcmd.kill_wait_time = 20;
+    mc->startcmd.startnow = 0;
+
  out:
     *rmc = mc;
     return 0;
+}
+
+static void
+handle_tick(void *info, unsigned int seconds)
+{
+    lmc_data_t *mc = info;
+
+    if (mc->startcmd.wait_poweroff) {
+	if (mc->startcmd.vmpid == 0) {
+	    mc->startcmd.wait_poweroff = 0;
+	} else if (mc->startcmd.wait_poweroff > 0) {
+	    /* Waiting for the first kill */
+	    mc->startcmd.wait_poweroff--;
+	    if (mc->startcmd.wait_poweroff == 0) {
+		ipmi_do_kill(&mc->startcmd, 0);
+		mc->startcmd.wait_poweroff = -mc->startcmd.kill_wait_time;
+	    }
+	} else {
+	    mc->startcmd.wait_poweroff++;
+	    if (mc->startcmd.wait_poweroff == 0)
+		ipmi_do_kill(&mc->startcmd, 1);
+	}
+    }
+}
+
+static void
+handle_child_quit(void *info, pid_t pid)
+{
+    lmc_data_t *mc = info;
+
+    if (mc->startcmd.vmpid == pid) {
+	mc->startcmd.vmpid = 0;
+	mc->startcmd.wait_poweroff = 0;
+    }
 }
 
 int
@@ -5974,7 +6065,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	mc->device_sdrs[i].next_entry = 1;
     }
 
-    mc->event_receiver = 0x20;
+    mc->event_receiver = sys->bmc_ipmb;
     mc->event_receiver_lun = 0;
 
     mc->hs_sensor = NULL;
@@ -6022,6 +6113,17 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
 	mc->sysinfo = emu->sysinfo;
 	err = init_sys(emu, mc);
+    }
+
+    if (mc->startcmd.startcmd) {
+	mc->child_quit_handler.info = mc;
+	mc->child_quit_handler.handler = handle_child_quit;
+	ipmi_register_child_quit_handler(&mc->child_quit_handler);
+	mc->tick_handler.info = mc;
+	mc->tick_handler.handler = handle_tick;
+	ipmi_register_tick_handler(&mc->tick_handler);
+	mc->channels[15]->start_cmd = chan_start_cmd;
+	mc->channels[15]->stop_cmd = chan_stop_cmd;
     }
 
     mc->configured = 1;

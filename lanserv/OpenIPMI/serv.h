@@ -162,6 +162,9 @@ struct channel_s
        be queued. */
     int (*recv_in_q)(channel_t *chan, msg_t *msg);
 
+    void (*start_cmd)(channel_t *chan);
+    void (*stop_cmd)(channel_t *chan, int do_it_now);
+
     /* Perform some hardware operations. */
 #define HW_OP_RESET		0
 #define HW_OP_POWERON		1
@@ -275,6 +278,16 @@ typedef struct lan_addr_s {
     socklen_t     addr_len;
 } lan_addr_t;
 
+struct startcmd_s {
+    /* Command to start a VM */
+    char *startcmd;
+    unsigned int startnow; /* Start startcmd at simulator startup? */
+    unsigned int poweroff_wait_time;
+    unsigned int kill_wait_time;
+    int vmpid; /* Process id of the VM, 0 if not running. */
+    int wait_poweroff;
+};
+
 /*
  * Generic data about the system that is global for the whole system and
  * required for all server types.
@@ -303,14 +316,6 @@ struct sys_data_s {
 #define SETUP_ERROR			12
     void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...);
 
-    /* Command to start a VM */
-    char *startcmd;
-    unsigned int startnow; /* Start startcmd at simulator startup? */
-    unsigned int poweroff_wait_time;
-    unsigned int kill_wait_time;
-    int vmpid; /* Process id of the VM, 0 if not running. */
-    int wait_poweroff;
-
     /* Console port.  Length is zero if not set. */
     sockaddr_ip_t console_addr;
     socklen_t console_addr_len;
@@ -327,10 +332,11 @@ struct sys_data_s {
     void *info;
 
     /*
-     * When reading in config, this tracks which set of channels we are
+     * When reading in config, this tracks which information we are
      * working on.
      */
     channel_t **chan_set;
+    startcmd_t *startcmd;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);
@@ -388,6 +394,14 @@ typedef struct ipmi_tick_handler_s {
 
 void ipmi_register_tick_handler(ipmi_tick_handler_t *handler);
 
+typedef struct ipmi_child_quit_s {
+    void (*handler)(void *info, pid_t pid);
+    void *info;
+    struct ipmi_child_quit_s *next;
+} ipmi_child_quit_t;
+
+void ipmi_register_child_quit_handler(ipmi_child_quit_t *handler);
+
 /* A helper function to allow OEM code to send messages. */
 int ipmi_oem_send_msg(channel_t     *chan,
 		      unsigned char netfn,
@@ -404,7 +418,8 @@ int channel_smi_send(channel_t *chan, msg_t *msg);
 /*
  * Start the "startcmd" specified in the configuration file.
  */
-void sys_start_cmd(sys_data_t *sys);
+void ipmi_do_start_cmd(startcmd_t *startcmd);
+void ipmi_do_kill(startcmd_t *startcmd, int noblock);
 
 int chan_init(channel_t *chan);
 void sysinfo_init(sys_data_t *sys);

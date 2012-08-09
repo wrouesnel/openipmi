@@ -1050,7 +1050,6 @@ static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
     misc_data_t *data = cb_data;
-    sys_data_t *sys = data->sys;
     struct timeval tv;
     int err;
     ipmi_tick_handler_t *h;
@@ -1062,23 +1061,6 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
     }
 
     ipmi_emu_tick(data->emu, 1);
-
-    if (sys->wait_poweroff) {
-	if (sys->vmpid == 0) {
-	    sys->wait_poweroff = 0;
-	} else if (sys->wait_poweroff > 0) {
-	    /* Waiting for the first kill */
-	    sys->wait_poweroff--;
-	    if (sys->wait_poweroff == 0) {
-		kill(sys->vmpid, SIGTERM);
-		sys->wait_poweroff = -sys->kill_wait_time;
-	    }
-	} else {
-	    sys->wait_poweroff++;
-	    if (sys->wait_poweroff == 0)
-		kill(sys->vmpid, SIGKILL);
-	}
-    }
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;
@@ -1101,43 +1083,6 @@ ifree(channel_t *chan, void *data)
     return free(data);
 }
 
-void
-sys_start_cmd(sys_data_t *sys)
-{
-    int pid;
-    char *startcmd;
-
-    if (!sys->startcmd) {
-	sys->log(sys, OS_ERROR, NULL, "Power on issued, no start command set");
-	return;
-    }
-
-    if (sys->vmpid)
-	/* Already running */
-	return;
-
-    startcmd = malloc(strlen(sys->startcmd) + 6);
-    if (!startcmd)
-	return;
-    strcpy(startcmd, "exec ");
-    strcpy(startcmd + 5, sys->startcmd);
-
-    pid = fork();
-    if (pid == -1) {
-	free(startcmd);
-	return;
-    }
-
-    if (pid == 0) {
-	char *args[4] = { "/bin/sh", "-c", startcmd, NULL };
-
-	execvp(args[0], args);
-	exit(1);
-    }
-    sys->vmpid = pid;
-    free(startcmd);
-}
-
 static int sigpipeh[2] = {-1, -1};
 
 static void
@@ -1148,21 +1093,70 @@ handle_sigchld(int sig)
     rv = write(sigpipeh[1], &c, 1);
 }
 
+static ipmi_child_quit_t *child_quit_handlers;
+
+void
+ipmi_register_child_quit_handler(ipmi_child_quit_t *handler)
+{
+    handler->next = child_quit_handlers;
+    child_quit_handlers = handler;
+}
+
 static void
 sigchld_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
     char buf;
-    misc_data_t *data = cb_data;
-    sys_data_t  *sys = data->sys;
-    int err;
+    int rv;
     int status;
+    ipmi_child_quit_t *h;
 
-    err = read(sigpipeh[0], &buf, 1);
-    err = waitpid(sys->vmpid, &status, WNOHANG);
-    if (err == -1)
+    rv = read(sigpipeh[0], &buf, 1);
+    rv = waitpid(-1, &status, WNOHANG);
+    if (rv == -1)
 	return;
-    sys->vmpid = 0;
-    sys->wait_poweroff = 0;
+
+    h = child_quit_handlers;
+    while(h) {
+	h->handler(h->info, rv);
+	h = h->next;
+    }
+}
+
+void
+ipmi_do_start_cmd(startcmd_t *startcmd)
+{
+    pid_t pid;
+    char *cmd;
+
+    cmd = malloc(strlen(startcmd->startcmd) + 6);
+    if (!cmd)
+	return;
+    strcpy(cmd, "exec ");
+    strcpy(cmd + 5, startcmd->startcmd);
+
+    pid = fork();
+    if (pid == -1) {
+	free(cmd);
+	return;
+    }
+
+    if (pid == 0) {
+	char *args[4] = { "/bin/sh", "-c", cmd, NULL };
+
+	execvp(args[0], args);
+	exit(1);
+    }
+    startcmd->vmpid = pid;
+    free(cmd);
+}
+
+void
+ipmi_do_kill(startcmd_t *startcmd, int noblock)
+{
+    if (noblock)
+	kill(startcmd->vmpid, SIGKILL);
+    else
+	kill(startcmd->vmpid, SIGTERM);
 }
 
 int
@@ -1222,9 +1216,6 @@ main(int argc, const char *argv[])
     sysinfo.write_config = write_config;
     sysinfo.debug = debug;
     sysinfo.log = sim_log;
-    sysinfo.poweroff_wait_time = 60;
-    sysinfo.kill_wait_time = 20;
-    sysinfo.startnow = 1;
     sysinfo.csmi_send = smi_send;
     sysinfo.clog = sim_chan_log;
     sysinfo.calloc = ialloc;
@@ -1285,6 +1276,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
     sysinfo.chan_set = ipmi_mc_get_channelset(mc);
+    sysinfo.startcmd = ipmi_mc_get_startcmdinfo(mc);
 
     if (read_config(&sysinfo, config_file))
 	exit(1);
@@ -1381,9 +1373,6 @@ main(int argc, const char *argv[])
 	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
 	exit(1);
     }
-
-    if (sysinfo.startnow && sysinfo.startcmd)
-	sys_start_cmd(&sysinfo);
 
     data.os_hnd->operation_loop(data.os_hnd);
     exit(0);

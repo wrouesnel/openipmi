@@ -8,6 +8,9 @@
 	* lanserv/*: Move the channel structures into the MC and allow
 	per-MC channel settings.
 
+	* lanserv/*: Move the startcmd into the MC to allow more than
+	one VM to hook to simulated IPMI environment on different MCs.
+
 2012-08-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Rename "bmc_data_t" to "sys_data_t" because it's mostly

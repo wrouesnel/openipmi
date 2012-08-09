@@ -470,13 +470,14 @@ read_config(sys_data_t *sys,
 	} else if (strcmp(tok, "name") == 0) {
 	    err = get_delim_str(&tokptr, &sys->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
-	    err = get_delim_str(&tokptr, &sys->startcmd, &errstr);
+	    err = get_delim_str(&tokptr, &sys->startcmd->startcmd, &errstr);
 	} else if (strcmp(tok, "startnow") == 0) {
-	    err = get_bool(&tokptr, &sys->startnow, &errstr);
+	    err = get_bool(&tokptr, &sys->startcmd->startnow, &errstr);
 	} else if (strcmp(tok, "poweroff_wait") == 0) {
-	    err = get_uint(&tokptr, &sys->poweroff_wait_time, &errstr);
+	    err = get_uint(&tokptr, &sys->startcmd->poweroff_wait_time,
+			   &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
-	    err = get_uint(&tokptr, &sys->kill_wait_time, &errstr);
+	    err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
 	} else if (strcmp(tok, "set_working_mc") == 0) {
 	    unsigned char ipmb;
 	    err = get_uchar(&tokptr, &ipmb, &errstr);
@@ -491,6 +492,7 @@ read_config(sys_data_t *sys,
 		    err = -1;
 		} else {
 		    sys->chan_set = ipmi_mc_get_channelset(mc);
+		    sys->startcmd = ipmi_mc_get_startcmdinfo(mc);
 		}
 	    }
 	} else if (strcmp(tok, "console") == 0) {

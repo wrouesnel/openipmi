@@ -72,6 +72,8 @@
 #if HAVE_SYSLOG
 #include <syslog.h>
 #endif
+#include <signal.h>
+#include <sys/wait.h>
 
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -640,6 +642,49 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
 {
     sys_data_t *sys = (sys_data_t *) mc;
     return sys->chan_set;
+}
+
+startcmd_t *
+ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
+{
+    return NULL;
+}
+
+void
+ipmi_do_start_cmd(startcmd_t *startcmd)
+{
+    pid_t pid;
+    char *cmd;
+
+    cmd = malloc(strlen(startcmd->startcmd) + 6);
+    if (!cmd)
+	return;
+    strcpy(cmd, "exec ");
+    strcpy(cmd + 5, startcmd->startcmd);
+
+    pid = fork();
+    if (pid == -1) {
+	free(cmd);
+	return;
+    }
+
+    if (pid == 0) {
+	char *args[4] = { "/bin/sh", "-c", cmd, NULL };
+
+	execvp(args[0], args);
+	exit(1);
+    }
+    startcmd->vmpid = pid;
+    free(cmd);
+}
+
+void
+ipmi_do_kill(startcmd_t *startcmd, int noblock)
+{
+    if (noblock)
+	kill(startcmd->vmpid, SIGKILL);
+    else
+	kill(startcmd->vmpid, SIGTERM);
 }
 
 int
