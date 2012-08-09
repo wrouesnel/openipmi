@@ -57,6 +57,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -962,7 +963,7 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	if (si->sysinfo->wait_poweroff)
 	    /* Already powering off. */
 	    return;
-	if (si->sysinfo->connected) {
+	if (si->connected) {
 	    vm_add_char(VM_CMD_POWEROFF, c, &len);
 	    si->sysinfo->wait_poweroff = si->sysinfo->poweroff_wait_time;
 	} else
@@ -1000,13 +1001,13 @@ vm_connected(serserv_data_t *si)
     vm_add_char(VM_PROTOCOL_VERSION, c, &len);
     c[len++] = VM_CMD_CHAR;
     raw_send(si, c, len);
-    si->sysinfo->connected = 1;
+    si->connected = 1;
 }
 
 static void
 vm_disconnected(serserv_data_t *si)
 {
-    si->sysinfo->connected = 0;
+    si->connected = 0;
 }
 
 static int
@@ -1161,6 +1162,9 @@ ser_return_rsp(channel_t *chan, msg_t *imsg, rsp_msg_t *rsp)
     serserv_data_t *ser = chan->chan_info;
     msg_t msg;
 
+    if (!ser->connected)
+	return;
+
     msg.netfn = rsp->netfn;
     msg.cmd = rsp->cmd;
     msg.data = rsp->data;
@@ -1191,7 +1195,7 @@ serserv_init(serserv_data_t *ser)
     if (ser->oem)
 	ser->oem->init(ser);
 
-    chan_init(&ser->channel, ser->sysinfo->ipmb[ser->sysinfo->bmc_ipmb >> 1]);
+    chan_init(&ser->channel);
     return 0;
 }
 
@@ -1240,7 +1244,7 @@ serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
 	goto out_err;
     }
 
-    if (sys->channels[chan_num] != &sys->sys_channel) {
+    if (sys->chan_set[chan_num]) {
 	*errstr = "System channel already defined";
 	goto out_err;
     }
@@ -1325,7 +1329,7 @@ serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
     ser->sysinfo = sys;
     ser->channel.chan_info = ser;
 
-    sys->channels[chan_num] = &ser->channel;
+    sys->chan_set[chan_num] = &ser->channel;
     return 0;
 
  out_err:

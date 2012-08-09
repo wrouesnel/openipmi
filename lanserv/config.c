@@ -57,6 +57,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <errno.h>
 #include <netdb.h>
 
 #include <OpenIPMI/serv.h>
@@ -181,6 +182,20 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
 
 int
 get_uint(char **tokptr, unsigned int *rval, char **err)
+{
+    char *end;
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
+
+    *rval = strtoul(tok, &end, 0);
+    if (*end != '\0') {
+	*err = "Invalid integer value";
+	return -1;
+    }
+    return 0;
+}
+
+int
+get_uchar(char **tokptr, unsigned char *rval, char **err)
 {
     char *end;
     char *tok = mystrtok(NULL, " \t\n", tokptr);
@@ -443,10 +458,6 @@ read_config(sys_data_t *sys,
 		err = -1;
 		errstr = "Channel number out of range";
 	    }
-	    if (!err && sys->channels[val]) {
-		err = -1;
-		errstr = "Channel already in use";
-	    }
 	    if (!err) {
 		err = lanserv_read_config(sys, f, &line, val);
 		if (err)
@@ -466,6 +477,22 @@ read_config(sys_data_t *sys,
 	    err = get_uint(&tokptr, &sys->poweroff_wait_time, &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
 	    err = get_uint(&tokptr, &sys->kill_wait_time, &errstr);
+	} else if (strcmp(tok, "set_working_mc") == 0) {
+	    unsigned char ipmb;
+	    err = get_uchar(&tokptr, &ipmb, &errstr);
+	    if (!err) {
+		lmc_data_t *mc;
+		err = ipmi_mc_alloc_unconfigured(sys, ipmb, &mc);
+		if (err == ENOMEM) {
+		    errstr = "Out of memory";
+		    err = -1;
+		} else if (err) {
+		    errstr = "Invalid IPMB specified";
+		    err = -1;
+		} else {
+		    sys->chan_set = ipmi_mc_get_channelset(mc);
+		}
+	    }
 	} else if (strcmp(tok, "console") == 0) {
 	    err = get_sock_addr(&tokptr,
 				&sys->console_addr, &sys->console_addr_len,

@@ -2941,9 +2941,10 @@ ipmi_handle_lan_msg(lanserv_data_t *lan,
 
 }
 
-void
-ipmi_lan_tick(lanserv_data_t *lan, unsigned int time_since_last)
+static void
+ipmi_lan_tick(void *info, unsigned int time_since_last)
 {
+    lanserv_data_t *lan = info;
     int i;
 
     for (i=1; i<=MAX_SESSIONS; i++) {
@@ -3008,7 +3009,11 @@ ipmi_lan_init(lanserv_data_t *lan)
     if (lan->default_session_timeout == 0)
 	lan->default_session_timeout = 30;
 
-    chan_init(&lan->channel, lan->sysinfo->ipmb[lan->sysinfo->bmc_ipmb >> 1]);
+    chan_init(&lan->channel);
+
+    lan->tick_handler.handler = ipmi_lan_tick;
+    lan->tick_handler.info = lan;
+    ipmi_register_tick_handler(&lan->tick_handler);
 
     return 0;
 }

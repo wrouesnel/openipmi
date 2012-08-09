@@ -177,15 +177,21 @@ struct lmc_data_s
 {
     emu_data_t *emu;
 
-    int enabled;
-
-    unsigned char guid[16];
-    unsigned char guid_set;
+    char enabled;
+    char configured; 
 
     unsigned char ipmb;
 
+    unsigned char guid_set;
+    unsigned char guid[16];
+
+    channel_t *channels[IPMI_MAX_CHANNELS];
+
+    channel_t sys_channel;
+    channel_t ipmb_channel;
+
     unsigned char evq[16];
-    unsigned int  ev_in_q;
+    char  ev_in_q;
 
     /* Get Device Id contents. */
     unsigned char device_id;       /* byte 2 */
@@ -477,7 +483,7 @@ mc_new_event(lmc_data_t *mc,
     } else
 	recid = 0xffff;
     if (!mc->ev_in_q && IPMI_MC_EVENT_MSG_BUF_ENABLED(mc)) {
-	channel_t *chan = mc->sysinfo->channels[15];
+	channel_t *chan = mc->channels[15];
 	mc->ev_in_q = 1;
 	ipmi_set_uint16(mc->evq, recid);
 	mc->evq[2] = record_type;
@@ -1927,7 +1933,7 @@ static void
 watchdog_timeout(void *cb_data)
 {
     lmc_data_t *mc = cb_data;
-    channel_t *bchan = mc->sysinfo->channels[15];
+    channel_t *bchan = mc->channels[15];
     sensor_t *sens = mc->sensors[0][WATCHDOG_SENSOR_NUM];
 
     if (!mc->watchdog_running)
@@ -2050,7 +2056,7 @@ handle_set_watchdog_timer(lmc_data_t    *mc,
 
     rdata[0] = 0;
 
-    bchan = mc->sysinfo->channels[15];
+    bchan = mc->channels[15];
     val = msg->data[1] & 0x7; /* Validate action */
     switch (val) {
     case IPMI_MC_WATCHDOG_ACTION_NONE:
@@ -2156,7 +2162,7 @@ handle_get_channel_info(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->channels[lchan]) {
 	if (lchan == 0) {
 	    /* The IPMB channel is always there. */
 	    medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
@@ -2169,10 +2175,10 @@ handle_get_channel_info(lmc_data_t    *mc,
 	    return;
 	}
     } else {
-	medium_type = mc->sysinfo->channels[lchan]->medium_type;
-	protocol_type = mc->sysinfo->channels[lchan]->protocol_type;
-	session_support = mc->sysinfo->channels[lchan]->session_support;
-	active_sessions = mc->sysinfo->channels[lchan]->active_sessions;
+	medium_type = mc->channels[lchan]->medium_type;
+	protocol_type = mc->channels[lchan]->protocol_type;
+	session_support = mc->channels[lchan]->session_support;
+	active_sessions = mc->channels[lchan]->active_sessions;
     }
 
     rdata[0] = 0;
@@ -2213,7 +2219,7 @@ handle_get_channel_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->channels[lchan]) {
 	if (lchan == 0) {
 	    rdata[0] = 0;
 	    rdata[1] = 0;
@@ -2225,7 +2231,7 @@ handle_get_channel_access(lmc_data_t    *mc,
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->sysinfo->channels[lchan];
+    chan = mc->channels[lchan];
 
     upd = (msg->data[1] >> 6) & 0x3;
 
@@ -2262,7 +2268,7 @@ handle_set_global_enables(lmc_data_t    *mc,
     *rdata_len = 1;
 
     mc->global_enables = msg->data[0];
-    bchan = mc->sysinfo->channels[15];
+    bchan = mc->channels[15];
     if (!bchan || !bchan->set_atn)
 	return;
 
@@ -2569,18 +2575,18 @@ handle_set_channel_access(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->sysinfo || !mc->channels[lchan]) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->sysinfo->channels[lchan];
+    chan = mc->channels[lchan];
 
     if (!chan->set_chan_access) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2597,7 +2603,7 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
 			     unsigned char *rdata,
 			     unsigned int  *rdata_len)
 {
-    channel_t *chan = mc->sysinfo->channels[15];
+    channel_t *chan = mc->channels[15];
 
     if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2674,7 +2680,7 @@ handle_get_msg(lmc_data_t    *mc,
 
     mc->recv_q_head = qmsg->next;
     if (!qmsg->next) {
-	channel_t *bchan = mc->sysinfo->channels[15];
+	channel_t *bchan = mc->channels[15];
 	mc->recv_q_tail = NULL;
 	if (bchan->set_atn)
 	    bchan->set_atn(bchan, 0, IPMI_MC_MSG_INTS_ON(mc));
@@ -2819,24 +2825,21 @@ handle_chassis_control(lmc_data_t    *mc,
 
     switch(msg->data[0] & 0xf) {
     case 0: /* power down */
-	if (!HW_OP_CAN_POWER(mc->sysinfo->channels[15]))
+	if (!HW_OP_CAN_POWER(mc->channels[15]))
 	    goto no_support;
-	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
-					 HW_OP_POWEROFF);
+	mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
 	break;
 
     case 1: /* power up */
-	if (!HW_OP_CAN_POWER(mc->sysinfo->channels[15]))
+	if (!HW_OP_CAN_POWER(mc->channels[15]))
 	    goto no_support;
-	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
-					 HW_OP_POWERON);
+	mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
 	break;
 
     case 3: /* hard reset */
-	if (!HW_OP_CAN_RESET(mc->sysinfo->channels[15]))
+	if (!HW_OP_CAN_RESET(mc->channels[15]))
 	    goto no_support;
-	mc->sysinfo->channels[15]->hw_op(mc->sysinfo->channels[15],
-					 HW_OP_RESET);
+	mc->channels[15]->hw_op(mc->channels[15], HW_OP_RESET);
 	break;
 
     case 2: /* power cycle */
@@ -2903,12 +2906,12 @@ handle_ipmi_set_lan_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
-    chan = mc->sysinfo->channels[lchan];
+    chan = mc->channels[lchan];
 
     if (!chan->set_lan_parms) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2943,18 +2946,13 @@ handle_ipmi_get_lan_config_parms(lmc_data_t    *mc,
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
+    if (!mc->channels[lchan]) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if (!mc->sysinfo || !mc->sysinfo->channels[lchan]) {
-	rdata[0] = IPMI_INVALID_CMD_CC;
-	*rdata_len = 1;
-	return;
-    }
-    chan = mc->sysinfo->channels[lchan];
+    chan = mc->channels[lchan];
 
     if (!chan->get_lan_parms) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -5582,10 +5580,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* An encapsulated command, put the response into the receive q. */
-	channel_t *bchan = emu->sysinfo->channels[15];
+	channel_t *bchan = srcmc->channels[15];
 
 	if (bchan->recv_in_q) {
-	    if (bchan->recv_in_q(mc->sysinfo->channels[15], rmsg))
+	    if (bchan->recv_in_q(srcmc->channels[15], rmsg))
 		return;
 	}
 
@@ -5599,7 +5597,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    rmsg->next = srcmc->recv_q_tail;
 	    srcmc->recv_q_tail = rmsg;
 	} else {
-	    channel_t *bchan = emu->sysinfo->channels[15];
+	    channel_t *bchan = srcmc->channels[15];
 
 	    rmsg->next = NULL;
 	    srcmc->recv_q_head = rmsg;
@@ -5724,7 +5722,38 @@ ipmi_mc_disable(lmc_data_t *mc)
 void
 ipmi_mc_enable(lmc_data_t *mc)
 {
+    unsigned int i;
+    sys_data_t *sys = mc->sysinfo;
+
     mc->enabled = 1;
+
+    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
+	channel_t *chan = mc->channels[i];
+	int err = 0;
+
+	if (!chan)
+	    continue;
+
+	chan->smi_send = sys->csmi_send;
+	chan->oem.user_data = sys->info;
+	chan->alloc = sys->calloc;
+	chan->free = sys->cfree;
+	chan->log = sys->clog;
+	chan->mc = mc;
+
+	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)
+	    err = sys->lan_channel_init(sys->info, chan);
+	else if (chan->medium_type == IPMI_CHANNEL_MEDIUM_RS232)
+	    err = sys->ser_channel_init(sys->info, chan);
+	else 
+	    chan_init(chan);
+	if (err) {
+	    chan->log(chan, SETUP_ERROR, NULL,
+		      "Unable to initialize channel for "
+		      "IPMB 0x%2.2x, channel %d: %d",
+		      mc->ipmb, chan->channel_num, err);
+	}
+    }
 }
 
 int
@@ -5856,6 +5885,45 @@ init_sys(emu_data_t *emu, lmc_data_t *mc)
     return err;
 }
 
+channel_t **
+ipmi_mc_get_channelset(lmc_data_t *mc)
+{
+    return mc->channels;
+}
+
+int
+ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
+			   lmc_data_t **rmc)
+{
+    lmc_data_t *mc;
+    
+    if (ipmb & 1) {
+	sys->log(sys, SETUP_ERROR, NULL,
+		 "Odd numbered MC IPMB specified: 0x%x.", ipmb);
+	return EINVAL;
+    }
+
+    mc = sys->ipmb[ipmb >> 1];
+    if (mc) {
+	if (mc->configured) {
+	    sys->log(sys, SETUP_ERROR, NULL,
+		     "MC IPMB specified twice: 0x%x.", ipmb);
+	    return EBUSY;
+	}
+	goto out;
+    }
+
+    mc = malloc(sizeof(*mc));
+    if (!mc)
+	return ENOMEM;
+    memset(mc, 0, sizeof(*mc));
+    sys->ipmb[ipmb >> 1] = mc;
+
+ out:
+    *rmc = mc;
+    return 0;
+}
+
 int
 ipmi_emu_add_mc(emu_data_t    *emu,
 		unsigned char ipmb,
@@ -5872,15 +5940,13 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     lmc_data_t     *mc;
     struct timeval t;
     int            i;
+    sys_data_t     *sys = emu->sysinfo;
 
-    if (ipmb & 1)
-	return EINVAL;
+    i = ipmi_mc_alloc_unconfigured(sys, ipmb, &mc);
+    if (i)
+	return i;
 
-    mc = malloc(sizeof(*mc));
-    if (!mc)
-	return ENOMEM;
-    memset(mc, 0, sizeof(*mc));
-
+    mc->sysinfo = sys;
     mc->emu = emu;
     mc->ipmb = ipmb;
 
@@ -5934,17 +6000,31 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
     }
 
-    if (emu->sysinfo->ipmb[ipmb >> 1])
-	ipmi_mc_destroy(emu->sysinfo->ipmb[ipmb >> 1]);
-
-    emu->sysinfo->ipmb[ipmb >> 1] = mc;
+    mc->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
+    mc->ipmb_channel.channel_num = 0;
+    mc->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+    mc->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    mc->ipmb_channel.active_sessions = 0;
+    mc->channels[0] = &mc->ipmb_channel;
 
     if (ipmb == emu->sysinfo->bmc_ipmb) {
 	int err;
 
+	if (!mc->channels[15]) {
+	    /* No one specified a system channel, make one up */
+	    mc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
+	    mc->sys_channel.channel_num = 15;
+	    mc->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
+	    mc->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+	    mc->sys_channel.active_sessions = 0;
+	    mc->channels[15] = &mc->sys_channel;
+	}
+
 	mc->sysinfo = emu->sysinfo;
 	err = init_sys(emu, mc);
     }
+
+    mc->configured = 1;
 
     return 0;
 }

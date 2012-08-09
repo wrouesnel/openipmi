@@ -280,9 +280,10 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     return fd;
 }
 
-int
-lan_channel_init(misc_data_t *data, channel_t *chan)
+static int
+lan_channel_init(void *info, channel_t *chan)
 {
+    misc_data_t *data = info;
     lanserv_data_t *lan = chan->chan_info;
     int err;
     unsigned int i;
@@ -429,9 +430,10 @@ ser_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     }
 }
 
-int
-ser_channel_init(misc_data_t *data, channel_t *chan)
+static int
+ser_channel_init(void *info, channel_t *chan)
 {
+    misc_data_t *data = info;
     serserv_data_t *ser = chan->chan_info;
     int err;
     int fd;
@@ -1035,6 +1037,15 @@ ipmi_free_timer(ipmi_timer_t *timer)
     timer->data->os_hnd->free_timer(timer->data->os_hnd, timer->id);
 }
 
+static ipmi_tick_handler_t *tick_handlers;
+
+void
+ipmi_register_tick_handler(ipmi_tick_handler_t *handler)
+{
+    handler->next = tick_handlers;
+    tick_handlers = handler;
+}
+
 static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
@@ -1042,15 +1053,14 @@ tick(void *cb_data, os_hnd_timer_id_t *id)
     sys_data_t *sys = data->sys;
     struct timeval tv;
     int err;
-    unsigned int i;
+    ipmi_tick_handler_t *h;
 
-    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = data->sys->channels[i];
-
-	if (chan && (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)) {
-	    ipmi_lan_tick(chan->chan_info, 1);
-	}
+    h = tick_handlers;
+    while(h) {
+	h->handler(h->info, 1);
+	h = h->next;
     }
+
     ipmi_emu_tick(data->emu, 1);
 
     if (sys->wait_poweroff) {
@@ -1167,6 +1177,7 @@ main(int argc, const char *argv[])
     console_info_t stdio_console;
     struct sigaction act;
     os_hnd_fd_id_t *conid;
+    lmc_data_t *mc;
 	
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
@@ -1214,6 +1225,12 @@ main(int argc, const char *argv[])
     sysinfo.poweroff_wait_time = 60;
     sysinfo.kill_wait_time = 20;
     sysinfo.startnow = 1;
+    sysinfo.csmi_send = smi_send;
+    sysinfo.clog = sim_chan_log;
+    sysinfo.calloc = ialloc;
+    sysinfo.cfree = ifree;
+    sysinfo.lan_channel_init = lan_channel_init;
+    sysinfo.ser_channel_init = ser_channel_init;
     data.sys = &sysinfo;
 
     err = pipe(sigpipeh);
@@ -1261,6 +1278,14 @@ main(int argc, const char *argv[])
 	data.consoles = &stdio_console;
     }
 
+    err = ipmi_mc_alloc_unconfigured(&sysinfo, 0x20, &mc);
+    if (err) {
+	if (err == ENOMEM)
+	    fprintf(stderr, "Out of memory allocation BMC MC\n");
+	exit(1);
+    }
+    sysinfo.chan_set = ipmi_mc_get_channelset(mc);
+
     if (read_config(&sysinfo, config_file))
 	exit(1);
 
@@ -1294,26 +1319,6 @@ main(int argc, const char *argv[])
 	sysinfo.log(&sysinfo, SETUP_ERROR, NULL,
 		    "No bmc_ipmb specified or configured.");
 	exit(1);
-    }
-
-    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = sysinfo.channels[i];
-
-	if (!chan)
-	    continue;
-
-	chan->smi_send = smi_send;
-	chan->oem.user_data = &data;
-	chan->alloc = ialloc;
-	chan->free = ifree;
-	chan->log = sim_chan_log;
-
-	if (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)
-	    err = lan_channel_init(&data, sysinfo.channels[i]);
-	else if (chan->medium_type == IPMI_CHANNEL_MEDIUM_RS232)
-	    err = ser_channel_init(&data, sysinfo.channels[i]);
-	else 
-	    chan_init(chan, sysinfo.ipmb[sysinfo.bmc_ipmb >> 1]);
     }
 
     sysinfo.console_fd = -1;

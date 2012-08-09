@@ -82,6 +82,7 @@ lanserv_read_config(sys_data_t    *sys,
     char         *errstr;
     lanserv_data_t *lan;
 
+
     lan = sys->alloc(sys, sizeof(*lan));
     if (!lan) {
 	err = -1;
@@ -96,7 +97,12 @@ lanserv_read_config(sys_data_t    *sys,
     lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
     lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
     lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
-    lan->sysinfo->channels[channel_num] = &lan->channel;
+
+    if (sys->chan_set[channel_num]) {
+	err = -1;
+	errstr = "Channel already in use";
+	goto out_err;
+    }
 
     while (fgets(buf, sizeof(buf), f) != NULL) {
 	(*line)++;
@@ -106,7 +112,7 @@ lanserv_read_config(sys_data_t    *sys,
 	    continue;
 
 	if (strcmp(tok, "endlan") == 0) {
-	    sys->channels[channel_num] = &lan->channel;
+	    sys->chan_set[channel_num] = &lan->channel;
 	    return 0;
 	}
 

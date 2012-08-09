@@ -286,7 +286,8 @@ handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 	    rdata[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
 	    rsp.msg.data_len = sizeof(rdata);
 	} else {
-	    lanserv_log(NULL, DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
+	    lanserv_log(NULL, DEBUG, NULL, "Error receiving message: %s\n",
+			strerror(errno));
 	    return;
 	}
     }
@@ -326,7 +327,7 @@ handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 	return;
     }
 
-    ipmi_handle_smi_rsp(info->sys->channels[msg->channel], msg,
+    ipmi_handle_smi_rsp(info->sys->chan_set[msg->channel], msg,
 			rsp.msg.data, rsp.msg.data_len);
 }
 
@@ -571,20 +572,27 @@ write_config(sys_data_t *chan)
 
 void init_oem_force(void);
 
+static ipmi_tick_handler_t *tick_handlers;
+
+void
+ipmi_register_tick_handler(ipmi_tick_handler_t *handler)
+{
+    handler->next = tick_handlers;
+    tick_handlers = handler;
+}
+
 static void
 tick(void *cb_data, os_hnd_timer_id_t *id)
 {
     misc_data_t *data = cb_data;
     struct timeval tv;
     int err;
-    unsigned int i;
+    ipmi_tick_handler_t *h;
 
-    for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = data->sys->channels[i];
-
-	if (chan && (chan->medium_type == IPMI_CHANNEL_MEDIUM_8023_LAN)) {
-	    ipmi_lan_tick(chan->chan_info, 1);
-	}
+    h = tick_handlers;
+    while(h) {
+	h->handler(h->info, 1);
+	h = h->next;
     }
 
     tv.tv_sec = 1;
@@ -620,6 +628,21 @@ ipmi_mc_get_next_recv_q(lmc_data_t *mc)
 }
 
 int
+ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
+			   lmc_data_t **rmc)
+{
+    *rmc = (lmc_data_t *) sys;
+    return 0;
+}
+
+channel_t **
+ipmi_mc_get_channelset(lmc_data_t *mc)
+{
+    sys_data_t *sys = (sys_data_t *) mc;
+    return sys->chan_set;
+}
+
+int
 main(int argc, const char *argv[])
 {
     sys_data_t  sysinfo;
@@ -632,6 +655,7 @@ main(int argc, const char *argv[])
     int lan_fd;
     os_hnd_fd_id_t *fd_id;
     unsigned int debug = 0;
+    channel_t *channels[16];
 
 #if HAVE_SYSLOG
     openlog(argv[0], LOG_CONS, LOG_DAEMON);
@@ -681,6 +705,8 @@ main(int argc, const char *argv[])
     sysinfo.log = lanserv_log;
     sysinfo.debug = debug;
 
+    memset(channels, 0, sizeof(channels));
+    sysinfo.chan_set = channels;
 
     if (read_config(&sysinfo, config_file))
 	exit(1);
@@ -697,7 +723,7 @@ main(int argc, const char *argv[])
     }
 
     for (i = 0; i < IPMI_MAX_CHANNELS; i++) {
-	channel_t *chan = sysinfo.channels[i];
+	channel_t *chan = channels[i];
 
 	if (!chan)
 	    continue;
@@ -751,7 +777,7 @@ main(int argc, const char *argv[])
 		}
 	    }
 	} else 
-	    chan_init(chan, NULL);
+	    chan_init(chan);
     }
 
     if (daemonize) {

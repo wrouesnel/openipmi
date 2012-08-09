@@ -2,6 +2,12 @@
 
 	* lanserv/*: Move the receive queue into the MC where it belongs.
 
+	* swig/python/openipmigui/_mc_chan.py: Fix channel scanning code
+	so it scans channel 15, too.
+
+	* lanserv/*: Move the channel structures into the MC and allow
+	per-MC channel settings.
+
 2012-08-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Rename "bmc_data_t" to "sys_data_t" because it's mostly

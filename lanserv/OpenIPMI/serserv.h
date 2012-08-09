@@ -91,6 +91,8 @@ struct serserv_data_s {
     int bind_fd;
     int con_fd;
 
+    int connected;
+
     void (*send_out)(serserv_data_t *si, unsigned char *data,
 		     unsigned int data_len);
 

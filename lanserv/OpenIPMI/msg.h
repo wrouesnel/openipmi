@@ -112,4 +112,7 @@ typedef struct rsp_msg
     uint8_t        *data;
 } rsp_msg_t;
 
+typedef struct channel_s channel_t;
+typedef struct sys_data_s sys_data_t;
+
 #endif /* __MSG_H_ */

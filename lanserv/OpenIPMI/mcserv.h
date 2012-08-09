@@ -60,6 +60,11 @@
 
 typedef struct lmc_data_s lmc_data_t;
 
+int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
+				  lmc_data_t **rmc);
+
+channel_t **ipmi_mc_get_channelset(lmc_data_t *mc);
+
 void ipmi_mc_destroy(lmc_data_t *mc);
 
 void ipmi_mc_disable(lmc_data_t *mc);

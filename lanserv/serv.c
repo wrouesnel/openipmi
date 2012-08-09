@@ -209,11 +209,9 @@ look_for_get_devid(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 }
 
 int
-chan_init(channel_t *chan, lmc_data_t *mc)
+chan_init(channel_t *chan)
 {
     int rv = 0;
-
-    chan->mc = mc;
 
     /* If the calling code already hasn't set up an OEM handler, we
        set up our own to look for a get device id.  When we find a get
@@ -238,21 +236,6 @@ sysinfo_init(sys_data_t *sys)
     unsigned int i;
 
     memset(sys, 0, sizeof(*sys));
-
-    sys->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
-    sys->sys_channel.channel_num = 0xf;
-    /* Assume this for now, override with config */
-    sys->sys_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_KCS;
-    sys->sys_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    sys->sys_channel.active_sessions = 0;
-    sys->channels[0xf] = &sys->sys_channel;
-
-    sys->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
-    sys->ipmb_channel.channel_num = 0;
-    sys->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
-    sys->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    sys->ipmb_channel.active_sessions = 0;
-    sys->channels[0] = &sys->ipmb_channel;
 
     for (i=0; i<=MAX_USERS; i++) {
 	sys->users[i].idx = i;

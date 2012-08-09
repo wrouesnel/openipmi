@@ -68,8 +68,6 @@
 #include <OpenIPMI/msg.h>
 #include <OpenIPMI/mcserv.h>
 
-typedef struct channel_s channel_t;
-
 typedef void (*handle_oem_cb)(channel_t *chan, void *cb_data);
 typedef struct oem_handler_s
 {
@@ -219,8 +217,6 @@ typedef struct user_s
 #define USER_BITS_REQ		6 /* Bits required to hold a user. */
 #define USER_MASK		0x3f
 
-typedef struct sys_data_s sys_data_t;
-
 #define MAX_EVENT_FILTERS 16
 #define MAX_ALERT_POLICIES 16
 #define MAX_ALERT_STRINGS 16
@@ -325,17 +321,16 @@ struct sys_data_s {
 
     unsigned char bmc_ipmb;
 
-    channel_t *channels[IPMI_MAX_CHANNELS];
-
-    int connected; /* For VM serial connections */
-
-    channel_t sys_channel;
-    channel_t ipmb_channel;
-
     pef_data_t pef;
     pef_data_t pef_rollback;
 
     void *info;
+
+    /*
+     * When reading in config, this tracks which set of channels we are
+     * working on.
+     */
+    channel_t **chan_set;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);
@@ -350,9 +345,22 @@ struct sys_data_s {
     /* FIXME - move */
     void (*target_reset)(sys_data_t *sys);
 
-    /* Write the configuration file (done when a non-volatile
-       change is done, or when a user name/password is written. */
+    /*
+     * Write the configuration file (done when a non-volatile
+     * change is done, or when a user name/password is written.
+     */
     void (*write_config)(sys_data_t *chan);
+
+    /*
+     * These are a hack so the channel code in the MCs can pick up
+     * these functions.
+     */
+    void (*clog)(channel_t *chan, int logtype, msg_t *msg, char *format, ...);
+    int (*csmi_send)(channel_t *chan, msg_t *msg);
+    void *(*calloc)(channel_t *chan, int size);
+    void (*cfree)(channel_t *chan, void *data);
+    int (*lan_channel_init)(void *info, channel_t *chan);
+    int (*ser_channel_init)(void *info, channel_t *chan);
 };
 
 static inline void
@@ -372,6 +380,14 @@ zero_extend_ascii(uint8_t *c, unsigned int len)
     }
 }
 
+typedef struct ipmi_tick_handler_s {
+    void (*handler)(void *info, unsigned int seconds);
+    void *info;
+    struct ipmi_tick_handler_s *next;
+} ipmi_tick_handler_t;
+
+void ipmi_register_tick_handler(ipmi_tick_handler_t *handler);
+
 /* A helper function to allow OEM code to send messages. */
 int ipmi_oem_send_msg(channel_t     *chan,
 		      unsigned char netfn,
@@ -390,7 +406,7 @@ int channel_smi_send(channel_t *chan, msg_t *msg);
  */
 void sys_start_cmd(sys_data_t *sys);
 
-int chan_init(channel_t *chan, lmc_data_t *mc);
+int chan_init(channel_t *chan);
 void sysinfo_init(sys_data_t *sys);
 
 

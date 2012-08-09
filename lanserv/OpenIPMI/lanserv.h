@@ -236,6 +236,8 @@ struct lanserv_data_s
 {
     sys_data_t *sysinfo;
 
+    ipmi_tick_handler_t tick_handler;
+
     unsigned char *guid;
 
     channel_t channel;
@@ -289,10 +291,6 @@ int lanserv_read_config(sys_data_t   *sys,
 			FILE         *f,
 			int          *line,
 			unsigned int channel_num);
-
-/* Call this periodically to time things.  time_since_last is the
-   number of seconds since the last call to this. */
-void ipmi_lan_tick(lanserv_data_t *lan, unsigned int time_since_last);
 
 int ipmi_lan_init(lanserv_data_t *lan);
 
