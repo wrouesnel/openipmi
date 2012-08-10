@@ -397,30 +397,30 @@ get_user(char **tokptr, sys_data_t *sys, char **err)
     rv = get_bool(tokptr, &val, err);
     if (rv)
 	return rv;
-    sys->users[num].valid = val;
+    sys->cusers[num].valid = val;
 
-    rv = read_bytes(tokptr, sys->users[num].username, err, 16);
+    rv = read_bytes(tokptr, sys->cusers[num].username, err, 16);
     if (rv)
 	return rv;
 
-    rv = read_bytes(tokptr, sys->users[num].pw, err, 20);
+    rv = read_bytes(tokptr, sys->cusers[num].pw, err, 20);
     if (rv)
 	return rv;
 
     rv = get_priv(tokptr, &val, err);
     if (rv)
 	return rv;
-    sys->users[num].privilege = val;
+    sys->cusers[num].privilege = val;
 
     rv = get_uint(tokptr, &val, err);
     if (rv)
 	return rv;
-    sys->users[num].max_sessions = val;
+    sys->cusers[num].max_sessions = val;
 
     rv = get_auths(tokptr, &val, err);
     if (rv)
 	return rv;
-    sys->users[num].allowed_auths = val;
+    sys->cusers[num].allowed_auths = val;
 
     return 0;
 }
@@ -492,6 +492,8 @@ read_config(sys_data_t *sys,
 		    err = -1;
 		} else {
 		    sys->chan_set = ipmi_mc_get_channelset(mc);
+		    sys->cusers = ipmi_mc_get_users(mc);
+		    sys->cpef = ipmi_mc_get_pef(mc);
 		    sys->startcmd = ipmi_mc_get_startcmdinfo(mc);
 		}
 	    }

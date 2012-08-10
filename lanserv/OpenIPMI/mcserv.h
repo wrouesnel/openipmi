@@ -65,6 +65,8 @@ int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 
 channel_t **ipmi_mc_get_channelset(lmc_data_t *mc);
 startcmd_t *ipmi_mc_get_startcmdinfo(lmc_data_t *mc);
+user_t *ipmi_mc_get_users(lmc_data_t *mc);
+pef_data_t *ipmi_mc_get_pef(lmc_data_t *mc);
 
 void ipmi_mc_destroy(lmc_data_t *mc);
 

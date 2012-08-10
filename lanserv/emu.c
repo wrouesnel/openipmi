@@ -192,6 +192,11 @@ struct lmc_data_s
     channel_t sys_channel;
     channel_t ipmb_channel;
 
+    user_t users[MAX_USERS + 1];
+
+    pef_data_t pef;
+    pef_data_t pef_rollback;
+
     ipmi_tick_handler_t tick_handler;
     ipmi_child_quit_t child_quit_handler;
     startcmd_t startcmd;
@@ -2354,32 +2359,32 @@ handle_set_user_access(lmc_data_t    *mc,
 
     if (msg->data[0] & 0x80) {
 	newv = (msg->data[0] >> 4) & 1;
-	if (newv != mc->sysinfo->users[user].valid) {
-	    mc->sysinfo->users[user].valid = newv;
+	if (newv != mc->users[user].valid) {
+	    mc->users[user].valid = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 5) & 1;
-	if (newv != mc->sysinfo->users[user].link_auth) {
-	    mc->sysinfo->users[user].link_auth = newv;
+	if (newv != mc->users[user].link_auth) {
+	    mc->users[user].link_auth = newv;
 	    changed = 1;
 	}
 	newv = (msg->data[0] >> 6) & 1;
-	if (newv != mc->sysinfo->users[user].cb_only) {
-	    mc->sysinfo->users[user].cb_only = newv;
+	if (newv != mc->users[user].cb_only) {
+	    mc->users[user].cb_only = newv;
 	    changed = 1;
 	}
     }
 
-    if (priv != mc->sysinfo->users[user].privilege) {
-	mc->sysinfo->users[user].privilege = priv;
+    if (priv != mc->users[user].privilege) {
+	mc->users[user].privilege = priv;
 	changed = 1;
     }
 
     if (msg->len >= 4) {
 	/* Got the session limit byte. */
 	newv = msg->data[3] & 0xf;
-	if (newv != mc->sysinfo->users[user].max_sessions) {
-	    mc->sysinfo->users[user].max_sessions = newv;
+	if (newv != mc->users[user].max_sessions) {
+	    mc->users[user].max_sessions = newv;
 	    changed = 1;
 	}
     }
@@ -2425,17 +2430,17 @@ handle_get_user_access(lmc_data_t    *mc,
     /* Number of enabled users. */
     rdata[2] = 0;
     for (i=1; i<=MAX_USERS; i++) {
-	if (mc->sysinfo->users[i].valid)
+	if (mc->users[i].valid)
 	    rdata[2]++;
     }
 
     /* Only fixed user name is user 1. */
-    rdata[3] = mc->sysinfo->users[1].valid;
+    rdata[3] = mc->users[1].valid;
 
-    rdata[4] = ((mc->sysinfo->users[user].valid << 4)
-		| (mc->sysinfo->users[user].link_auth << 5)
-		| (mc->sysinfo->users[user].cb_only << 6)
-		| mc->sysinfo->users[user].privilege);
+    rdata[4] = ((mc->users[user].valid << 4)
+		| (mc->users[user].link_auth << 5)
+		| (mc->users[user].cb_only << 6)
+		| mc->users[user].privilege);
     *rdata_len = 5;
 }
 
@@ -2466,8 +2471,8 @@ handle_set_user_name(lmc_data_t    *mc,
 	return;
     }
 
-    memcpy(mc->sysinfo->users[user].username, msg->data+1, 16);
-    cleanup_ascii_16(mc->sysinfo->users[user].username);
+    memcpy(mc->users[user].username, msg->data+1, 16);
+    cleanup_ascii_16(mc->users[user].username);
     rdata[0] = 0;
     *rdata_len = 1;
 }
@@ -2501,7 +2506,7 @@ handle_get_user_name(lmc_data_t    *mc,
     }
 
     data[0] = 0;
-    memcpy(data+1, mc->sysinfo->users[user].username, 16);
+    memcpy(data+1, mc->users[user].username, 16);
     *rdata_len = 17;
 }
 
@@ -2535,9 +2540,9 @@ handle_set_user_password(lmc_data_t    *mc,
 
     op = msg->data[1] & 0x3;
     if (op == 0) {
-	mc->sysinfo->users[user].valid = 0;
+	mc->users[user].valid = 0;
     } else if (op == 1) {
-	mc->sysinfo->users[user].valid = 1;
+	mc->users[user].valid = 1;
     } else {
 	if (msg->len < 18) {
 	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -2545,7 +2550,7 @@ handle_set_user_password(lmc_data_t    *mc,
 	    return;
 	}
 	if (op == 2) {
-	    memcpy(mc->sysinfo->users[user].pw, msg->data+2, 16);
+	    memcpy(mc->users[user].pw, msg->data+2, 16);
 	} else {
 	    /* Nothing to do for test password, we accept anything. */
 	}
@@ -3892,30 +3897,30 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	switch (msg->data[1] & 0x3)
 	{
 	case 0:
-	    if (sys->pef.set_in_progress) {
+	    if (mc->pef.set_in_progress) {
 		/* rollback */
-		memcpy(&sys->pef, &sys->pef_rollback,
-		       sizeof(sys->pef));
+		memcpy(&mc->pef, &mc->pef_rollback,
+		       sizeof(mc->pef));
 	    }
 	    /* No affect otherwise */
 	    break;
 
 	case 1:
-	    if (sys->pef.set_in_progress)
+	    if (mc->pef.set_in_progress)
 		err = 0x81; /* Another user is writing. */
 	    else {
 		/* Save rollback data */
-		memcpy(&sys->pef_rollback, &sys->pef,
-		       sizeof(sys->pef));
-		sys->pef.set_in_progress = 1;
+		memcpy(&mc->pef_rollback, &mc->pef,
+		       sizeof(mc->pef));
+		mc->pef.set_in_progress = 1;
 	    }
 	    break;
 
 	case 2:
-	    if (sys->pef.commit)
-		sys->pef.commit(sys);
-	    memset(&sys->pef.changed, 0, sizeof(sys->pef.changed));
-	    sys->pef.set_in_progress = 0;
+	    if (mc->pef.commit)
+		mc->pef.commit(sys);
+	    memset(&mc->pef.changed, 0, sizeof(mc->pef.changed));
+	    mc->pef.set_in_progress = 0;
 	    break;
 
 	case 3:
@@ -3930,35 +3935,35 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	break;
 
     case 1:
-	sys->pef.pef_control = msg->data[1];
-	sys->pef.changed.pef_control = 1;
+	mc->pef.pef_control = msg->data[1];
+	mc->pef.changed.pef_control = 1;
 	break;
 
     case 2:
-	sys->pef.pef_action_global_control = msg->data[1];
-	sys->pef.changed.pef_action_global_control = 1;
+	mc->pef.pef_action_global_control = msg->data[1];
+	mc->pef.changed.pef_action_global_control = 1;
 	break;
 
     case 3:
-	sys->pef.pef_startup_delay = msg->data[1];
-	sys->pef.changed.pef_startup_delay = 1;
+	mc->pef.pef_startup_delay = msg->data[1];
+	mc->pef.changed.pef_startup_delay = 1;
 	break;
 
     case 4:
-	sys->pef.pef_alert_startup_delay = msg->data[1];
-	sys->pef.changed.pef_alert_startup_delay = 1;
+	mc->pef.pef_alert_startup_delay = msg->data[1];
+	mc->pef.changed.pef_alert_startup_delay = 1;
 	break;
 
     case 6:
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 22)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= sys->pef.num_event_filters))
+	else if ((set <= 0) || (set >= mc->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(sys->pef.event_filter_table[set], msg->data+1, 21);
-	    sys->pef.changed.event_filter_table[set] = 1;
+	    memcpy(mc->pef.event_filter_table[set], msg->data+1, 21);
+	    mc->pef.changed.event_filter_table[set] = 1;
 	}
 	break;
 
@@ -3966,12 +3971,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 3)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= sys->pef.num_event_filters))
+	else if ((set <= 0) || (set >= mc->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(sys->pef.event_filter_data1[set], msg->data+1, 2);
-	    sys->pef.changed.event_filter_data1[set] = 1;
+	    memcpy(mc->pef.event_filter_data1[set], msg->data+1, 2);
+	    mc->pef.changed.event_filter_data1[set] = 1;
 	}
 	break;
 
@@ -3979,12 +3984,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 5)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if ((set <= 0) || (set >= sys->pef.num_alert_policies))
+	else if ((set <= 0) || (set >= mc->pef.num_alert_policies))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(sys->pef.alert_policy_table[set], msg->data+1, 4);
-	    sys->pef.changed.alert_policy_table[set] = 1;
+	    memcpy(mc->pef.alert_policy_table[set], msg->data+1, 4);
+	    mc->pef.changed.alert_policy_table[set] = 1;
 	}
 	break;
 
@@ -3992,8 +3997,8 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	if (msg->len < 18)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
-	    memcpy(sys->pef.system_guid, msg->data+1, 17);
-	    sys->pef.changed.system_guid = 1;
+	    memcpy(mc->pef.system_guid, msg->data+1, 17);
+	    mc->pef.changed.system_guid = 1;
 	}
 	break;
 
@@ -4001,12 +4006,12 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 4)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= sys->pef.num_alert_strings)
+	else if (set >= mc->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    set = msg->data[1] & 0x7f;
-	    memcpy(sys->pef.alert_string_keys[set], msg->data+1, 3);
-	    sys->pef.changed.alert_string_keys[set] = 1;
+	    memcpy(mc->pef.alert_string_keys[set], msg->data+1, 3);
+	    mc->pef.changed.alert_string_keys[set] = 1;
 	}
 	break;
 
@@ -4014,7 +4019,7 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 	set = msg->data[1] & 0x7f;
 	if (msg->len < 4)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (set >= sys->pef.num_alert_strings)
+	else if (set >= mc->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else if (msg->data[2] == 0)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
@@ -4026,8 +4031,8 @@ handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 		break;
 	    }
-	    memcpy(sys->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
-	    sys->pef.changed.alert_strings[set] = 1;
+	    memcpy(mc->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
+	    mc->pef.changed.alert_strings[set] = 1;
 	}
 	break;
 
@@ -4069,85 +4074,85 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
     switch (msg->data[0] & 0x7f)
     {
     case 0:
-	databyte = sys->pef.set_in_progress;
+	databyte = mc->pef.set_in_progress;
 	break;
 
     case 5:
-	databyte = sys->pef.num_event_filters - 1;
+	databyte = mc->pef.num_event_filters - 1;
 	break;
 
     case 8:
-	databyte = sys->pef.num_alert_policies - 1;
+	databyte = mc->pef.num_alert_policies - 1;
 	break;
 
     case 11:
-	databyte = sys->pef.num_alert_strings - 1;
+	databyte = mc->pef.num_alert_strings - 1;
 	break;
 
     case 1:
-	databyte = sys->pef.pef_control;
+	databyte = mc->pef.pef_control;
 	break;
 
     case 2:
-	databyte = sys->pef.pef_action_global_control;
+	databyte = mc->pef.pef_action_global_control;
 	break;
 
     case 3:
-	databyte = sys->pef.pef_startup_delay;
+	databyte = mc->pef.pef_startup_delay;
 	break;
 
     case 4:
-	databyte = sys->pef.pef_alert_startup_delay;
+	databyte = mc->pef.pef_alert_startup_delay;
 	break;
 
     case 6:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= sys->pef.num_event_filters))
+	if ((set <= 0) || (set >= mc->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = sys->pef.event_filter_table[set];
+	    data = mc->pef.event_filter_table[set];
 	    length = 21;
 	}
 	break;
 
     case 7:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= sys->pef.num_event_filters))
+	if ((set <= 0) || (set >= mc->pef.num_event_filters))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = sys->pef.event_filter_data1[set];
+	    data = mc->pef.event_filter_data1[set];
 	    length = 2;
 	}
 	break;
 
     case 9:
 	set = msg->data[1] & 0x7f;
-	if ((set <= 0) || (set >= sys->pef.num_alert_policies))
+	if ((set <= 0) || (set >= mc->pef.num_alert_policies))
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = sys->pef.alert_policy_table[set];
+	    data = mc->pef.alert_policy_table[set];
 	    length = 4;
 	}
 	break;
 
     case 10:
-	data = sys->pef.system_guid;
+	data = mc->pef.system_guid;
 	length = 17;
 	break;
 
     case 12:
 	set = msg->data[1] & 0x7f;
-	if (set >= sys->pef.num_alert_strings)
+	if (set >= mc->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    data = sys->pef.alert_string_keys[set];
+	    data = mc->pef.alert_string_keys[set];
 	    length = 3;
 	}
 	break;
 
     case 13:
 	set = msg->data[1] & 0x7f;
-	if (set >= sys->pef.num_alert_strings)
+	if (set >= mc->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else if (msg->data[2] == 0)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
@@ -4159,7 +4164,7 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
 	    }
 	    tmpdata[0] = set;
 	    tmpdata[1] = block + 1;
-	    memcpy(tmpdata+2, sys->pef.alert_strings[set]+(block*16), 16);
+	    memcpy(tmpdata+2, mc->pef.alert_strings[set]+(block*16), 16);
 	    data = tmpdata;
 	    length = 18;
 	}
@@ -5938,6 +5943,18 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
     return mc->channels;
 }
 
+user_t *
+ipmi_mc_get_users(lmc_data_t *mc)
+{
+    return mc->users;
+}
+
+pef_data_t *
+ipmi_mc_get_pef(lmc_data_t *mc)
+{
+    return &mc->pef;
+}
+
 startcmd_t *
 ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
 {
@@ -5949,6 +5966,7 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 			   lmc_data_t **rmc)
 {
     lmc_data_t *mc;
+    unsigned int i;
     
     if (ipmb & 1) {
 	sys->log(sys, SETUP_ERROR, NULL,
@@ -5975,6 +5993,23 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
     mc->startcmd.poweroff_wait_time = 60;
     mc->startcmd.kill_wait_time = 20;
     mc->startcmd.startnow = 0;
+
+    for (i=0; i<=MAX_USERS; i++) {
+	mc->users[i].idx = i;
+    }
+
+    mc->pef.num_event_filters = MAX_EVENT_FILTERS;
+    for (i=0; i<MAX_EVENT_FILTERS; i++) {
+	mc->pef.event_filter_table[i][0] = i;
+	mc->pef.event_filter_data1[i][0] = i;
+    }
+    mc->pef.num_alert_policies = MAX_ALERT_POLICIES;
+    for (i=0; i<MAX_ALERT_POLICIES; i++)
+	mc->pef.alert_policy_table[i][0] = i;
+    mc->pef.num_alert_strings = MAX_ALERT_STRINGS;
+    for (i=0; i<MAX_ALERT_STRINGS; i++) {
+	mc->pef.alert_string_keys[i][0] = i;
+    }
 
  out:
     *rmc = mc;

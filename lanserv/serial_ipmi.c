@@ -1241,6 +1241,7 @@ serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
 	goto out_err;
     }
 
+printf("A: %p\n", sys->chan_set);
     if (sys->chan_set[chan_num]) {
 	*errstr = "System channel already defined";
 	goto out_err;

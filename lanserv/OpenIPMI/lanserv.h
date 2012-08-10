@@ -242,6 +242,11 @@ struct lanserv_data_s
 
     channel_t channel;
 
+    /* user 0 is not used. */
+    user_t *users;
+
+    pef_data_t *pef;
+
     /* The amount of time in seconds before a session will be shut
        down if there is no activity. */
     unsigned int default_session_timeout;

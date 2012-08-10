@@ -116,12 +116,12 @@ find_user(lanserv_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
     user_t *rv = NULL;
 
     for (i=1; i<=MAX_USERS; i++) {
-	if (lan->sysinfo->users[i].valid
-	    && (memcmp(user, lan->sysinfo->users[i].username, 16) == 0))
+	if (lan->users[i].valid
+	    && (memcmp(user, lan->users[i].username, 16) == 0))
 	{
 	    if (name_only_lookup ||
-		(lan->sysinfo->users[i].privilege == priv)) {
-		rv = &(lan->sysinfo->users[i]);
+		(lan->users[i].privilege == priv)) {
+		rv = &(lan->users[i]);
 		break;
 	    }
 	}
@@ -643,8 +643,8 @@ handle_get_channel_auth_capabilities(lanserv_data_t *lan, msg_t *msg)
 			   user-level authenitcation is on,
 			   non-null user names disabled,
 			   no anonymous support. */
-	if (lan->sysinfo->users[1].valid) {
-	    if (is_authval_null(lan->sysinfo->users[1].pw))
+	if (lan->users[1].valid) {
+	    if (is_authval_null(lan->users[1].pw))
 		data[3] |= 0x01; /* Anonymous login. */
 	    else
 		data[3] |= 0x02; /* Null user supported. */
@@ -827,7 +827,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     }
 
     auth = msg->data[0] & 0xf;
-    user = &(lan->sysinfo->users[user_idx]);
+    user = &(lan->users[user_idx]);
     if (! (user->valid)) {
 	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
@@ -1854,7 +1854,7 @@ rakp_hmac_set2(lanserv_data_t *lan, session_t *session,
     idata[56] = a->role;
     idata[57] = a->username_len;
     memcpy(idata+58, a->username, idata[57]);
-    user = &(lan->sysinfo->users[session->userid]);
+    user = &(lan->users[session->userid]);
 
     HMAC(a->akey, user->pw, a->akey_len,
 	 idata, 58+idata[57], data + *data_len, &ilen);
@@ -1889,7 +1889,7 @@ rakp_hmac_check3(lanserv_data_t *lan, session_t *session,
     unsigned char       idata[38];
     unsigned int        ilen;
     unsigned char       integ[20];
-    user_t              *user = &(lan->sysinfo->users[session->userid]);
+    user_t              *user = &(lan->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
     if (((*data_len) - a->akey_len) < 8)
@@ -1963,7 +1963,7 @@ hmac_sha1_init(lanserv_data_t *lan, session_t *session)
 static int
 hmac_md5_init(lanserv_data_t *lan, session_t *session)
 {
-    user_t *user = &(lan->sysinfo->users[session->userid]);
+    user_t *user = &(lan->users[session->userid]);
     session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
     session->auth_data.ikey_len = 16;
@@ -2026,7 +2026,7 @@ auth_free(void *info, void *data)
 static int
 md5_init(lanserv_data_t *lan, session_t *session)
 {
-    user_t          *user = &(lan->sysinfo->users[session->userid]);
+    user_t          *user = &(lan->users[session->userid]);
     int             rv;
     ipmi_authdata_t idata;
 
@@ -2991,7 +2991,7 @@ ipmi_lan_init(lanserv_data_t *lan)
     lan->channel.set_chan_access = set_channel_access;
 
     /* Force user 1 to be a null user. */
-    memset(lan->sysinfo->users[1].username, 0, 16);
+    memset(lan->users[1].username, 0, 16);
 
     i = lan->gen_rand(lan, challenge_data, 16);
     if (i)

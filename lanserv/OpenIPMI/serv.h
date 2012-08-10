@@ -197,7 +197,7 @@ struct channel_s
 				 unsigned char *rdata, unsigned int *rdata_len);
 };
 
-typedef struct user_s
+struct user_s
 {
     unsigned char valid;
     unsigned char link_auth;
@@ -211,7 +211,7 @@ typedef struct user_s
 
     /* Set by the user code. */
     int           idx; /* My idx in the table. */
-} user_t;
+};
 
 /*
  * Restrictions: <=64 users (per spec, 6 bits)
@@ -225,7 +225,7 @@ typedef struct user_s
 #define MAX_ALERT_STRINGS 16
 #define MAX_ALERT_STRING_LEN 64
 
-typedef struct pef_data_s
+struct pef_data_s
 {
     unsigned int set_in_progress : 2;
     void (*commit)(sys_data_t *sys); /* Called when the commit occurs. */
@@ -257,7 +257,7 @@ typedef struct pef_data_s
 	unsigned int alert_string_keys[MAX_ALERT_STRINGS];
 	unsigned int alert_strings[MAX_ALERT_STRINGS];
     } changed;
-} pef_data_t;
+};
 
 typedef struct ipmi_timer_s ipmi_timer_t;
 
@@ -321,22 +321,19 @@ struct sys_data_s {
     socklen_t console_addr_len;
     int console_fd;
 
-    /* user 0 is not used. */
-    user_t users[MAX_USERS + 1];
-
     unsigned char bmc_ipmb;
-
-    pef_data_t pef;
-    pef_data_t pef_rollback;
 
     void *info;
 
     /*
      * When reading in config, this tracks which information we are
-     * working on.
+     * working on.  This is initialized to the MC at 0x20, setting
+     * the working MC changes these to the new MC.
      */
     channel_t **chan_set;
     startcmd_t *startcmd;
+    user_t *cusers;
+    pef_data_t *cpef;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);

@@ -97,6 +97,7 @@ lanserv_read_config(sys_data_t    *sys,
     lan->channel.medium_type = IPMI_CHANNEL_MEDIUM_8023_LAN;
     lan->channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
     lan->channel.session_support = IPMI_CHANNEL_MULTI_SESSION;
+    lan->users = sys->cusers;
 
     if (sys->chan_set[channel_num]) {
 	err = -1;

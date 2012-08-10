@@ -650,6 +650,22 @@ ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
     return NULL;
 }
 
+static user_t musers[MAX_USERS + 1];
+
+user_t *
+ipmi_mc_get_users(lmc_data_t *mc)
+{
+    return musers;
+}
+
+static pef_data_t mpef;
+
+pef_data_t *
+ipmi_mc_get_pef(lmc_data_t *mc)
+{
+    return &mpef;
+}
+
 void
 ipmi_do_start_cmd(startcmd_t *startcmd)
 {

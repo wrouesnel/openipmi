@@ -28,7 +28,7 @@ sensor_set_event_support 20 0 1 enable scanning per-state \
 	000111111000000 000111111000000
 
 # Add a satellite MC
-mc_add 30 2 no-device-sdrs 98 10 1 00 1291 f03
+mc_add 30 2 no-device-sdrs 98 10 1 80 1291 f03
 mc_enable 30
 
 # Turn on the BMC

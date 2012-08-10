@@ -233,25 +233,7 @@ chan_init(channel_t *chan)
 void
 sysinfo_init(sys_data_t *sys)
 {
-    unsigned int i;
-
     memset(sys, 0, sizeof(*sys));
-
-    for (i=0; i<=MAX_USERS; i++) {
-	sys->users[i].idx = i;
-    }
-    sys->pef.num_event_filters = MAX_EVENT_FILTERS;
-    for (i=0; i<MAX_EVENT_FILTERS; i++) {
-	sys->pef.event_filter_table[i][0] = i;
-	sys->pef.event_filter_data1[i][0] = i;
-    }
-    sys->pef.num_alert_policies = MAX_ALERT_POLICIES;
-    for (i=0; i<MAX_ALERT_POLICIES; i++)
-	sys->pef.alert_policy_table[i][0] = i;
-    sys->pef.num_alert_strings = MAX_ALERT_STRINGS;
-    for (i=0; i<MAX_ALERT_STRINGS; i++) {
-	sys->pef.alert_string_keys[i][0] = i;
-    }
 }
 
 void

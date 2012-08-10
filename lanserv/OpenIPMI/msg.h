@@ -115,5 +115,7 @@ typedef struct rsp_msg
 typedef struct channel_s channel_t;
 typedef struct sys_data_s sys_data_t;
 typedef struct startcmd_s startcmd_t;
+typedef struct user_s user_t;
+typedef struct pef_data_s pef_data_t;
 
 #endif /* __MSG_H_ */

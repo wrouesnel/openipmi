@@ -11,6 +11,12 @@
 	* lanserv/*: Move the startcmd into the MC to allow more than
 	one VM to hook to simulated IPMI environment on different MCs.
 
+	* lib/chassis.c, lib/mc.c, include/OpenIPMI/internal/ipmi_mc.h:
+	Create power and reset controls for non-BMC MCs with the chassis
+	bit set, use the IPMB address for the instance in that case.
+
+	* lanserv/*: Move the user and PEF structures into the MC.
+
 2012-08-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Rename "bmc_data_t" to "sys_data_t" because it's mostly
