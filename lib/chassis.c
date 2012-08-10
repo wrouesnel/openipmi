@@ -375,7 +375,7 @@ chassis_mc_control_active_handler(ipmi_mc_t *mc,
 }
 
 int
-_ipmi_chassis_create_controls(ipmi_mc_t *mc)
+_ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance)
 {
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
@@ -386,7 +386,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_control_cbs_t cbs;
 
     rv = ipmi_entity_add(ents, domain, 0, 0, 0,
-			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
+			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, instance,
 			 NULL, IPMI_ASCII_STR, 0,
 			 chassis_entity_sdr_add,
 			 NULL, &chassis_ent);

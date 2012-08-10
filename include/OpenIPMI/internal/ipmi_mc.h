@@ -203,7 +203,7 @@ void _ipmi_mc_release(ipmi_mc_t *mc);
 void _ipmi_mc_check_mc(ipmi_mc_t *mc);
 
 /* Create chassis conrols for an MC. */
-int _ipmi_chassis_create_controls(ipmi_mc_t *mc);
+int _ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance);
 
 /* Generate a unique number for the MC. */
 unsigned int ipmi_mc_get_unique_nmu(ipmi_mc_t *mc);

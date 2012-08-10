@@ -2319,8 +2319,11 @@ mc_startup(ipmi_mc_t *mc)
     mc->startup_count = 1;
     mc->startup_reported = 0;
 
-    if (mc->devid.chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
-        rv = _ipmi_chassis_create_controls(mc);
+    if (mc->devid.chassis_support) {
+	unsigned char instance = ipmi_mc_get_address(mc);
+        if (instance == 0x20)
+	    instance = 1;
+        rv = _ipmi_chassis_create_controls(mc, instance);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%smc.c(ipmi_mc_setup_new): "
