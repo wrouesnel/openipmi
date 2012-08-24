@@ -1,0 +1,131 @@
+This directory contains two programs: lanserv and ipmi_sim.  These
+grew out of a need to be able to test OpenIPMI without having to have
+real hardware, but they have taken on more than that.
+
+lanserv is a program that provides a LAN connection for a BMC that
+does not otherwise have a LAN connection.  It takes a standard Linux
+IPMI device and implements the IPMI LAN protocol.
+
+ipmi_sim is a full IPMI simulator and does not require a real BMC.  It
+can be used to simulate an entire IPMI system, including satellite
+MCs.  You can use it over a LAN connection, or it provides a serial
+interface so it can be used with QEMU or other VMs.  The serial
+interface implements the serial protocols available on many ATCA
+blades, and it also emulates a protocol so it may be used for
+emulation of a standard IPMI interface (KCS, SMIC, BT, SSIF) including
+the handling of reset, power, and interrupts.
+
+
+Files
+-----
+
+The include files are in the OpenIPMI directory:
+
+lanserv.h - The configuration of a LAN interface is defined in this file.
+
+mcserv.h - This defines the interface for an MC.
+
+msg.h - This defines an IPMI message that is passed around, and a few
+      other global things that pretty much everything uses.  This is
+      separate from serv.h because of chicken and egg problems.
+
+serserv.h - The configuration of a serial interface.
+
+serv.h - This defines data structures used by the whole system.
+
+
+The code is in this directory:
+
+lanserv.c - The main file for the lanserv program.
+
+config.c - Reads a configuration file.  This defines things that are
+	common between lanserv and ipmi_sim, LAN configuration,
+	serial port configuration, users, etc.
+
+lanserv_config.c - Specific code for reading in LAN configuration, used
+	by config.c.
+
+priv_table.c - Holds the tables used map IPMI commands to their required
+	privilege levels.
+
+emu.c - An emulator for an MC, including the full MC data structure.
+	This file is really too large and should be broken up.
+
+emu_cmd.c - Implements a command language used for both configuration
+	and control of the MCs in ipmi_sim.  It is used by configuration
+	files (see the .emu files) to define the system, and it can be
+	used to generate real-time events by setting sensor values.
+
+emu.h - Defines the interface between emu.c and emu_cmd.c
+
+ipmi_sim.c - The main file for the ipmi_sim program.
+
+lanserv_ipmi.c - An implementation of the IPMI LAN protocol.
+
+lanserv_oem_force.c - Some OEM handling for some older Force computer
+	systems.
+
+serial_ipmi.c - An implementation of the IPMI serial protocols, and
+	also code to handle reading a serial configuration line.
+
+lanserv_asf.c - Handles LAN ASF commands.
+
+serv.c - General utilities used by a lot of the system.
+
+
+And here's a few other miscellaneous things:
+
+ipmi_checksum.c - A program that takes a string of bytes and generates
+	an IPMI checksum.  Primarily used for testing.
+
+ipmisim1.emu - emu commands for creating a simple IPMI system.
+
+atca.emu - emu commands for creating a more complex ATCA system.
+
+lan.conf - A configuration file example.
+
+
+General Design (for ipmi_sim)
+-----------------------------
+
+The ipmi_sim.c file has all the startup code and handles all the I/O
+and timers for the simulator.  It does all the system initialization,
+opens all the the necessary sockets, and handles the input and output
+for the sockets and the emu_cmd emulator.  The rest of the simulator
+is completely event-driven and does no I/O on it's own.  ipmi_sim uses
+the POSIX OS handler defined in the ../unix directory.
+
+When ipmi_sim.c starts up, it defines the sysinfo structure, which
+provides interfaces for doing timers, logging, LAN and serial
+initialization, and message output.  It then reads the configuration
+file and the emu file.
+
+As part of reading the configuration file, LAN and serial interfaces
+are implemented.  These result in callbacks into the ipmi_sim.c code
+to open the sockets.
+
+When a message comes in on the LAN interface, ipmi_sim will either
+call handle_asf() (in lanserv_asf.c) or ipmi_handle_lan_msg() (in
+lanserv_ipmi.c) depending on the message type.
+
+lanserv_ipmi.c will handle the IPMI LAN protocol part.  It handles
+session establishment for both RMCP and RMCP+, it handles checking the
+privilege levels for command, and it handles all the LAN-specific IPMI
+commands.  This code may send an immediate response to a message, or
+if a normal message comes in, it will send it to channel_smi_send()
+(in serv.c).
+
+channel_smi_send() will call the channel-specific handling callback,
+which will generall result it in going back to ipmi_sim.c's smi_send()
+function.  smi_send() calls ipmi_emu_handle_msg() in emu.c to handle
+the message, then ipmi_handle_smi_rsp() (in serv.c) to send the response.
+
+ipmi_handle_smi_rsp() does a little bit of formatting then calls the
+channel-specific return_rsp() function.  In the LAN case, this results
+in lan_return_rsp() (in lanserv_ipmi.c) being called.
+lan_return_rsp() does the formatting and handling to transmit the
+message then calls the send_out function variable, resulting in
+lan_send() in ipmi_sim.c being called.  That transmits the message.
+
+The serial case is similar, substituting the serial code for the LAN
+code.
