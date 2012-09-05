@@ -65,6 +65,7 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/lanserv.h>
 
 #include <OpenIPMI/internal/md5.h>
@@ -720,6 +721,89 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
     }
 }
 
+static unsigned char cipher_suites[] = {
+    0xc0, 0x00, 0x00, 0x40, 0x80,
+    0xc0, 0x01, 0x01, 0x40, 0x80,
+    0xc0, 0x02, 0x01, 0x41, 0x80,
+    0xc0, 0x03, 0x01, 0x41, 0x81,
+    0xc0, 0x04, 0x01, 0x41, 0x82,
+    0xc0, 0x05, 0x01, 0x41, 0x83,
+    0xc0, 0x06, 0x02, 0x40, 0x80,
+    0xc0, 0x07, 0x02, 0x42, 0x80,
+    0xc0, 0x08, 0x02, 0x42, 0x81,
+    0xc0, 0x09, 0x02, 0x42, 0x82,
+    0xc0, 0x0a, 0x02, 0x42, 0x83,
+    0xc0, 0x0b, 0x02, 0x43, 0x80,
+    0xc0, 0x0c, 0x02, 0x43, 0x81,
+    0xc0, 0x0d, 0x02, 0x43, 0x82,
+    0xc0, 0x0e, 0x02, 0x43, 0x83
+};
+
+static unsigned char cipher_algos[] = {
+    0x00, 0x01, 0x02,
+    0x40, 0x41, 0x42, 0x43,
+    0x80, 0x81, 0x82, 0x83
+};
+
+static void
+handle_get_channel_cipher_suites(lanserv_data_t *lan, msg_t *msg)
+{
+    unsigned int chan;
+    channel_t **channels, *channel;
+    unsigned char *adata, data[18];
+    unsigned int start, size;
+
+    if (msg->len < 3) {
+	return_err(lan, msg, NULL, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	return;
+    }
+
+    chan = msg->data[0] & 0xf;
+    if (chan == 0xe)
+	chan = lan->channel.channel_num;
+
+    channels = ipmi_mc_get_channelset(lan->channel.mc);
+    channel = channels[chan];
+    if (!channel) {
+	return_err(lan, msg, NULL, IPMI_NOT_PRESENT_CC);
+	return;
+    }
+
+    if (channel->medium_type != IPMI_CHANNEL_MEDIUM_8023_LAN) {
+	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
+	return;
+    }
+
+    /*
+     * The cipher suites are all fixed, so just need to validate the
+     * channel and return our hard-coded info.
+     */
+
+    if (msg->data[2] & 0x80) {
+	adata = cipher_suites;
+	size = sizeof(cipher_suites);
+    } else {
+	adata = cipher_algos;
+	size = sizeof(cipher_algos);
+    }
+
+    start = (msg->data[2] & 0x1f) * 16;
+    if (start >= size) {
+	start = 0;
+	size = 0;
+    } else {
+	size = size - start;
+    }
+    if (size > 16)
+	size = 16;
+
+    data[0] = 0;
+    data[1] = chan;
+    memcpy(data + 2, adata + start, size);
+
+    return_rsp_data(lan, msg, NULL, data, size + 2);
+}
+
 static void
 handle_no_session(lanserv_data_t *lan, msg_t *msg)
 {
@@ -738,24 +822,28 @@ handle_no_session(lanserv_data_t *lan, msg_t *msg)
     }
 
     switch (msg->cmd) {
-	case IPMI_GET_SYSTEM_GUID_CMD:
-	    handle_get_system_guid(lan, NULL, msg);
-	    break;
+    case IPMI_GET_SYSTEM_GUID_CMD:
+	handle_get_system_guid(lan, NULL, msg);
+	break;
 
-	case IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD:
-	    handle_get_channel_auth_capabilities(lan, msg);
-	    break;
+    case IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD:
+	handle_get_channel_auth_capabilities(lan, msg);
+	break;
 
-	case IPMI_GET_SESSION_CHALLENGE_CMD:
-	    handle_get_session_challenge(lan, msg);
-	    break;
+    case IPMI_GET_SESSION_CHALLENGE_CMD:
+	handle_get_session_challenge(lan, msg);
+	break;
 
-	default:
-	    lan->sysinfo->log(lan->sysinfo, INVALID_MSG, msg,
-		     "No session message failed: Invalid command: 0x%x",
-		     msg->cmd);
-	    return_err(lan, msg, NULL, IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC);
-	    break;
+    case IPMI_GET_CHANNEL_CIPHER_SUITES_CMD:
+	handle_get_channel_cipher_suites(lan, msg);
+	break;
+
+    default:
+	lan->sysinfo->log(lan->sysinfo, INVALID_MSG, msg,
+			  "No session message failed: Invalid command: 0x%x",
+			  msg->cmd);
+	return_err(lan, msg, NULL, IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC);
+	break;
     }
 }
 
@@ -2173,7 +2261,7 @@ static void
 handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[36];
-    unsigned char priv;
+    unsigned char priv, max_priv;
     unsigned char auth;
     unsigned char integ;
     unsigned char conf;
@@ -2262,6 +2350,15 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
     }
     if (valid_cipher_suites[i].auth == -1) {
 	err = IPMI_RMCPP_NO_CIPHER_SUITE_MATCHES;
+	goto out_err;
+    }
+
+    max_priv = lan->lanparm.max_priv_for_cipher_suite[priv >> 1];
+    if (max_priv & 1)
+	max_priv >>= 4;
+    max_priv &= 0xf;
+    if (priv > max_priv) {
+	err = IPMI_RMCPP_UNAUTHORIZED_ROLE_OR_PRIVILEGE;
 	goto out_err;
     }
 

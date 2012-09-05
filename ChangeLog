@@ -3,6 +3,10 @@
 	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: Remove a
 	bunch of LAN config options we are not supporting.
 
+	* lanserv/lanserv_ipmi.c: Implement Get Channel Cipher Suites
+	and implement a few other authentication mechanisms that needed
+	to be done.
+
 2012-09-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/persist.c, lanserv/persist.h, lanserv/Makefile.am: Add a
