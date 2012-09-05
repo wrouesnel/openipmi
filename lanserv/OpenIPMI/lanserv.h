@@ -190,22 +190,6 @@ struct lanparm_data_s
     unsigned int  num_cipher_suites : 4;
     unsigned char cipher_suite_entry[17];
     unsigned char max_priv_for_cipher_suite[9];
-
-    /* Tells what has changed, so the commit can do something about it. */
-    struct {
-	unsigned int ip_addr_src : 1;
-	unsigned int ip_addr : 1;
-	unsigned int mac_addr : 1;
-	unsigned int subnet_mask : 1;
-	unsigned int ipv4_hdr_parms : 1;
-	unsigned int default_gw_ip_addr : 1;
-	unsigned int default_gw_mac_addr : 1;
-	unsigned int backup_gw_ip_addr : 1;
-	unsigned int backup_gw_mac_addr : 1;
-	unsigned int vlan_id : 1;
-	unsigned int vlan_priority : 1;
-	unsigned int max_priv_for_cipher_suite : 1;
-    } changed;
 };
 
 struct lanserv_data_s
