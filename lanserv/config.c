@@ -75,13 +75,11 @@ read_persist_users(sys_data_t *sys)
 	user_t *users;
 	persist_t *p;
 	long iv;
-	char name[128];
 
 	if (!mc)
 	    continue;
 
-	sprintf(name, "users.mc%2.2x", ipmi_mc_get_ipmb(mc));
-	p = read_persist(name);
+	p = read_persist("users.mc%2.2x", ipmi_mc_get_ipmb(mc));
 	if (!p)
 	    continue;
 
@@ -126,13 +124,11 @@ write_persist_users(sys_data_t *sys)
 	lmc_data_t *mc = sys->ipmb[i];
 	user_t *users;
 	persist_t *p;
-	char name[128];
 
 	if (!mc || !ipmi_mc_users_changed(mc))
 	    continue;
 
-	sprintf(name, "users.mc%2.2x", ipmi_mc_get_ipmb(mc));
-	p = alloc_persist(name);
+	p = alloc_persist("users.mc%2.2x", ipmi_mc_get_ipmb(mc));
 	if (!p)
 	    return ENOMEM;
 

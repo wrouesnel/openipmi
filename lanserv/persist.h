@@ -60,8 +60,8 @@ typedef struct persist_s persist_t;
 
 int persist_init(const char *app, const char *instance);
 
-persist_t *alloc_persist(const char *name);
-persist_t *read_persist(const char *name);
+persist_t *alloc_persist(const char *name, ...);
+persist_t *read_persist(const char *name, ...);
 int write_persist(persist_t *p);
 void free_persist(persist_t *p);
 

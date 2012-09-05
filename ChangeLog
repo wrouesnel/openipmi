@@ -7,6 +7,9 @@
 	and implement a few other authentication mechanisms that needed
 	to be done.
 
+	* lanserv/config.c, lanserv/persist.c, lanserv/persist.h:  Allow
+	printf-type names for alloc and read persist operations.
+
 2012-09-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/persist.c, lanserv/persist.h, lanserv/Makefile.am: Add a

@@ -126,19 +126,49 @@ persist_init(const char *papp, const char *instance)
     return 0;
 }
 
+static char *
+do_va_nameit(const char *name, va_list ap)
+{
+    unsigned int len;
+    va_list aq;
+    char dummy;
+    char *rv;
+
+    va_copy(aq, ap);
+    len = vsnprintf(&dummy, 1, name, aq);
+    va_end(aq);
+    rv = malloc(len + 1);
+    if (!rv)
+	return NULL;
+    vsprintf(rv, name, ap);
+    return rv;
+}
+
 persist_t *
-alloc_persist(const char *name)
+alloc_vpersist(const char *iname, va_list ap)
 {
     persist_t *p = malloc(sizeof(*p));
 
     if (!p)
 	return NULL;
-    p->name = strdup(name);
+    p->name = do_va_nameit(iname, ap);
     if (!p->name) {
 	free(p);
 	return NULL;
     }
     p->items = NULL;
+    return p;
+}
+
+persist_t *
+alloc_persist(const char *name, ...)
+{
+    persist_t *p;
+    va_list ap;
+
+    va_start(ap, name);
+    p = alloc_vpersist(name, ap);
+    va_end(ap);
     return p;
 }
 
@@ -220,15 +250,18 @@ write_data(void *idata, unsigned int len, FILE *f)
 }
 
 persist_t *
-read_persist(const char *name)
+read_persist(const char *name, ...)
 {
     char *fname;
-    persist_t *p = alloc_persist(name);
+    va_list ap;
+    persist_t *p;
     FILE *f;
     char *line;
     char *end;
     size_t n;
 
+    va_start(ap, name);
+    p = alloc_vpersist(name, ap);
     if (!p)
 	return NULL;
     fname = get_fname(p, "");
@@ -370,22 +403,18 @@ free_persist(persist_t *p)
     free(p);
 }
 
-
 static int
 alloc_pi(persist_t *p, enum pitem_type type, const void *data, long len,
 	 const char *iname, va_list ap)
 {
     struct pitem *pi;
-    char name[128];
-
-    vsprintf(name, iname, ap);
 
     pi = malloc(sizeof(*pi));
     if (!pi)
 	return ENOMEM;
 
     pi->type = type;
-    pi->iname = strdup(name);
+    pi->iname = do_va_nameit(iname, ap);
     if (!pi->iname) {
 	free(pi);
 	return ENOMEM;
@@ -414,16 +443,18 @@ static struct pitem *
 find_pi(persist_t *p, const char *iname, va_list ap)
 {
     struct pitem *pi = p->items;
-    char name[128];
+    char *name = do_va_nameit(iname, ap);
 
-    vsprintf(name, iname, ap);
+    if (!name)
+	return NULL;
 
     while (pi) {
 	if (strcmp(pi->iname, name) == 0)
-	    return pi;
+	    break;
 	pi = pi->next;
     }
-    return NULL;
+    free(name);
+    return pi;
 }
 
 int
