@@ -63,6 +63,7 @@ typedef struct lmc_data_s lmc_data_t;
 int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 				  lmc_data_t **rmc);
 
+unsigned char ipmi_mc_get_ipmb(lmc_data_t *mc);
 channel_t **ipmi_mc_get_channelset(lmc_data_t *mc);
 startcmd_t *ipmi_mc_get_startcmdinfo(lmc_data_t *mc);
 user_t *ipmi_mc_get_users(lmc_data_t *mc);
@@ -179,5 +180,9 @@ void ipmi_set_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_get_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_set_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
+
+void read_persist_users(sys_data_t *sys);
+int write_persist_users(sys_data_t *sys);
+int ipmi_mc_users_changed(lmc_data_t *mc);
 
 #endif /* __MCSERV_H */

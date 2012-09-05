@@ -86,6 +86,7 @@
 #include <OpenIPMI/serserv.h>
 
 #include "emu.h"
+#include "persist.h"
 
 #define MAX_ADDR 4
 
@@ -654,12 +655,6 @@ static struct poptOption poptOpts[]=
 };
 
 static void
-write_config(sys_data_t *sys)
-{
-//    misc_data_t *info = lan->user_info;
-}
-
-static void
 emu_printf(emu_out_t *out, char *format, ...)
 {
     console_info_t *info = out->data;
@@ -1213,7 +1208,6 @@ main(int argc, const char *argv[])
     sysinfo.start_timer = ipmi_start_timer;
     sysinfo.stop_timer = ipmi_stop_timer;
     sysinfo.free_timer = ipmi_free_timer;
-    sysinfo.write_config = write_config;
     sysinfo.debug = debug;
     sysinfo.log = sim_log;
     sysinfo.csmi_send = smi_send;
@@ -1283,7 +1277,21 @@ main(int argc, const char *argv[])
     if (read_config(&sysinfo, config_file))
 	exit(1);
 
-    if (!command_file && sysinfo.name) {
+    if (!sysinfo.name) {
+	fprintf(stderr, "name not set in config file\n");
+	exit(1);
+    }
+
+    err = persist_init("ipmi_sim", sysinfo.name);
+    if (err) {
+	fprintf(stderr, "Unable to initialize persistence: %s\n",
+		strerror(err));
+	exit(1);
+    }
+
+    read_persist_users(&sysinfo);
+
+    if (!command_file) {
 	FILE *tf;
 	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(sysinfo.name));
 	if (!command_file) {

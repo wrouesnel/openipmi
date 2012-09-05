@@ -63,6 +63,97 @@
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
 #include <OpenIPMI/serserv.h>
+#include "persist.h"
+
+void
+read_persist_users(sys_data_t *sys)
+{
+    unsigned int i, j;
+
+    for (i = 0; i < IPMI_MAX_MCS; i++) {
+	lmc_data_t *mc = sys->ipmb[i];
+	user_t *users;
+	persist_t *p;
+	long iv;
+	char name[128];
+
+	if (!mc)
+	    continue;
+
+	sprintf(name, "users.mc%2.2x", ipmi_mc_get_ipmb(mc));
+	p = read_persist(name);
+	if (!p)
+	    continue;
+
+	users = ipmi_mc_get_users(mc);
+	for (j = 0; j <= MAX_USERS; j++) {
+	    void *data;
+	    unsigned int len;
+
+	    if (!read_persist_int(p, &iv, "%d.valid", j))
+		users[j].valid = iv;
+	    if (!read_persist_int(p, &iv, "%d.link_auth", j))
+		users[j].link_auth = iv;
+	    if (!read_persist_int(p, &iv, "%d.cb_only", j))
+		users[j].cb_only = iv;
+	    if (!read_persist_data(p, &data, &len, "%d.username", j)) {
+		if (len == sizeof(users[j].username))
+		    memcpy(users[j].username, data, len);
+		free_persist_data(data);
+	    }
+	    if (!read_persist_data(p, &data, &len, "%d.passwd", j)) {
+		if (len == sizeof(users[j].pw))
+		    memcpy(users[j].pw, data, len);
+		free_persist_data(data);
+	    }
+	    if (!read_persist_int(p, &iv, "%d.privilege", j))
+		users[j].privilege = iv;
+	    if (!read_persist_int(p, &iv, "%d.max_sessions", j))
+		users[j].max_sessions = iv;
+	    if (!read_persist_int(p, &iv, "%d.allowed_auths", j))
+		users[j].allowed_auths = iv;
+	}
+	free_persist(p);
+    }
+}
+
+int
+write_persist_users(sys_data_t *sys)
+{
+    unsigned int i, j;
+
+    for (i = 0; i < IPMI_MAX_MCS; i++) {
+	lmc_data_t *mc = sys->ipmb[i];
+	user_t *users;
+	persist_t *p;
+	char name[128];
+
+	if (!mc || !ipmi_mc_users_changed(mc))
+	    continue;
+
+	sprintf(name, "users.mc%2.2x", ipmi_mc_get_ipmb(mc));
+	p = alloc_persist(name);
+	if (!p)
+	    return ENOMEM;
+
+	users = ipmi_mc_get_users(mc);
+	for (j = 0; j <= MAX_USERS; j++) {
+	    add_persist_int(p, users[j].valid, "%d.valid", j);
+	    add_persist_int(p, users[j].link_auth, "%d.link_auth", j);
+	    add_persist_int(p, users[j].cb_only, "%d.cb_only", j);
+	    add_persist_data(p, users[j].username, sizeof(users[j].username),
+			     "%d.username", j);
+	    add_persist_data(p, users[j].pw, sizeof(users[j].pw),
+			     "%d.passwd", j);
+	    add_persist_int(p, users[j].privilege, "%d.privilege", j);
+	    add_persist_int(p, users[j].max_sessions, "%d.max_sessions", j);
+	    add_persist_int(p, users[j].allowed_auths, "%d.allowed_auths", j);
+	}
+	write_persist(p);
+	free_persist(p);
+    }
+    return 0;
+}
 
 /*
  * To parse more complex expressions, we really need to know what the
@@ -491,8 +582,8 @@ read_config(sys_data_t *sys,
 		    errstr = "Invalid IPMB specified";
 		    err = -1;
 		} else {
-		    sys->chan_set = ipmi_mc_get_channelset(mc);
 		    sys->cusers = ipmi_mc_get_users(mc);
+		    sys->chan_set = ipmi_mc_get_channelset(mc);
 		    sys->cpef = ipmi_mc_get_pef(mc);
 		    sys->startcmd = ipmi_mc_get_startcmdinfo(mc);
 		}

@@ -566,12 +566,6 @@ static struct poptOption poptOpts[]=
     }	
 };
 
-static void
-write_config(sys_data_t *chan)
-{
-//    misc_data_t *info = lan->user_info;
-}
-
 void init_oem_force(void);
 
 static ipmi_tick_handler_t *tick_handlers;
@@ -651,6 +645,18 @@ ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
 }
 
 static user_t musers[MAX_USERS + 1];
+
+unsigned char
+ipmi_mc_get_ipmb(lmc_data_t *mc)
+{
+    return 0x20;
+}
+
+int
+ipmi_mc_users_changed(lmc_data_t *mc)
+{
+    return 0;
+}
 
 user_t *
 ipmi_mc_get_users(lmc_data_t *mc)
@@ -762,7 +768,6 @@ main(int argc, const char *argv[])
     sysinfo_init(&sysinfo);
     sysinfo.alloc = balloc;
     sysinfo.free = bfree;
-    sysinfo.write_config = write_config;
     sysinfo.log = lanserv_log;
     sysinfo.debug = debug;
 

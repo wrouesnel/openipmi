@@ -1195,7 +1195,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    *rdata_len = 0;
 	    return;
 	}
-	    
+
 	newv = (msg->data[1] >> 3) & 1;
 	if (newv) {
 	    /* Don't support unauthenticated user-level access */
@@ -1203,7 +1203,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    *rdata_len = 0;
 	    return;
 	}
-	    
+
 	newv = (msg->data[1] >> 0) & 7;
 	if (newv != 0x2) {
 	    /* Only support "always available" channel */
@@ -1249,7 +1249,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
     }
 
     if (write_nonv)
-	lan->sysinfo->write_config(lan->sysinfo);
+      /*lan->sysinfo->write_config(lan->sysinfo)*/;
 
     rdata[0] = 0;
     *rdata_len = 0;
@@ -1769,7 +1769,7 @@ handle_normal_session(lanserv_data_t *lan, msg_t *msg)
     }
 }
 
-void
+static void
 handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
 {
     if (msg->len < 7) {
@@ -2306,7 +2306,7 @@ struct valid_cypher_suites_s
     { -1, -1. -1 }
 };
 
-void
+static void
 handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[36];
@@ -2485,7 +2485,8 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 	close_session(lan, session);
 }
 
-void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
+static void
+handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[64];
     unsigned char priv;
@@ -2590,7 +2591,8 @@ void handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 	close_session(lan, session);
 }
 
-void handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
+static void
+handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char data[32];
     session_t     *session = NULL;
@@ -2660,7 +2662,7 @@ payload_handler_cb payload_handlers[64] =
     [0x14] = handle_rakp3_payload,
 };
 
-int
+static int
 decrypt_message(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.encrypted) {
@@ -2676,7 +2678,7 @@ decrypt_message(lanserv_data_t *lan, session_t *session, msg_t *msg)
     return session->confh->decrypt(lan, session, msg);
 }
 
-int
+static int
 check_message_integrity(lanserv_data_t *lan, session_t *session, msg_t *msg)
 {
     if (!msg->rmcpp.authenticated) {
@@ -2697,7 +2699,7 @@ check_message_integrity(lanserv_data_t *lan, session_t *session, msg_t *msg)
     return session->integh->check(lan, session, msg);
 }
 
-void
+static void
 ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned int len;
@@ -2813,7 +2815,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 	payload_handlers[msg->rmcpp.payload](lan, msg);
 }
 
-void
+static void
 ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 {
     unsigned char *tsid;

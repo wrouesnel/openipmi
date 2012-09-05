@@ -1,3 +1,15 @@
+2012-09-05 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/persist.c, lanserv/persist.h, lanserv/Makefile.am: Add a
+	persistence tool to use for storing data on the disk.
+
+	* lanserv/config.h, lanserv/emu.c, lanserv/ipmi_sim.c: Save and
+	restore users information using the persistence tool.
+
+	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c, lanserv/lanserv.c:
+	Remove the write_config function, replacing it with the persistence
+	tool.
+
 2012-08-09 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Move the receive queue into the MC where it belongs.

@@ -192,6 +192,7 @@ struct lmc_data_s
     channel_t sys_channel;
     channel_t ipmb_channel;
 
+    int users_changed;
     user_t users[MAX_USERS + 1];
 
     pef_data_t pef;
@@ -322,6 +323,8 @@ struct emu_data_s
 {
     sys_data_t *sysinfo;
 
+    int users_changed;
+
     int          atca_mode;
     atca_site_t  atca_sites[128]; /* Indexed by HW address. */
     uint32_t     atca_fru_inv_curr_timestamp;
@@ -366,6 +369,11 @@ ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
 	    free(emu->temp_fru_inv_data);
 	    emu->temp_fru_inv_data = NULL;
 	}
+    }
+
+    if (emu->users_changed) {
+	emu->users_changed = 0;
+	write_persist_users(emu->sysinfo);
     }
 }
 
@@ -2320,6 +2328,13 @@ cleanup_ascii_16(uint8_t *c)
 }
 
 static void
+set_users_changed(lmc_data_t *mc)
+{
+    mc->users_changed = 1;
+    mc->emu->users_changed = 1;
+}
+
+static void
 handle_set_user_access(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
@@ -2390,7 +2405,7 @@ handle_set_user_access(lmc_data_t    *mc,
     }
 
     if (changed)
-	mc->sysinfo->write_config(mc->sysinfo);
+	set_users_changed(mc);
 
     rdata[0] = 0;
     *rdata_len = 1;
@@ -2473,6 +2488,9 @@ handle_set_user_name(lmc_data_t    *mc,
 
     memcpy(mc->users[user].username, msg->data+1, 16);
     cleanup_ascii_16(mc->users[user].username);
+
+    set_users_changed(mc);
+
     rdata[0] = 0;
     *rdata_len = 1;
 }
@@ -2484,7 +2502,6 @@ handle_get_user_name(lmc_data_t    *mc,
 		     unsigned int  *rdata_len)
 {
     uint8_t user;
-    uint8_t data[17];
 
     if (msg->len < 1) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -2499,14 +2516,14 @@ handle_get_user_name(lmc_data_t    *mc,
     }
 
     user = msg->data[0] & 0x3f;
-    if (user <= 1) {
+    if ((user <= 1) || (user > MAX_USERS)) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    data[0] = 0;
-    memcpy(data+1, mc->users[user].username, 16);
+    rdata[0] = 0;
+    memcpy(rdata+1, mc->users[user].username, 16);
     *rdata_len = 17;
 }
 
@@ -2555,6 +2572,8 @@ handle_set_user_password(lmc_data_t    *mc,
 	    /* Nothing to do for test password, we accept anything. */
 	}
     }
+
+    set_users_changed(mc);
 
     rdata[0] = 0;
     *rdata_len = 1;
@@ -5943,6 +5962,20 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
     return mc->channels;
 }
 
+unsigned char
+ipmi_mc_get_ipmb(lmc_data_t *mc)
+{
+    return mc->ipmb;
+}
+
+int
+ipmi_mc_users_changed(lmc_data_t *mc)
+{
+    int rv = mc->users_changed;
+    mc->users_changed = 0;
+    return rv;
+}
+
 user_t *
 ipmi_mc_get_users(lmc_data_t *mc)
 {
@@ -5988,6 +6021,7 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
     if (!mc)
 	return ENOMEM;
     memset(mc, 0, sizeof(*mc));
+    mc->ipmb = ipmb;
     sys->ipmb[ipmb >> 1] = mc;
 
     mc->startcmd.poweroff_wait_time = 60;

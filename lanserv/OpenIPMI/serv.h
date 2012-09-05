@@ -288,6 +288,7 @@ struct startcmd_s {
     int wait_poweroff;
 };
 
+#define IPMI_MAX_MCS 128
 /*
  * Generic data about the system that is global for the whole system and
  * required for all server types.
@@ -296,7 +297,7 @@ struct sys_data_s {
     char *name;
 
     /* The MCs in the system */
-    lmc_data_t *ipmb[128];
+    lmc_data_t *ipmb[IPMI_MAX_MCS];
 
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)
@@ -347,12 +348,6 @@ struct sys_data_s {
     /* Called by interface code to report that the target did a reset. */
     /* FIXME - move */
     void (*target_reset)(sys_data_t *sys);
-
-    /*
-     * Write the configuration file (done when a non-volatile
-     * change is done, or when a user name/password is written.
-     */
-    void (*write_config)(sys_data_t *chan);
 
     /*
      * These are a hack so the channel code in the MCs can pick up

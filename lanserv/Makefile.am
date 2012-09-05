@@ -5,7 +5,7 @@ LD_VERSION = 0:1:0
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
 	$(OPENSSLINCS)
 
-AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"'
+AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"' -DSTATEDIR='"$(localstatedir)"'
 
 lib_LTLIBRARIES = libIPMIlanserv.la
 
@@ -13,10 +13,11 @@ bin_PROGRAMS = ipmi_sim ipmilan
 
 noinst_PROGRAMS = ipmi_checksum
 
-noinst_HEADERS = emu.h
+noinst_HEADERS = emu.h persist.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
-	lanserv_oem_force.c lanserv_config.c config.c serv.c serial_ipmi.c
+	lanserv_oem_force.c lanserv_config.c config.c serv.c serial_ipmi.c \
+	persist.c
 nodist_libIPMIlanserv_la_SOURCES = ../utils/ipmi_auth.c ../utils/md2.c \
 	../utils/md5.c
 libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS)
