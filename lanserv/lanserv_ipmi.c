@@ -906,8 +906,7 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
 	goto out_free;
     }
 
-    if (! (lan->channel.priv_info[priv-1].
-	   allowed_auths & (1 << auth))) {
+    if (! (lan->channel.priv_info[priv-1].allowed_auths & (1 << auth))) {
 	/* Authentication level not permitted for this privilege */
 	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Auth level %d invalid for"
@@ -1260,8 +1259,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 		     unsigned int *rdata_len)
 {
     unsigned char err = 0;
-    int           idx;
-    lanserv_data_t    *lan = chan->chan_info;
+    lanserv_data_t *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1301,19 +1299,11 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	break;
 
     case 1:
+    case 2:
     case 17:
     case 22:
     case 23:
 	err = 0x82; /* Read-only data */
-	break;
-
-    case 2:
-	if (msg->len < 7)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else {
-	    memcpy(lan->lanparm.auth_type_enables, msg->data+2, 5);
-	    lan->lanparm.changed.auth_type_enables = 1;
-	}
 	break;
 
     case 3:
@@ -1357,34 +1347,6 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	}
 	break;
 
-    case 8:
-	if (msg->len < 4)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else {
-	    memcpy(lan->lanparm.primary_rmcp_port, msg->data+2, 2);
-	    lan->lanparm.changed.primary_rmcp_port = 1;
-	}
-	break;
-
-    case 9:
-	if (msg->len < 4)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else {
-	    memcpy(lan->lanparm.secondary_rmcp_port, msg->data+2, 2);
-	    lan->lanparm.changed.secondary_rmcp_port = 1;
-	}
-	break;
-
-    case 10:
-	lan->lanparm.bmc_gen_arp_ctl = msg->data[2];
-	lan->lanparm.changed.bmc_gen_arp_ctl = 1;
-	break;
-
-    case 11:
-	lan->lanparm.garp_interval = msg->data[2];
-	lan->lanparm.changed.garp_interval = 1;
-	break;
-
     case 12:
 	if (msg->len < 6)
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -1421,39 +1383,6 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	}
 	break;
 
-    case 16:
-	if (msg->len < 20)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else {
-	    memcpy(lan->lanparm.community_string, msg->data+2, 18);
-	    lan->lanparm.changed.community_string = 1;
-	}
-	break;
-
-    case 18:
-	idx = msg->data[2] & 0xf;
-	if (msg->len < 6)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (idx > lan->lanparm.num_destinations)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    memcpy(lan->lanparm.dest[idx].type, msg->data+2, 4);
-	    lan->lanparm.changed.dest_type[idx] = 1;
-	}
-	break;
-
-    case 19:
-	idx = msg->data[2] & 0xf;
-	if (msg->len < 15)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (idx > lan->lanparm.num_destinations)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    memcpy(lan->lanparm.dest[idx].addr, msg->data+2, 13);
-	    lan->lanparm.changed.dest_addr[idx] = 1;
-	}
-	break;
-
     case 20:
 	if (msg->len < 4)
 	    err = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -1477,18 +1406,6 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	}
 	break;
 
-    case 25:
-	idx = msg->data[2] & 0xf;
-	if (msg->len < 6)
-	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
-	else if (idx > lan->lanparm.num_destinations)
-	    err = IPMI_INVALID_DATA_FIELD_CC;
-	else {
-	    memcpy(lan->lanparm.dest[idx].vlan, msg->data+2, 4);
-	    lan->lanparm.changed.dest_vlan[idx] = 1;
-	}
-	break;
-
     default:
 	err = 0x80; /* Parm not supported */
     }
@@ -1501,11 +1418,11 @@ static void
 get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 		     unsigned int *rdata_len)
 {
-    int           idx;
     unsigned char databyte = 0;
+    unsigned char databytes[5];
     unsigned char *data = NULL;
     unsigned int  length = 0;
-    lanserv_data_t    *lan = chan->chan_info;
+    lanserv_data_t *lan = chan->chan_info;
 
     switch (msg->data[1])
     {
@@ -1514,16 +1431,21 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	break;
 
     case 1:
-	databyte = lan->lanparm.auth_type_support;
+	databyte = 0x1f; /* We support all authentications. */
+	break;
+
+    case 2: /* Read only, all authtypes enabled on all channels */
+	data = databytes;
+	data[0] = 0x1f;
+	data[1] = 0x1f;
+	data[2] = 0x1f;
+	data[3] = 0x1f;
+	data[4] = 0x1f;
+	length = 5;
 	break;
 
     case 17:
 	databyte = lan->lanparm.num_destinations;
-	break;
-
-    case 2:
-	data = lan->lanparm.auth_type_enables;
-	length = 5;
 	break;
 
     case 3:
@@ -1550,24 +1472,6 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	length = 3;
 	break;
 
-    case 8:
-	data = lan->lanparm.primary_rmcp_port;
-	length = 2;
-	break;
-
-    case 9:
-	data = lan->lanparm.secondary_rmcp_port;
-	length = 2;
-	break;
-
-    case 10:
-	databyte = lan->lanparm.bmc_gen_arp_ctl;
-	break;
-
-    case 11:
-	databyte = lan->lanparm.garp_interval;
-	break;
-
     case 12:
 	data = lan->lanparm.default_gw_ip_addr;
 	length = 4;
@@ -1586,35 +1490,6 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
     case 15:
 	data = lan->lanparm.backup_gw_mac_addr;
 	length = 6;
-	break;
-
-    case 16:
-	data = lan->lanparm.community_string;
-	length = 18;
-	break;
-
-    case 18:
-	idx = msg->data[2] & 0xf;
-	if (idx > lan->lanparm.num_destinations) {
-	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	    *rdata_len = 1;
-	    return;
-	} else {
-	    data = lan->lanparm.dest[idx].type;
-	    length = 4;
-	}
-	break;
-
-    case 19:
-	idx = msg->data[2] & 0xf;
-	if (idx > lan->lanparm.num_destinations) {
-	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	    *rdata_len = 1;
-	    return;
-	} else {
-	    data = lan->lanparm.dest[idx].addr;
-	    length = 13;
-	}
 	break;
 
     case 20:
@@ -1638,18 +1513,6 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
     case 24:
 	data = lan->lanparm.max_priv_for_cipher_suite;
 	length = 9;
-	break;
-
-    case 25:
-	idx = msg->data[2] & 0xf;
-	if (idx > lan->lanparm.num_destinations) {
-	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	    *rdata_len = 1;
-	    return;
-	} else {
-	    data = lan->lanparm.dest[idx].vlan;
-	    length = 4;
-	}
 	break;
 
     default:
@@ -2976,12 +2839,7 @@ ipmi_lan_init(lanserv_data_t *lan)
 	lan->sessions[i].handle = i;
     }
 
-    lan->lanparm.num_destinations = 15;
-    for (i=0; i<16; i++) {
-	lan->lanparm.dest[i].addr[0] = i;
-	lan->lanparm.dest[i].type[0] = i;
-	lan->lanparm.dest[i].vlan[0] = i;
-    }
+    lan->lanparm.num_destinations = 0; /* LAN alerts not supported */
 
     lan->lanparm.num_cipher_suites = 15;
     for (i=0; i<17; i++)

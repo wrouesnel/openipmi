@@ -1,5 +1,10 @@
 2012-09-05 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: Remove a
+	bunch of LAN config options we are not supporting.
+
+2012-09-04 Corey Minyard <cminyard@mvista.com>
+
 	* lanserv/persist.c, lanserv/persist.h, lanserv/Makefile.am: Add a
 	persistence tool to use for storing data on the disk.
 

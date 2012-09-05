@@ -168,37 +168,22 @@ struct session_s
     int  src_len;
 };
 
-typedef struct lanparm_dest_data_s
-{
-    unsigned char type[4];
-    unsigned char addr[13];
-    unsigned char vlan[4];
-} lanparm_dest_data_t;
-
 typedef struct lanparm_data_s lanparm_data_t;
 struct lanparm_data_s
 {
     unsigned int set_in_progress : 2;
     void (*commit)(lanserv_data_t *lan); /* Called when the commit occurs. */
-    unsigned int auth_type_support : 6; /* Read-only */
     unsigned int ip_addr_src : 4;
-    unsigned int bmc_gen_arp_ctl : 2;
-    unsigned int garp_interval : 8;
     unsigned int num_destinations : 4; /* Read-only */
-    lanparm_dest_data_t dest[16];
 
-    unsigned char auth_type_enables[5];
     unsigned char ip_addr[4];
     unsigned char mac_addr[6];
     unsigned char subnet_mask[4];
     unsigned char ipv4_hdr_parms[3];
-    unsigned char primary_rmcp_port[2];
-    unsigned char secondary_rmcp_port[2];
     unsigned char default_gw_ip_addr[4];
     unsigned char default_gw_mac_addr[6];
     unsigned char backup_gw_ip_addr[4];
     unsigned char backup_gw_mac_addr[6];
-    unsigned char community_string[18];
 
     unsigned char vlan_id[2];
     unsigned char vlan_priority;
@@ -211,7 +196,6 @@ struct lanparm_data_s
 	unsigned int ip_addr_src : 1;
 	unsigned int bmc_gen_arp_ctl : 1;
 	unsigned int garp_interval : 1;
-	unsigned int auth_type_enables : 1;
 	unsigned int ip_addr : 1;
 	unsigned int mac_addr : 1;
 	unsigned int subnet_mask : 1;
