@@ -139,24 +139,14 @@ lanserv_read_config(sys_data_t    *sys,
 	    err = get_auths(&tokptr, &val, &errstr);
 	    lan->channel.priv_info[3].allowed_auths = val;
 	} else if (strcmp(tok, "addr") == 0) {
-	    lan_addr_t *newa = malloc(sizeof(*newa) *
-				      (lan->num_lan_addrs + 1));
-	    if (!newa) {
-	        fprintf(stderr, "Out of memory on line %d\n", *line);
+	    if (lan->lan_addr_set) {
+		fprintf(stderr, "LAN address already set, line %d\n", *line);
 		return -1;
 	    }
-	    if (lan->lan_addrs) {
-		memcpy(newa, lan->lan_addrs,
-		       sizeof(*newa) * lan->num_lan_addrs);
-		free(lan->lan_addrs);
-	    }
-	    lan->lan_addrs = newa;
-	    newa += lan->num_lan_addrs;
-	    lan->num_lan_addrs += 1;
-	    memset(newa, 0, sizeof(*newa));
-
-	    err = get_sock_addr(&tokptr, &newa->addr, &newa->addr_len,
+	    err = get_sock_addr(&tokptr, &lan->lan_addr.addr,
+				&lan->lan_addr.addr_len,
 				IPMI_LAN_STD_PORT_STR, SOCK_DGRAM, &errstr);
+	    lan->lan_addr_set = 1;
 	} else if (strcmp(tok, "guid") == 0) {
 	    if (!lan->guid)
 		lan->guid = malloc(16);

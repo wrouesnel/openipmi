@@ -186,6 +186,8 @@ struct channel_s
 			  unsigned int *rdata_len);
     void (*set_chan_access)(channel_t *chan, msg_t *msg, unsigned char *rdata,
 			    unsigned int *rdata_len);
+    int (*set_associated_mc)(channel_t *chan, uint32_t session_id,
+			     unsigned int payload, lmc_data_t *mc);
 
     oem_handlers_t oem;
 
@@ -335,6 +337,7 @@ struct sys_data_s {
     startcmd_t *startcmd;
     user_t *cusers;
     pef_data_t *cpef;
+    ipmi_sol_t *sol;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);

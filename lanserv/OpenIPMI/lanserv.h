@@ -166,6 +166,9 @@ struct session_s
     /* Address of the message that started the sessions. */
     void *src_addr;
     int  src_len;
+
+    /* The MC associated with the RMCP session activation, used for SOL. */
+    lmc_data_t *mc;
 };
 
 typedef struct lanparm_data_s lanparm_data_t;
@@ -238,8 +241,8 @@ struct lanserv_data_s
     lanparm_data_t lanparm;
     lanparm_data_t lanparm_rollback;
 
-    lan_addr_t *lan_addrs;
-    unsigned int num_lan_addrs;
+    lan_addr_t lan_addr;
+    int lan_addr_set;
 };
 
 
@@ -258,6 +261,12 @@ int lanserv_read_config(sys_data_t   *sys,
 			unsigned int channel_num);
 
 int ipmi_lan_init(lanserv_data_t *lan);
+
+typedef void (*ipmi_payload_handler_cb)(lanserv_data_t *lan, lmc_data_t *mc,
+					msg_t *msg);
+
+int ipmi_register_payload(unsigned int payload_id,
+			  ipmi_payload_handler_cb handler);
 
 #ifdef __cplusplus
 }

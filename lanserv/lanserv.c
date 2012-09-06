@@ -638,6 +638,12 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
     return sys->chan_set;
 }
 
+ipmi_sol_t *
+ipmi_mc_get_sol(lmc_data_t *mc)
+{
+    return NULL;
+}
+
 startcmd_t *
 ipmi_mc_get_startcmdinfo(lmc_data_t *mc)
 {
@@ -814,33 +820,28 @@ main(int argc, const char *argv[])
 		exit(1);
 	    }
 
-	    if (lan->num_lan_addrs == 0) {
-		struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
+	    if (!lan->lan_addr_set) {
+		struct sockaddr_in *ipaddr = (void *) &lan->lan_addr.addr;
 		ipaddr->sin_family = AF_INET;
 		ipaddr->sin_port = htons(623);
 		ipaddr->sin_addr.s_addr = INADDR_ANY;
-		lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
-		lan->num_lan_addrs++;
+		lan->lan_addr.addr_len = sizeof(*ipaddr);
+		lan->lan_addr_set = 1;
 	    }
 
-	    for (i=0; i<lan->num_lan_addrs; i++) {
-		if (lan->lan_addrs[i].addr_len == 0)
-		    break;
+	    lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
+				 lan->lan_addr.addr_len);
+	    if (lan_fd == -1) {
+		fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+		exit(1);
+	    }
 
-		lan_fd = open_lan_fd(&lan->lan_addrs[i].addr.s_ipsock.s_addr,
-				     lan->lan_addrs[i].addr_len);
-		if (lan_fd == -1) {
-		    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
-		    exit(1);
-		}
-
-		err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd,
-						      lan_data_ready, lan,
-						      NULL, &fd_id);
-		if (err) {
-		    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
-		    exit(1);
-		}
+	    err = data.os_hnd->add_fd_to_wait_for(data.os_hnd, lan_fd,
+						  lan_data_ready, lan,
+						  NULL, &fd_id);
+	    if (err) {
+		fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+		exit(1);
 	    }
 	} else 
 	    chan_init(chan);

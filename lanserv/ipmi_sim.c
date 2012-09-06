@@ -290,6 +290,7 @@ lan_channel_init(void *info, channel_t *chan)
     unsigned int i;
     int lan_fd;
     os_hnd_fd_id_t *fd_id;
+    unsigned char addr_data[6];
 
     lan->user_info = data;
     lan->send_out = lan_send;
@@ -307,47 +308,40 @@ lan_channel_init(void *info, channel_t *chan)
 	    ipmi_emu_set_mc_guid(sys, lan->guid, 0);
     }
 
-    if (lan->num_lan_addrs == 0) {
+    if (!lan->lan_addr_set == 0) {
 #ifdef AF_INET6
-	struct sockaddr_in6 *ipaddr = (void *) &lan->lan_addrs[0].addr;
+	struct sockaddr_in6 *ipaddr = (void *) &lan->lan_addr.addr;
 	memcpy(ipaddr, &in6addr_any, sizeof(*ipaddr));
 #else
-	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs[0].addr;
+	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs.addr;
 	ipaddr->sin_family = AF_INET;
 	ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
 #endif
-	lan->lan_addrs[0].addr_len = sizeof(*ipaddr);
-	lan->num_lan_addrs++;
+	lan->lan_addr.addr_len = sizeof(*ipaddr);
+	lan->lan_addr_set = 1;
     }
 
-    for (i=0; i<lan->num_lan_addrs; i++) {
-	unsigned char addr_data[6];
+    lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
+			 lan->lan_addr.addr_len);
+    if (lan_fd == -1) {
+	fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+	exit(1);
+    }
 
-	if (lan->lan_addrs[i].addr_len == 0)
-	    break;
+    memcpy(addr_data,
+	   &lan->lan_addr.addr.s_ipsock.s_addr4.sin_addr.s_addr,
+	   4);
+    memcpy(addr_data + 4,
+	   &lan->lan_addr.addr.s_ipsock.s_addr4.sin_port, 2);
+    ipmi_emu_set_addr(data->emu, 0, 0, addr_data, 6);
 
-	lan_fd = open_lan_fd(&lan->lan_addrs[i].addr.s_ipsock.s_addr,
-			     lan->lan_addrs[i].addr_len);
-	if (lan_fd == -1) {
-	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
-	    exit(1);
-	}
-
-	memcpy(addr_data,
-	       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_addr.s_addr,
-	       4);
-	memcpy(addr_data+4,
-	       &lan->lan_addrs[i].addr.s_ipsock.s_addr4.sin_port, 2);
-	ipmi_emu_set_addr(data->emu, i, 0, addr_data, 6);
-
-	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, lan_fd,
-					      lan_data_ready, lan,
-					      NULL, &fd_id);
-	if (err) {
-	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
-	    exit(1);
-	}
+    err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, lan_fd,
+					   lan_data_ready, lan,
+					   NULL, &fd_id);
+    if (err) {
+	fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+	exit(1);
     }
 
     return err;
@@ -1273,6 +1267,7 @@ main(int argc, const char *argv[])
     sysinfo.startcmd = ipmi_mc_get_startcmdinfo(mc);
     sysinfo.cpef = ipmi_mc_get_pef(mc);
     sysinfo.cusers = ipmi_mc_get_users(mc);
+    sysinfo.sol = ipmi_mc_get_sol(mc);
 
     if (read_config(&sysinfo, config_file))
 	exit(1);
@@ -1290,6 +1285,7 @@ main(int argc, const char *argv[])
     }
 
     read_persist_users(&sysinfo);
+    read_sol_config(&sysinfo);
 
     if (!command_file) {
 	FILE *tf;

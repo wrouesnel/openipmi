@@ -13,6 +13,9 @@
 	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: Add persistence
 	for some LAN data.
 
+	* lanserv/sol.c, lanserv/emu.c, lanserv/lanserv_ipmi.c: Start
+	adding the SOL protocol.
+
 2012-09-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/persist.c, lanserv/persist.h, lanserv/Makefile.am: Add a

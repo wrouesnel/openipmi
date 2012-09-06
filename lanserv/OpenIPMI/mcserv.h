@@ -60,11 +60,33 @@
 
 typedef struct lmc_data_s lmc_data_t;
 
+typedef struct solparm_s {
+    int enabled;
+    int bitrate;
+    int bitrate_nonv;
+    int default_bitrate;
+
+} solparm_t;
+
+typedef struct ipmi_sol_s {
+    int configured;
+
+    char *device;
+
+    int set_in_progress;
+    solparm_t solparm;
+    solparm_t solparm_rollback;
+    void (*update_bitrate)(lmc_data_t *mc);
+
+    int active;
+} ipmi_sol_t;
+
 int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 				  lmc_data_t **rmc);
 
 unsigned char ipmi_mc_get_ipmb(lmc_data_t *mc);
 channel_t **ipmi_mc_get_channelset(lmc_data_t *mc);
+ipmi_sol_t *ipmi_mc_get_sol(lmc_data_t *mc);
 startcmd_t *ipmi_mc_get_startcmdinfo(lmc_data_t *mc);
 user_t *ipmi_mc_get_users(lmc_data_t *mc);
 pef_data_t *ipmi_mc_get_pef(lmc_data_t *mc);
@@ -183,6 +205,19 @@ void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 
 void read_persist_users(sys_data_t *sys);
 int write_persist_users(sys_data_t *sys);
+void read_sol_config(sys_data_t *sys);
+int write_sol_config(lmc_data_t *mc);
+
 int ipmi_mc_users_changed(lmc_data_t *mc);
+
+void ipmi_sol_activate(lmc_data_t    *mc,
+		       msg_t         *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len);
+
+void ipmi_sol_deactivate(lmc_data_t    *mc,
+			 msg_t         *msg,
+			 unsigned char *rdata,
+			 unsigned int  *rdata_len);
 
 #endif /* __MCSERV_H */

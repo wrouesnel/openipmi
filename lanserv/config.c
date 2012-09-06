@@ -151,6 +151,64 @@ write_persist_users(sys_data_t *sys)
     return 0;
 }
 
+void
+read_sol_config(sys_data_t *sys)
+{
+    unsigned int i;
+
+    for (i = 0; i < IPMI_MAX_MCS; i++) {
+	lmc_data_t *mc = sys->ipmb[i];
+	ipmi_sol_t *sol;
+	persist_t *p;
+	long iv;
+
+	if (!mc)
+	    continue;
+	sol = ipmi_mc_get_sol(mc);
+	if (!sol->configured)
+	    continue;
+
+	p = read_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
+	if (!p)
+	    continue;
+
+	if (!read_persist_int(p, &iv, "enabled"))
+	    sol->solparm.enabled = iv;
+	else
+	    sol->solparm.enabled = 1;
+
+	if (!read_persist_int(p, &iv, "bitrate"))
+	    sol->solparm.bitrate_nonv = iv;
+	else
+	    sol->solparm.bitrate_nonv = 0;
+	sol->solparm.bitrate = sol->solparm.bitrate_nonv;
+
+	free_persist(p);
+    }
+}
+
+int
+write_sol_config(lmc_data_t *mc)
+{
+    ipmi_sol_t *sol;
+    persist_t *p;
+
+    sol = ipmi_mc_get_sol(mc);
+
+    p = alloc_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
+    if (!p)
+	return ENOMEM;
+
+    sol = ipmi_mc_get_sol(mc);
+
+    add_persist_int(p, sol->solparm.enabled, "enabled");
+    add_persist_int(p, sol->solparm.bitrate_nonv, "bitrate");
+
+    write_persist(p);
+    free_persist(p);
+    return 0;
+}
+
 /*
  * To parse more complex expressions, we really need to know what the
  * save state is.  So we, unfortunately, have to create our own
@@ -512,6 +570,35 @@ get_user(char **tokptr, sys_data_t *sys, char **err)
     return 0;
 }
 
+static int
+sol_read_config(char **tokptr, sys_data_t *sys, char **err)
+{
+    unsigned int val;
+    int          rv;
+
+    rv = get_delim_str(tokptr, &sys->sol->device, err);
+    if (rv)
+	return rv;
+
+    rv = get_uint(tokptr, &val, err);
+    if (rv)
+	return rv;
+    switch (val) {
+    case 9600: val = 6; break;
+    case 19200: val = 7; break;
+    case 38400: val = 8; break;
+    case 57600: val = 9; break;
+    case 115200: val = 10; break;
+    default:
+	*err = "Invalid bitrate, must be 9600, 19200, 38400, 57600, or 115200";
+	return -1;
+    }
+
+    sys->sol->solparm.default_bitrate = val;
+    sys->sol->configured = 1;
+    return 0;
+}
+
 int
 read_config(sys_data_t *sys,
 	    char       *config_file)
@@ -554,6 +641,8 @@ read_config(sys_data_t *sys,
 	    err = get_user(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "serial") == 0) {
 	    err = serserv_read_config(&tokptr, sys, &errstr);
+	} else if (strcmp(tok, "sol") == 0) {
+	    err = sol_read_config(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "name") == 0) {
 	    err = get_delim_str(&tokptr, &sys->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
@@ -582,6 +671,7 @@ read_config(sys_data_t *sys,
 		    sys->chan_set = ipmi_mc_get_channelset(mc);
 		    sys->cpef = ipmi_mc_get_pef(mc);
 		    sys->startcmd = ipmi_mc_get_startcmdinfo(mc);
+		    sys->sol = ipmi_mc_get_sol(mc);
 		}
 	    }
 	} else if (strcmp(tok, "console") == 0) {

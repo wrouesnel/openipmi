@@ -56,6 +56,8 @@
 #ifndef __MSG_H_
 #define __MSG_H_
 
+#include <stdint.h>
+
 typedef struct msg_s
 {
     void *src_addr;

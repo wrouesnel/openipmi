@@ -66,6 +66,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/lanserv.h>
 
 #include <OpenIPMI/internal/md5.h>
@@ -868,8 +869,10 @@ find_free_session(lanserv_data_t *lan)
     int i;
     /* Find a free session.  Session 0 is invalid. */
     for (i=1; i<=MAX_SESSIONS; i++) {
-	if (! lan->sessions[i].active)
+	if (! lan->sessions[i].active) {
+	    lan->sessions[i].mc = NULL;
 	    return &(lan->sessions[i]);
+	}
     }
     return NULL;
 }
@@ -1703,6 +1706,10 @@ handle_normal_session(lanserv_data_t *lan, msg_t *msg)
 	    handle_get_system_guid(lan, session, msg);
 	    break;
 
+	case IPMI_GET_CHANNEL_CIPHER_SUITES_CMD:
+	    handle_get_channel_cipher_suites(lan, msg);
+	    break;
+
 	case IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD:
 	case IPMI_GET_SESSION_CHALLENGE_CMD:
 	    return_err(lan, msg, session,
@@ -1735,7 +1742,7 @@ handle_normal_session(lanserv_data_t *lan, msg_t *msg)
 }
 
 static void
-handle_ipmi_payload(lanserv_data_t *lan, msg_t *msg)
+handle_ipmi_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 {
     if (msg->len < 7) {
 	lan->sysinfo->log(lan->sysinfo, LAN_ERR, msg,
@@ -2272,7 +2279,7 @@ struct valid_cypher_suites_s
 };
 
 static void
-handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
+handle_open_session_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 {
     unsigned char data[36];
     unsigned char priv, max_priv;
@@ -2460,7 +2467,7 @@ handle_open_session_payload(lanserv_data_t *lan, msg_t *msg)
 }
 
 static void
-handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
+handle_rakp1_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 {
     unsigned char data[64];
     unsigned char priv;
@@ -2566,7 +2573,7 @@ handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
 }
 
 static void
-handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
+handle_rakp3_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 {
     unsigned char data[32];
     session_t     *session = NULL;
@@ -2626,15 +2633,24 @@ handle_rakp3_payload(lanserv_data_t *lan, msg_t *msg)
 	session->in_startup = 0;
 }
 
-typedef void (*payload_handler_cb)(lanserv_data_t *lan, msg_t *msg);
-
-payload_handler_cb payload_handlers[64] =
+ipmi_payload_handler_cb payload_handlers[64] =
 {
     [0] = handle_ipmi_payload,
     [0x10] = handle_open_session_payload,
     [0x12] = handle_rakp1_payload,
     [0x14] = handle_rakp3_payload,
 };
+
+int
+ipmi_register_payload(unsigned int payload_id, ipmi_payload_handler_cb handler)
+{
+    if (payload_id >= 64)
+	return EINVAL;
+    if (payload_handlers[payload_id])
+	return EBUSY;
+    payload_handlers[payload_id] = handler;
+    return 0;
+}
 
 static int
 decrypt_message(lanserv_data_t *lan, session_t *session, msg_t *msg)
@@ -2679,6 +2695,7 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
     unsigned int len;
     uint32_t     *seq;
     msg_t        imsg;
+    lmc_data_t   *mc = NULL;
 
     imsg.data = msg->data-1;
     imsg.len = msg->len+1;
@@ -2783,10 +2800,12 @@ ipmi_handle_rmcpp_msg(lanserv_data_t *lan, msg_t *msg)
 	   sequence number, to prevent spoofing. */
 	if (msg->seq > *seq)
 	    *seq = msg->seq;
+
+	mc = session->mc;
     }
 
     if (payload_handlers[msg->rmcpp.payload])
-	payload_handlers[msg->rmcpp.payload](lan, msg);
+	payload_handlers[msg->rmcpp.payload](lan, mc, msg);
 }
 
 static void
@@ -2877,7 +2896,7 @@ ipmi_handle_rmcp_msg(lanserv_data_t *lan, msg_t *msg)
 	    session->recv_seq = msg->seq;
     }
 
-    handle_ipmi_payload(lan, msg);
+    handle_ipmi_payload(lan, NULL, msg);
 }
 
 void
@@ -2975,6 +2994,26 @@ read_lan_config(lanserv_data_t *lan)
 	free_persist(p);
 }
 
+static int
+set_associated_mc(channel_t *chan, uint32_t session_id,
+		  unsigned int payload, lmc_data_t *mc)
+{
+    lanserv_data_t *lan = chan->chan_info;
+    session_t *session = sid_to_session(lan, session_id);
+
+    if (payload != IPMI_RMCPP_PAYLOAD_TYPE_SOL)
+	return EINVAL;
+
+    if (!session)
+	return EINVAL;
+
+    if (session->mc && mc)
+	return EBUSY;
+
+    session->mc = mc;
+    return 0;
+}
+
 int
 ipmi_lan_init(lanserv_data_t *lan)
 {
@@ -2998,6 +3037,7 @@ ipmi_lan_init(lanserv_data_t *lan)
     lan->channel.get_lan_parms = get_lan_config_parms;
     lan->channel.set_lan_parms = set_lan_config_parms;
     lan->channel.set_chan_access = set_channel_access;
+    lan->channel.set_associated_mc = set_associated_mc;
 
     /* Force user 1 to be a null user. */
     memset(lan->users[1].username, 0, 16);

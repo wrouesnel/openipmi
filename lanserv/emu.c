@@ -41,6 +41,7 @@
 #include <OpenIPMI/ipmi_picmg.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_lan.h>
 
 #include "emu.h"
 
@@ -264,6 +265,8 @@ struct lmc_data_s
     uint32_t sensor_population_change_time;
 
     fru_data_t frus[255];
+
+    ipmi_sol_t sol;
 
     unsigned char power_value;
 #define MAX_LEDS 8
@@ -2726,6 +2729,91 @@ handle_get_msg(lmc_data_t    *mc,
 }
 
 static void
+handle_activate_payload(lmc_data_t    *mc,
+			msg_t         *msg,
+			unsigned char *rdata,
+			unsigned int  *rdata_len)
+{
+    channel_t *channel = mc->channels[msg->channel];
+    int rv;
+
+    if (!mc->sol.configured || !channel->set_associated_mc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->len < 6) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rv = channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, mc);
+    if (rv == EBUSY) {
+	rdata[0] = IPMI_NODE_BUSY_CC;
+	*rdata_len = 1;
+	return;
+    } else if (rv) {
+	rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    ipmi_sol_activate(mc, msg, rdata, rdata_len);
+}
+
+static void
+handle_deactivate_payload(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len)
+{
+    channel_t *channel = mc->channels[msg->channel];
+
+    if (!mc->sol.configured || !channel->set_associated_mc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->len < 6) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    ipmi_sol_deactivate(mc, msg, rdata, rdata_len);
+
+    if (rdata[0] == 0)
+	channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, NULL);
+}
+
+static void
 handle_app_netfn(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
@@ -2802,6 +2890,14 @@ handle_app_netfn(lmc_data_t    *mc,
 
     case IPMI_CLEAR_MSG_FLAGS_CMD:
 	handle_clear_msg_flags(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_ACTIVATE_PAYLOAD_CMD:
+	handle_activate_payload(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_DEACTIVATE_PAYLOAD_CMD:
+	handle_deactivate_payload(mc, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -2992,6 +3088,184 @@ handle_ipmi_get_lan_config_parms(lmc_data_t    *mc,
 }
 
 static void
+handle_set_sol_config_parms(lmc_data_t    *mc,
+			    msg_t         *msg,
+			    unsigned char *rdata,
+			    unsigned int  *rdata_len)
+{
+    unsigned char chan;
+    unsigned char err = 0;
+    unsigned char val;
+    int write_config = 0;
+    ipmi_sol_t *sol = &mc->sol;
+
+    if (!mc->sol.configured) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    /*
+     * I am not sure of the point of the channel, as there is nothing
+     * aobut SOL associated with it, but at least validate it.
+     */
+    chan = msg->data[0];
+    if (chan == 0xe)
+	chan = msg->channel;
+    else if (chan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    if (!mc->channels[chan]) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    switch (msg->data[1]) {
+    case 0:
+	switch (msg->data[2] & 0x3) {
+	case 0:
+	    if (sol->set_in_progress) {
+		/* Rollback */
+		memcpy(&mc->sol.solparm, &mc->sol.solparm_rollback,
+		       sizeof(solparm_t));
+		write_config = 1;
+	    }
+	    break;
+
+	case 1:
+	    if (sol->set_in_progress)
+		err = 0x81; /* Another user is writing. */
+	    else {
+		/* Save rollback data */
+		memcpy(&mc->sol.solparm_rollback, &mc->sol.solparm,
+		       sizeof(solparm_t));
+		sol->set_in_progress = 1;
+	    }
+	    break;
+
+	case 2:
+	    sol->set_in_progress = 0;
+	    break;
+
+	case 3:
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	}
+	break;
+
+    case 1:
+	sol->solparm.enabled = msg->data[2] & 1;
+	write_config = 1;
+	break;
+
+    case 5:
+	val = msg->data[2] & 0xf;
+	if ((val < 6) || (val > 0xa)) {
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	} else {
+	    sol->solparm.bitrate_nonv = val;
+	    write_config = 1;
+	}
+	break;
+
+    case 6:
+	val = msg->data[2] & 0xf;
+	if ((val < 6) || (val > 0xa)) {
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	} else {
+	    sol->solparm.bitrate = val;
+	    if (sol->update_bitrate)
+		sol->update_bitrate(mc);
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    if (write_config)
+	write_sol_config(mc);
+
+    rdata[0] = err;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_sol_config_parms(lmc_data_t    *mc,
+			    msg_t         *msg,
+			    unsigned char *rdata,
+			    unsigned int  *rdata_len)
+{
+    unsigned char chan;
+    ipmi_sol_t *sol = &mc->sol;
+    unsigned char databyte = 0;
+
+    if (!mc->sol.configured) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (msg->len < 4) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    /*
+     * I am not sure of the point of the channel, as there is nothing
+     * aobut SOL associated with it, but at least validate it.
+     */
+    chan = msg->data[0];
+    if (chan == 0xe)
+	chan = msg->channel;
+    else if (chan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+    if (!mc->channels[chan]) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    switch (msg->data[1]) {
+    case 0:
+	databyte = sol->set_in_progress;
+	break;
+
+    case 1:
+	databyte = sol->solparm.enabled;
+	break;
+
+    case 5:
+	databyte = sol->solparm.bitrate_nonv;
+	break;
+
+    case 6:
+	databyte = sol->solparm.bitrate;
+	break;
+
+    default:
+	rdata[0] = 0x80; /* Parm not supported */
+	*rdata_len = 0;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = 0x11;
+    rdata[2] = databyte;
+    *rdata_len = 3;
+}
+
+static void
 handle_transport_netfn(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
@@ -3004,6 +3278,18 @@ handle_transport_netfn(lmc_data_t    *mc,
 
     case IPMI_GET_LAN_CONFIG_PARMS_CMD:
 	handle_ipmi_get_lan_config_parms(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_SOL_CONFIGURATION_PARAMETERS:
+	handle_set_sol_config_parms(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_SOL_CONFIGURATION_PARAMETERS:
+	handle_get_sol_config_parms(mc, msg, rdata, rdata_len);
+	break;
+
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
 	break;
     }
 }
@@ -5960,6 +6246,12 @@ channel_t **
 ipmi_mc_get_channelset(lmc_data_t *mc)
 {
     return mc->channels;
+}
+
+ipmi_sol_t *
+ipmi_mc_get_sol(lmc_data_t *mc)
+{
+    return &mc->sol;
 }
 
 unsigned char
