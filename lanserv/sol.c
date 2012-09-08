@@ -30,7 +30,22 @@
  *  License along with this program; if not, write to the Free
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
 
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <malloc.h>
+#include <signal.h>
+#include <sys/ioctl.h>
+
+#include <OpenIPMI/serv.h>
 #include <OpenIPMI/mcserv.h>
+
+/* FIXME - move to configure handling */
+#define USE_UUCP_LOCKING
+
 
 void
 ipmi_sol_activate(lmc_data_t    *mc,
@@ -38,6 +53,15 @@ ipmi_sol_activate(lmc_data_t    *mc,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+
+    if (sol->active) {
+	*rdata = 0x80; /* Payload already active */
+	*rdata_len = 1;
+	return;
+    }
+
+    
 }
 
 void
@@ -46,4 +70,269 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
 {
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+
+    if (!sol->active) {
+	*rdata = 0x80; /* Payload already deactivated */
+	*rdata_len = 1;
+	return;
+    }
+
+    
+}
+
+#ifdef USE_UUCP_LOCKING
+static char *uucp_lck_dir = "/var/lock";
+static char *progname = "ipmisim";
+
+static int
+uucp_fname_lock_size(char *devname)
+{
+    char *ptr;
+
+    (ptr = strrchr(devname, '/'));
+    if (ptr == NULL) {
+	ptr = devname;
+    } else {
+	ptr = ptr + 1;
+    }
+
+    return 7 + strlen(uucp_lck_dir) + strlen(ptr);
+}
+
+static void
+uucp_fname_lock(char *buf, char *devname)
+{
+    char *ptr;
+
+    (ptr = strrchr(devname, '/'));
+    if (ptr == NULL) {
+	ptr = devname;
+    } else {
+	ptr = ptr + 1;
+    }
+    sprintf(buf, "%s/LCK..%s", uucp_lck_dir, ptr);
+}
+
+static int
+write_full(int fd, char *data, size_t count)
+{
+    size_t written;
+
+ restart:
+    while ((written = write(fd, data, count)) > 0) {
+	data += written;
+	count -= written;
+    }
+    if (written < 0) {
+	if (errno == EAGAIN)
+	    goto restart;
+	return -1;
+    }
+    return 0;
+}
+
+static void
+uucp_rm_lock(char *devname)
+{
+    char *lck_file;
+
+    lck_file = malloc(uucp_fname_lock_size(devname));
+    if (lck_file == NULL) {
+	return;
+    }
+    uucp_fname_lock(lck_file, devname);
+    unlink(lck_file);
+    free(lck_file);
+}
+
+/* return 0=OK, -1=error, 1=locked by other proces */
+static int
+uucp_mk_lock(char *devname)
+{
+    struct stat stt;
+    int pid = -1;
+
+    if (stat(uucp_lck_dir, &stt) == 0) { /* is lock file directory present? */
+	char *lck_file;
+	union {
+	    uint32_t ival;
+	    char     str[64];
+	} buf;
+	int fd;
+
+	lck_file = malloc(uucp_fname_lock_size(devname));
+	if (lck_file == NULL)
+	    return -1;
+
+	uucp_fname_lock(lck_file, devname);
+
+	pid = 0;
+	if ((fd = open(lck_file, O_RDONLY)) >= 0) {
+	    int n;
+
+    	    n = read(fd, &buf, sizeof(buf));
+	    close(fd);
+	    if( n == 4 ) 		/* Kermit-style lockfile. */
+		pid = buf.ival;
+	    else if (n > 0) {		/* Ascii lockfile. */
+		buf.str[n] = 0;
+		sscanf(buf.str, "%d", &pid);
+	    }
+
+	    if (pid > 0 && kill((pid_t)pid, 0) < 0 && errno == ESRCH) {
+		/* death lockfile - remove it */
+		unlink(lck_file);
+		sleep(1);
+		pid = 0;
+	    } else
+		pid = 1;
+
+	}
+
+	if (pid == 0) {
+	    int mask;
+	    size_t rv;
+
+	    mask = umask(022);
+	    fd = open(lck_file, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	    umask(mask);
+	    if (fd >= 0) {
+		snprintf(buf.str, sizeof(buf), "%10ld\t%s\n",
+			 (long)getpid(), progname );
+		rv = write_full(fd, buf.str, strlen(buf.str));
+		close(fd);
+		if (rv < 0) {
+		    pid = -errno;
+		    unlink(lck_file);
+		}
+	    } else {
+		pid = -errno;
+	    }
+	}
+
+	free(lck_file);
+    }
+
+    return pid;
+}
+#endif /* USE_UUCP_LOCKING */
+
+static int
+sol_to_termios_bitrate(ipmi_sol_t *sol, int solbps)
+{
+    int retried = 0;
+
+  retry:
+    switch(solbps) {
+    case 6: return B9600;
+    case 7: return B19200;
+    case 8: return B38400;
+    case 9: return B57600;
+    case 10: return B115200;
+
+    case 0:
+    default:
+	if (retried)
+	    return B9600;
+	solbps = sol->solparm.default_bitrate;
+	goto retry;
+    }
+}
+
+/* Initialize a serial port control structure for the first time. */
+static void
+devinit(ipmi_sol_t *sol, struct termios *termctl)
+{
+    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
+
+    cfmakeraw(termctl);
+    cfsetospeed(termctl, bitrate);
+    cfsetispeed(termctl, bitrate);
+    termctl->c_cflag &= ~(CSTOPB);
+    termctl->c_cflag &= ~(CSIZE);
+    termctl->c_cflag |= CS8;
+    termctl->c_cflag &= ~(PARENB);
+    termctl->c_cflag &= ~(CLOCAL);
+    termctl->c_cflag &= ~(HUPCL);
+    termctl->c_cflag |= CREAD;
+    termctl->c_cflag &= ~(CRTSCTS);
+    termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
+    termctl->c_iflag |= IGNBRK;
+}
+
+static void
+sol_update_bitrate(lmc_data_t *mc)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
+
+    cfsetospeed(&sol->termctl, bitrate);
+    cfsetispeed(&sol->termctl, bitrate);
+    tcsetattr(sol->fd, TCSANOW, &sol->termctl);
+}
+
+int
+sol_init(lmc_data_t *mc)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    int err;
+
+#ifdef USE_UUCP_LOCKING
+    err = uucp_mk_lock(sol->device);
+    if (err > 0) {
+	fprintf(stderr, "SOL device %s is already owned by process %d\n",
+		sol->device, err);
+	return EBUSY;
+    }
+    if (err < 0) {
+	fprintf(stderr, "Error locking SOL device %s\n", sol->device);
+	return -err;
+    }
+#endif /* USE_UUCP_LOCKING */
+    sol->configured++; /* Marked that we locked the device. */
+
+    devinit(sol, &sol->termctl);
+
+    sol->fd = open(sol->device, O_NONBLOCK | O_NOCTTY | O_RDWR);
+    if (sol->fd == -1) {
+	err = errno;
+	fprintf(stderr, "Error opening SOL device %s\n", sol->device);
+	return err;
+    }
+
+    err = tcsetattr(sol->fd, TCSANOW, &sol->termctl);
+    if (err == -1) {
+	err = errno;
+	fprintf(stderr, "Error configuring SOL device %s\n", sol->device);
+	return err;
+    }
+   
+    sol->update_bitrate = sol_update_bitrate;
+
+    /* Turn off BREAK. */
+    ioctl(sol->fd, TIOCCBRK);
+ 
+    return 0;
+}
+
+void
+sol_shutdown(sys_data_t *sys)
+{
+    unsigned int i;
+
+    for (i = 0; i < IPMI_MAX_MCS; i++) {
+	lmc_data_t *mc = sys->ipmb[i];
+	ipmi_sol_t *sol;
+
+	if (!mc)
+	    continue;
+	sol = ipmi_mc_get_sol(mc);
+	if (sol->configured < 2)
+	    continue;
+
+#ifdef USE_UUCP_LOCKING
+	uucp_rm_lock(sol->device);
+#endif /* USE_UUCP_LOCKING */
+    }
 }

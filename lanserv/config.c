@@ -151,10 +151,11 @@ write_persist_users(sys_data_t *sys)
     return 0;
 }
 
-void
+int
 read_sol_config(sys_data_t *sys)
 {
     unsigned int i;
+    int rv;
 
     for (i = 0; i < IPMI_MAX_MCS; i++) {
 	lmc_data_t *mc = sys->ipmb[i];
@@ -169,22 +170,26 @@ read_sol_config(sys_data_t *sys)
 	    continue;
 
 	p = read_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
-	if (!p)
-	    continue;
+	if (p) {
+	    if (!read_persist_int(p, &iv, "enabled"))
+		sol->solparm.enabled = iv;
+	    else
+		sol->solparm.enabled = 1;
 
-	if (!read_persist_int(p, &iv, "enabled"))
-	    sol->solparm.enabled = iv;
-	else
-	    sol->solparm.enabled = 1;
+	    if (!read_persist_int(p, &iv, "bitrate"))
+		sol->solparm.bitrate_nonv = iv;
+	    else
+		sol->solparm.bitrate_nonv = 0;
+	    sol->solparm.bitrate = sol->solparm.bitrate_nonv;
 
-	if (!read_persist_int(p, &iv, "bitrate"))
-	    sol->solparm.bitrate_nonv = iv;
-	else
-	    sol->solparm.bitrate_nonv = 0;
-	sol->solparm.bitrate = sol->solparm.bitrate_nonv;
-
-	free_persist(p);
+	    free_persist(p);
+	}
+	rv = sol_init(mc);
+	if (rv)
+	    return rv;
     }
+
+    return 0;
 }
 
 int

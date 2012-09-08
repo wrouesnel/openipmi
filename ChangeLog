@@ -1,3 +1,8 @@
+2012-09-07 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/mcserv.h, lanserv/sol.c: Implemented UUCP
+	locking on SOL ports and basic SOL device setup.
+
 2012-09-05 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: Remove a

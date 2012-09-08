@@ -57,6 +57,8 @@
 #define __MCSERV_H
 
 #include <OpenIPMI/msg.h>
+#include <termios.h>
+#include <unistd.h>
 
 typedef struct lmc_data_s lmc_data_t;
 
@@ -72,6 +74,8 @@ typedef struct ipmi_sol_s {
     int configured;
 
     char *device;
+    int fd;
+    struct termios termctl;
 
     int set_in_progress;
     solparm_t solparm;
@@ -205,7 +209,7 @@ void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 
 void read_persist_users(sys_data_t *sys);
 int write_persist_users(sys_data_t *sys);
-void read_sol_config(sys_data_t *sys);
+int read_sol_config(sys_data_t *sys);
 int write_sol_config(lmc_data_t *mc);
 
 int ipmi_mc_users_changed(lmc_data_t *mc);
@@ -219,5 +223,8 @@ void ipmi_sol_deactivate(lmc_data_t    *mc,
 			 msg_t         *msg,
 			 unsigned char *rdata,
 			 unsigned int  *rdata_len);
+
+int sol_init(lmc_data_t *mc);
+void sol_shutdown(sys_data_t *sys);
 
 #endif /* __MCSERV_H */

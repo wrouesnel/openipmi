@@ -1153,7 +1153,7 @@ main(int argc, const char *argv[])
 {
     sys_data_t  sysinfo;
     misc_data_t data;
-    int err;
+    int err, rv = 1;
     int i;
     poptContext poptCtx;
     struct timeval tv;
@@ -1285,14 +1285,19 @@ main(int argc, const char *argv[])
     }
 
     read_persist_users(&sysinfo);
-    read_sol_config(&sysinfo);
+    err = read_sol_config(&sysinfo);
+    if (err) {
+	fprintf(stderr, "Unable to initialize SOL: %s\n",
+		strerror(err));
+	goto out;
+    }
 
     if (!command_file) {
 	FILE *tf;
 	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(sysinfo.name));
 	if (!command_file) {
 	    fprintf(stderr, "Out of memory\n");
-	    exit(1);
+	    goto out;
 	}
 	strcpy(command_file, BASE_CONF_STR);
 	strcat(command_file, "/");
@@ -1316,7 +1321,7 @@ main(int argc, const char *argv[])
     if (!sysinfo.bmc_ipmb || !sysinfo.ipmb[sysinfo.bmc_ipmb >> 1]) {
 	sysinfo.log(&sysinfo, SETUP_ERROR, NULL,
 		    "No bmc_ipmb specified or configured.");
-	exit(1);
+	goto out;
     }
 
     sysinfo.console_fd = -1;
@@ -1328,25 +1333,25 @@ main(int argc, const char *argv[])
 		     SOCK_STREAM, IPPROTO_TCP);
 	if (nfd == -1) {
 	    perror("Console socket open");
-	    exit(1);
+	    goto out;
 	}
 	err = bind(nfd, (struct sockaddr *) &sysinfo.console_addr,
 		   sysinfo.console_addr_len);
 	if (err) {
 	    perror("bind to console socket");
-	    exit(1);
+	    goto out;
 	}
 	err = listen(nfd, 1);
 	if (err == -1) {
 	    perror("listen to console socket");
-	    exit(1);
+	    goto out;
 	}
 	val = 1;
 	err = setsockopt(nfd, SOL_SOCKET, SO_REUSEADDR,
 			 (char *)&val, sizeof(val));
 	if (err) {
 	    perror("console setsockopt reuseaddr");
-	    exit(1);
+	    goto out;
 	}
 	sysinfo.console_fd = nfd;
 
@@ -1355,7 +1360,7 @@ main(int argc, const char *argv[])
 					      NULL, &conid);
 	if (err) {
 	    fprintf(stderr, "Unable to add console wait: 0x%x\n", err);
-	    exit(1);
+	    goto out;
 	}
     }
 
@@ -1368,7 +1373,7 @@ main(int argc, const char *argv[])
 					      NULL, &stdio_console.conid);
 	if (err) {
 	    fprintf(stderr, "Unable to add input wait: 0x%x\n", err);
-	    exit(1);
+	    goto out;
 	}
     }
 
@@ -1377,9 +1382,12 @@ main(int argc, const char *argv[])
     err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);
     if (err) {
 	fprintf(stderr, "Unable to start timer: 0x%x\n", err);
-	exit(1);
+	goto out;
     }
 
     data.os_hnd->operation_loop(data.os_hnd);
-    exit(0);
+    rv = 0;
+  out:
+    sol_shutdown(&sysinfo);
+    exit(rv);
 }
