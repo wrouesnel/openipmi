@@ -169,6 +169,8 @@ read_sol_config(sys_data_t *sys)
 	if (!sol->configured)
 	    continue;
 
+	sys->sol_present = 1;
+
 	p = read_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
 	if (p) {
 	    if (!read_persist_int(p, &iv, "enabled"))
@@ -184,7 +186,7 @@ read_sol_config(sys_data_t *sys)
 
 	    free_persist(p);
 	}
-	rv = sol_init(mc);
+	rv = sol_init_mc(mc);
 	if (rv)
 	    return rv;
     }

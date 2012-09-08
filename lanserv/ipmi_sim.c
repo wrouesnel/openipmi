@@ -1285,7 +1285,15 @@ main(int argc, const char *argv[])
     }
 
     read_persist_users(&sysinfo);
+
     err = read_sol_config(&sysinfo);
+    if (err) {
+	fprintf(stderr, "Unable to read SOL configs: %s\n",
+		strerror(err));
+	goto out;
+    }
+
+    err = sol_init(&sysinfo, data.os_hnd);
     if (err) {
 	fprintf(stderr, "Unable to initialize SOL: %s\n",
 		strerror(err));

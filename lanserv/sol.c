@@ -42,18 +42,39 @@
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/mcserv.h>
+#include <OpenIPMI/lanserv.h>
+#include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/ipmi_err.h>
 
 /* FIXME - move to configure handling */
 #define USE_UUCP_LOCKING
 
+static os_handler_t *sol_os_hnd;
+
+static void ipmi_set_uint16(uint8_t *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+}
+
+static void ipmi_set_uint32(uint8_t *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+    data[2] = (val >> 16) & 0xff;
+    data[3] = (val >> 24) & 0xff;
+}
 
 void
 ipmi_sol_activate(lmc_data_t    *mc,
+		  channel_t     *channel,
 		  msg_t         *msg,
 		  unsigned char *rdata,
 		  unsigned int  *rdata_len)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    uint16_t port;
+    int rv;
 
     if (sol->active) {
 	*rdata = 0x80; /* Payload already active */
@@ -61,11 +82,32 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	return;
     }
 
-    
+    rv = channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, mc,
+				    &port);
+    if (rv == EBUSY) {
+	rdata[0] = IPMI_NODE_BUSY_CC;
+	*rdata_len = 1;
+	return;
+    } else if (rv) {
+	rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    sol->active = 1;
+    sol->session_id = msg->sid;
+
+    rdata[0] = 0;
+    ipmi_set_uint32(rdata + 1, 0);
+    ipmi_set_uint16(rdata + 5, sizeof(sol->inbuf));
+    ipmi_set_uint16(rdata + 7, sizeof(sol->outbuf));
+    ipmi_set_uint16(rdata + 9, port);
+    ipmi_set_uint16(rdata + 11, 0xffff);
 }
 
 void
 ipmi_sol_deactivate(lmc_data_t    *mc,
+		    channel_t     *channel,
 		    msg_t         *msg,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
@@ -78,7 +120,10 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 	return;
     }
 
-    
+    sol->active = 0;
+    sol->session_id = 0;
+    channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, NULL,
+			       NULL);
 }
 
 #ifdef USE_UUCP_LOCKING
@@ -272,8 +317,34 @@ sol_update_bitrate(lmc_data_t *mc)
     tcsetattr(sol->fd, TCSANOW, &sol->termctl);
 }
 
+static void
+handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+
+    if (!sol->active)
+	return;
+}
+
+static void
+sol_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+}
+
 int
-sol_init(lmc_data_t *mc)
+sol_init(sys_data_t *sys, os_handler_t *os_hnd)
+{
+    if (!sys->sol_present)
+	return 0;
+
+    sol_os_hnd = os_hnd;
+
+    return ipmi_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
+				 handle_sol_payload);
+}
+
+int
+sol_init_mc(lmc_data_t *mc)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     int err;
@@ -312,8 +383,12 @@ sol_init(lmc_data_t *mc)
 
     /* Turn off BREAK. */
     ioctl(sol->fd, TIOCCBRK);
+
+    err = sol_os_hnd->add_fd_to_wait_for(sol_os_hnd, sol->fd,
+					 sol_data_ready, sol,
+					 NULL, &sol->fd_id);
  
-    return 0;
+    return err;
 }
 
 void

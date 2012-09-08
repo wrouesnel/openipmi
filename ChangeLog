@@ -1,3 +1,9 @@
+2012-09-08 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/*: Start adding SOL functionality, implement commands,
+	start working on payload handling and getting all the various
+	pieces tied in to the frameworks.
+
 2012-09-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/mcserv.h, lanserv/sol.c: Implemented UUCP

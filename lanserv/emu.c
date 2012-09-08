@@ -2729,13 +2729,108 @@ handle_get_msg(lmc_data_t    *mc,
 }
 
 static void
+handle_get_payload_activation_status(lmc_data_t    *mc,
+				     msg_t         *msg,
+				     unsigned char *rdata,
+				     unsigned int  *rdata_len)
+{
+    channel_t *channel = mc->channels[msg->channel];
+
+    if (!mc->sol.configured || !channel->set_associated_mc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 4;
+
+    if ((msg->data[0] & 0xf) == IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[1] = 1; /* Only one SOL session at a time */
+	rdata[2] = mc->sol.active;
+	rdata[3] = 0;
+    } else {
+	rdata[1] = 0;
+	rdata[2] = 0;
+	rdata[3] = 0;
+    }
+}
+
+static void
+handle_get_payload_instance_info(lmc_data_t    *mc,
+				 msg_t         *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    channel_t *channel = mc->channels[msg->channel];
+
+    if (msg->len < 2) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (!mc->sol.configured || !channel->set_associated_mc) {
+	rdata[0] = IPMI_INVALID_CMD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != IPMI_RMCPP_PAYLOAD_TYPE_SOL) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->data[1] != 1) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    ipmi_set_uint32(rdata + 1, mc->sol.session_id);
+    rdata[5] = 1;
+    memset(rdata + 6, 0, 7);
+    *rdata_len = 13;
+}
+
+static void
+handle_get_channel_payload_support(lmc_data_t    *mc,
+				   msg_t         *msg,
+				   unsigned char *rdata,
+				   unsigned int  *rdata_len)
+{
+    channel_t *channel;
+
+    if (msg->len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    channel = mc->channels[msg->data[0] & 0xf];
+
+    rdata[0] = 0;
+    rdata[1] = ((1 << 1) |
+		((mc->sol.configured && channel->set_associated_mc) << 2));
+    memset(rdata + 2, 0, 7);
+    *rdata_len = 9;
+}
+
+static void
 handle_activate_payload(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
 			unsigned int  *rdata_len)
 {
     channel_t *channel = mc->channels[msg->channel];
-    int rv;
 
     if (!mc->sol.configured || !channel->set_associated_mc) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -2761,18 +2856,7 @@ handle_activate_payload(lmc_data_t    *mc,
 	return;
     }
 
-    rv = channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, mc);
-    if (rv == EBUSY) {
-	rdata[0] = IPMI_NODE_BUSY_CC;
-	*rdata_len = 1;
-	return;
-    } else if (rv) {
-	rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	*rdata_len = 1;
-	return;
-    }
-
-    ipmi_sol_activate(mc, msg, rdata, rdata_len);
+    ipmi_sol_activate(mc, channel, msg, rdata, rdata_len);
 }
 
 static void
@@ -2807,10 +2891,7 @@ handle_deactivate_payload(lmc_data_t    *mc,
 	return;
     }
 
-    ipmi_sol_deactivate(mc, msg, rdata, rdata_len);
-
-    if (rdata[0] == 0)
-	channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, NULL);
+    ipmi_sol_deactivate(mc, channel, msg, rdata, rdata_len);
 }
 
 static void
@@ -2890,6 +2971,18 @@ handle_app_netfn(lmc_data_t    *mc,
 
     case IPMI_CLEAR_MSG_FLAGS_CMD:
 	handle_clear_msg_flags(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD:
+	handle_get_payload_activation_status(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD:
+	handle_get_payload_instance_info(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD:
+	handle_get_channel_payload_support(mc, msg, rdata, rdata_len);
 	break;
 
     case IPMI_ACTIVATE_PAYLOAD_CMD:

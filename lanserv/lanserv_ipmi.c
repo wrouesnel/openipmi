@@ -2996,7 +2996,8 @@ read_lan_config(lanserv_data_t *lan)
 
 static int
 set_associated_mc(channel_t *chan, uint32_t session_id,
-		  unsigned int payload, lmc_data_t *mc)
+		  unsigned int payload, lmc_data_t *mc,
+		  uint16_t *port)
 {
     lanserv_data_t *lan = chan->chan_info;
     session_t *session = sid_to_session(lan, session_id);
@@ -3011,6 +3012,7 @@ set_associated_mc(channel_t *chan, uint32_t session_id,
 	return EBUSY;
 
     session->mc = mc;
+    *port = lan->port;
     return 0;
 }
 

@@ -59,6 +59,7 @@
 #include <OpenIPMI/msg.h>
 #include <termios.h>
 #include <unistd.h>
+#include <OpenIPMI/os_handler.h>
 
 typedef struct lmc_data_s lmc_data_t;
 
@@ -75,6 +76,7 @@ typedef struct ipmi_sol_s {
 
     char *device;
     int fd;
+    os_hnd_fd_id_t *fd_id;
     struct termios termctl;
 
     int set_in_progress;
@@ -82,7 +84,11 @@ typedef struct ipmi_sol_s {
     solparm_t solparm_rollback;
     void (*update_bitrate)(lmc_data_t *mc);
 
+    unsigned char inbuf[32];
+    unsigned char outbuf[32];
+
     int active;
+    uint32_t session_id;
 } ipmi_sol_t;
 
 int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
@@ -215,16 +221,19 @@ int write_sol_config(lmc_data_t *mc);
 int ipmi_mc_users_changed(lmc_data_t *mc);
 
 void ipmi_sol_activate(lmc_data_t    *mc,
+		       channel_t     *channel,
 		       msg_t         *msg,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len);
 
 void ipmi_sol_deactivate(lmc_data_t    *mc,
+			 channel_t     *channel,
 			 msg_t         *msg,
 			 unsigned char *rdata,
 			 unsigned int  *rdata_len);
 
-int sol_init(lmc_data_t *mc);
+int sol_init_mc(lmc_data_t *mc);
 void sol_shutdown(sys_data_t *sys);
+int sol_init(sys_data_t *sys, os_handler_t *os_hnd);
 
 #endif /* __MCSERV_H */

@@ -243,6 +243,7 @@ struct lanserv_data_s
 
     lan_addr_t lan_addr;
     int lan_addr_set;
+    uint16_t port;
 };
 
 

@@ -187,7 +187,8 @@ struct channel_s
     void (*set_chan_access)(channel_t *chan, msg_t *msg, unsigned char *rdata,
 			    unsigned int *rdata_len);
     int (*set_associated_mc)(channel_t *chan, uint32_t session_id,
-			     unsigned int payload, lmc_data_t *mc);
+			     unsigned int payload, lmc_data_t *mc,
+			     uint16_t *port);
 
     oem_handlers_t oem;
 
@@ -325,6 +326,7 @@ struct sys_data_s {
     int console_fd;
 
     unsigned char bmc_ipmb;
+    int sol_present;
 
     void *info;
 
