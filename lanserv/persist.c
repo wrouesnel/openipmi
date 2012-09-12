@@ -112,7 +112,10 @@ persist_init(const char *papp, const char *instance)
     strcat(dname, "/");
     strcat(dname, app);
     strcat(dname, "/");
-    n = strchr(dname, '/');
+    if (dname[0] == '/')
+	n = strchr(dname + 1, '/');
+    else
+	n = strchr(dname, '/');
     while (n) {
 	*n = '\0';
 	if (stat(dname, &st) != 0) {
