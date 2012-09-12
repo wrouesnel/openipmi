@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003,2004,2005 MontaVista Software Inc.
+ * Copyright 2002,2003,2004,2005,2012 MontaVista Software Inc.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU

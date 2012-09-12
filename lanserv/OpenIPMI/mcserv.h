@@ -57,8 +57,6 @@
 #define __MCSERV_H
 
 #include <OpenIPMI/msg.h>
-#include <termios.h>
-#include <unistd.h>
 #include <OpenIPMI/os_handler.h>
 
 typedef struct lmc_data_s lmc_data_t;
@@ -68,27 +66,24 @@ typedef struct solparm_s {
     int bitrate;
     int bitrate_nonv;
     int default_bitrate;
-
 } solparm_t;
+
+typedef struct soldata_s soldata_t;
 
 typedef struct ipmi_sol_s {
     int configured;
 
     char *device;
-    int fd;
-    os_hnd_fd_id_t *fd_id;
-    struct termios termctl;
 
     int set_in_progress;
     solparm_t solparm;
     solparm_t solparm_rollback;
     void (*update_bitrate)(lmc_data_t *mc);
 
-    unsigned char inbuf[32];
-    unsigned char outbuf[32];
-
     int active;
     uint32_t session_id;
+
+    soldata_t *soldata;
 } ipmi_sol_t;
 
 int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,

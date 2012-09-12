@@ -167,6 +167,8 @@ sid_to_session(lanserv_data_t *lan, unsigned int sid)
 static void
 close_session(lanserv_data_t *lan, session_t *session)
 {
+    if (session->close_cb)
+	session->close_cb(session->mc, session->close_cb_data);
     session->active = 0;
     if (session->authtype <= 4)
 	ipmi_auths[session->authtype].authcode_cleanup(session->authdata);
@@ -463,8 +465,8 @@ return_rsp(lanserv_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 	session = sid_to_session(lan, msg->sid);
 
     if (session && session->rmcpplus) {
-	return_rmcpp_rsp(lan, session, msg, 0, rsp->data, rsp->data_len,
-			 NULL, 0);
+	return_rmcpp_rsp(lan, session, msg, msg->rmcpp.payload,
+			 rsp->data, rsp->data_len, NULL, 0);
 	return;
     } else if (msg->sid == 0) {
 	session = &dummy_session;
@@ -2997,7 +2999,9 @@ read_lan_config(lanserv_data_t *lan)
 static int
 set_associated_mc(channel_t *chan, uint32_t session_id,
 		  unsigned int payload, lmc_data_t *mc,
-		  uint16_t *port)
+		  uint16_t *port,
+		  void (*close)(lmc_data_t *mc, void *cb_data),
+		  void *cb_data)
 {
     lanserv_data_t *lan = chan->chan_info;
     session_t *session = sid_to_session(lan, session_id);
@@ -3011,8 +3015,11 @@ set_associated_mc(channel_t *chan, uint32_t session_id,
     if (session->mc && mc)
 	return EBUSY;
 
+    session->close_cb = close;
+    session->close_cb_data = cb_data;
     session->mc = mc;
-    *port = lan->port;
+    if (port)
+	*port = lan->port;
     return 0;
 }
 

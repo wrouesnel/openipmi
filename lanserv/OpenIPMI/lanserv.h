@@ -169,6 +169,10 @@ struct session_s
 
     /* The MC associated with the RMCP session activation, used for SOL. */
     lmc_data_t *mc;
+
+    /* Function to call when the session closes */
+    void (*close_cb)(lmc_data_t *mc, void *cb_data);
+    void *close_cb_data;
 };
 
 typedef struct lanparm_data_s lanparm_data_t;

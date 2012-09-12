@@ -39,6 +39,8 @@
 #include <malloc.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/mcserv.h>
@@ -50,6 +52,34 @@
 #define USE_UUCP_LOCKING
 
 static os_handler_t *sol_os_hnd;
+
+#define SOL_INBUF_SIZE 32
+#define SOL_OUTBUF_SIZE 32
+
+struct soldata_s {
+    int fd;
+    os_hnd_fd_id_t *fd_id;
+    struct termios termctl;
+
+    channel_t *channel;
+    msg_t dummy_send_msg;
+
+    /* Data from the remote to the serial port */
+    unsigned char inbuf[SOL_INBUF_SIZE];
+    unsigned int inlen;
+
+    /* Data from the serial port to the remote */
+    unsigned char outbuf[SOL_OUTBUF_SIZE];
+    unsigned int outlen;
+
+    char in_nack;
+    char read_enabled;
+    char write_enabled;
+
+    int last_acked_packet;
+    int last_acked_packet_len;
+    int curr_packet_seq;
+};
 
 static void ipmi_set_uint16(uint8_t *data, int val)
 {
@@ -65,6 +95,16 @@ static void ipmi_set_uint32(uint8_t *data, int val)
     data[3] = (val >> 24) & 0xff;
 }
 
+static void
+sol_session_closed(lmc_data_t *mc, void *cb_data)
+{
+    ipmi_sol_t *sol = cb_data;
+
+    free(sol->soldata->dummy_send_msg.src_addr);
+    sol->active = 0;
+    sol->session_id = 0;
+}
+
 void
 ipmi_sol_activate(lmc_data_t    *mc,
 		  channel_t     *channel,
@@ -75,6 +115,7 @@ ipmi_sol_activate(lmc_data_t    *mc,
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     uint16_t port;
     int rv;
+    msg_t *dmsg;
 
     if (sol->active) {
 	*rdata = 0x80; /* Payload already active */
@@ -82,13 +123,26 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	return;
     }
 
+    dmsg = &sol->soldata->dummy_send_msg;
+    dmsg->src_addr = malloc(msg->src_len);
+    if (!dmsg->src_addr) {
+	rdata[0] = IPMI_OUT_OF_SPACE_CC;
+	*rdata_len = 1;
+	return;
+    }
+    memcpy(dmsg->src_addr, msg->src_addr, msg->src_len);
+    dmsg->src_len = msg->src_len;
+    dmsg->rmcpp.payload = IPMI_RMCPP_PAYLOAD_TYPE_SOL;
+
     rv = channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, mc,
-				    &port);
+				    &port, sol_session_closed, sol);
     if (rv == EBUSY) {
+	free(dmsg->src_addr);
 	rdata[0] = IPMI_NODE_BUSY_CC;
 	*rdata_len = 1;
 	return;
     } else if (rv) {
+	free(dmsg->src_addr);
 	rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	*rdata_len = 1;
 	return;
@@ -96,13 +150,16 @@ ipmi_sol_activate(lmc_data_t    *mc,
 
     sol->active = 1;
     sol->session_id = msg->sid;
+    dmsg->sid = msg->sid;
+    sol->soldata->channel = channel;
 
     rdata[0] = 0;
     ipmi_set_uint32(rdata + 1, 0);
-    ipmi_set_uint16(rdata + 5, sizeof(sol->inbuf));
-    ipmi_set_uint16(rdata + 7, sizeof(sol->outbuf));
+    ipmi_set_uint16(rdata + 5, sizeof(sol->soldata->inbuf));
+    ipmi_set_uint16(rdata + 7, sizeof(sol->soldata->outbuf));
     ipmi_set_uint16(rdata + 9, port);
     ipmi_set_uint16(rdata + 11, 0xffff);
+    *rdata_len = 13;
 }
 
 void
@@ -120,10 +177,13 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 	return;
     }
 
-    sol->active = 0;
-    sol->session_id = 0;
+    sol_session_closed(mc, sol);
+
     channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, NULL,
-			       NULL);
+			       NULL, NULL, 0);
+
+    rdata[0] = 0;
+    *rdata_len = 1;
 }
 
 #ifdef USE_UUCP_LOCKING
@@ -312,31 +372,211 @@ sol_update_bitrate(lmc_data_t *mc)
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
 
-    cfsetospeed(&sol->termctl, bitrate);
-    cfsetispeed(&sol->termctl, bitrate);
-    tcsetattr(sol->fd, TCSANOW, &sol->termctl);
+    cfsetospeed(&sol->soldata->termctl, bitrate);
+    cfsetispeed(&sol->soldata->termctl, bitrate);
+    tcsetattr(sol->soldata->fd, TCSANOW, &sol->soldata->termctl);
+}
+
+static void
+set_read_enable(soldata_t *sd)
+{
+    int val;
+
+    if (sizeof(sd->outbuf) == sd->outlen)
+	/* Read is always disabled if we have nothing to read into. */
+	val = 0;
+    else
+	val = !sd->in_nack;
+    if (sd->read_enabled == val)
+	return;
+
+    sd->read_enabled = val;
+    sol_os_hnd->set_fd_enables(sol_os_hnd, sd->fd_id, sd->read_enabled,
+			       sd->write_enabled, 0);
+}
+
+static void
+set_write_enable(soldata_t *sd)
+{
+    int val = sd->inlen > 0;
+
+    if (sd->write_enabled == val)
+	return;
+
+    sd->write_enabled = val;
+    sol_os_hnd->set_fd_enables(sol_os_hnd, sd->fd_id, sd->read_enabled,
+			       sd->write_enabled, 0);
+}
+
+static void
+send_data(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    rsp_msg_t msg;
+    unsigned char data[SOL_OUTBUF_SIZE + 4];
+
+    data[0] = sd->curr_packet_seq;
+    data[1] = 0;
+    data[2] = 0;
+    data[3] = (sd->inlen == sizeof(sd->inbuf)) << 6;
+    memcpy(data + 4, sd->outbuf, sd->outlen);
+    msg.data = data;
+    msg.data_len = sd->outlen + 4;
+
+    sd->channel->return_rsp(sd->channel, &sd->dummy_send_msg, &msg);
+}
+
+static void
+send_ack(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    rsp_msg_t msg;
+    unsigned char data[SOL_OUTBUF_SIZE + 4];
+
+    data[0] = 0;
+    data[1] = sd->last_acked_packet;
+    data[2] = sd->last_acked_packet_len;
+    data[3] = (sd->inlen == sizeof(sd->inbuf)) << 6;
+    msg.data = data;
+    msg.data_len = 4;
+
+    sd->channel->return_rsp(sd->channel, &sd->dummy_send_msg, &msg);
+}
+
+static void
+clear_outbuf(soldata_t *sd)
+{
+    sd->curr_packet_seq++;
+    if (sd->curr_packet_seq >= 16)
+	sd->curr_packet_seq = 1;
+    sd->outlen = 0;
 }
 
 static void
 handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
+    unsigned char seq, ack, count;
+    char isnack, isbreak, ctspause, deassert_dcd, flush_in, flush_out;
+    unsigned char *data;
+    unsigned int len;
 
-    if (!sol->active)
+    if (!mc || !sol->active)
 	return;
+
+    if (msg->len < 4)
+	return;
+
+    seq = msg->data[0] & 0xf;
+    ack = msg->data[1] & 0xf;
+    count = msg->data[2];
+    isnack = msg->data[3] & (1 << 6);
+    /* Ring Indicator is ignored for now */
+    isbreak = msg->data[3] & (1 << 4);
+    ctspause = msg->data[3] & (1 << 3);
+    deassert_dcd = msg->data[3] & (1 << 2);
+    /* FIXME - add handling for the three above conditions */
+    flush_in = msg->data[3] & (1 << 1);
+    flush_out = msg->data[3] & (1 << 0);
+
+    data = msg->data + 4;
+    len = msg->len - 4;
+
+    if (seq != 0) {
+	if (seq == sd->last_acked_packet) {
+	    send_ack(sol);
+	} else if (len) {
+	    sd->last_acked_packet = seq;
+	    if (len > (sizeof(sd->inbuf) - sd->inlen))
+		len = sizeof(sd->inbuf) - sd->inlen;
+	    sd->last_acked_packet_len = len;
+	    memcpy(sd->inbuf + sd->inlen, data, len);
+	    sd->inlen += len;
+
+	    send_ack(sol);
+	    set_write_enable(sol->soldata);
+	}
+    }
+
+    if (ack != 0) {
+	if (isnack) {
+	    sd->in_nack = 1;
+	    set_read_enable(sd);
+	} else {
+	    sd->in_nack = 0;
+	    set_read_enable(sd);
+	    if (count != sd->outlen)
+		send_data(sol);
+	    else
+		clear_outbuf(sd);
+	}
+    }
+
+    if (flush_out)
+	clear_outbuf(sd);
+
+    if (flush_in)
+	sd->inlen = 0;
 }
 
 static void
-sol_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
+sol_write_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
+    ipmi_sol_t *sol = cb_data;
+    soldata_t *sd = sol->soldata;
+    int rv;
+
+    rv = write(fd, sd->inbuf, sd->inlen);
+    if (rv < 0) {
+	sd->channel->log(sd->channel, OS_ERROR, NULL,
+			 "Error reading from serial port: %d, disabling\n",
+			 errno);
+	sol_os_hnd->remove_fd_to_wait_for(sol_os_hnd, id);
+	close(sd->fd);
+	sd->fd = -1;
+	return;
+    }
+
+    if (((unsigned int) rv) < sd->inlen)
+	memcpy(sd->inbuf, sd->inbuf + rv, sd->inlen - rv);
+    sd->inlen -= rv;
+
+    set_write_enable(sd);
+}
+
+static void
+sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    ipmi_sol_t *sol = cb_data;
+    soldata_t *sd = sol->soldata;
+    int rv;
+
+    rv = read(fd, sd->outbuf, sizeof(sd->outbuf) - sd->outlen);
+    if (rv < 0) {
+	sd->channel->log(sd->channel, OS_ERROR, NULL,
+			 "Error reading from serial port: %d, disabling\n",
+			 errno);
+	sol_os_hnd->remove_fd_to_wait_for(sol_os_hnd, id);
+	close(sd->fd);
+	sd->fd = -1;
+	return;
+    }
+    sd->outlen += rv;
+
+    if (!sol->active) {
+	sd->outlen = 0;
+	return;
+    }
+
+    /* Looks strange, but will turn off read if the buffer is full */
+    set_read_enable(sd);
+    send_data(sol);
 }
 
 int
 sol_init(sys_data_t *sys, os_handler_t *os_hnd)
 {
-    if (!sys->sol_present)
-	return 0;
-
     sol_os_hnd = os_hnd;
 
     return ipmi_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
@@ -347,47 +587,73 @@ int
 sol_init_mc(lmc_data_t *mc)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd;
     int err;
+
+    sd = malloc(sizeof(*sd));
+    if (!sd)
+	return ENOMEM;
+    memset(sd, 0, sizeof(*sd));
+
+    sol->soldata = sd;
+    sd->fd = -1;
+    sd->curr_packet_seq = 1;
 
 #ifdef USE_UUCP_LOCKING
     err = uucp_mk_lock(sol->device);
     if (err > 0) {
 	fprintf(stderr, "SOL device %s is already owned by process %d\n",
 		sol->device, err);
-	return EBUSY;
+	err = EBUSY;
+	goto out;
     }
     if (err < 0) {
 	fprintf(stderr, "Error locking SOL device %s\n", sol->device);
-	return -err;
+	err = -err;
+	goto out;
     }
 #endif /* USE_UUCP_LOCKING */
     sol->configured++; /* Marked that we locked the device. */
 
-    devinit(sol, &sol->termctl);
+    devinit(sol, &sd->termctl);
 
-    sol->fd = open(sol->device, O_NONBLOCK | O_NOCTTY | O_RDWR);
-    if (sol->fd == -1) {
+    sd->fd = open(sol->device, O_NONBLOCK | O_NOCTTY | O_RDWR);
+    if (sd->fd == -1) {
 	err = errno;
 	fprintf(stderr, "Error opening SOL device %s\n", sol->device);
-	return err;
+	goto out;
     }
 
-    err = tcsetattr(sol->fd, TCSANOW, &sol->termctl);
+    err = tcsetattr(sd->fd, TCSANOW, &sd->termctl);
     if (err == -1) {
 	err = errno;
 	fprintf(stderr, "Error configuring SOL device %s\n", sol->device);
-	return err;
+	goto out;
     }
    
     sol->update_bitrate = sol_update_bitrate;
 
     /* Turn off BREAK. */
-    ioctl(sol->fd, TIOCCBRK);
+    ioctl(sd->fd, TIOCCBRK);
 
-    err = sol_os_hnd->add_fd_to_wait_for(sol_os_hnd, sol->fd,
+    sd->read_enabled = 1;
+    sd->write_enabled = 0;
+    err = sol_os_hnd->add_fd_to_wait_for(sol_os_hnd, sd->fd,
 					 sol_data_ready, sol,
-					 NULL, &sol->fd_id);
- 
+					 NULL, &sd->fd_id);
+    if (err)
+	goto out;
+
+    sol_os_hnd->set_fd_handlers(sol_os_hnd, sd->fd_id, sol_write_ready, NULL);
+
+  out:
+    if (err) {
+	if (sd->fd >= 0)
+	    close(sd->fd);
+	free(sd);
+	sol->soldata = NULL;
+    }
+
     return err;
 }
 
