@@ -308,10 +308,11 @@ lan_channel_init(void *info, channel_t *chan)
 	    ipmi_emu_set_mc_guid(sys, lan->guid, 0);
     }
 
-    if (!lan->lan_addr_set == 0) {
+    if (!lan->lan_addr_set) {
 #ifdef AF_INET6
 	struct sockaddr_in6 *ipaddr = (void *) &lan->lan_addr.addr;
 	memcpy(ipaddr, &in6addr_any, sizeof(*ipaddr));
+	ipaddr->sin6_port = htons(623);
 #else
 	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs.addr;
 	ipaddr->sin_family = AF_INET;
