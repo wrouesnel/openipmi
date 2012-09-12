@@ -336,6 +336,14 @@ struct os_handler_s
     /* Set the function to send logs to. */
     void (*set_log_handler)(os_handler_t *handler,
 			    os_vlog_t    log_handler);
+
+    /* For fd handlers, allow write and except handling to be done,
+       and allow any of the I/O types to be enabled and disabled. */
+    void (*set_fd_handlers)(os_handler_t *handler, os_hnd_fd_id_t *id,
+			    os_data_ready_t write_ready,
+			    os_data_ready_t except_ready);
+    int (*set_fd_enables)(os_handler_t *handler, os_hnd_fd_id_t *id,
+			  int read, int write, int except);
 };
 
 /* Only use these to allocate/free OS handlers. */

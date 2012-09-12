@@ -71,6 +71,8 @@ struct os_hnd_fd_id_s
     int             fd;
     void            *cb_data;
     os_data_ready_t data_ready;
+    os_data_ready_t write_ready;
+    os_data_ready_t except_ready;
     os_handler_t    *handler;
     os_fd_data_freed_t freed;
 };
@@ -80,11 +82,29 @@ fd_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
     void            *cb_data;
-    os_handler_t    *handler;
 
-    handler = fd_data->handler;
     cb_data = fd_data->cb_data;
     fd_data->data_ready(fd, fd_data->cb_data, fd_data);
+}
+
+static void
+fd_write_handler(int fd, void *data)
+{
+    os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
+    void            *cb_data;
+
+    cb_data = fd_data->cb_data;
+    fd_data->write_ready(fd, fd_data->cb_data, fd_data);
+}
+
+static void
+fd_except_handler(int fd, void *data)
+{
+    os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
+    void            *cb_data;
+
+    cb_data = fd_data->cb_data;
+    fd_data->except_ready(fd, fd_data->cb_data, fd_data);
 }
 
 static void
@@ -122,7 +142,8 @@ add_fd(os_handler_t       *handler,
     fd_data->freed = freed;
     sel_set_fd_write_handler(posix_sel, fd, SEL_FD_HANDLER_DISABLED);
     sel_set_fd_except_handler(posix_sel, fd, SEL_FD_HANDLER_DISABLED);
-    rv = sel_set_fd_handlers(posix_sel, fd, fd_data, fd_handler, NULL, NULL,
+    rv = sel_set_fd_handlers(posix_sel, fd, fd_data, fd_handler, 
+			     fd_write_handler, fd_except_handler,
 			     free_fd_data);
     if (rv) {
 	free(fd_data);
@@ -144,6 +165,40 @@ remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
     /* fd_data gets freed in the free_fd_data callback registered at
        set time. */
+    return 0;
+}
+
+static void
+set_fd_handlers(os_handler_t *handler, os_hnd_fd_id_t *id,
+		os_data_ready_t write_ready,
+		os_data_ready_t except_ready)
+{
+    id->write_ready = write_ready;
+    id->except_ready = except_ready;
+}
+
+static int
+set_fd_enables(os_handler_t *handler, os_hnd_fd_id_t *id,
+	       int read, int write, int except)
+{
+    iposix_info_t  *info = handler->internal_data;
+    selector_t *posix_sel = info->sel;
+
+    if (read)
+	read = SEL_FD_HANDLER_ENABLED;
+    else
+	read = SEL_FD_HANDLER_DISABLED;
+    if (write)
+	write = SEL_FD_HANDLER_ENABLED;
+    else
+	write = SEL_FD_HANDLER_DISABLED;
+    if (except)
+	except = SEL_FD_HANDLER_ENABLED;
+    else
+	except = SEL_FD_HANDLER_DISABLED;
+    sel_set_fd_read_handler(posix_sel, id->fd, read);
+    sel_set_fd_write_handler(posix_sel, id->fd, write);
+    sel_set_fd_except_handler(posix_sel, id->fd, except);
     return 0;
 }
 
@@ -511,6 +566,8 @@ static os_handler_t ipmi_posix_os_handler =
     .mem_free = posix_free,
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
+    .set_fd_handlers = set_fd_handlers,
+    .set_fd_enables = set_fd_enables,
     .start_timer = start_timer,
     .stop_timer = stop_timer,
     .alloc_timer = alloc_timer,

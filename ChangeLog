@@ -1,3 +1,10 @@
+2012-09-11 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/os_handler.h: Add functions to handle write
+	and except status on an FD.
+
+	* unix/posix_os_hnd.c: Add the above functions for this handler.
+
 2012-09-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Start adding SOL functionality, implement commands,
