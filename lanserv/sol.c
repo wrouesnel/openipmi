@@ -60,6 +60,7 @@ struct soldata_s {
     int fd;
     os_hnd_fd_id_t *fd_id;
     struct termios termctl;
+    int modemstate;
 
     channel_t *channel;
     msg_t dummy_send_msg;
@@ -72,6 +73,28 @@ struct soldata_s {
     unsigned char outbuf[SOL_OUTBUF_SIZE];
     unsigned int outlen;
 
+    /*
+     * A circular history buffer.  Note that history_end points to the
+     * last byte (not one past the last byte) and history_start points
+     * to the first byte.
+     */
+    unsigned char *history;
+    int history_start;
+    int history_end;
+
+    /* A copy of the history, used for reliable streaming. */
+    unsigned char *history_copy;
+    unsigned int history_copy_size;
+    unsigned int history_pos;
+    msg_t history_dummy_send_msg;
+    channel_t *history_channel;
+    int history_last_acked_packet;
+    int history_last_acked_packet_len;
+    int history_curr_packet_seq;
+    char history_in_nack;
+    os_hnd_timer_id_t *history_timer;
+    unsigned int history_num_sends;
+
     char in_nack;
     char read_enabled;
     char write_enabled;
@@ -79,7 +102,16 @@ struct soldata_s {
     int last_acked_packet;
     int last_acked_packet_len;
     int curr_packet_seq;
+    os_hnd_timer_id_t *timer;
+    unsigned int num_sends;
 };
+
+static char *end_history_msg = "\r\n<End Of History>\r\n";
+
+#define MAX_HISTORY_SEND 64
+#define MAX_SOL_RESENDS 4
+static void sol_timeout(void *cb_data, os_hnd_timer_id_t *id);
+static void sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id);
 
 static void ipmi_set_uint16(uint8_t *data, int val)
 {
@@ -96,13 +128,74 @@ static void ipmi_set_uint32(uint8_t *data, int val)
 }
 
 static void
-sol_session_closed(lmc_data_t *mc, void *cb_data)
+reset_modem_state(ipmi_sol_t *sol)
+{
+    int modemstate;
+
+    /* Turn on CTS and DCD if we have history, off if not */
+    /* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
+    ioctl(sol->soldata->fd, TIOCMGET, &modemstate);
+    if (sol->history_size)
+	modemstate |= TIOCM_DTR | TIOCM_RTS;
+    else
+	modemstate &= ~(TIOCM_DTR | TIOCM_RTS);
+    sol->soldata->modemstate = modemstate & (TIOCM_DTR | TIOCM_RTS);
+    ioctl(sol->soldata->fd, TIOCMSET, &modemstate);
+}
+
+static void
+sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
 
-    free(sol->soldata->dummy_send_msg.src_addr);
-    sol->active = 0;
-    sol->session_id = 0;
+    if (session_id == sol->session_id) {
+	if (sol->soldata->dummy_send_msg.src_addr) {
+	    free(sol->soldata->dummy_send_msg.src_addr);
+	    sol->soldata->dummy_send_msg.src_addr = NULL;
+	}
+	sol->active = 0;
+	sol->session_id = 0;
+	reset_modem_state(sol);
+    } else if (session_id == sol->history_session_id) {
+	if (sol->soldata->history_dummy_send_msg.src_addr) {
+	    free(sol->soldata->history_dummy_send_msg.src_addr);
+	    sol->soldata->history_dummy_send_msg.src_addr = NULL;
+	}
+	if (sol->soldata->history_copy) {
+	    free(sol->soldata->history_copy);
+	    sol->soldata->history_copy = NULL;
+	}
+	sol->history_active = 0;
+	sol->history_session_id = 0;
+    }
+}
+
+static int
+copy_history_buffer(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    unsigned int to_copy;
+    unsigned int endmsg_size = strlen(end_history_msg);
+    unsigned char *dest = malloc(sol->history_size + endmsg_size);
+
+    if (!dest)
+	return ENOMEM;
+    sd->history_copy = dest;
+    if (sd->history_start > sd->history_end) {
+	/* Buffer is filled, copy in two chunks. */
+	to_copy = sol->history_size - sd->history_start;
+	memcpy(dest + to_copy, sd->history, sd->history_end + 1);
+	sd->history_copy_size = sol->history_size;
+    } else {
+	/* Buffer is not yet filled, just runs from start to end */
+	to_copy = sd->history_end - sd->history_start + 1;
+	sd->history_copy_size = to_copy;
+    }
+    memcpy(dest, sd->history + sd->history_start, to_copy);
+    memcpy(dest + sd->history_copy_size, end_history_msg, endmsg_size);
+    sd->history_copy_size += endmsg_size;
+    sd->history_pos = 0;
+    return 0;
 }
 
 void
@@ -113,17 +206,38 @@ ipmi_sol_activate(lmc_data_t    *mc,
 		  unsigned int  *rdata_len)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
     uint16_t port;
     int rv;
     msg_t *dmsg;
+    unsigned int instance;
 
-    if (sol->active) {
-	*rdata = 0x80; /* Payload already active */
+    /*
+     * FIXME - we are currently ignoring all the payload encryption and
+     * authentication bits in the message.
+     */
+
+    instance = msg->data[1] & 0xf;
+    if (instance == 1) {
+	if (sol->active) {
+	    *rdata = 0x80; /* Payload already active */
+	    *rdata_len = 1;
+	    return;
+	}
+	dmsg = &sd->dummy_send_msg;
+    } else if (instance == 2 && sol->history_size) {
+	if (sol->history_active) {
+	    *rdata = 0x80; /* Payload already active */
+	    *rdata_len = 1;
+	    return;
+	}
+	dmsg = &sd->history_dummy_send_msg;
+    } else {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    dmsg = &sol->soldata->dummy_send_msg;
     dmsg->src_addr = malloc(msg->src_len);
     if (!dmsg->src_addr) {
 	rdata[0] = IPMI_OUT_OF_SPACE_CC;
@@ -138,25 +252,62 @@ ipmi_sol_activate(lmc_data_t    *mc,
 				    &port, sol_session_closed, sol);
     if (rv == EBUSY) {
 	free(dmsg->src_addr);
+	dmsg->src_addr = NULL;
 	rdata[0] = IPMI_NODE_BUSY_CC;
 	*rdata_len = 1;
 	return;
     } else if (rv) {
 	free(dmsg->src_addr);
+	dmsg->src_addr = NULL;
 	rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sol->active = 1;
-    sol->session_id = msg->sid;
     dmsg->sid = msg->sid;
-    sol->soldata->channel = channel;
+
+    if (instance == 1) {
+	/*
+	 * Note that we enable CTS and DCD if history is set, because we
+	 * always monitor the history.
+	 */
+	if (!sol->history_size) {
+	    if ((msg->data[2] & 1) == 0) {
+		/* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
+		int modemstate;
+		ioctl(sd->fd, TIOCMGET, &modemstate);
+		modemstate |= TIOCM_DTR | TIOCM_RTS;
+		sd->modemstate = TIOCM_DTR | TIOCM_RTS;
+		ioctl(sd->fd, TIOCMSET, &modemstate);
+	    }
+	}
+
+	sol->active = 1;
+	sol->session_id = msg->sid;
+	sd->channel = channel;
+	ipmi_set_uint16(rdata + 5, sizeof(sd->inbuf));
+	ipmi_set_uint16(rdata + 7, sizeof(sd->outbuf));
+    } else if (instance == 2 && sol->history_size) {
+	struct timeval tv;
+	if (copy_history_buffer(sol)) {
+	    rdata[0] = IPMI_OUT_OF_SPACE_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	sol->history_active = 1;
+	sol->history_session_id = msg->sid;
+	sd->history_channel = channel;
+	ipmi_set_uint16(rdata + 5, MAX_HISTORY_SEND);
+	ipmi_set_uint16(rdata + 7, MAX_HISTORY_SEND);
+	tv.tv_sec = 0;
+	tv.tv_usec = 0; /* Send immediately */
+	sd->history_num_sends = 0;
+	sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
+				sol_history_timeout, sol);
+    }
 
     rdata[0] = 0;
     ipmi_set_uint32(rdata + 1, 0);
-    ipmi_set_uint16(rdata + 5, sizeof(sol->soldata->inbuf));
-    ipmi_set_uint16(rdata + 7, sizeof(sol->soldata->outbuf));
     ipmi_set_uint16(rdata + 9, port);
     ipmi_set_uint16(rdata + 11, 0xffff);
     *rdata_len = 13;
@@ -170,16 +321,32 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 		    unsigned int  *rdata_len)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    unsigned int instance;
+    uint32_t session_id;
 
-    if (!sol->active) {
-	*rdata = 0x80; /* Payload already deactivated */
+    instance = msg->data[1] & 0xf;
+    if (instance == 1) {
+	if (!sol->active) {
+	    *rdata = 0x80; /* Payload already deactivated */
+	    *rdata_len = 1;
+	    return;
+	}
+	session_id = sol->session_id;
+    } else if (instance == 2) {
+	if (!sol->history_active) {
+	    *rdata = 0x80; /* Payload already deactivated */
+	    *rdata_len = 1;
+	    return;
+	}
+	session_id = sol->history_session_id;
+    } else {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    sol_session_closed(mc, sol);
-
-    channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, NULL,
+    sol_session_closed(mc, session_id, sol);
+    channel->set_associated_mc(channel, session_id, msg->data[0] & 0xf, NULL,
 			       NULL, NULL, 0);
 
     rdata[0] = 0;
@@ -358,12 +525,14 @@ devinit(ipmi_sol_t *sol, struct termios *termctl)
     termctl->c_cflag &= ~(CSIZE);
     termctl->c_cflag |= CS8;
     termctl->c_cflag &= ~(PARENB);
-    termctl->c_cflag &= ~(CLOCAL);
+    termctl->c_cflag |= CLOCAL;
     termctl->c_cflag &= ~(HUPCL);
     termctl->c_cflag |= CREAD;
-    termctl->c_cflag &= ~(CRTSCTS);
+    termctl->c_cflag |= CRTSCTS;
     termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
     termctl->c_iflag |= IGNBRK;
+
+    reset_modem_state(sol);
 }
 
 static void
@@ -409,15 +578,20 @@ set_write_enable(soldata_t *sd)
 }
 
 static void
-send_data(ipmi_sol_t *sol)
+send_data(ipmi_sol_t *sol, int need_send_ack)
 {
     soldata_t *sd = sol->soldata;
     rsp_msg_t msg;
     unsigned char data[SOL_OUTBUF_SIZE + 4];
 
     data[0] = sd->curr_packet_seq;
-    data[1] = 0;
-    data[2] = 0;
+    if (need_send_ack) {
+	data[1] = sd->last_acked_packet;
+	data[2] = sd->last_acked_packet_len;
+    } else {
+	data[1] = 0;
+	data[2] = 0;
+    }
     data[3] = (sd->inlen == sizeof(sd->inbuf)) << 6;
     memcpy(data + 4, sd->outbuf, sd->outlen);
     msg.data = data;
@@ -453,19 +627,36 @@ clear_outbuf(soldata_t *sd)
 }
 
 static void
-handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
+sol_timeout(void *cb_data, os_hnd_timer_id_t *id)
 {
-    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    ipmi_sol_t *sol = cb_data;
+    soldata_t *sd = sol->soldata;
+    struct timeval tv;
+
+    if (sd->num_sends > MAX_SOL_RESENDS) {
+	clear_outbuf(sd);
+	return;
+    }
+
+    sd->num_sends++;
+    send_data(sol, 0);
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
+			    sol_history_timeout, sol);
+}
+
+static void
+handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
+{
     soldata_t *sd = sol->soldata;
     unsigned char seq, ack, count;
     char isnack, isbreak, ctspause, deassert_dcd, flush_in, flush_out;
     unsigned char *data;
     unsigned int len;
+    int need_send_ack = 0;
 
-    if (!mc || !sol->active)
-	return;
-
-    if (msg->len < 4)
+    if (!sol->active || msg->len < 4)
 	return;
 
     seq = msg->data[0] & 0xf;
@@ -476,7 +667,6 @@ handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
     isbreak = msg->data[3] & (1 << 4);
     ctspause = msg->data[3] & (1 << 3);
     deassert_dcd = msg->data[3] & (1 << 2);
-    /* FIXME - add handling for the three above conditions */
     flush_in = msg->data[3] & (1 << 1);
     flush_out = msg->data[3] & (1 << 0);
 
@@ -485,7 +675,7 @@ handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 
     if (seq != 0) {
 	if (seq == sd->last_acked_packet) {
-	    send_ack(sol);
+	    need_send_ack = 1;
 	} else if (len) {
 	    sd->last_acked_packet = seq;
 	    if (len > (sizeof(sd->inbuf) - sd->inlen))
@@ -494,30 +684,202 @@ handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
 	    memcpy(sd->inbuf + sd->inlen, data, len);
 	    sd->inlen += len;
 
-	    send_ack(sol);
+	    need_send_ack = 1;
 	    set_write_enable(sol->soldata);
 	}
     }
 
-    if (ack != 0) {
+    if (ack == sd->curr_packet_seq) {
 	if (isnack) {
 	    sd->in_nack = 1;
 	    set_read_enable(sd);
 	} else {
 	    sd->in_nack = 0;
 	    set_read_enable(sd);
-	    if (count != sd->outlen)
-		send_data(sol);
-	    else
+	    if (count != sd->outlen) {
+		send_data(sol, need_send_ack);
+		need_send_ack = 0;
+	    } else {
 		clear_outbuf(sd);
+	    }
 	}
+	sol_os_hnd->stop_timer(sol_os_hnd, sd->timer);
     }
+
+    if (need_send_ack)
+	send_ack(sol);
 
     if (flush_out)
 	clear_outbuf(sd);
 
     if (flush_in)
 	sd->inlen = 0;
+
+    if (isbreak)
+	tcsendbreak(sd->fd, 0);
+
+    /*
+     * If history is enabled, we don't allow DCD/CTS fiddling, just leave
+     * them on all the time.
+     */
+    if (!sol->history_size) {
+	int modemstate = 0;
+	if (!ctspause)
+	    modemstate |= TIOCM_RTS;
+	if (!deassert_dcd)
+	    modemstate |= TIOCM_DTR;
+
+	if (modemstate != sd->modemstate) {
+	    int val;
+	    ioctl(sol->soldata->fd, TIOCMGET, &val);
+	    val &= ~(TIOCM_DTR | TIOCM_RTS);
+	    val |= modemstate;
+	    ioctl(sol->soldata->fd, TIOCMSET, &val);
+	}
+    }
+}
+
+static int
+send_history_data(ipmi_sol_t *sol, int need_send_ack)
+{
+    soldata_t *sd = sol->soldata;
+    rsp_msg_t msg;
+    unsigned char data[MAX_HISTORY_SEND + 4];
+    int to_send;
+
+    to_send = sd->history_copy_size - sd->history_pos;
+    if (to_send <= 0)
+	return need_send_ack;
+    if (to_send > MAX_HISTORY_SEND)
+	to_send = MAX_HISTORY_SEND;
+
+    data[0] = sd->history_curr_packet_seq;
+    if (need_send_ack) {
+	data[1] = sd->history_last_acked_packet;
+	data[2] = sd->history_last_acked_packet_len;
+    } else {
+	data[1] = 0;
+	data[2] = 0;
+    }
+    data[3] = 1 << 6; /* Always ready to get data, we just throw it away */
+
+    memcpy(data + 4, sd->history_copy + sd->history_pos, to_send);
+    msg.data = data;
+    msg.data_len = to_send + 4;
+
+    sd->history_channel->return_rsp(sd->history_channel,
+				    &sd->history_dummy_send_msg, &msg);
+    return 0;
+}
+
+static void
+send_history_ack(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    rsp_msg_t msg;
+    unsigned char data[SOL_OUTBUF_SIZE + 4];
+
+    data[0] = 0;
+    data[1] = sd->history_last_acked_packet;
+    data[2] = sd->history_last_acked_packet_len;
+    data[3] = 1 << 6;
+    msg.data = data;
+    msg.data_len = 4;
+
+    sd->history_channel->return_rsp(sd->history_channel,
+				    &sd->history_dummy_send_msg, &msg);
+}
+
+static void
+sol_history_next_packet(soldata_t *sd)
+{
+    /* Only send one size for history, no need to check msg's count */
+    sd->history_pos += MAX_HISTORY_SEND;
+    sd->history_curr_packet_seq++;
+    if (sd->history_curr_packet_seq >= 16)
+	sd->history_curr_packet_seq = 1;
+    sd->history_num_sends = 0;
+}
+
+static void
+sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id)
+{
+    ipmi_sol_t *sol = cb_data;
+    soldata_t *sd = sol->soldata;
+    struct timeval tv;
+
+    if (sd->history_num_sends > MAX_SOL_RESENDS)
+	sol_history_next_packet(sd);
+
+    if (sd->history_pos >= sd->history_copy_size)
+	return;
+
+    sd->history_num_sends++;
+    send_history_data(sol, 0);
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
+			    sol_history_timeout, sol);
+}
+
+static void
+handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
+{
+    soldata_t *sd = sol->soldata;
+    unsigned char seq, ack;
+    char isnack;
+    unsigned char *data;
+    unsigned int len;
+    int need_send_ack = 0;
+
+    if (!sol->history_active || msg->len < 4)
+	return;
+
+    seq = msg->data[0] & 0xf;
+    ack = msg->data[1] & 0xf;
+    isnack = msg->data[3] & (1 << 6);
+
+    data = msg->data + 4;
+    len = msg->len - 4;
+
+    if (seq != 0) {
+	if (seq == sd->history_last_acked_packet) {
+	    need_send_ack = 1;
+	} else if (len) {
+	    sd->history_last_acked_packet = seq;
+	    sd->history_last_acked_packet_len = len;
+	    need_send_ack = 1;
+	}
+    }
+
+    if (ack == sd->history_curr_packet_seq) {
+	if (isnack) {
+	    sd->history_in_nack = 1;
+	} else {
+	    sd->history_in_nack = 0;
+	    sol_history_next_packet(sd);
+	    need_send_ack = send_history_data(sol, need_send_ack);
+	}
+	sol_os_hnd->stop_timer(sol_os_hnd, sd->timer);
+    }
+
+    if (need_send_ack)
+	send_history_ack(sol);
+}
+
+static void
+handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
+{
+    ipmi_sol_t *sol;
+
+    if (!mc)
+	return;
+
+    sol = ipmi_mc_get_sol(mc);
+    if (msg->sid == sol->session_id)
+	handle_sol_port_payload(lan, sol, msg);
+    else if (msg->sid == sol->history_session_id)
+	handle_sol_history_payload(lan, sol, msg);
 }
 
 static void
@@ -546,11 +908,57 @@ sol_write_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 }
 
 static void
+add_to_history(ipmi_sol_t *sol, unsigned char *buf, unsigned int len)
+{
+    soldata_t *sd = sol->soldata;
+    int to_copy;
+
+    if (!sd->history || len == 0)
+	return;
+
+    /*
+     * No point in handling more data than we can take, only take the
+     * last history size section.
+     */
+    if (len > sol->history_size) {
+	buf += len - sol->history_size;
+	len = sol->history_size;
+    }
+
+    if (sd->history_end + len + 1 > sol->history_size) {
+	/* Wrap case, copy to the end and wrap history_end. */
+	to_copy = sol->history_size - sd->history_end - 1;
+	memcpy(sd->history + sd->history_end + 1, buf, to_copy);
+	sd->history_end = -1;
+	len -= to_copy;
+	buf += to_copy;
+    }
+
+    /*
+     * At this point all the data should fit between history_end
+     * and the end of the buffer.
+     */
+    memcpy(sd->history + sd->history_end + 1, buf, len);
+    if (sd->history_start > sd->history_end) {
+	/*
+	 * Before we completely fill the buffer, history_start will
+	 * always be <= history_end.  After we fill the buffer,
+	 * history_end will always be < history_start.
+	 */
+	sd->history_start += len;
+	if (sd->history_start >= (int) sol->history_size)
+	    sd->history_start -= sol->history_size;
+    }
+    sd->history_end += len;
+}
+
+static void
 sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
     ipmi_sol_t *sol = cb_data;
     soldata_t *sd = sol->soldata;
     int rv;
+    struct timeval tv;
 
     rv = read(fd, sd->outbuf, sizeof(sd->outbuf) - sd->outlen);
     if (rv < 0) {
@@ -562,6 +970,9 @@ sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	sd->fd = -1;
 	return;
     }
+
+    add_to_history(sol, sd->outbuf + sd->outlen, rv);
+
     sd->outlen += rv;
 
     if (!sol->active) {
@@ -571,7 +982,11 @@ sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 
     /* Looks strange, but will turn off read if the buffer is full */
     set_read_enable(sd);
-    send_data(sol);
+    send_data(sol, 0);
+    sd->num_sends = 0;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    sol_os_hnd->start_timer(sol_os_hnd, sd->timer, &tv, sol_timeout, sol);
 }
 
 int
@@ -595,9 +1010,28 @@ sol_init_mc(lmc_data_t *mc)
 	return ENOMEM;
     memset(sd, 0, sizeof(*sd));
 
+    if (sol_os_hnd->alloc_timer(sol_os_hnd, &sd->timer)) {
+	free(sd);
+	return ENOMEM;
+    }
+
+    if (sol->history_size) {
+	if (sol_os_hnd->alloc_timer(sol_os_hnd, &sd->history_timer)) {
+	    free(sd);
+	    return ENOMEM;
+	}
+
+	sd->history = malloc(sol->history_size);
+	if (!sd->history) {
+	    free(sd);
+	    return ENOMEM;
+	}
+    }
+
     sol->soldata = sd;
     sd->fd = -1;
     sd->curr_packet_seq = 1;
+    sd->history_curr_packet_seq = 1;
 
 #ifdef USE_UUCP_LOCKING
     err = uucp_mk_lock(sol->device);
@@ -648,8 +1082,14 @@ sol_init_mc(lmc_data_t *mc)
 
   out:
     if (err) {
+	if (sd->timer)
+	    sol_os_hnd->free_timer(sol_os_hnd, sd->timer);
+	if (sd->history_timer)
+	    sol_os_hnd->free_timer(sol_os_hnd, sd->history_timer);
 	if (sd->fd >= 0)
 	    close(sd->fd);
+	if (sd->history)
+	    free(sd->history);
 	free(sd);
 	sol->soldata = NULL;
     }

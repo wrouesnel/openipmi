@@ -1,3 +1,12 @@
+2012-09-13 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/sol.c: Finish up the SOL implementation by adding
+	a timer and modem control signal handling.
+
+	* lanserv/sol.c, lanserv/config.c, lanserv/OpenIPMI/mcserv.h: Add
+	a history buffer that tracks the last N bytes of serial port
+	output, where N is specific in the config file.
+
 2012-09-11 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/os_handler.h: Add functions to handle write

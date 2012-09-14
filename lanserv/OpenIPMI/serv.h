@@ -189,7 +189,8 @@ struct channel_s
     int (*set_associated_mc)(channel_t *chan, uint32_t session_id,
 			     unsigned int payload, lmc_data_t *mc,
 			     uint16_t *port,
-			     void (*close)(lmc_data_t *mc, void *cb_data),
+			     void (*close)(lmc_data_t *mc, uint32_t session_id,
+					   void *cb_data),
 			     void *cb_data);
 
     oem_handlers_t oem;

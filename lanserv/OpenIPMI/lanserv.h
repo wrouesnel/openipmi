@@ -171,7 +171,7 @@ struct session_s
     lmc_data_t *mc;
 
     /* Function to call when the session closes */
-    void (*close_cb)(lmc_data_t *mc, void *cb_data);
+    void (*close_cb)(lmc_data_t *mc, uint32_t session_id, void *cb_data);
     void *close_cb_data;
 };
 

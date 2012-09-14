@@ -83,6 +83,11 @@ typedef struct ipmi_sol_s {
     int active;
     uint32_t session_id;
 
+    /* A history buffer, hooking to instance 2 will dump it, if it's non-zero */
+    unsigned int history_size;
+    int history_active;
+    uint32_t history_session_id;
+
     soldata_t *soldata;
 } ipmi_sol_t;
 

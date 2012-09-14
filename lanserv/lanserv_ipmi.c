@@ -168,7 +168,7 @@ static void
 close_session(lanserv_data_t *lan, session_t *session)
 {
     if (session->close_cb)
-	session->close_cb(session->mc, session->close_cb_data);
+	session->close_cb(session->mc, session->sid, session->close_cb_data);
     session->active = 0;
     if (session->authtype <= 4)
 	ipmi_auths[session->authtype].authcode_cleanup(session->authdata);
@@ -3000,7 +3000,8 @@ static int
 set_associated_mc(channel_t *chan, uint32_t session_id,
 		  unsigned int payload, lmc_data_t *mc,
 		  uint16_t *port,
-		  void (*close)(lmc_data_t *mc, void *cb_data),
+		  void (*close)(lmc_data_t *mc, uint32_t session_id,
+				void *cb_data),
 		  void *cb_data)
 {
     lanserv_data_t *lan = chan->chan_info;

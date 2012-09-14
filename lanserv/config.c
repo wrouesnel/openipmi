@@ -582,6 +582,7 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
 {
     unsigned int val;
     int          rv;
+    char         *tok;
 
     rv = get_delim_str(tokptr, &sys->sol->device, err);
     if (rv)
@@ -599,6 +600,20 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
     default:
 	*err = "Invalid bitrate, must be 9600, 19200, 38400, 57600, or 115200";
 	return -1;
+    }
+
+    while ((tok = mystrtok(NULL, " \t\n", tokptr))) {
+	if (strncmp(tok, "history=", 8) == 0) {
+	    char *end;
+	    sys->sol->history_size = strtoul(tok + 8, &end, 0);
+	    if (*end != '\0') {
+		*err = "Invalid history value";
+		return -1;
+	    }
+	} else {
+	    *err = "Invalid item";
+	    return -1;
+	}
     }
 
     sys->sol->solparm.default_bitrate = val;
