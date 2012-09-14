@@ -1264,6 +1264,7 @@ main(int argc, const char *argv[])
 	    fprintf(stderr, "Out of memory allocation BMC MC\n");
 	exit(1);
     }
+    sysinfo.mc = mc;
     sysinfo.chan_set = ipmi_mc_get_channelset(mc);
     sysinfo.startcmd = ipmi_mc_get_startcmdinfo(mc);
     sysinfo.cpef = ipmi_mc_get_pef(mc);

@@ -624,6 +624,13 @@ ipmi_mc_get_next_recv_q(lmc_data_t *mc)
 }
 
 int
+ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+			    get_frudata_f handler, free_frudata_f freefunc)
+{
+    return 0;
+}
+
+int
 ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 			   lmc_data_t **rmc)
 {

@@ -128,6 +128,8 @@ typedef struct auth_data_s
     const void    *ckey;
 } auth_data_t;
 
+#define LANSERV_NUM_CLOSERS 3
+
 struct session_s
 {
     unsigned int active : 1;
@@ -167,12 +169,13 @@ struct session_s
     void *src_addr;
     int  src_len;
 
-    /* The MC associated with the RMCP session activation, used for SOL. */
-    lmc_data_t *mc;
-
-    /* Function to call when the session closes */
-    void (*close_cb)(lmc_data_t *mc, uint32_t session_id, void *cb_data);
-    void *close_cb_data;
+    struct {
+	/* Function to call when the session closes */
+	void (*close_cb)(lmc_data_t *mc, uint32_t session_id, void *cb_data);
+	void *close_cb_data;
+	/* The MC associated with the RMCP session activation, used for SOL. */
+	lmc_data_t *mc;
+    } closers[3];
 };
 
 typedef struct lanparm_data_s lanparm_data_t;
@@ -267,8 +270,7 @@ int lanserv_read_config(sys_data_t   *sys,
 
 int ipmi_lan_init(lanserv_data_t *lan);
 
-typedef void (*ipmi_payload_handler_cb)(lanserv_data_t *lan, lmc_data_t *mc,
-					msg_t *msg);
+typedef void (*ipmi_payload_handler_cb)(lanserv_data_t *lan, msg_t *msg);
 
 int ipmi_register_payload(unsigned int payload_id,
 			  ipmi_payload_handler_cb handler);

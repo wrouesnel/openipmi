@@ -170,32 +170,46 @@ sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
     }
 }
 
-static int
-copy_history_buffer(ipmi_sol_t *sol)
+static unsigned char *
+copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
 {
     soldata_t *sd = sol->soldata;
     unsigned int to_copy;
     unsigned int endmsg_size = strlen(end_history_msg);
     unsigned char *dest = malloc(sol->history_size + endmsg_size);
+    unsigned int size;
 
     if (!dest)
-	return ENOMEM;
-    sd->history_copy = dest;
+	return NULL;
     if (sd->history_start > sd->history_end) {
 	/* Buffer is filled, copy in two chunks. */
 	to_copy = sol->history_size - sd->history_start;
 	memcpy(dest + to_copy, sd->history, sd->history_end + 1);
-	sd->history_copy_size = sol->history_size;
+	size = sol->history_size;
     } else {
 	/* Buffer is not yet filled, just runs from start to end */
 	to_copy = sd->history_end - sd->history_start + 1;
-	sd->history_copy_size = to_copy;
+	size = to_copy;
     }
     memcpy(dest, sd->history + sd->history_start, to_copy);
-    memcpy(dest + sd->history_copy_size, end_history_msg, endmsg_size);
-    sd->history_copy_size += endmsg_size;
-    sd->history_pos = 0;
-    return 0;
+    memcpy(dest + size, end_history_msg, endmsg_size);
+    size += endmsg_size;
+    *rsize = size;
+    return dest;
+}
+
+unsigned char *
+sol_set_frudata(lmc_data_t *mc, unsigned int *size)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+
+    return copy_history_buffer(sol, size);
+}
+
+void sol_free_frudata(lmc_data_t *mc, unsigned char *data)
+{
+    if (data)
+	free(data);
 }
 
 void
@@ -289,11 +303,14 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	ipmi_set_uint16(rdata + 7, sizeof(sd->outbuf));
     } else if (instance == 2 && sol->history_size) {
 	struct timeval tv;
-	if (copy_history_buffer(sol)) {
+
+	sd->history_copy = copy_history_buffer(sol, &sd->history_copy_size);
+	if (!sd->history_copy) {
 	    rdata[0] = IPMI_OUT_OF_SPACE_CC;
 	    *rdata_len = 1;
 	    return;
 	}
+	sd->history_pos = 0;
 	sol->history_active = 1;
 	sol->history_session_id = msg->sid;
 	sd->history_channel = channel;
@@ -347,7 +364,7 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 
     sol_session_closed(mc, session_id, sol);
     channel->set_associated_mc(channel, session_id, msg->data[0] & 0xf, NULL,
-			       NULL, NULL, 0);
+			       NULL, NULL, NULL);
 
     rdata[0] = 0;
     *rdata_len = 1;
@@ -868,10 +885,14 @@ handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 }
 
 static void
-handle_sol_payload(lanserv_data_t *lan, lmc_data_t *mc, msg_t *msg)
+handle_sol_payload(lanserv_data_t *lan, msg_t *msg)
 {
     ipmi_sol_t *sol;
+    channel_t *channel = &lan->channel;
+    lmc_data_t *mc;
 
+    mc = channel->get_associated_mc(channel, msg->sid,
+				    IPMI_RMCPP_PAYLOAD_TYPE_SOL);
     if (!mc)
 	return;
 

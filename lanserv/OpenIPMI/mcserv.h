@@ -232,8 +232,15 @@ void ipmi_sol_deactivate(lmc_data_t    *mc,
 			 unsigned char *rdata,
 			 unsigned int  *rdata_len);
 
+typedef unsigned char *(*get_frudata_f)(lmc_data_t *mc, unsigned int *size);
+typedef void (*free_frudata_f)(lmc_data_t *mc, unsigned char *data);
+int ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+				get_frudata_f handler, free_frudata_f freefunc);
+
 int sol_init_mc(lmc_data_t *mc);
 void sol_shutdown(sys_data_t *sys);
 int sol_init(sys_data_t *sys, os_handler_t *os_hnd);
+unsigned char *sol_set_frudata(lmc_data_t *mc, unsigned int *size);
+void sol_free_frudata(lmc_data_t *mc, unsigned char *data);
 
 #endif /* __MCSERV_H */

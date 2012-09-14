@@ -192,6 +192,8 @@ struct channel_s
 			     void (*close)(lmc_data_t *mc, uint32_t session_id,
 					   void *cb_data),
 			     void *cb_data);
+    lmc_data_t *(*get_associated_mc)(channel_t *chan, uint32_t session_id,
+				     unsigned int payload);
 
     oem_handlers_t oem;
 
@@ -343,6 +345,7 @@ struct sys_data_s {
     user_t *cusers;
     pef_data_t *cpef;
     ipmi_sol_t *sol;
+    lmc_data_t *mc;
 
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);

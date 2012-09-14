@@ -160,6 +160,9 @@ typedef struct fru_data_s
 {
     unsigned int  length;
     unsigned char *data;
+    unsigned char *free_data;
+    get_frudata_f get;
+    free_frudata_f free;
 } fru_data_t;
 
 typedef struct led_data_s
@@ -378,6 +381,17 @@ ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
 	emu->users_changed = 0;
 	write_persist_users(emu->sysinfo);
     }
+}
+
+int
+ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+			    get_frudata_f handler, free_frudata_f freefunc)
+{
+    if (fru > 0xff)
+	return EINVAL;
+    mc->frus[fru].get = handler;
+    mc->frus[fru].free = freefunc;
+    return 0;
 }
 
 /*
@@ -1585,25 +1599,88 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
 }
 
 static void
+fru_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
+{
+    fru_data_t *fru = cb_data;
+
+    fru->length = 0;
+    if (fru->free_data) {
+	fru->free(mc, fru->free_data);
+	fru->data = NULL;
+	fru->free_data = NULL;
+    }
+}
+
+static void
 handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
 				   unsigned int  *rdata_len)
 {
     unsigned char devid;
+    fru_data_t *fru;
+    int rv;
 
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
 
     devid = msg->data[0];
-    if ((devid >= 255) || (!mc->frus[devid].data)) {
+    if (devid >= 255) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    fru = &mc->frus[devid];
+    if (fru->get) {
+	unsigned int size;
+	unsigned char *data;
+	channel_t *channel;
+
+	/* Set up to free the FRU data when the session closes. */
+	channel = msg->orig_channel;
+	rv = channel->set_associated_mc(channel, msg->sid, 0, mc,
+					NULL, fru_session_closed, fru);
+	if (rv == EBUSY) {
+	    rdata[0] = IPMI_NODE_BUSY_CC;
+	    *rdata_len = 1;
+	    return;
+	} else if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+
+	data = fru->get(mc, &size);
+	if (!data) {
+	    channel->set_associated_mc(channel, msg->sid, 0, NULL,
+				       NULL, NULL, NULL);
+	    rdata[0] = IPMI_OUT_OF_SPACE_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+
+	if (fru->data)
+	    free(fru->data);
+
+	fru->free_data = data;
+	if (size > 65535) {
+	    fru->data = data + (size - 65535);
+	    fru->length = 65535;
+	} else {
+	    fru->data = data;
+	    fru->length = size;
+	}
+    }
+
+    if (!mc->frus[devid].data) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
     rdata[0] = 0;
-    ipmi_set_uint16(rdata+1, mc->frus[devid].length);
+    ipmi_set_uint16(rdata+1, fru->length);
     rdata[3] = 0; /* We only support byte access for now. */
     *rdata_len = 4;
 }
@@ -5938,6 +6015,8 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	smsg.len = data_len - 7; /* Subtract off the header and
 				    the end checksum */
 	smsg.channel = 0; /* IPMB channel is 0 */
+	smsg.orig_channel = omsg->orig_channel;
+	smsg.sid = omsg->sid;
 	msg = &smsg;
     } else {
 	mc = srcmc;

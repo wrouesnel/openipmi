@@ -58,6 +58,8 @@
 
 #include <stdint.h>
 
+typedef struct channel_s channel_t;
+
 typedef struct msg_s
 {
     void *src_addr;
@@ -67,6 +69,9 @@ typedef struct msg_s
                       zero by the calling code. */
 
     unsigned char channel;
+
+    /* The channel the message originally came in on. */
+    channel_t *orig_channel;
 
     unsigned char authtype;
     uint32_t      seq;
@@ -114,7 +119,6 @@ typedef struct rsp_msg
     uint8_t        *data;
 } rsp_msg_t;
 
-typedef struct channel_s channel_t;
 typedef struct sys_data_s sys_data_t;
 typedef struct startcmd_s startcmd_t;
 typedef struct user_s user_t;

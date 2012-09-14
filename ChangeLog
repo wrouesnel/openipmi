@@ -1,3 +1,13 @@
+2012-09-14 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/serv.h: Rework the
+	session registration code to be able to add a separate MC for
+	different payloads.
+
+	* lanserv/sol.c, lanserv/emu.c, lanserv/OpenIPMI/mcserv.h:
+	Add the ability to fetch the SOL history buffer as FRU
+	data.
+
 2012-09-13 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sol.c: Finish up the SOL implementation by adding

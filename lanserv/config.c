@@ -610,6 +610,25 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
 		*err = "Invalid history value";
 		return -1;
 	    }
+	} else if (strncmp(tok, "historyfru=", 11) == 0) {
+	    char *end;
+	    unsigned int history_fru;
+	    history_fru = strtoul(tok + 11, &end, 0);
+	    if (*end != '\0') {
+		*err = "Invalid history FRU value";
+		return -1;
+	    }
+	    if (history_fru >= 0xff) {
+		*err = "history FRU value must be < 0xff";
+		return -1;
+	    }
+	    rv = ipmi_mc_set_frudata_handler(sys->mc, history_fru,
+					     sol_set_frudata,
+					     sol_free_frudata);
+	    if (rv) {
+		*err = "Cannot set frudata handler";
+		return -1;
+	    }
 	} else {
 	    *err = "Invalid item";
 	    return -1;
@@ -689,6 +708,7 @@ read_config(sys_data_t *sys,
 		    errstr = "Invalid IPMB specified";
 		    err = -1;
 		} else {
+		    sys->mc = mc;
 		    sys->cusers = ipmi_mc_get_users(mc);
 		    sys->chan_set = ipmi_mc_get_channelset(mc);
 		    sys->cpef = ipmi_mc_get_pef(mc);
