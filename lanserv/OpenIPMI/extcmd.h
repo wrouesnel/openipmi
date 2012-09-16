@@ -63,7 +63,8 @@ enum extcmd_info_type_e {
     extcmd_ip,
     extcmd_mac,
     extcmd_ip_src,
-    extcmd_int
+    extcmd_int,
+    extcmd_boot,
 };
 
 #define extcmdglue(a, b) a ## b

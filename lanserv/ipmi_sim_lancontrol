@@ -1,7 +1,38 @@
 #!/bin/sh
 
 #
+# An example script for handling external LAN configuration from the
+# IPMI simulator.  This command is generally invoked by the IPMI
+# simulator to get and set external LAN configuration parameters.
 #
+# It's parameters are:
+#
+#  ipmi_sim_lancontrol <device> get [parm [parm ...]]
+#  ipmi_sim_lancontrol <device> set|check [parm val [parm val ...]]
+#
+# where <device> is a network device (eth0, etc.) and parm is one of:
+#  ip_addr
+#  ip_addr_src
+#  mac_addr
+#  subnet_mask
+#  default_gw_ip_addr
+#  default_gw_mac_addr
+#  backup_gw_ip_addr
+#  backup_gw_mac_addr
+# These are config values out of the IPMI LAN config table that are
+# not IPMI-exclusive, they require setting external things.
+#
+# The output of the "get" is "<parm>:<value>" for each listed parm.
+# The output of the "set" is empty on success.  Error output goes to
+# standard out (so it can be captured in the simulator) and the program
+# returns an error.
+#
+# The IP address values are standard IP addresses in the form a.b.c.d.
+# The MAC addresses ar standard 6 octet xx:xx:xx:xx:xx:xx values.  The
+# only special one is ip_addr_src, which can be "dhcp" or "static".
+#  
+# The "check" operation checks to see if a value is valid without
+# committing it.  It is only implemented for the ip_addr_src parm.
 #
 
 prog=$0

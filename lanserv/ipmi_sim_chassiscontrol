@@ -1,10 +1,35 @@
 #!/bin/sh
 
 #
+# An example script for handling external power control.
+
+# It's parameters are:
 #
+#  ipmi_sim_chassiscontrol <device> get [parm [parm ...]]
+#  ipmi_sim_chassiscontrol <device> set [parm val [parm val ...]]
 #
+# where <device> is the particular target to reset and parm is either
+# "power", "reset", or "boot".
+#
+# The output of the "get" is "<parm>:<value>" for each listed parm,
+# and only power is listed, you cannot fetch reset.
+# The output of the "set" is empty on success.  Error output goes to
+# standard out (so it can be captured in the simulator) and the program
+# returns an error.
+#
+# The values for power and reset are either "1" or "0".  Note that
+# reset does a pulse, it does not set the reset line level.
+#
+# The value for boot is either "none", "pxe" or "default".
 
 prog=$0
+
+device=$1
+if [ "x$device" = "x" ]; then
+    echo "No device given"
+    exit 1;
+fi
+shift
 
 op=$1
 if [ "x$op" = "x" ]; then
@@ -18,6 +43,10 @@ do_get() {
 	case $1 in
 	    power)
 		val=0
+		;;
+
+	    boot)
+		val=default
 		;;
 
 	    # Note that reset has no get
@@ -49,6 +78,21 @@ do_set() {
 		;;
 
 	    reset)
+		;;
+
+	    boot)
+		case $1 in
+		    none)
+			;;
+		    pxe)
+			;;
+		    default)
+			;;
+		    *)
+			echo "Invalid boot value: $1"
+			exit 1
+			;;
+		esac
 		;;
 
 	    *)

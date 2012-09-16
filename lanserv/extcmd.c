@@ -113,6 +113,17 @@ extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
 	*((int *) loc) = ival;
 	break;
 
+    case extcmd_boot:
+	if (strncmp(val, "none", 4) == 0)
+	    *loc = 0;
+	else if (strncmp(val, "pxe", 3) == 0)
+	    *loc = 1;
+	else if (strncmp(val, "default", 7) == 0)
+	    *loc = 2;
+	else
+	    return EINVAL;
+	break;
+
     default:
 	return EINVAL;
     }
@@ -168,6 +179,25 @@ extcmd_setval(void *baseloc, extcmd_info_t *t)
 
     case extcmd_int:
 	sprintf(buf, "%d", *((int *) loc));
+	break;
+
+    case extcmd_boot:
+	switch (*loc) {
+	case 0:
+	    strcpy(buf, "none");
+	    break;
+
+	case 1:
+	    strcpy(buf, "pxe");
+	    break;
+
+	case 2:
+	    strcpy(buf, "disk");
+	    break;
+
+	default:
+	    return NULL;
+	}
 	break;
 
     default:

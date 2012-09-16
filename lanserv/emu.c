@@ -3096,6 +3096,7 @@ handle_get_chassis_capabilities(lmc_data_t    *mc,
 static extcmd_info_t chassis_prog[] = {
     { "power", extcmd_int, 0 },
     { "reset", extcmd_int, 0 },
+    { "boot", extcmd_boot, 0 },
 };
 
 static void
@@ -3194,6 +3195,114 @@ handle_chassis_control(lmc_data_t    *mc,
 }
 
 static void
+set_system_boot_options(lmc_data_t    *mc,
+			msg_t         *msg,
+			unsigned char *rdata,
+			unsigned int  *rdata_len)
+{
+    unsigned char val;
+
+    if (msg->len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+
+    switch (msg->data[0] & 0x3f) {
+    case 1:
+	if (msg->len < 2) {
+	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	switch (msg->data[2] & 0x3) {
+	case 0:
+	case 1:
+	    /* Just ignore this for now. */
+	    break;
+
+	default:
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    break;
+	}
+	break;
+
+    case 5: /* Boot flags */
+	if (msg->len < 6) {
+	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	val = (msg->data[2] >> 2) & 0xf;
+	
+	if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			   &chassis_prog[2], NULL, 1)) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	break;
+
+    default:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	break;
+    }
+}
+
+static void
+get_system_boot_options(lmc_data_t    *mc,
+			msg_t         *msg,
+			unsigned char *rdata,
+			unsigned int  *rdata_len)
+{
+    unsigned char val;
+
+    if (msg->len < 3) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = 1;
+    rdata[2] = msg->data[0] & 0x3f;
+    *rdata_len = 3;
+
+    switch (msg->data[0] & 0x3f) {
+    case 1:
+	/* Dummy this out for now */
+	rdata[3] = 0;
+	*rdata_len = 4;
+	break;
+
+    case 5: /* Boot flags */
+	if (extcmd_getvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			   &chassis_prog[2], 1)) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	rdata[3] = 0;
+	rdata[4] = val << 2;
+	rdata[5] = 0;
+	rdata[6] = 0;
+	rdata[7] = 0;
+	*rdata_len = 8;
+	break;
+
+    default:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	break;
+    }
+}
+
+static void
 handle_chassis_netfn(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
@@ -3215,6 +3324,14 @@ handle_chassis_netfn(lmc_data_t    *mc,
 
     case IPMI_CHASSIS_CONTROL_CMD:
 	handle_chassis_control(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_SYSTEM_BOOT_OPTIONS_CMD:
+	set_system_boot_options(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_SYSTEM_BOOT_OPTIONS_CMD:
+	get_system_boot_options(mc, msg, rdata, rdata_len);
 	break;
 
     default:

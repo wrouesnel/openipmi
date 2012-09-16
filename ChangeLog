@@ -6,6 +6,10 @@
 	* lanserv/ipmi_sim_chassiscontrol: Add an example script for power
 	configuration.
 
+	* lanserv/emu.c: Add boot config control handling.
+	
+	* lanserv/ipmi_sim_chassiscontrol: Add boot config control.
+
 2012-09-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/extcmd.c, lanserv/extcmd.h: Add an external command
