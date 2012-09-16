@@ -72,6 +72,7 @@
 #include <OpenIPMI/internal/md5.h>
 
 #include "persist.h"
+#include "extcmd.h"
 
 /* Deal with multi-byte data, IPMI (little-endian) style. */
 static unsigned int ipmi_get_uint16(uint8_t *data)
@@ -1274,23 +1275,47 @@ handle_get_session_info(lanserv_data_t *lan, session_t *session, msg_t *msg)
 
 }
 
+#define BASETYPE lanparm_data_t
+static extcmd_info_t lanread_vals[] = {
+    EXTCMD_MEMB(ip_addr, extcmd_ip),
+    EXTCMD_MEMB(ip_addr_src, extcmd_ip_src),
+    EXTCMD_MEMB(mac_addr, extcmd_mac),
+    EXTCMD_MEMB(subnet_mask, extcmd_ip),
+    EXTCMD_MEMB(default_gw_ip_addr, extcmd_ip),
+    EXTCMD_MEMB(default_gw_mac_addr, extcmd_mac),
+    EXTCMD_MEMB(backup_gw_ip_addr, extcmd_ip),
+    EXTCMD_MEMB(backup_gw_mac_addr, extcmd_mac)
+};
+#undef BASETYPE
+
 static void
 write_lan_config(lanserv_data_t *lan)
 {
-    persist_t *p;
+    if (lan->persist_changed) {
+	persist_t *p;
 
-    p = alloc_persist("lanparm.mc%2.2x.%d",
-		      ipmi_mc_get_ipmb(lan->channel.mc),
-		      lan->channel.channel_num);
-    if (!p)
-	return;
+	p = alloc_persist("lanparm.mc%2.2x.%d",
+			  ipmi_mc_get_ipmb(lan->channel.mc),
+			  lan->channel.channel_num);
+	if (!p)
+	    return;
 
-    add_persist_data(p, lan->lanparm.max_priv_for_cipher_suite, 9,
-		     "max_priv_for_cipher");
-    add_persist_int(p, lan->channel.privilege_limit, "privilege_limit");
+	add_persist_data(p, lan->lanparm.max_priv_for_cipher_suite, 9,
+			 "max_priv_for_cipher");
+	add_persist_int(p, lan->channel.privilege_limit, "privilege_limit");
 
-    write_persist(p);
-    free_persist(p);
+	write_persist(p);
+	free_persist(p);
+	lan->persist_changed = 0;
+    }
+
+    if (extcmd_setvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+		       lanread_vals, lan->lanparm_changed, lanread_len)) {
+	lan->sysinfo->log(lan->sysinfo, OS_ERROR, NULL,
+			  "Error writing external LANPARM values");
+    } else {
+	memset(lan->lanparm_changed, 0, sizeof(lan->lanparm_changed));
+    }
 }
 
 static void
@@ -1366,8 +1391,10 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	return;
     }
 
-    if (write_nonv)
+    if (write_nonv) {
+	lan->persist_changed = 1;
 	write_lan_config(lan);
+    }
 
     rdata[0] = 0;
     *rdata_len = 0;
@@ -1379,7 +1406,8 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 {
     unsigned char err = 0;
     lanserv_data_t *lan = chan->chan_info;
-    int write_config = 0;
+    int rv;
+    unsigned char oldval;
 
     switch (msg->data[1])
     {
@@ -1391,9 +1419,8 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 		/* rollback */
 		memcpy(&lan->lanparm, &lan->lanparm_rollback,
 		       sizeof(lan->lanparm));
-		write_config = 1;
 	    }
-	    /* No affect otherwise */
+	    /* No effect otherwise */
 	    break;
 
 	case 1:
@@ -1408,9 +1435,10 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    break;
 
 	case 2:
-	    if (lan->lanparm.commit)
-		lan->lanparm.commit(lan);
-	    lan->lanparm.set_in_progress = 0;
+	    /* Re-save rollback data */
+	    memcpy(&lan->lanparm_rollback, &lan->lanparm,
+		   sizeof(lan->lanparm));
+	    write_lan_config(lan);
 	    break;
 
 	case 3:
@@ -1431,11 +1459,23 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.ip_addr, msg->data+2, 4);
+	    lan->lanparm_changed[ip_addr_o] = 1;
 	}
 	break;
 
     case 4:
+	oldval = lan->lanparm.ip_addr_src;
 	lan->lanparm.ip_addr_src = msg->data[2];
+	/* Check to see if the system supports this value */
+	rv = extcmd_checkvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			      lanread_vals + ip_addr_src_o, 1);
+	if (rv) {
+	    lan->lanparm.ip_addr_src = oldval;
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	lan->lanparm_changed[ip_addr_src_o] = 1;
 	break;
 
     case 5:
@@ -1443,6 +1483,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.mac_addr, msg->data+2, 6);
+	    lan->lanparm_changed[mac_addr_o] = 1;
 	}
 	break;
 
@@ -1451,6 +1492,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.subnet_mask, msg->data+2, 4);
+	    lan->lanparm_changed[subnet_mask_o] = 1;
 	}
 	break;
 
@@ -1467,6 +1509,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.default_gw_ip_addr, msg->data+2, 4);
+	    lan->lanparm_changed[default_gw_ip_addr_o] = 1;
 	}
 	break;
 
@@ -1475,6 +1518,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.default_gw_mac_addr, msg->data+2, 6);
+	    lan->lanparm_changed[default_gw_mac_addr_o] = 1;
 	}
 	break;
 
@@ -1483,6 +1527,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.backup_gw_ip_addr, msg->data+2, 4);
+	    lan->lanparm_changed[backup_gw_ip_addr_o] = 1;
 	}
 	break;
 
@@ -1491,7 +1536,12 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.backup_gw_mac_addr, msg->data+2, 6);
+	    lan->lanparm_changed[backup_gw_mac_addr_o] = 1;
 	}
+	break;
+
+    case 16:
+	/* Just ignore this. */
 	break;
 
     case 20:
@@ -1511,15 +1561,13 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    err = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else {
 	    memcpy(lan->lanparm.max_priv_for_cipher_suite, msg->data+2, 9);
+	    lan->persist_changed = 1;
 	}
 	break;
 
     default:
 	err = 0x80; /* Parm not supported */
     }
-
-    if (write_config)
-	write_lan_config(lan);
 
     rdata[0] = err;
     *rdata_len = 1;
@@ -1534,6 +1582,7 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
     unsigned char *data = NULL;
     unsigned int  length = 0;
     lanserv_data_t *lan = chan->chan_info;
+    int rv;
 
     switch (msg->data[1])
     {
@@ -1560,55 +1609,120 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	break;
 
     case 3:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + ip_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.ip_addr;
 	length = 4;
 	break;
 
     case 4:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + ip_addr_src_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	databyte = lan->lanparm.ip_addr_src;
 	break;
 
     case 5:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + mac_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.mac_addr;
 	length = 6;
 	break;
 
     case 6:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + subnet_mask_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.subnet_mask;
 	length = 4;
 	break;
 
     case 7:
+	/* FIXME - this is not handled */
 	data = lan->lanparm.ipv4_hdr_parms;
 	length = 3;
 	break;
 
     case 12:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + default_gw_ip_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.default_gw_ip_addr;
 	length = 4;
 	break;
 
     case 13:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + default_gw_mac_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.default_gw_mac_addr;
 	length = 6;
 	break;
 
     case 14:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + backup_gw_ip_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.backup_gw_ip_addr;
 	length = 4;
 	break;
 
     case 15:
+	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+			    lanread_vals + backup_gw_mac_addr_o, 1);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	data = lan->lanparm.backup_gw_mac_addr;
 	length = 6;
 	break;
 
+    case 16:
+	/* Dummy value, we don't support this. */
+	data = (unsigned char *) "public            ";
+	length = 18;
+	break;
+
     case 20:
+	/* FIXME - no VLAN support */
 	data = lan->lanparm.vlan_id;
 	length = 2;
 	break;
 
     case 21:
+	/* FIXME - no VLAN support */
 	databyte = lan->lanparm.vlan_priority;
 	break;
 
@@ -1628,7 +1742,7 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 
     default:
 	rdata[0] = 0x80; /* Parm not supported */
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
@@ -2963,7 +3077,7 @@ ipmi_lan_tick(void *info, unsigned int time_since_last)
     }
 }
 
-static void
+static int
 read_lan_config(lanserv_data_t *lan)
 {
     unsigned int i;
@@ -2996,6 +3110,8 @@ read_lan_config(lanserv_data_t *lan)
 
     if (p)
 	free_persist(p);
+
+    return 0;
 }
 
 static int
@@ -3051,7 +3167,9 @@ ipmi_lan_init(lanserv_data_t *lan)
 	lan->sessions[i].handle = i;
     }
 
-    read_lan_config(lan);
+    rv = read_lan_config(lan);
+    if (rv)
+	return rv;
 
     lan->lanparm.num_destinations = 0; /* LAN alerts not supported */
 

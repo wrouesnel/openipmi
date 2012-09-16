@@ -1,3 +1,12 @@
+2012-09-15 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/extcmd.c, lanserv/extcmd.h: Add an external command
+	processing facility.
+
+	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: User the
+	external command processing facility to handle reading and writing
+	the external LAN configuration parameters.
+
 2012-09-14 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/serv.h: Rework the

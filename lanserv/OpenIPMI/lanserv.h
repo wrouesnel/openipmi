@@ -182,24 +182,38 @@ typedef struct lanparm_data_s lanparm_data_t;
 struct lanparm_data_s
 {
     unsigned int set_in_progress : 2;
-    void (*commit)(lanserv_data_t *lan); /* Called when the commit occurs. */
-    unsigned int ip_addr_src : 4;
     unsigned int num_destinations : 4; /* Read-only */
 
+    unsigned char ip_addr_src;
     unsigned char ip_addr[4];
     unsigned char mac_addr[6];
     unsigned char subnet_mask[4];
-    unsigned char ipv4_hdr_parms[3];
     unsigned char default_gw_ip_addr[4];
     unsigned char default_gw_mac_addr[6];
     unsigned char backup_gw_ip_addr[4];
     unsigned char backup_gw_mac_addr[6];
+
+    /* FIXME - we don't handle these now. */
+    unsigned char ipv4_hdr_parms[3];
 
     unsigned char vlan_id[2];
     unsigned char vlan_priority;
     unsigned int  num_cipher_suites : 4;
     unsigned char cipher_suite_entry[17];
     unsigned char max_priv_for_cipher_suite[9];
+};
+
+
+enum lanread_e {
+    ip_addr_o,
+    ip_addr_src_o,
+    mac_addr_o,
+    subnet_mask_o,
+    default_gw_ip_addr_o,
+    default_gw_mac_addr_o,
+    backup_gw_ip_addr_o,
+    backup_gw_mac_addr_o,
+    lanread_len
 };
 
 struct lanserv_data_s
@@ -246,7 +260,12 @@ struct lanserv_data_s
     unsigned int next_challenge_seq;
 
     lanparm_data_t lanparm;
+    unsigned char lanparm_changed[lanread_len];
+    unsigned int persist_changed;
     lanparm_data_t lanparm_rollback;
+
+    /* Used to access and set the external LAN config items. */
+    char *config_prog;
 
     lan_addr_t lan_addr;
     int lan_addr_set;
