@@ -212,6 +212,7 @@ void ipmi_set_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_get_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_set_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
+void ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog);
 
 void read_persist_users(sys_data_t *sys);
 int write_persist_users(sys_data_t *sys);

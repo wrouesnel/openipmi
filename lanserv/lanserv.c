@@ -623,6 +623,11 @@ ipmi_mc_get_next_recv_q(lmc_data_t *mc)
     return NULL;
 }
 
+void
+ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog)
+{
+}
+
 int
 ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
 			    get_frudata_f handler, free_frudata_f freefunc)

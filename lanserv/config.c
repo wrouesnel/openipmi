@@ -684,6 +684,11 @@ read_config(sys_data_t *sys,
 	    err = serserv_read_config(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "sol") == 0) {
 	    err = sol_read_config(&tokptr, sys, &errstr);
+	} else if (strcmp(tok, "chassis_control") == 0) {
+	    char *prog;
+	    err = get_delim_str(&tokptr, &prog, &errstr);
+	    if (!err)
+		ipmi_set_chassis_control_prog(sys->mc, prog);
 	} else if (strcmp(tok, "name") == 0) {
 	    err = get_delim_str(&tokptr, &sys->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {

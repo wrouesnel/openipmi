@@ -61,6 +61,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <malloc.h>
+#include <stdlib.h>
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/extcmd.h>
@@ -69,6 +70,8 @@ static int
 extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
 {
     unsigned char *loc = baseloc;
+    char *end;
+    int ival;
 
     while (isspace(*val))
 	val++;
@@ -99,6 +102,15 @@ extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
 	    *loc = 4;
 	else
 	    return EINVAL;
+	break;
+
+    case extcmd_int:
+	if (*val == '\0')
+	    return EINVAL;
+	ival = strtol(val, &end, 0);
+	if (!isspace(*end) && (*end != '\0'))
+	    return EINVAL;
+	*((int *) loc) = ival;
 	break;
 
     default:
@@ -152,6 +164,10 @@ extcmd_setval(void *baseloc, extcmd_info_t *t)
 	default:
 	    return NULL;
 	}
+	break;
+
+    case extcmd_int:
+	sprintf(buf, "%d", *((int *) loc));
 	break;
 
     default:
@@ -307,7 +323,7 @@ extcmd_setvals(sys_data_t *sys,
     cmd = newcmd;
 
     for (i = 0; i < count; i++) {
-	if (!setit[i])
+	if (setit && !setit[i])
 	    continue;
 	oneset = 1;
 	rv = add_cmd(&cmd, ts[i].name, extcmd_setval(baseloc, ts + i), 1);

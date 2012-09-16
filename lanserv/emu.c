@@ -42,6 +42,7 @@
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/extcmd.h>
 
 #include "emu.h"
 
@@ -270,6 +271,8 @@ struct lmc_data_s
     fru_data_t frus[255];
 
     ipmi_sol_t sol;
+
+    char *chassis_control_prog;
 
     unsigned char power_value;
 #define MAX_LEDS 8
@@ -3090,6 +3093,11 @@ handle_get_chassis_capabilities(lmc_data_t    *mc,
     rdata[5] = mc->sysinfo->bmc_ipmb;
 }
 
+static extcmd_info_t chassis_prog[] = {
+    { "power", extcmd_int, 0 },
+    { "reset", extcmd_int, 0 },
+};
+
 static void
 handle_get_chassis_status(lmc_data_t    *mc,
 			  msg_t         *msg,
@@ -3097,9 +3105,21 @@ handle_get_chassis_status(lmc_data_t    *mc,
 			  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->startcmd.vmpid != 0;
+    if (mc->chassis_control_prog) {
+	int val;
+	if (extcmd_getvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			   &chassis_prog[0], 1)) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	rdata[1] = val;
+    } else {
+	rdata[1] = mc->startcmd.vmpid != 0;
+    }
     rdata[2] = 0;
     rdata[3] = 0;
+    *rdata_len = 4;
 }
 
 static void
@@ -3119,21 +3139,48 @@ handle_chassis_control(lmc_data_t    *mc,
 
     switch(msg->data[0] & 0xf) {
     case 0: /* power down */
-	if (!HW_OP_CAN_POWER(mc->channels[15]))
+	if (mc->chassis_control_prog) {
+	    int val = 0;
+	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			       &chassis_prog[0], NULL, 1)) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (HW_OP_CAN_POWER(mc->channels[15]))
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
+	else
 	    goto no_support;
-	mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
 	break;
 
     case 1: /* power up */
-	if (!HW_OP_CAN_POWER(mc->channels[15]))
+	if (mc->chassis_control_prog) {
+	    int val = 1;
+	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			       &chassis_prog[0], NULL, 1)) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (HW_OP_CAN_POWER(mc->channels[15]))
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
+	else
 	    goto no_support;
-	mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
 	break;
 
     case 3: /* hard reset */
-	if (!HW_OP_CAN_RESET(mc->channels[15]))
+	if (mc->chassis_control_prog) {
+	    int val = 1;
+	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			       &chassis_prog[1], NULL, 1)) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (HW_OP_CAN_RESET(mc->channels[15]))
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_RESET);
+	else
 	    goto no_support;
-	mc->channels[15]->hw_op(mc->channels[15], HW_OP_RESET);
 	break;
 
     case 2: /* power cycle */
@@ -6752,6 +6799,12 @@ void
 ipmi_set_product_id(lmc_data_t *mc, unsigned char product_id[2])
 {
     memcpy(mc->product_id, product_id, 2);
+}
+
+void
+ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog)
+{
+    mc->chassis_control_prog = prog;
 }
 
 void

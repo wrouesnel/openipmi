@@ -1,0 +1,82 @@
+#!/bin/sh
+
+#
+#
+#
+
+prog=$0
+
+op=$1
+if [ "x$op" = "x" ]; then
+    echo "No operation given"
+    exit 1
+fi
+shift
+
+do_get() {
+    while [ "x$1" != "x" ]; do
+	case $1 in
+	    power)
+		val=0
+		;;
+
+	    # Note that reset has no get
+
+	    *)
+		echo "Invalid parameter: $1"
+		exit 1
+		;;
+	esac
+
+	echo "$1:$val"
+	shift
+    done
+}
+
+do_set() {
+    while [ "x$1" != "x" ]; do
+	parm="$1"
+	shift
+	if [ "x$1" = "x" ]; then
+	    echo "No value present for parameter $parm"
+	    exit 1
+	fi
+	val="$1"
+	shift
+
+	case $parm in
+	    power)
+		;;
+
+	    reset)
+		;;
+
+	    *)
+		echo "Invalid parameter: $1"
+		exit 1
+		;;
+	esac
+    done
+}
+
+do_check() {
+    # Check is not supported for chassis control
+    exit 1
+}
+
+case $op in
+    get)
+	do_get $@
+	;;
+    set)
+	do_set $@
+	;;
+    
+    check)
+	do_check $@
+	;;
+
+*)
+	echo "Unknown operation: $op"
+	exit 1
+esac
