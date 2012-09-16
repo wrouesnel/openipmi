@@ -86,7 +86,7 @@
 #include <OpenIPMI/serserv.h>
 
 #include "emu.h"
-#include "persist.h"
+#include <OpenIPMI/persist.h>
 
 #define MAX_ADDR 4
 

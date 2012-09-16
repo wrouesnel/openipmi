@@ -63,7 +63,7 @@
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
 #include <OpenIPMI/serserv.h>
-#include "persist.h"
+#include <OpenIPMI/persist.h>
 
 void
 read_persist_users(sys_data_t *sys)

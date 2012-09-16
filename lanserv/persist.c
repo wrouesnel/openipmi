@@ -1,5 +1,5 @@
 /*
- * persist.h
+ * persist.c
  *
  * MontaVista IPMI LAN server persistence tool
  *
@@ -61,7 +61,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdarg.h>
-#include "persist.h"
+#include <OpenIPMI/persist.h>
 
 enum pitem_type {
     PITEM_DATA = 'd',

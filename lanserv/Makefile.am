@@ -13,7 +13,7 @@ bin_PROGRAMS = ipmi_sim ipmilan
 
 noinst_PROGRAMS = ipmi_checksum
 
-noinst_HEADERS = emu.h persist.h
+noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c lanserv_config.c config.c serv.c serial_ipmi.c \

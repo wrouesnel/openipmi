@@ -3,7 +3,7 @@
 	* lanserv/extcmd.c, lanserv/extcmd.h: Add an external command
 	processing facility.
 
-	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: User the
+	* lanserv/lanserv_ipmi.c, lanserv/OpenIPMI/lanserv.h: Use the
 	external command processing facility to handle reading and writing
 	the external LAN configuration parameters.
 

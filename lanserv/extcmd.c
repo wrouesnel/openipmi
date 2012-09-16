@@ -63,7 +63,7 @@
 #include <malloc.h>
 
 #include <OpenIPMI/serv.h>
-#include "extcmd.h"
+#include <OpenIPMI/extcmd.h>
 
 static int
 extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)

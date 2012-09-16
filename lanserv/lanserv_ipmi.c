@@ -71,8 +71,8 @@
 
 #include <OpenIPMI/internal/md5.h>
 
-#include "persist.h"
-#include "extcmd.h"
+#include <OpenIPMI/persist.h>
+#include <OpenIPMI/extcmd.h>
 
 /* Deal with multi-byte data, IPMI (little-endian) style. */
 static unsigned int ipmi_get_uint16(uint8_t *data)
