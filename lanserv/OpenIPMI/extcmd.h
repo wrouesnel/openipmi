@@ -62,17 +62,25 @@
 enum extcmd_info_type_e {
     extcmd_ip,
     extcmd_mac,
-    extcmd_ip_src,
+    extcmd_uchar,
     extcmd_int,
-    extcmd_boot,
 };
+
+typedef struct extcmd_map_s {
+    int value;
+    char *name;
+} extcmd_map_t;
 
 #define extcmdglue(a, b) a ## b
 #define EXTCMD_MEMB(name, type) \
-    [extcmdglue(name, _o)] = { #name, type, offsetof(BASETYPE, name) }
+    [extcmdglue(name, _o)] = { #name, type, NULL, offsetof(BASETYPE, name) }
+#define EXTCMD_MEMB_MAPUCHAR(name, map) \
+    [extcmdglue(name, _o)] = { #name, extcmd_uchar, map,		\
+			       offsetof(BASETYPE, name) }
 typedef struct extcmd_info_s {
     char *name;
     enum extcmd_info_type_e type;
+    extcmd_map_t *map;
     size_t offset;
 } extcmd_info_t;
 

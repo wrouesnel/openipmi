@@ -1275,10 +1275,19 @@ handle_get_session_info(lanserv_data_t *lan, session_t *session, msg_t *msg)
 
 }
 
+static extcmd_map_t ip_src_map[] = {
+    { 0, "unknown" },
+    { 1, "static" },
+    { 2, "dhcp" },
+    { 3, "bios" },
+    { 4, "other" },
+    { 0, NULL }
+};
+
 #define BASETYPE lanparm_data_t
 static extcmd_info_t lanread_vals[] = {
     EXTCMD_MEMB(ip_addr, extcmd_ip),
-    EXTCMD_MEMB(ip_addr_src, extcmd_ip_src),
+    EXTCMD_MEMB_MAPUCHAR(ip_addr_src, ip_src_map),
     EXTCMD_MEMB(mac_addr, extcmd_mac),
     EXTCMD_MEMB(subnet_mask, extcmd_ip),
     EXTCMD_MEMB(default_gw_ip_addr, extcmd_ip),

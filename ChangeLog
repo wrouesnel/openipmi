@@ -1,3 +1,11 @@
+2012-09-17 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/extcmd.c, lanserv/OpenIPMI/extcmd.h: Add a mapping
+	capability to map values to strings.
+
+	* lanserv/emu.c, lanserv/lanserv_ipmi.c: Convert over to the
+	extcmd string mapping facility.
+
 2012-09-16 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/config.c, lanserv/emu.c: Add an external command
@@ -7,7 +15,7 @@
 	configuration.
 
 	* lanserv/emu.c: Add boot config control handling.
-	
+
 	* lanserv/ipmi_sim_chassiscontrol: Add boot config control.
 
 2012-09-15 Corey Minyard <cminyard@mvista.com>

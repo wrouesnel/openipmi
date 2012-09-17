@@ -89,39 +89,50 @@ extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
 	    return EINVAL;
 	break;
 
-    case extcmd_ip_src:
-	if (strncmp(val, "unknown", 7) == 0)
-	    *loc = 0;
-	else if (strncmp(val, "static", 6) == 0)
-	    *loc = 1;
-	else if (strncmp(val, "dhcp", 4) == 0)
-	    *loc = 2;
-	else if (strncmp(val, "bios", 4) == 0)
-	    *loc = 3;
-	else if (strncmp(val, "other", 5) == 0)
-	    *loc = 4;
-	else
+    case extcmd_uchar:
+	if (*val == '\0')
 	    return EINVAL;
+	if (t->map) {
+	    char *eval = val;
+	    unsigned int i;
+	    while (*eval && !isspace(*eval))
+		eval++;
+	    for (i = 0; t->map[i].name; i++) {
+		if (strncmp(t->map[i].name, val, eval - val) == 0)
+		    break;
+	    }
+	    if (!t->map[i].name)
+		return EINVAL;
+	    ival = t->map[i].value;
+	} else {
+	    ival = strtol(val, &end, 0);
+	    if (!isspace(*end) && (*end != '\0'))
+		return EINVAL;
+	}
+	*((unsigned char *) loc) = ival;
 	break;
 
     case extcmd_int:
 	if (*val == '\0')
 	    return EINVAL;
-	ival = strtol(val, &end, 0);
-	if (!isspace(*end) && (*end != '\0'))
-	    return EINVAL;
+	if (t->map) {
+	    char *eval = val;
+	    unsigned int i;
+	    while (*eval && !isspace(*eval))
+		eval++;
+	    for (i = 0; t->map[i].name; i++) {
+		if (strncmp(t->map[i].name, val, eval - val) == 0)
+		    break;
+	    }
+	    if (!t->map[i].name)
+		return EINVAL;
+	    ival = t->map[i].value;
+	} else {
+	    ival = strtol(val, &end, 0);
+	    if (!isspace(*end) && (*end != '\0'))
+		return EINVAL;
+	}
 	*((int *) loc) = ival;
-	break;
-
-    case extcmd_boot:
-	if (strncmp(val, "none", 4) == 0)
-	    *loc = 0;
-	else if (strncmp(val, "pxe", 3) == 0)
-	    *loc = 1;
-	else if (strncmp(val, "default", 7) == 0)
-	    *loc = 2;
-	else
-	    return EINVAL;
 	break;
 
     default:
@@ -135,7 +146,8 @@ static char *
 extcmd_setval(void *baseloc, extcmd_info_t *t)
 {
     unsigned char *loc = baseloc;
-    char buf[18]; /* Big enough to hold IP, MAC and src */
+    char cbuf[18]; /* Big enough to hold IP, MAC and src */
+    char *buf = cbuf;
 
     loc += t->offset;
 
@@ -150,53 +162,37 @@ extcmd_setval(void *baseloc, extcmd_info_t *t)
 	    return NULL;
 	break;
 
-    case extcmd_ip_src:
-	switch (*loc) {
-	case 0:
-	    strcpy(buf, "unknown");
-	    break;
-
-	case 1:
-	    strcpy(buf, "static");
-	    break;
-
-	case 2:
-	    strcpy(buf, "dhcp");
-	    break;
-
-	case 3:
-	    strcpy(buf, "bios");
-	    break;
-
-	case 4:
-	    strcpy(buf, "other");
-	    break;
-
-	default:
-	    return NULL;
+    case extcmd_uchar:
+	if (t->map) {
+	    unsigned int i;
+	    buf = NULL;
+	    for (i = 0; t->map[i].name; i++) {
+		if (t->map[i].value == *((unsigned char *) loc)) {
+		    buf = t->map[i].name;
+		    break;
+		}
+	    }
+	    if (!buf)
+		return NULL;
+	} else {
+	    sprintf(buf, "%u", *((unsigned char *) loc));
 	}
 	break;
-
+	
     case extcmd_int:
-	sprintf(buf, "%d", *((int *) loc));
-	break;
-
-    case extcmd_boot:
-	switch (*loc) {
-	case 0:
-	    strcpy(buf, "none");
-	    break;
-
-	case 1:
-	    strcpy(buf, "pxe");
-	    break;
-
-	case 2:
-	    strcpy(buf, "disk");
-	    break;
-
-	default:
-	    return NULL;
+	if (t->map) {
+	    unsigned int i;
+	    buf = NULL;
+	    for (i = 0; t->map[i].name; i++) {
+		if (t->map[i].value == *((int *) loc)) {
+		    buf = t->map[i].name;
+		    break;
+		}
+	    }
+	    if (!buf)
+		return NULL;
+	} else {
+	    sprintf(buf, "%d", *((int *) loc));
 	}
 	break;
 

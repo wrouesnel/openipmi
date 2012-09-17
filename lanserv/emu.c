@@ -3093,10 +3093,17 @@ handle_get_chassis_capabilities(lmc_data_t    *mc,
     rdata[5] = mc->sysinfo->bmc_ipmb;
 }
 
+static extcmd_map_t boot_map[] = {
+    { 0, "none" },
+    { 1, "pxe" },
+    { 2, "default" },
+    { 0, NULL }
+};
+
 static extcmd_info_t chassis_prog[] = {
-    { "power", extcmd_int, 0 },
-    { "reset", extcmd_int, 0 },
-    { "boot", extcmd_boot, 0 },
+    { "power", extcmd_int, NULL, 0 },
+    { "reset", extcmd_int, NULL, 0 },
+    { "boot", extcmd_uchar, boot_map, 0 },
 };
 
 static void
