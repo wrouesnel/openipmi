@@ -228,8 +228,7 @@ typedef void (*cmd_handler_f)(lmc_data_t    *mc,
 			      msg_t         *msg,
 			      unsigned char *rdata,
 			      unsigned int  *rdata_len);
-int ipmi_emu_register_cmd_handler(emu_data_t *emu,
-				  unsigned char netfn, unsigned char cmd,
+int ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 				  cmd_handler_f handler);
 
 /*

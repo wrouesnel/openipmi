@@ -4,6 +4,9 @@
 	tables to allow commands to be dynamically added, and add
 	a function to do this.
 
+	* lanserv/config.c: Add a way to dynamically load libraries
+	into the simulator.
+
 2012-09-17 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/extcmd.c, lanserv/OpenIPMI/extcmd.h: Add a mapping

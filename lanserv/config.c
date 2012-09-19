@@ -59,6 +59,7 @@
 #include <string.h>
 #include <errno.h>
 #include <netdb.h>
+#include <dlfcn.h>
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/lanserv.h>
@@ -700,6 +701,29 @@ read_config(sys_data_t *sys,
 			   &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
 	    err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
+	} else if (strcmp(tok, "loadlib") == 0) {
+	    char *library = NULL, *initstr = NULL;
+	    void *handle = NULL;
+	    err = get_delim_str(&tokptr, &library, &errstr);
+	    if (!err)
+		err = get_delim_str(&tokptr, &initstr, &errstr);
+	    if (!err) {
+		handle = dlopen(library, RTLD_NOW | RTLD_GLOBAL);
+		if (!handle) {
+		    err = EINVAL;
+		    errstr = dlerror();
+		}
+	    }
+	    if (!err) {
+		void (*func)(sys_data_t *sys, char *initstr);
+		func = dlsym(handle, "ipmi_sim_module_init");
+		if (func)
+		    func(sys, initstr);
+	    }
+	    if (library)
+		free(library);
+	    if (initstr)
+		free(initstr);
 	} else if (strcmp(tok, "set_working_mc") == 0) {
 	    unsigned char ipmb;
 	    err = get_uchar(&tokptr, &ipmb, &errstr);

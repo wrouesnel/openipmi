@@ -5806,8 +5806,7 @@ static netfn_handler_t netfn_handlers[32] = {
 };
 
 int
-ipmi_emu_register_cmd_handler(emu_data_t *emu,
-			      unsigned char netfn, unsigned char cmd,
+ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 			      cmd_handler_f handler)
 {
     unsigned int ni = netfn >> 1;
