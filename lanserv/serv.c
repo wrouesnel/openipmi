@@ -266,3 +266,32 @@ debug_log_raw_msg(sys_data_t *sys,
     sys->log(sys, DEBUG, NULL, str);
     free(str);
 }
+
+/* Deal with multi-byte data, IPMI (little-endian) style. */
+unsigned int ipmi_get_uint16(uint8_t *data)
+{
+    return (data[0]
+	    | (data[1] << 8));
+}
+
+void ipmi_set_uint16(uint8_t *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+}
+
+unsigned int ipmi_get_uint32(uint8_t *data)
+{
+    return (data[0]
+	    | (data[1] << 8)
+	    | (data[2] << 16)
+	    | (data[3] << 24));
+}
+
+void ipmi_set_uint32(uint8_t *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+    data[2] = (val >> 16) & 0xff;
+    data[3] = (val >> 24) & 0xff;
+}

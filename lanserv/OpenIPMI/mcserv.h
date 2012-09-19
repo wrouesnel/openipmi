@@ -221,6 +221,21 @@ int write_sol_config(lmc_data_t *mc);
 
 int ipmi_mc_users_changed(lmc_data_t *mc);
 
+/*
+ * Types and functions for registering handlers with the MC emulator.
+ */
+typedef void (*cmd_handler_f)(lmc_data_t    *mc,
+			      msg_t         *msg,
+			      unsigned char *rdata,
+			      unsigned int  *rdata_len);
+int ipmi_emu_register_cmd_handler(emu_data_t *emu,
+				  unsigned char netfn, unsigned char cmd,
+				  cmd_handler_f handler);
+
+/*
+ * SOL handling
+ */
+
 void ipmi_sol_activate(lmc_data_t    *mc,
 		       channel_t     *channel,
 		       msg_t         *msg,
@@ -233,15 +248,15 @@ void ipmi_sol_deactivate(lmc_data_t    *mc,
 			 unsigned char *rdata,
 			 unsigned int  *rdata_len);
 
-typedef unsigned char *(*get_frudata_f)(lmc_data_t *mc, unsigned int *size);
-typedef void (*free_frudata_f)(lmc_data_t *mc, unsigned char *data);
-int ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
-				get_frudata_f handler, free_frudata_f freefunc);
-
 int sol_init_mc(lmc_data_t *mc);
 void sol_shutdown(sys_data_t *sys);
 int sol_init(sys_data_t *sys, os_handler_t *os_hnd);
 unsigned char *sol_set_frudata(lmc_data_t *mc, unsigned int *size);
 void sol_free_frudata(lmc_data_t *mc, unsigned char *data);
+
+typedef unsigned char *(*get_frudata_f)(lmc_data_t *mc, unsigned int *size);
+typedef void (*free_frudata_f)(lmc_data_t *mc, unsigned char *data);
+int ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+				get_frudata_f handler, free_frudata_f freefunc);
 
 #endif /* __MCSERV_H */

@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2003 MontaVista Software Inc.
+ * Copyright 2003,2012 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -49,35 +49,6 @@
 static void ipmi_mc_start_cmd(lmc_data_t *mc);
 
 #define WATCHDOG_SENSOR_NUM 0
-
-/* Deal with multi-byte data, IPMI (little-endian) style. */
-static unsigned int ipmi_get_uint16(uint8_t *data)
-{
-    return (data[0]
-	    | (data[1] << 8));
-}
-
-static void ipmi_set_uint16(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-}
-
-static unsigned int ipmi_get_uint32(uint8_t *data)
-{
-    return (data[0]
-	    | (data[1] << 8)
-	    | (data[2] << 16)
-	    | (data[3] << 24));
-}
-
-static void ipmi_set_uint32(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-    data[2] = (val >> 16) & 0xff;
-    data[3] = (val >> 24) & 0xff;
-}
 
 typedef struct sel_entry_s
 {
@@ -1824,117 +1795,34 @@ ipmi_mc_add_fru_data(lmc_data_t    *mc,
     return 0;
 }
 
-static void
-handle_storage_netfn(lmc_data_t    *mc,
-		     msg_t         *msg,
-		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
-{
-    switch(msg->cmd) {
-    case IPMI_GET_SEL_INFO_CMD:
-	handle_get_sel_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SEL_ALLOCATION_INFO_CMD:
-	handle_get_sel_allocation_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_RESERVE_SEL_CMD:
-	handle_reserve_sel(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SEL_ENTRY_CMD:
-	handle_get_sel_entry(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_ADD_SEL_ENTRY_CMD:
-	handle_add_sel_entry(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_DELETE_SEL_ENTRY_CMD:
-	handle_delete_sel_entry(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_CLEAR_SEL_CMD:
-	handle_clear_sel(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SEL_TIME_CMD:
-	handle_get_sel_time(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SEL_TIME_CMD:
-	handle_set_sel_time(mc, msg, rdata, rdata_len);
-	break;
-
-    /* We don't currently care about partial sel adds, since they are
-       pretty stupid. */
-
-    case IPMI_GET_SDR_REPOSITORY_INFO_CMD:
-	handle_get_sdr_repository_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SDR_REPOSITORY_ALLOC_INFO_CMD:
-	handle_get_sdr_repository_alloc_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_RESERVE_SDR_REPOSITORY_CMD:
-	handle_reserve_sdr_repository(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SDR_CMD:
-	handle_get_sdr(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_ADD_SDR_CMD:
-	handle_add_sdr(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_PARTIAL_ADD_SDR_CMD:
-	handle_partial_add_sdr(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_DELETE_SDR_CMD:
-	handle_delete_sdr(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_CLEAR_SDR_REPOSITORY_CMD:
-	handle_clear_sdr_repository(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SDR_REPOSITORY_TIME_CMD:
-	handle_get_sdr_repository_time(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SDR_REPOSITORY_TIME_CMD:
-	handle_set_sdr_repository_time(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_ENTER_SDR_REPOSITORY_UPDATE_CMD:
-	handle_enter_sdr_repository_update(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_EXIT_SDR_REPOSITORY_UPDATE_CMD:
-	handle_exit_sdr_repository_update(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_FRU_INVENTORY_AREA_INFO_CMD:
-	handle_get_fru_inventory_area_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_READ_FRU_DATA_CMD:
-	handle_read_fru_data(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_WRITE_FRU_DATA_CMD:
-	handle_write_fru_data(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
-}
+/* We don't currently care about partial sel adds, since they are
+   pretty stupid. */
+static cmd_handler_f storage_netfn_handlers[256] = {
+    [IPMI_GET_SEL_INFO_CMD] = handle_get_sel_info,
+    [IPMI_GET_SEL_ALLOCATION_INFO_CMD] = handle_get_sel_allocation_info,
+    [IPMI_RESERVE_SEL_CMD] = handle_reserve_sel,
+    [IPMI_GET_SEL_ENTRY_CMD] = handle_get_sel_entry,
+    [IPMI_ADD_SEL_ENTRY_CMD] = handle_add_sel_entry,
+    [IPMI_DELETE_SEL_ENTRY_CMD] = handle_delete_sel_entry,
+    [IPMI_CLEAR_SEL_CMD] = handle_clear_sel,
+    [IPMI_GET_SEL_TIME_CMD] = handle_get_sel_time,
+    [IPMI_SET_SEL_TIME_CMD] = handle_set_sel_time,
+    [IPMI_GET_SDR_REPOSITORY_INFO_CMD] = handle_get_sdr_repository_info,
+    [IPMI_GET_SDR_REPOSITORY_ALLOC_INFO_CMD] = handle_get_sdr_repository_alloc_info,
+    [IPMI_RESERVE_SDR_REPOSITORY_CMD] = handle_reserve_sdr_repository,
+    [IPMI_GET_SDR_CMD] = handle_get_sdr,
+    [IPMI_ADD_SDR_CMD] = handle_add_sdr,
+    [IPMI_PARTIAL_ADD_SDR_CMD] = handle_partial_add_sdr,
+    [IPMI_DELETE_SDR_CMD] = handle_delete_sdr,
+    [IPMI_CLEAR_SDR_REPOSITORY_CMD] = handle_clear_sdr_repository,
+    [IPMI_GET_SDR_REPOSITORY_TIME_CMD] = handle_get_sdr_repository_time,
+    [IPMI_SET_SDR_REPOSITORY_TIME_CMD] = handle_set_sdr_repository_time,
+    [IPMI_ENTER_SDR_REPOSITORY_UPDATE_CMD] = handle_enter_sdr_repository_update,
+    [IPMI_EXIT_SDR_REPOSITORY_UPDATE_CMD] = handle_exit_sdr_repository_update,
+    [IPMI_GET_FRU_INVENTORY_AREA_INFO_CMD] = handle_get_fru_inventory_area_info,
+    [IPMI_READ_FRU_DATA_CMD] = handle_read_fru_data,
+    [IPMI_WRITE_FRU_DATA_CMD] = handle_write_fru_data
+};
 
 static void
 handle_get_device_id(lmc_data_t    *mc,
@@ -2974,110 +2862,31 @@ handle_deactivate_payload(lmc_data_t    *mc,
     ipmi_sol_deactivate(mc, channel, msg, rdata, rdata_len);
 }
 
-static void
-handle_app_netfn(lmc_data_t    *mc,
-		 msg_t         *msg,
-		 unsigned char *rdata,
-		 unsigned int  *rdata_len)
-{
-    switch(msg->cmd) {
-    case IPMI_GET_DEVICE_ID_CMD:
-	handle_get_device_id(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_WATCHDOG_TIMER_CMD:
-	handle_get_watchdog_timer(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_WATCHDOG_TIMER_CMD:
-	handle_set_watchdog_timer(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_RESET_WATCHDOG_TIMER_CMD:
-	handle_reset_watchdog_timer(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_CHANNEL_INFO_CMD:
-	handle_get_channel_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_CHANNEL_ACCESS_CMD:
-	handle_get_channel_access(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_BMC_GLOBAL_ENABLES_CMD:
-	handle_set_global_enables(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_BMC_GLOBAL_ENABLES_CMD:
-	handle_get_global_enables(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_USER_ACCESS_CMD:
-	handle_set_user_access(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_USER_ACCESS_CMD:
-	handle_get_user_access(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_USER_NAME_CMD:
-	handle_set_user_name(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_USER_NAME_CMD:
-	handle_get_user_name(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_USER_PASSWORD_CMD:
-	handle_set_user_password(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_CHANNEL_ACCESS_CMD:
-	handle_set_channel_access(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_READ_EVENT_MSG_BUFFER_CMD:
-	handle_read_event_msg_buffer(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_MSG_CMD:
-	handle_get_msg(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_MSG_FLAGS_CMD:
-	handle_get_msg_flags(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_CLEAR_MSG_FLAGS_CMD:
-	handle_clear_msg_flags(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD:
-	handle_get_payload_activation_status(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD:
-	handle_get_payload_instance_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD:
-	handle_get_channel_payload_support(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_ACTIVATE_PAYLOAD_CMD:
-	handle_activate_payload(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_DEACTIVATE_PAYLOAD_CMD:
-	handle_deactivate_payload(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
-}
+static cmd_handler_f app_netfn_handlers[256] = {
+    [IPMI_GET_DEVICE_ID_CMD] = handle_get_device_id,
+    [IPMI_GET_WATCHDOG_TIMER_CMD] = handle_get_watchdog_timer,
+    [IPMI_SET_WATCHDOG_TIMER_CMD] = handle_set_watchdog_timer,
+    [IPMI_RESET_WATCHDOG_TIMER_CMD] = handle_reset_watchdog_timer,
+    [IPMI_GET_CHANNEL_INFO_CMD] = handle_get_channel_info,
+    [IPMI_GET_CHANNEL_ACCESS_CMD] = handle_get_channel_access,
+    [IPMI_SET_BMC_GLOBAL_ENABLES_CMD] = handle_set_global_enables,
+    [IPMI_GET_BMC_GLOBAL_ENABLES_CMD] = handle_get_global_enables,
+    [IPMI_SET_USER_ACCESS_CMD] = handle_set_user_access,
+    [IPMI_GET_USER_ACCESS_CMD] = handle_get_user_access,
+    [IPMI_SET_USER_NAME_CMD] = handle_set_user_name,
+    [IPMI_GET_USER_NAME_CMD] = handle_get_user_name,
+    [IPMI_SET_USER_PASSWORD_CMD] = handle_set_user_password,
+    [IPMI_SET_CHANNEL_ACCESS_CMD] = handle_set_channel_access,
+    [IPMI_READ_EVENT_MSG_BUFFER_CMD] = handle_read_event_msg_buffer,
+    [IPMI_GET_MSG_CMD] = handle_get_msg,
+    [IPMI_GET_MSG_FLAGS_CMD] = handle_get_msg_flags,
+    [IPMI_CLEAR_MSG_FLAGS_CMD] = handle_clear_msg_flags,
+    [IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD] = handle_get_payload_activation_status,
+    [IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD] = handle_get_payload_instance_info,
+    [IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD] = handle_get_channel_payload_support,
+    [IPMI_ACTIVATE_PAYLOAD_CMD] = handle_activate_payload,
+    [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload
+};
 
 static void
 handle_get_chassis_capabilities(lmc_data_t    *mc,
@@ -3309,43 +3118,19 @@ get_system_boot_options(lmc_data_t    *mc,
     }
 }
 
-static void
-handle_chassis_netfn(lmc_data_t    *mc,
-		     msg_t         *msg,
-		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+static int
+check_chassis_capable(lmc_data_t *mc)
 {
-    if (!(mc->device_support & IPMI_DEVID_CHASSIS_DEVICE)) {
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	return;
-    }
-
-    switch(msg->cmd) {
-    case IPMI_GET_CHASSIS_CAPABILITIES_CMD:
-	handle_get_chassis_capabilities(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_CHASSIS_STATUS_CMD:
-	handle_get_chassis_status(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_CHASSIS_CONTROL_CMD:
-	handle_chassis_control(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SYSTEM_BOOT_OPTIONS_CMD:
-	set_system_boot_options(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SYSTEM_BOOT_OPTIONS_CMD:
-	get_system_boot_options(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
+    return (mc->device_support & IPMI_DEVID_CHASSIS_DEVICE);
 }
+
+static cmd_handler_f chassis_netfn_handlers[256] = {
+    [IPMI_GET_CHASSIS_CAPABILITIES_CMD] = handle_get_chassis_capabilities,
+    [IPMI_GET_CHASSIS_STATUS_CMD] = handle_get_chassis_status,
+    [IPMI_CHASSIS_CONTROL_CMD] = handle_chassis_control,
+    [IPMI_SET_SYSTEM_BOOT_OPTIONS_CMD] = set_system_boot_options,
+    [IPMI_GET_SYSTEM_BOOT_OPTIONS_CMD] = get_system_boot_options
+};
 
 static void
 handle_ipmi_set_lan_config_parms(lmc_data_t    *mc,
@@ -3606,34 +3391,12 @@ handle_get_sol_config_parms(lmc_data_t    *mc,
     *rdata_len = 3;
 }
 
-static void
-handle_transport_netfn(lmc_data_t    *mc,
-		       msg_t         *msg,
-		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
-{
-    switch(msg->cmd) {
-    case IPMI_SET_LAN_CONFIG_PARMS_CMD:
-	handle_ipmi_set_lan_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_LAN_CONFIG_PARMS_CMD:
-	handle_ipmi_get_lan_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SOL_CONFIGURATION_PARAMETERS:
-	handle_set_sol_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SOL_CONFIGURATION_PARAMETERS:
-	handle_get_sol_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
-}
+static cmd_handler_f transport_netfn_handlers[256] = {
+    [IPMI_SET_LAN_CONFIG_PARMS_CMD] = handle_ipmi_set_lan_config_parms,
+    [IPMI_GET_LAN_CONFIG_PARMS_CMD] = handle_ipmi_get_lan_config_parms,
+    [IPMI_SET_SOL_CONFIGURATION_PARAMETERS] = handle_set_sol_config_parms,
+    [IPMI_GET_SOL_CONFIGURATION_PARAMETERS] = handle_get_sol_config_parms
+};
 
 static void
 handle_get_event_receiver(lmc_data_t    *mc,
@@ -4838,89 +4601,28 @@ handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
     }
 }
 
-static void
-handle_sensor_event_netfn(lmc_data_t    *mc,
-			  msg_t         *msg,
-			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
-{
-    switch(msg->cmd) {
-    case IPMI_GET_EVENT_RECEIVER_CMD:
-	handle_get_event_receiver(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_EVENT_RECEIVER_CMD:
-	handle_set_event_receiver(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_DEVICE_SDR_INFO_CMD:
-	handle_get_device_sdr_info(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD:
-	handle_reserve_device_sdr_repository(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_DEVICE_SDR_CMD:
-	handle_get_device_sdr(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SENSOR_HYSTERESIS_CMD:
-	handle_set_sensor_hysteresis(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_HYSTERESIS_CMD:
-	handle_get_sensor_hysteresis(mc, msg, rdata, rdata_len);
-	break;
-	
-    case IPMI_SET_SENSOR_THRESHOLD_CMD:
-	handle_set_sensor_thresholds(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_THRESHOLD_CMD:
-	handle_get_sensor_thresholds(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SENSOR_EVENT_ENABLE_CMD:
-	handle_set_sensor_event_enable(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_EVENT_ENABLE_CMD:
-	handle_get_sensor_event_enable(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_SENSOR_TYPE_CMD:
-	handle_set_sensor_type(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_TYPE_CMD:
-	handle_get_sensor_type(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_READING_CMD:
-	handle_get_sensor_reading(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_PEF_CAPABILITIES_CMD:
-	handle_ipmi_get_pef_capabilities(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SET_PEF_CONFIG_PARMS_CMD:
-	handle_ipmi_set_pef_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_PEF_CONFIG_PARMS_CMD:
-	handle_ipmi_get_pef_config_parms(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GET_SENSOR_EVENT_STATUS_CMD:
-    case IPMI_REARM_SENSOR_EVENTS_CMD:
-    case IPMI_GET_SENSOR_READING_FACTORS_CMD:
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
-}
+static cmd_handler_f sensor_event_netfn_handlers[256] = {
+    [IPMI_GET_EVENT_RECEIVER_CMD] = handle_get_event_receiver,
+    [IPMI_SET_EVENT_RECEIVER_CMD] = handle_set_event_receiver,
+    [IPMI_GET_DEVICE_SDR_INFO_CMD] = handle_get_device_sdr_info,
+    [IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD] = handle_reserve_device_sdr_repository,
+    [IPMI_GET_DEVICE_SDR_CMD] = handle_get_device_sdr,
+    [IPMI_SET_SENSOR_HYSTERESIS_CMD] = handle_set_sensor_hysteresis,
+    [IPMI_GET_SENSOR_HYSTERESIS_CMD] = handle_get_sensor_hysteresis,
+    [IPMI_SET_SENSOR_THRESHOLD_CMD] = handle_set_sensor_thresholds,
+    [IPMI_GET_SENSOR_THRESHOLD_CMD] = handle_get_sensor_thresholds,
+    [IPMI_SET_SENSOR_EVENT_ENABLE_CMD] = handle_set_sensor_event_enable,
+    [IPMI_GET_SENSOR_EVENT_ENABLE_CMD] = handle_get_sensor_event_enable,
+    [IPMI_SET_SENSOR_TYPE_CMD] = handle_set_sensor_type,
+    [IPMI_GET_SENSOR_TYPE_CMD] = handle_get_sensor_type,
+    [IPMI_GET_SENSOR_READING_CMD] = handle_get_sensor_reading,
+    [IPMI_GET_PEF_CAPABILITIES_CMD] = handle_ipmi_get_pef_capabilities,
+    [IPMI_SET_PEF_CONFIG_PARMS_CMD] = handle_ipmi_set_pef_config_parms,
+    [IPMI_GET_PEF_CONFIG_PARMS_CMD] = handle_ipmi_get_pef_config_parms,
+    [IPMI_GET_SENSOR_EVENT_STATUS_CMD] = NULL,
+    [IPMI_REARM_SENSOR_EVENTS_CMD] = NULL,
+    [IPMI_GET_SENSOR_READING_FACTORS_CMD] = NULL
+};
 
 int
 ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
@@ -5017,34 +4719,12 @@ handle_get_hs_led(lmc_data_t    *mc,
     *rdata_len = 2;
 }
 
-static void
-handle_oem0_netfn(lmc_data_t    *mc,
-		  msg_t         *msg,
-		  unsigned char *rdata,
-		  unsigned int  *rdata_len)
-{
-    switch(msg->cmd) {
-    case 0x01:
-	handle_set_power(mc, msg, rdata, rdata_len);
-	break;
-
-    case 0x02:
-	handle_get_power(mc, msg, rdata, rdata_len);
-	break;
-
-    case 0x03:
-	handle_set_hs_led(mc, msg, rdata, rdata_len);
-	break;
-
-    case 0x04:
-	handle_get_hs_led(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
-	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
-}
+static cmd_handler_f oem0_netfn_handlers[256] = {
+    [0x01] = handle_set_power,
+    [0x02] = handle_get_power,
+    [0x03] = handle_set_hs_led,
+    [0x04] = handle_get_hs_led
+};
 
 static void
 handle_picmg_get_properties(lmc_data_t    *mc,
@@ -6108,6 +5788,44 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 	return -csum;
 }
 
+typedef struct netfn_handler_s {
+    cmd_handler_f *handlers;
+    cmd_handler_f main_handler;
+    int (*check_capable)(lmc_data_t *mc);
+} netfn_handler_t;
+
+static netfn_handler_t netfn_handlers[32] = {
+    [IPMI_APP_NETFN >> 1] = { .handlers = app_netfn_handlers },
+    [IPMI_STORAGE_NETFN >> 1] = { .handlers = storage_netfn_handlers },
+    [IPMI_CHASSIS_NETFN >> 1] = { .handlers = chassis_netfn_handlers,
+			     .check_capable = check_chassis_capable },
+    [IPMI_TRANSPORT_NETFN >> 1] = { .handlers = transport_netfn_handlers },
+    [IPMI_SENSOR_EVENT_NETFN >> 1] = { .handlers = sensor_event_netfn_handlers },
+    [IPMI_GROUP_EXTENSION_NETFN >> 1] = { .main_handler = handle_group_extension_netfn },
+    [0x30 >> 1] = { .handlers = oem0_netfn_handlers }
+};
+
+int
+ipmi_emu_register_cmd_handler(emu_data_t *emu,
+			      unsigned char netfn, unsigned char cmd,
+			      cmd_handler_f handler)
+{
+    unsigned int ni = netfn >> 1;
+
+    if (netfn >= 32)
+	return EINVAL;
+
+    if (!netfn_handlers[ni].handlers) {
+	netfn_handlers[ni].handlers = malloc(256 * sizeof(cmd_handler_f));
+	if (!netfn_handlers[ni].handlers)
+	    return ENOMEM;
+	memset(netfn_handlers[ni].handlers, 0, 256 * sizeof(cmd_handler_f));
+    }
+
+    netfn_handlers[ni].handlers[cmd] = handler;
+    return 0;
+}
+
 void
 ipmi_emu_handle_msg(emu_data_t    *emu,
 		    lmc_data_t    *srcmc,
@@ -6201,41 +5919,19 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	msg = omsg;
     }
 
-    switch (msg->netfn) {
-    case IPMI_APP_NETFN:
-	handle_app_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_CHASSIS_NETFN:
-	handle_chassis_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_TRANSPORT_NETFN:
-	handle_transport_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_SENSOR_EVENT_NETFN:
-	handle_sensor_event_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_STORAGE_NETFN:
-	handle_storage_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case IPMI_GROUP_EXTENSION_NETFN:
-	handle_group_extension_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    case 0x30:
-	handle_oem0_netfn(mc, msg, rdata, rdata_len);
-	break;
-
-    default:
+    if (netfn_handlers[msg->netfn >> 1].check_capable &&
+	!netfn_handlers[msg->netfn >> 1].check_capable(mc))
 	handle_invalid_cmd(mc, rdata, rdata_len);
-	break;
-    }
+    else if (netfn_handlers[msg->netfn >> 1].main_handler)
+	netfn_handlers[msg->netfn >> 1].main_handler(mc, msg, rdata, rdata_len);
+    else if (netfn_handlers[msg->netfn >> 1].handlers &&
+	     netfn_handlers[msg->netfn >> 1].handlers[msg->cmd])
+	netfn_handlers[msg->netfn >> 1].handlers[msg->cmd](mc, msg, rdata,
+							   rdata_len);
+    else
+	handle_invalid_cmd(mc, rdata, rdata_len);
 
-    if (omsg->cmd == IPMI_SEND_MSG_CMD) {
+    if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* An encapsulated command, put the response into the receive q. */
 	channel_t *bchan = srcmc->channels[15];
 

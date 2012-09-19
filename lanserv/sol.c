@@ -113,20 +113,6 @@ static char *end_history_msg = "\r\n<End Of History>\r\n";
 static void sol_timeout(void *cb_data, os_hnd_timer_id_t *id);
 static void sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id);
 
-static void ipmi_set_uint16(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-}
-
-static void ipmi_set_uint32(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-    data[2] = (val >> 16) & 0xff;
-    data[3] = (val >> 24) & 0xff;
-}
-
 static void
 reset_modem_state(ipmi_sol_t *sol)
 {

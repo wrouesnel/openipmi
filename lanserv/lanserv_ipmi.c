@@ -74,35 +74,6 @@
 #include <OpenIPMI/persist.h>
 #include <OpenIPMI/extcmd.h>
 
-/* Deal with multi-byte data, IPMI (little-endian) style. */
-static unsigned int ipmi_get_uint16(uint8_t *data)
-{
-    return (data[0]
-	    | (data[1] << 8));
-}
-
-static void ipmi_set_uint16(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-}
-
-static unsigned int ipmi_get_uint32(uint8_t *data)
-{
-    return (data[0]
-	    | (data[1] << 8)
-	    | (data[2] << 16)
-	    | (data[3] << 24));
-}
-
-static void ipmi_set_uint32(uint8_t *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-    data[2] = (val >> 16) & 0xff;
-    data[3] = (val >> 24) & 0xff;
-}
-
 static int
 is_authval_null(uint8_t *val)
 {

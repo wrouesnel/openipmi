@@ -455,4 +455,9 @@ void debug_log_raw_msg(sys_data_t *sys,
 		       unsigned char *data, unsigned int len,
 		       char *format, ...);
 
+unsigned int ipmi_get_uint16(uint8_t *data);
+void ipmi_set_uint16(uint8_t *data, int val);
+unsigned int ipmi_get_uint32(uint8_t *data);
+void ipmi_set_uint32(uint8_t *data, int val);
+
 #endif /* __SERV_H_ */
