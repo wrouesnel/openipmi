@@ -2,7 +2,8 @@
 LIB_VERSION = 0.0.5
 LD_VERSION = 0:5:0
 
-AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include \
+AM_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
+	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/libedit -DIPMI_CHECK_LOCKS $(GLIB_CFLAGS) \
 	$(TCL_CFLAGS)
 

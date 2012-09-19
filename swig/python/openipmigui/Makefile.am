@@ -23,7 +23,18 @@ PYO_FILES = _control.pyo _domain.pyo _entity.pyo _mc.pyo _sensor.pyo \
 	gui_lightset.pyo gui_treelist.pyo gui_list.pyo gui_term.pyo \
 	_misc.pyo
 
-all-local: $(PYC_FILES) $(PYO_FILES)
+# Python doesn't have any way to output the compiled files somewhere else,
+# and it doesn't work very well for them to be remote, anyway, so maintain
+# a local copy of the .py files in the output directory.
+localcopy:
+	for i in $(EXTRA_DIST); do \
+		if ! cmp $(srcdir)/$$i $$i 2>/dev/null; then \
+			echo "Copying $$i" \
+			cp $(srcdir)/$$i $$i; \
+		fi \
+	done
+
+all-local: localcopy $(PYC_FILES) $(PYO_FILES)
 
 install-exec-local: $(EXTRA_DIST) $(PYC_FILES) $(PYO_FILES)
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)/openipmigui

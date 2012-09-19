@@ -7,6 +7,21 @@
 	* lanserv/config.c: Add a way to dynamically load libraries
 	into the simulator.
 
+	* cmdlang/Makefile.am: Rework so OpenIPMI can build in an external
+	directory.
+	* cmdlang/ipmish.c: ditto
+	* include/OpenIPMI/ipmi_conn.h: ditto
+	* include/OpenIPMI/ipmi_lan.h: ditto
+	* include/OpenIPMI/ipmi_types.h: ditto
+	* include/OpenIPMI/ipmiif.h.in: ditto
+	* lib/Makefile.am: ditto
+	* sample/Makefile.am: ditto
+	* swig/perl/Makefile.am: ditto
+	* swig/python/Makefile.am: ditto
+	* swig/python/openipmigui/Makefile.am: ditto
+	* ui/Makefile.am: ditto
+	* unix/Makefile.am: ditto
+
 2012-09-17 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/extcmd.c, lanserv/OpenIPMI/extcmd.h: Add a mapping

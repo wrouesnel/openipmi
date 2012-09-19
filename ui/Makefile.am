@@ -4,7 +4,8 @@ LD_VERSION = 1:1:0
 
 SNMPLIBS=@SNMPLIBS@
 
-AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
+AM_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
+	-I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
 bin_PROGRAMS = ipmi_ui
 

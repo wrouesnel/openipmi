@@ -191,9 +191,6 @@ int ipmi_control_id_is_invalid(const ipmi_control_id_t *id);
  *
  ***********************************************************************/
 
-/* This type holds the arguments for an IPMI connection. */
-typedef struct ipmi_args_s ipmi_args_t;
-
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 

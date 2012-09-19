@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_posix.h>

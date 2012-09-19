@@ -34,7 +34,8 @@ OpenIPMI_perl.lo: OpenIPMI_perl.c OpenIPMI.h
 OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 	$(SWIG) $(DEFS) -perl5 -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/perl $<
 
-CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
+CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI_wrap.o OpenIPMI_perl.o OpenIPMI.la \
+	OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
 
 install-exec-local: OpenIPMI.so OpenIPMI.pm
 	$(INSTALL) -d "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"

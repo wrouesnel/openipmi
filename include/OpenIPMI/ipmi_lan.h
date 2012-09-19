@@ -34,7 +34,6 @@
 #ifndef __IPMI_LAN_H
 #define __IPMI_LAN_H
 
-#include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_addr.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <netinet/in.h>

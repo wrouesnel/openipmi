@@ -37,7 +37,6 @@
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_addr.h>
-#include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/os_handler.h>
 
 #ifdef __cplusplus

@@ -119,6 +119,9 @@ typedef int64_t ipmi_timeout_t;
    1, 1970 */
 typedef int64_t ipmi_time_t;
 
+/* This type holds the arguments for an IPMI connection. */
+typedef struct ipmi_args_s ipmi_args_t;
+
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 
 #define IPMI_MAX_MSG_LENGTH	80
