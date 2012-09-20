@@ -1,3 +1,8 @@
+2012-09-20 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c: Make the FRU history be per-session so multiple
+	users will consistent data.
+
 2012-09-19 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Convert the command handling over to using

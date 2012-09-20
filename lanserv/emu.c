@@ -128,14 +128,27 @@ struct sensor_s
     void (*sensor_update_handler)(lmc_data_t *mc, sensor_t *sensor);
 };
 
-typedef struct fru_data_s
+typedef struct fru_data_s fru_data_t;
+
+typedef struct fru_session_s
+{
+    unsigned char *data_to_free;
+    unsigned char *data;
+    unsigned int length;
+    unsigned int sid;
+    fru_data_t *fru;
+    struct fru_session_s *next;
+    
+} fru_session_t;
+
+struct fru_data_s
 {
     unsigned int  length;
     unsigned char *data;
-    unsigned char *free_data;
+    fru_session_t *sessions;
     get_frudata_f get;
     free_frudata_f free;
-} fru_data_t;
+};
 
 typedef struct led_data_s
 {
@@ -1575,14 +1588,20 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
 static void
 fru_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 {
-    fru_data_t *fru = cb_data;
+    fru_session_t *ses = cb_data;
+    fru_data_t *fru = ses->fru;
 
-    fru->length = 0;
-    if (fru->free_data) {
-	fru->free(mc, fru->free_data);
-	fru->data = NULL;
-	fru->free_data = NULL;
+    if (fru->sessions == ses) {
+	fru->sessions = ses->next;
+    } else {
+	fru_session_t *p = fru->sessions;
+	while (p && p->next != ses)
+	    p = p->next;
+	if (p && p->next != ses)
+	    p->next = ses->next;
     }
+    fru->free(mc, ses->data_to_free);
+    free(ses);
 }
 
 static void
@@ -1593,6 +1612,8 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 {
     unsigned char devid;
     fru_data_t *fru;
+    unsigned int size;
+    unsigned char *data;
     int rv;
 
     if (check_msg_length(msg, 1, rdata, rdata_len))
@@ -1607,14 +1628,33 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 
     fru = &mc->frus[devid];
     if (fru->get) {
-	unsigned int size;
-	unsigned char *data;
 	channel_t *channel;
+	fru_session_t *ses;
+
+	ses = fru->sessions;
+	while (ses) {
+	    if (ses->sid == msg->sid)
+		break;
+	    ses = ses->next;
+	}
+	if (!ses) {
+	    ses = malloc(sizeof(*ses));
+	    if (!ses) {
+		rdata[0] = IPMI_OUT_OF_SPACE_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	    memset(ses, 0, sizeof(*ses));
+	    ses->sid = msg->sid;
+	    ses->fru = fru;
+	    ses->next = fru->sessions;
+	    fru->sessions = ses;
+	}
 
 	/* Set up to free the FRU data when the session closes. */
 	channel = msg->orig_channel;
 	rv = channel->set_associated_mc(channel, msg->sid, 0, mc,
-					NULL, fru_session_closed, fru);
+					NULL, fru_session_closed, ses);
 	if (rv == EBUSY) {
 	    rdata[0] = IPMI_NODE_BUSY_CC;
 	    *rdata_len = 1;
@@ -1634,27 +1674,30 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 	    return;
 	}
 
-	if (fru->data)
-	    free(fru->data);
+	if (ses->data_to_free)
+	    fru->free(mc, ses->data_to_free);
 
-	fru->free_data = data;
+	ses->data_to_free = data;
 	if (size > 65535) {
-	    fru->data = data + (size - 65535);
-	    fru->length = 65535;
+	    ses->data = data + (size - 65535);
+	    ses->length = 65535;
 	} else {
-	    fru->data = data;
-	    fru->length = size;
+	    ses->data = data;
+	    ses->length = size;
 	}
+    } else {
+	size = fru->length;
+	data = fru->data;
     }
 
-    if (!mc->frus[devid].data) {
+    if (!data) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
     rdata[0] = 0;
-    ipmi_set_uint16(rdata+1, fru->length);
+    ipmi_set_uint16(rdata+1, size);
     rdata[3] = 0; /* We only support byte access for now. */
     *rdata_len = 4;
 }
@@ -1668,28 +1711,49 @@ handle_read_fru_data(lmc_data_t    *mc,
     unsigned char devid;
     unsigned int  offset;
     unsigned int  count;
+    unsigned char *data;
+    unsigned int  size;
+    fru_session_t *ses;
+    fru_data_t *fru;
 
     if (check_msg_length(msg, 4, rdata, rdata_len))
 	return;
 
     devid = msg->data[0];
-    if ((devid >= 255) || (!mc->frus[devid].data)) {
+    if (devid >= 255) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
+    fru = &mc->frus[devid];
     offset = ipmi_get_uint16(msg->data+1);
     count = msg->data[3];
 
-    if (offset >= mc->frus[devid].length) {
+    data = fru->data;
+    size = fru->length;
+    ses = fru->sessions;
+    while (ses && (ses->sid != msg->sid))
+	ses = ses->next;
+    if (ses) {
+	data = ses->data;
+	size = ses->length;
+    }
+
+    if (!data) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (offset >= size) {
 	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if ((offset+count) > mc->frus[devid].length)
-	count = mc->frus[devid].length - offset;
+    if ((offset+count) > size)
+	count = size - offset;
     if (count+2 > *rdata_len) {
 	/* Too much data to put into response. */
 	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
@@ -1699,8 +1763,8 @@ handle_read_fru_data(lmc_data_t    *mc,
 
     rdata[0] = 0;
     rdata[1] = count;
-    memcpy(rdata+2, mc->frus[devid].data+offset, count);
-    *rdata_len = 2+count;
+    memcpy(rdata + 2, data + offset, count);
+    *rdata_len = 2 + count;
 }
 
 static void
