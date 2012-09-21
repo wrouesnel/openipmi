@@ -2862,7 +2862,7 @@ handle_activate_payload(lmc_data_t    *mc,
 			unsigned char *rdata,
 			unsigned int  *rdata_len)
 {
-    channel_t *channel = mc->channels[msg->channel];
+    channel_t *channel = msg->orig_channel;
 
     if (!mc->sol.configured || !channel->set_associated_mc) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -5959,7 +5959,9 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	rmsg->data[3] = data[0];
 	rmsg->data[4] = (data[4] & 0xfc) | (data[1] & 0x03);
 	rmsg->data[5] = data[5];
-	    
+
+	smsg.src_addr = omsg->src_addr;
+	smsg.src_len = omsg->src_len;
 	smsg.netfn = data[1] >> 2;
 	smsg.rs_lun = data[1] & 0x3;
 	smsg.cmd = data[5];

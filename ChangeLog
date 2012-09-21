@@ -1,3 +1,8 @@
+2012-09-21 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c, lanserv/lanserv_ipmi.c: Test handling a SOL
+	session on a satellite MC, fix some issues with that.
+
 2012-09-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Make the FRU history be per-session so multiple

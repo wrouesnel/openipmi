@@ -142,11 +142,15 @@ close_session(lanserv_data_t *lan, session_t *session)
     unsigned int i;
 
     for (i = 0; i < LANSERV_NUM_CLOSERS; i++) {
-	if (session->closers[i].close_cb)
+	if (session->closers[i].close_cb) {
 	    session->closers[i].close_cb(
 		session->closers[i].mc,
 		session->sid, session->closers[i].close_cb_data);
+	    session->closers[i].close_cb = NULL;
+	    session->closers[i].mc = NULL;
+	}
     }
+
     session->active = 0;
     if (session->authtype <= 4)
 	ipmi_auths[session->authtype].authcode_cleanup(session->authdata);
