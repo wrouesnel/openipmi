@@ -2897,7 +2897,7 @@ handle_deactivate_payload(lmc_data_t    *mc,
 			  unsigned char *rdata,
 			  unsigned int  *rdata_len)
 {
-    channel_t *channel = mc->channels[msg->channel];
+    channel_t *channel = msg->orig_channel;
 
     if (!mc->sol.configured || !channel->set_associated_mc) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
