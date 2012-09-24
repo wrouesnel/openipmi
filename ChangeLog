@@ -3,6 +3,10 @@
 	* doc/Makefile.am: One more fix for building outside the source
 	directory.
 
+	* lanserv/OpenIPMI/Makefile.am: Add a missing file.
+
+	* lanserv/Makefile.am: Fix a cross-compile issue.
+
 2012-09-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/lanserv_ipmi.c: Test handling a SOL

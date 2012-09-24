@@ -28,11 +28,13 @@ ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
 ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la
-ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
+ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
+	../utils/libOpenIPMIutils.la
 
 ipmi_sim_SOURCES = ipmi_sim.c emu.c emu_cmd.c
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
-ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la
+ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
+	../utils/libOpenIPMIutils.la
 
 EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
 
