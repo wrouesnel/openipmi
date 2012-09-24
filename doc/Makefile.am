@@ -12,11 +12,11 @@ EPS_FILES = BusSystem.eps       ManagementController.eps  SimpleHotSwap.eps \
 IPMI.pdf: IPMI.dvi
 	$(DVIPDF) IPMI
 
-IPMI.dvi: IPMI.ltx ${EPS_FILES}
-	${LATEX} IPMI.ltx
-	${BIBTEX} IPMI
-	${LATEX} IPMI.ltx
-	${LATEX} IPMI.ltx
+IPMI.dvi: $(srcdir)/IPMI.ltx ${EPS_FILES}
+	${LATEX} $(srcdir)/IPMI.ltx
+	BIBINPUTS=$(srcdir) ${BIBTEX} IPMI
+	${LATEX} $(srcdir)/IPMI.ltx
+	${LATEX} $(srcdir)/IPMI.ltx
 
 .dia.eps:
 	$(DIA) --export=$@ $(DIA_FILTER_NAME)=eps $<

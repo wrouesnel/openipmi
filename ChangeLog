@@ -1,3 +1,8 @@
+2012-09-24 Corey Minyard <cminyard@mvista.com>
+
+	* doc/Makefile.am: One more fix for building outside the source
+	directory.
+
 2012-09-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/lanserv_ipmi.c: Test handling a SOL
