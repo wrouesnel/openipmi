@@ -715,10 +715,13 @@ read_config(sys_data_t *sys,
 		}
 	    }
 	    if (!err) {
-		void (*func)(sys_data_t *sys, char *initstr);
+		int (*func)(sys_data_t *sys, char *initstr);
 		func = dlsym(handle, "ipmi_sim_module_init");
-		if (func)
-		    func(sys, initstr);
+		if (func) {
+		    err = func(sys, initstr);
+		    if (err)
+			errstr = "Error returned from module init";
+		}
 	    }
 	    if (library)
 		free(library);
