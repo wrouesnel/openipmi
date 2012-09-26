@@ -1,3 +1,8 @@
+2012-09-26 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c: Add a way to do I/O
+	handling to the sys_data structure.
+
 2012-09-25 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/config.c: Have the module initialization function

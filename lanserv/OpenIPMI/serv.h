@@ -268,6 +268,7 @@ struct pef_data_s
 };
 
 typedef struct ipmi_timer_s ipmi_timer_t;
+typedef struct ipmi_io_s ipmi_io_t;
 
 typedef struct sockaddr_ip_s {
     union
@@ -355,6 +356,15 @@ struct sys_data_s {
     int (*start_timer)(ipmi_timer_t *timer, struct timeval *timeout);
     int (*stop_timer)(ipmi_timer_t *timer);
     void (*free_timer)(ipmi_timer_t *timer);
+
+    int (*add_io_hnd)(sys_data_t *sys, int fd,
+		      void (*read_hnd)(int fd, void *cb_data),
+		      void *cb_data, ipmi_io_t **io);
+    void (*remove_io_hnd)(ipmi_io_t *io);
+    void (*io_set_hnds)(ipmi_io_t *io,
+			void (*write_hnd)(int fd, void *cb_data),
+			void (*except_hnd)(int fd, void *cb_data));
+    void (*io_set_enables)(ipmi_io_t *io, int read, int write, int except);
 
     /* Called by interface code to report that the target did a reset. */
     /* FIXME - move */

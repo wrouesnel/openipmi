@@ -967,6 +967,89 @@ sleeper(emu_data_t *emu, struct timeval *time)
     os_handler_waiter_release(waiter);
 }
 
+struct ipmi_io_s
+{
+    os_hnd_fd_id_t *id;
+    misc_data_t *data;
+    void (*read_cb)(int fd, void *cb_data);
+    void (*write_cb)(int fd, void *cb_data);
+    void (*except_cb)(int fd, void *cb_data);
+    void *cb_data;
+};
+
+static void
+io_read_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    ipmi_io_t *io = cb_data;
+    io->read_cb(fd, io->cb_data);
+}
+
+static void
+io_write_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    ipmi_io_t *io = cb_data;
+    io->write_cb(fd, io->cb_data);
+}
+
+static void
+io_except_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    ipmi_io_t *io = cb_data;
+    io->write_cb(fd, io->cb_data);
+}
+
+static void
+ipmi_io_set_hnds(ipmi_io_t *io,
+		 void (*write_hnd)(int fd, void *cb_data),
+		 void (*except_hnd)(int fd, void *cb_data))
+{
+    io->write_cb = write_hnd;
+    io->except_cb = except_hnd;
+}
+
+static void
+ipmi_io_set_enables(ipmi_io_t *io, int read, int write, int except)
+{
+    io->data->os_hnd->set_fd_enables(io->data->os_hnd,
+				     io->id, read, write, except);
+}
+
+static int
+ipmi_add_io_hnd(sys_data_t *sys, int fd,
+		void (*read_hnd)(int fd, void *cb_data),
+		void *cb_data, ipmi_io_t **rio)
+{
+    ipmi_io_t *io;
+    misc_data_t *data = sys->info;
+    int err;
+
+    io = malloc(sizeof(*io));
+    if (!io)
+	return ENOMEM;
+
+    io->data = data;
+    io->read_cb = read_hnd;
+    io->cb_data = cb_data;
+    
+    err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, fd, io_read_ready, io,
+					   NULL,  &io->id);
+    if (err) {
+	free(io);
+	return err;
+    }
+    data->os_hnd->set_fd_handlers(data->os_hnd, io->id, io_write_ready,
+				  io_except_ready);
+
+    *rio = io;
+    return 0;
+}
+
+static void
+ipmi_remove_io_hnd(ipmi_io_t *io)
+{
+    io->data->os_hnd->remove_fd_to_wait_for(io->data->os_hnd, io->id);
+}
+
 struct ipmi_timer_s
 {
     os_hnd_timer_id_t *id;
@@ -1203,6 +1286,10 @@ main(int argc, const char *argv[])
     sysinfo.start_timer = ipmi_start_timer;
     sysinfo.stop_timer = ipmi_stop_timer;
     sysinfo.free_timer = ipmi_free_timer;
+    sysinfo.add_io_hnd = ipmi_add_io_hnd;
+    sysinfo.io_set_hnds = ipmi_io_set_hnds;
+    sysinfo.io_set_enables = ipmi_io_set_enables;
+    sysinfo.remove_io_hnd = ipmi_remove_io_hnd;
     sysinfo.debug = debug;
     sysinfo.log = sim_log;
     sysinfo.csmi_send = smi_send;
