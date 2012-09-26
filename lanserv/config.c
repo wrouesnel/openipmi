@@ -187,7 +187,7 @@ read_sol_config(sys_data_t *sys)
 
 	    free_persist(p);
 	}
-	rv = sol_init_mc(mc);
+	rv = sol_init_mc(sys, mc);
 	if (rv)
 	    return rv;
     }

@@ -1375,7 +1375,7 @@ main(int argc, const char *argv[])
 
     read_persist_users(&sysinfo);
 
-    err = sol_init(&sysinfo, data.os_hnd);
+    err = sol_init(&sysinfo);
     if (err) {
 	fprintf(stderr, "Unable to initialize SOL: %s\n",
 		strerror(err));

@@ -36,7 +36,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <malloc.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <termios.h>
@@ -51,14 +50,13 @@
 /* FIXME - move to configure handling */
 #define USE_UUCP_LOCKING
 
-static os_handler_t *sol_os_hnd;
-
 #define SOL_INBUF_SIZE 32
 #define SOL_OUTBUF_SIZE 32
 
 struct soldata_s {
     int fd;
-    os_hnd_fd_id_t *fd_id;
+    sys_data_t *sys;
+    ipmi_io_t *fd_id;
     struct termios termctl;
     int modemstate;
 
@@ -92,7 +90,7 @@ struct soldata_s {
     int history_last_acked_packet_len;
     int history_curr_packet_seq;
     char history_in_nack;
-    os_hnd_timer_id_t *history_timer;
+    ipmi_timer_t *history_timer;
     unsigned int history_num_sends;
 
     char in_nack;
@@ -102,7 +100,7 @@ struct soldata_s {
     int last_acked_packet;
     int last_acked_packet_len;
     int curr_packet_seq;
-    os_hnd_timer_id_t *timer;
+    ipmi_timer_t *timer;
     unsigned int num_sends;
 };
 
@@ -110,8 +108,8 @@ static char *end_history_msg = "\r\n<End Of History>\r\n";
 
 #define MAX_HISTORY_SEND 64
 #define MAX_SOL_RESENDS 4
-static void sol_timeout(void *cb_data, os_hnd_timer_id_t *id);
-static void sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id);
+static void sol_timeout(void *cb_data);
+static void sol_history_timeout(void *cb_data);
 
 static void
 reset_modem_state(ipmi_sol_t *sol)
@@ -133,10 +131,11 @@ static void
 sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
+    soldata_t *sd = sol->soldata;
 
     if (session_id == sol->session_id) {
 	if (sol->soldata->dummy_send_msg.src_addr) {
-	    free(sol->soldata->dummy_send_msg.src_addr);
+	    sd->sys->free(sd->sys, sol->soldata->dummy_send_msg.src_addr);
 	    sol->soldata->dummy_send_msg.src_addr = NULL;
 	}
 	sol->active = 0;
@@ -144,11 +143,12 @@ sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 	reset_modem_state(sol);
     } else if (session_id == sol->history_session_id) {
 	if (sol->soldata->history_dummy_send_msg.src_addr) {
-	    free(sol->soldata->history_dummy_send_msg.src_addr);
+	    sd->sys->free(sd->sys,
+			   sol->soldata->history_dummy_send_msg.src_addr);
 	    sol->soldata->history_dummy_send_msg.src_addr = NULL;
 	}
 	if (sol->soldata->history_copy) {
-	    free(sol->soldata->history_copy);
+	    sd->sys->free(sd->sys, sol->soldata->history_copy);
 	    sol->soldata->history_copy = NULL;
 	}
 	sol->history_active = 0;
@@ -162,7 +162,8 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
     soldata_t *sd = sol->soldata;
     unsigned int to_copy;
     unsigned int endmsg_size = strlen(end_history_msg);
-    unsigned char *dest = malloc(sol->history_size + endmsg_size);
+    unsigned char *dest = sd->sys->alloc(sd->sys,
+					  sol->history_size + endmsg_size);
     unsigned int size;
 
     if (!dest)
@@ -194,8 +195,11 @@ sol_set_frudata(lmc_data_t *mc, unsigned int *size)
 
 void sol_free_frudata(lmc_data_t *mc, unsigned char *data)
 {
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
+
     if (data)
-	free(data);
+	sd->sys->free(sd->sys, data);
 }
 
 void
@@ -238,7 +242,7 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	return;
     }
 
-    dmsg->src_addr = malloc(msg->src_len);
+    dmsg->src_addr = sd->sys->alloc(sd->sys, msg->src_len);
     if (!dmsg->src_addr) {
 	rdata[0] = IPMI_OUT_OF_SPACE_CC;
 	*rdata_len = 1;
@@ -251,13 +255,13 @@ ipmi_sol_activate(lmc_data_t    *mc,
     rv = channel->set_associated_mc(channel, msg->sid, msg->data[0] & 0xf, mc,
 				    &port, sol_session_closed, sol);
     if (rv == EBUSY) {
-	free(dmsg->src_addr);
+	sd->sys->free(sd->sys, dmsg->src_addr);
 	dmsg->src_addr = NULL;
 	rdata[0] = IPMI_NODE_BUSY_CC;
 	*rdata_len = 1;
 	return;
     } else if (rv) {
-	free(dmsg->src_addr);
+	sd->sys->free(sd->sys, dmsg->src_addr);
 	dmsg->src_addr = NULL;
 	rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	*rdata_len = 1;
@@ -305,8 +309,7 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	tv.tv_sec = 0;
 	tv.tv_usec = 0; /* Send immediately */
 	sd->history_num_sends = 0;
-	sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
-				sol_history_timeout, sol);
+	sd->sys->start_timer(sd->history_timer, &tv);
     }
 
     rdata[0] = 0;
@@ -408,22 +411,22 @@ write_full(int fd, char *data, size_t count)
 }
 
 static void
-uucp_rm_lock(char *devname)
+uucp_rm_lock(sys_data_t *sys, char *devname)
 {
     char *lck_file;
 
-    lck_file = malloc(uucp_fname_lock_size(devname));
+    lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
     if (lck_file == NULL) {
 	return;
     }
     uucp_fname_lock(lck_file, devname);
     unlink(lck_file);
-    free(lck_file);
+    sys->free(sys, lck_file);
 }
 
 /* return 0=OK, -1=error, 1=locked by other proces */
 static int
-uucp_mk_lock(char *devname)
+uucp_mk_lock(sys_data_t *sys, char *devname)
 {
     struct stat stt;
     int pid = -1;
@@ -436,7 +439,7 @@ uucp_mk_lock(char *devname)
 	} buf;
 	int fd;
 
-	lck_file = malloc(uucp_fname_lock_size(devname));
+	lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
 	if (lck_file == NULL)
 	    return -1;
 
@@ -486,7 +489,7 @@ uucp_mk_lock(char *devname)
 	    }
 	}
 
-	free(lck_file);
+	sys->free(sys, lck_file);
     }
 
     return pid;
@@ -563,8 +566,7 @@ set_read_enable(soldata_t *sd)
 	return;
 
     sd->read_enabled = val;
-    sol_os_hnd->set_fd_enables(sol_os_hnd, sd->fd_id, sd->read_enabled,
-			       sd->write_enabled, 0);
+    sd->sys->io_set_enables(sd->fd_id, sd->read_enabled, sd->write_enabled, 0);
 }
 
 static void
@@ -576,8 +578,7 @@ set_write_enable(soldata_t *sd)
 	return;
 
     sd->write_enabled = val;
-    sol_os_hnd->set_fd_enables(sol_os_hnd, sd->fd_id, sd->read_enabled,
-			       sd->write_enabled, 0);
+    sd->sys->io_set_enables(sd->fd_id, sd->read_enabled, sd->write_enabled, 0);
 }
 
 static void
@@ -630,7 +631,7 @@ clear_outbuf(soldata_t *sd)
 }
 
 static void
-sol_timeout(void *cb_data, os_hnd_timer_id_t *id)
+sol_timeout(void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
     soldata_t *sd = sol->soldata;
@@ -645,8 +646,7 @@ sol_timeout(void *cb_data, os_hnd_timer_id_t *id)
     send_data(sol, 0);
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
-			    sol_history_timeout, sol);
+    sd->sys->start_timer(sd->history_timer, &tv);
 }
 
 static void
@@ -706,7 +706,7 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 		clear_outbuf(sd);
 	    }
 	}
-	sol_os_hnd->stop_timer(sol_os_hnd, sd->timer);
+	sd->sys->stop_timer(sd->timer);
     }
 
     if (need_send_ack)
@@ -805,7 +805,7 @@ sol_history_next_packet(soldata_t *sd)
 }
 
 static void
-sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id)
+sol_history_timeout(void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
     soldata_t *sd = sol->soldata;
@@ -821,8 +821,7 @@ sol_history_timeout(void *cb_data, os_hnd_timer_id_t *id)
     send_history_data(sol, 0);
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    sol_os_hnd->start_timer(sol_os_hnd, sd->history_timer, &tv,
-			    sol_history_timeout, sol);
+    sd->sys->start_timer(sd->history_timer, &tv);
 }
 
 static void
@@ -863,7 +862,7 @@ handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 	    sol_history_next_packet(sd);
 	    need_send_ack = send_history_data(sol, need_send_ack);
 	}
-	sol_os_hnd->stop_timer(sol_os_hnd, sd->timer);
+	sd->sys->stop_timer(sd->timer);
     }
 
     if (need_send_ack)
@@ -890,7 +889,7 @@ handle_sol_payload(lanserv_data_t *lan, msg_t *msg)
 }
 
 static void
-sol_write_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+sol_write_ready(int fd, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
     soldata_t *sd = sol->soldata;
@@ -901,7 +900,7 @@ sol_write_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	sd->channel->log(sd->channel, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
-	sol_os_hnd->remove_fd_to_wait_for(sol_os_hnd, id);
+	sd->sys->remove_io_hnd(sd->fd_id);
 	close(sd->fd);
 	sd->fd = -1;
 	return;
@@ -960,7 +959,7 @@ add_to_history(ipmi_sol_t *sol, unsigned char *buf, unsigned int len)
 }
 
 static void
-sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
+sol_data_ready(int fd, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
     soldata_t *sd = sol->soldata;
@@ -972,7 +971,7 @@ sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	sd->channel->log(sd->channel, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
-	sol_os_hnd->remove_fd_to_wait_for(sol_os_hnd, id);
+	sd->sys->remove_io_hnd(sd->fd_id);
 	close(sd->fd);
 	sd->fd = -1;
 	return;
@@ -993,55 +992,58 @@ sol_data_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     sd->num_sends = 0;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    sol_os_hnd->start_timer(sol_os_hnd, sd->timer, &tv, sol_timeout, sol);
+    sd->sys->start_timer(sd->timer, &tv);
 }
 
 int
-sol_init(sys_data_t *sys, os_handler_t *os_hnd)
+sol_init(sys_data_t *sys)
 {
-    sol_os_hnd = os_hnd;
-
     return ipmi_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
 				 handle_sol_payload);
 }
 
 int
-sol_init_mc(lmc_data_t *mc)
+sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd;
     int err;
 
-    sd = malloc(sizeof(*sd));
+    sd = sys->alloc(sys, sizeof(*sd));
     if (!sd)
 	return ENOMEM;
     memset(sd, 0, sizeof(*sd));
 
-    if (sol_os_hnd->alloc_timer(sol_os_hnd, &sd->timer)) {
-	free(sd);
+    if (sys->alloc_timer(sys, sol_timeout, sol, &sd->timer)) {
+	sys->free(sys, sd);
 	return ENOMEM;
     }
 
     if (sol->history_size) {
-	if (sol_os_hnd->alloc_timer(sol_os_hnd, &sd->history_timer)) {
-	    free(sd);
+	if (sys->alloc_timer(sys, sol_history_timeout, sol,
+			     &sd->history_timer)) {
+	    sys->free_timer(sd->timer);
+	    sys->free(sys, sd);
 	    return ENOMEM;
 	}
 
-	sd->history = malloc(sol->history_size);
+	sd->history = sys->alloc(sys, sol->history_size);
 	if (!sd->history) {
-	    free(sd);
+	    sys->free_timer(sd->history_timer);
+	    sys->free_timer(sd->timer);
+	    sys->free(sys, sd);
 	    return ENOMEM;
 	}
     }
 
+    sd->sys = sys;
     sol->soldata = sd;
     sd->fd = -1;
     sd->curr_packet_seq = 1;
     sd->history_curr_packet_seq = 1;
 
 #ifdef USE_UUCP_LOCKING
-    err = uucp_mk_lock(sol->device);
+    err = uucp_mk_lock(sys, sol->device);
     if (err > 0) {
 	fprintf(stderr, "SOL device %s is already owned by process %d\n",
 		sol->device, err);
@@ -1079,25 +1081,23 @@ sol_init_mc(lmc_data_t *mc)
 
     sd->read_enabled = 1;
     sd->write_enabled = 0;
-    err = sol_os_hnd->add_fd_to_wait_for(sol_os_hnd, sd->fd,
-					 sol_data_ready, sol,
-					 NULL, &sd->fd_id);
+    err = sys->add_io_hnd(sys, sd->fd, sol_data_ready, sol, &sd->fd_id);
     if (err)
 	goto out;
 
-    sol_os_hnd->set_fd_handlers(sol_os_hnd, sd->fd_id, sol_write_ready, NULL);
+    sd->sys->io_set_hnds(sd->fd_id, sol_write_ready, NULL);
 
   out:
     if (err) {
 	if (sd->timer)
-	    sol_os_hnd->free_timer(sol_os_hnd, sd->timer);
+	    sys->free_timer(sd->timer);
 	if (sd->history_timer)
-	    sol_os_hnd->free_timer(sol_os_hnd, sd->history_timer);
+	    sys->free_timer(sd->history_timer);
 	if (sd->fd >= 0)
 	    close(sd->fd);
 	if (sd->history)
-	    free(sd->history);
-	free(sd);
+	    sys->free(sys, sd->history);
+	sys->free(sys, sd);
 	sol->soldata = NULL;
     }
 
@@ -1120,7 +1120,7 @@ sol_shutdown(sys_data_t *sys)
 	    continue;
 
 #ifdef USE_UUCP_LOCKING
-	uucp_rm_lock(sol->device);
+	uucp_rm_lock(sys, sol->device);
 #endif /* USE_UUCP_LOCKING */
     }
 }

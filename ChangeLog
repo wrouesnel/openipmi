@@ -3,6 +3,9 @@
 	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c: Add a way to do I/O
 	handling to the sys_data structure.
 
+	* lanserv/sol.c: Switch sol over to use the sys_data I/O handling
+	instead of directly using the OS handlers.
+
 2012-09-25 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/config.c: Have the module initialization function
