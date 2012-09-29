@@ -1,3 +1,7 @@
+2012-09-27 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c: Added an internal capability to do power control.
+
 2012-09-26 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c: Add a way to do I/O

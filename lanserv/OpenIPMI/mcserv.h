@@ -258,4 +258,17 @@ typedef void (*free_frudata_f)(lmc_data_t *mc, unsigned char *data);
 int ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
 				get_frudata_f handler, free_frudata_f freefunc);
 
+
+#define CHASSIS_CONTROL_POWER 0
+#define CHASSIS_CONTROL_RESET 1
+#define CHASSIS_CONTROL_BOOT  2
+void ipmi_mc_set_chassis_control_func(lmc_data_t *mc,
+				      int (*set)(lmc_data_t *mc, int op,
+						 unsigned char val,
+						 void *cb_data),
+				      int (*get)(lmc_data_t *mc, int op,
+						 unsigned char *val,
+						 void *cb_data),
+				      void *cb_data);
+
 #endif /* __MCSERV_H */
