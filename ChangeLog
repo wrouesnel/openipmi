@@ -1,3 +1,8 @@
+2012-09-29 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/config.c, lanserv/ipmi_sim.c: Move the dynamic loading
+	to after the main part of the simulator is initialized.
+
 2012-09-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Added an internal capability to do power control.

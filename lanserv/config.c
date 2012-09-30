@@ -641,6 +641,49 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
     return 0;
 }
 
+struct dliblist {
+    char *file;
+    char *init;
+    struct dliblist *next;
+};
+
+static struct dliblist *dlibs;
+
+int
+load_dynamic_libs(sys_data_t *sys)
+{
+    struct dliblist *dlib;
+    int (*func)(sys_data_t *sys, char *initstr);
+    void *handle;
+    int err;
+
+    while (dlibs) {
+	dlib = dlibs;
+	handle = dlopen(dlib->file, RTLD_NOW | RTLD_GLOBAL);
+	if (!handle) {
+	    fprintf(stderr, "Unable to load dynamic library %s: %s\n",
+		    dlib->file, dlerror());
+	    return EINVAL;
+	}
+
+	func = dlsym(handle, "ipmi_sim_module_init");
+	if (func) {
+	    err = func(sys, dlib->init);
+	    if (err) {
+		fprintf(stderr, "Error from module %s init: %s\n",
+			dlib->file, strerror(err));
+		return EINVAL;
+	    }
+	}
+	dlibs = dlib->next;
+	free(dlib->file);
+	free(dlib->init);
+	free(dlib);
+    }
+
+    return 0;
+}
+
 int
 read_config(sys_data_t *sys,
 	    char       *config_file)
@@ -703,30 +746,34 @@ read_config(sys_data_t *sys,
 	    err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
 	} else if (strcmp(tok, "loadlib") == 0) {
 	    char *library = NULL, *initstr = NULL;
-	    void *handle = NULL;
+	    struct dliblist *dlib, *dlibp;
+
 	    err = get_delim_str(&tokptr, &library, &errstr);
 	    if (!err)
 		err = get_delim_str(&tokptr, &initstr, &errstr);
-	    if (!err) {
-		handle = dlopen(library, RTLD_NOW | RTLD_GLOBAL);
-		if (!handle) {
-		    err = EINVAL;
-		    errstr = dlerror();
+	    dlib = malloc(sizeof(*dlib));
+	    if (!dlib) {
+		err = ENOMEM;
+		errstr = "Out of memory";
+	    } else {
+		dlib->file = library;
+		dlib->init = initstr;
+		dlib->next = NULL;
+		if (!dlibs) {
+		    dlibs = dlib;
+		} else {
+		    dlibp = dlibs;
+		    while (dlibp->next)
+			dlibp = dlibp->next;
+		    dlibp->next = dlib;
 		}
 	    }
-	    if (!err) {
-		int (*func)(sys_data_t *sys, char *initstr);
-		func = dlsym(handle, "ipmi_sim_module_init");
-		if (func) {
-		    err = func(sys, initstr);
-		    if (err)
-			errstr = "Error returned from module init";
-		}
+	    if (err) {
+		if (library)
+		    free(library);
+		if (initstr)
+		    free(initstr);
 	    }
-	    if (library)
-		free(library);
-	    if (initstr)
-		free(initstr);
 	} else if (strcmp(tok, "set_working_mc") == 0) {
 	    unsigned char ipmb;
 	    err = get_uchar(&tokptr, &ipmb, &errstr);

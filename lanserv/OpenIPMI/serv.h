@@ -460,6 +460,7 @@ int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 
 int read_config(sys_data_t    *sys,
 		char          *config_file);
+int load_dynamic_libs(sys_data_t *sys);
 
 void debug_log_raw_msg(sys_data_t *sys,
 		       unsigned char *data, unsigned int len,

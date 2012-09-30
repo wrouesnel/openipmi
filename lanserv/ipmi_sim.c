@@ -1389,6 +1389,10 @@ main(int argc, const char *argv[])
 	goto out;
     }
 
+    err = load_dynamic_libs(&sysinfo);
+    if (err)
+	goto out;
+
     if (!command_file) {
 	FILE *tf;
 	command_file = malloc(strlen(BASE_CONF_STR) + 6 + strlen(sysinfo.name));
