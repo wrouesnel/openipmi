@@ -3,6 +3,8 @@
 	* lanserv/config.c, lanserv/ipmi_sim.c: Move the dynamic loading
 	to after the main part of the simulator is initialized.
 
+	* lanserv/sol.c: Print the right pid if the device is UUCP locked.
+
 2012-09-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Added an internal capability to do power control.

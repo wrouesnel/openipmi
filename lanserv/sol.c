@@ -463,9 +463,7 @@ uucp_mk_lock(sys_data_t *sys, char *devname)
 		unlink(lck_file);
 		sleep(1);
 		pid = 0;
-	    } else
-		pid = 1;
-
+	    }
 	}
 
 	if (pid == 0) {
