@@ -68,6 +68,12 @@
 #include <OpenIPMI/msg.h>
 #include <OpenIPMI/mcserv.h>
 
+#ifndef __GNUC__
+#  ifndef __attribute__
+#    define  __attribute__(x)  /*NOTHING*/
+#  endif
+#endif
+
 typedef void (*handle_oem_cb)(channel_t *chan, void *cb_data);
 typedef struct oem_handler_s
 {
@@ -143,7 +149,8 @@ struct channel_s
     unsigned int channel_num;
 
     /* Used by channel code. */
-    void (*log)(channel_t *chan, int logtype, msg_t *msg, char *format, ...);
+    void (*log)(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+	__attribute__ ((__format__ (__printf__, 4, 5)));
 
     int (*smi_send)(channel_t *chan, msg_t *msg);
     void *(*alloc)(channel_t *chan, int size);
@@ -324,7 +331,8 @@ struct sys_data_s {
 #define INFO				10
 #define DEBUG				11
 #define SETUP_ERROR			12
-    void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...);
+    void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...)
+	__attribute__ ((__format__ (__printf__, 4, 5)));
 
     /* Console port.  Length is zero if not set. */
     sockaddr_ip_t console_addr;

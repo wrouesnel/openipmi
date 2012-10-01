@@ -263,7 +263,7 @@ debug_log_raw_msg(sys_data_t *sys,
     for (i = 0; i < len; i++)
 	pos += sprintf(str + pos, " %2.2x", data[i]);
 
-    sys->log(sys, DEBUG, NULL, str);
+    sys->log(sys, DEBUG, NULL, "%s", str);
     free(str);
 }
 

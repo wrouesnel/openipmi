@@ -275,7 +275,7 @@ raw_send(lanserv_data_t *lan,
 			       ((unsigned char *) vec[i].iov_base)[j]);
 	}
 
-	lan->sysinfo->log(lan->sysinfo, DEBUG, NULL, str);
+	lan->sysinfo->log(lan->sysinfo, DEBUG, NULL, "%s", str);
 	free(str);
     }
  send:
@@ -2628,7 +2628,7 @@ handle_rakp1_payload(lanserv_data_t *lan, msg_t *msg)
     user = find_user(lan, username, name_only_lookup, priv);
     if (!user) {
 	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
-		 "RAKP msg: invalid user: %s", user);
+		 "RAKP msg: invalid user: %s", username);
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
     }

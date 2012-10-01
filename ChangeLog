@@ -1,3 +1,10 @@
+2012-10-01 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/serv.h: Add printf attribute to the log functions.
+
+	* lanserv/serv.c, lanserv/lanserv_ipmi.c: Fix problems with log
+	function attributes being wrong.
+
 2012-09-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/config.c, lanserv/ipmi_sim.c: Move the dynamic loading
