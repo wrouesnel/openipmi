@@ -938,6 +938,7 @@ debug_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 quit(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
+    fflush(stdout);
     ipmi_emu_shutdown(emu);
     return 0;
 }

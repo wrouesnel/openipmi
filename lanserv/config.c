@@ -257,6 +257,7 @@ mystrtok(char *str, const char *delim, char **next)
 	const char *c = delim;
 	if (*curr == '\0') {
 	    *next = curr;
+	    goto out;
 	}
 	while (*c != '\0') {
 	    if (*c == *curr) {
@@ -585,6 +586,8 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
     int          rv;
     char         *tok;
 
+    sys->sol->use_rtscts = 1;
+
     rv = get_delim_str(tokptr, &sys->sol->device, err);
     if (rv)
 	return rv;
@@ -630,6 +633,8 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
 		*err = "Cannot set frudata handler";
 		return -1;
 	    }
+	} else if (strncmp(tok, "nortscts", 8) == 0) {
+	    sys->sol->use_rtscts = 0;
 	} else {
 	    *err = "Invalid item";
 	    return -1;

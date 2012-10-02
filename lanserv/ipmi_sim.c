@@ -287,7 +287,6 @@ lan_channel_init(void *info, channel_t *chan)
     misc_data_t *data = info;
     lanserv_data_t *lan = chan->chan_info;
     int err;
-    unsigned int i;
     int lan_fd;
     os_hnd_fd_id_t *fd_id;
     unsigned char addr_data[6];
@@ -326,7 +325,7 @@ lan_channel_init(void *info, channel_t *chan)
     lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
 			 lan->lan_addr.addr_len);
     if (lan_fd == -1) {
-	fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+	fprintf(stderr, "Unable to open LAN address\n");
 	exit(1);
     }
 
@@ -1340,10 +1339,10 @@ main(int argc, const char *argv[])
     } else {
 	stdio_console.out.printf = emu_printf;
 	stdio_console.out.data = &stdio_console;
-	stdio_console.next = NULL;
-	stdio_console.prev = NULL;
-	data.consoles = &stdio_console;
     }
+    stdio_console.next = NULL;
+    stdio_console.prev = NULL;
+    data.consoles = &stdio_console;
 
     err = ipmi_mc_alloc_unconfigured(&sysinfo, 0x20, &mc);
     if (err) {

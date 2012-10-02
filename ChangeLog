@@ -1,3 +1,11 @@
+2012-10-02 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/sol.c, lanserv/config.c: Add a way to disable RTS/CTS
+	handling on the port.
+
+	* lanserv/sol.c: Fix a bug handling data when the buffer gets
+	full.
+
 2012-10-01 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h: Add printf attribute to the log functions.

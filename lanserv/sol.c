@@ -96,6 +96,7 @@ struct soldata_s {
     char in_nack;
     char read_enabled;
     char write_enabled;
+    char waiting_ack;
 
     int last_acked_packet;
     int last_acked_packet_len;
@@ -532,7 +533,10 @@ devinit(ipmi_sol_t *sol, struct termios *termctl)
     termctl->c_cflag |= CLOCAL;
     termctl->c_cflag &= ~(HUPCL);
     termctl->c_cflag |= CREAD;
-    termctl->c_cflag |= CRTSCTS;
+    if (sol->use_rtscts)
+	termctl->c_cflag |= CRTSCTS;
+    else
+	termctl->c_cflag &= ~(CRTSCTS);
     termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
     termctl->c_iflag |= IGNBRK;
 
@@ -598,6 +602,7 @@ send_data(ipmi_sol_t *sol, int need_send_ack)
     memcpy(data + 4, sd->outbuf, sd->outlen);
     msg.data = data;
     msg.data_len = sd->outlen + 4;
+    sd->waiting_ack = 1;
 
     sd->channel->return_rsp(sd->channel, &sd->dummy_send_msg, &msg);
 }
@@ -620,12 +625,11 @@ send_ack(ipmi_sol_t *sol)
 }
 
 static void
-clear_outbuf(soldata_t *sd)
+next_seq(soldata_t *sd)
 {
     sd->curr_packet_seq++;
     if (sd->curr_packet_seq >= 16)
 	sd->curr_packet_seq = 1;
-    sd->outlen = 0;
 }
 
 static void
@@ -636,7 +640,9 @@ sol_timeout(void *cb_data)
     struct timeval tv;
 
     if (sd->num_sends > MAX_SOL_RESENDS) {
-	clear_outbuf(sd);
+	sd->waiting_ack = 0;
+	next_seq(sd);
+	sd->outlen = 0;
 	return;
     }
 
@@ -656,6 +662,7 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
     unsigned char *data;
     unsigned int len;
     int need_send_ack = 0;
+    struct timeval tv;
 
     if (!sol->active || msg->len < 4)
 	return;
@@ -691,27 +698,41 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
     }
 
     if (ack == sd->curr_packet_seq) {
+	next_seq(sd);
+	sd->sys->stop_timer(sd->timer);
 	if (isnack) {
 	    sd->in_nack = 1;
 	    set_read_enable(sd);
 	} else {
 	    sd->in_nack = 0;
-	    set_read_enable(sd);
-	    if (count != sd->outlen) {
+	    if (count < sd->outlen) {
+		unsigned int i;
+		len = sd->outlen - count;
+		for (i = 0; i < len; i++)
+		    sd->outbuf[i] = sd->outbuf[i + count];
+		sd->outlen = len;
+		
 		send_data(sol, need_send_ack);
 		need_send_ack = 0;
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+		sd->sys->start_timer(sd->timer, &tv);
 	    } else {
-		clear_outbuf(sd);
+		sd->waiting_ack = 0;
+		sd->outlen = 0;
 	    }
+	    set_read_enable(sd);
 	}
-	sd->sys->stop_timer(sd->timer);
     }
 
     if (need_send_ack)
 	send_ack(sol);
 
-    if (flush_out)
-	clear_outbuf(sd);
+    if (flush_out) {
+	sd->waiting_ack = 0;
+	next_seq(sd);
+	sd->outlen = 0;
+    }
 
     if (flush_in)
 	sd->inlen = 0;
@@ -964,7 +985,7 @@ sol_data_ready(int fd, void *cb_data)
     int rv;
     struct timeval tv;
 
-    rv = read(fd, sd->outbuf, sizeof(sd->outbuf) - sd->outlen);
+    rv = read(fd, sd->outbuf + sd->outlen, sizeof(sd->outbuf) - sd->outlen);
     if (rv < 0) {
 	sd->channel->log(sd->channel, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
@@ -986,11 +1007,14 @@ sol_data_ready(int fd, void *cb_data)
 
     /* Looks strange, but will turn off read if the buffer is full */
     set_read_enable(sd);
-    send_data(sol, 0);
-    sd->num_sends = 0;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    sd->sys->start_timer(sd->timer, &tv);
+
+    if (!sd->waiting_ack) {
+	send_data(sol, 0);
+	sd->num_sends = 0;
+	tv.tv_sec = 1;
+	tv.tv_usec = 0;
+	sd->sys->start_timer(sd->timer, &tv);
+    }
 }
 
 int
