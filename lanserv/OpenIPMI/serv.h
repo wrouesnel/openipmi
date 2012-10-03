@@ -304,7 +304,12 @@ struct startcmd_s {
     int wait_poweroff;
 };
 
-#define IPMI_MAX_MCS 128
+/*
+ * Note that we keep odd addresses, too.  In some cases that's useful
+ * in virtual systems that don't have I2C restrictions.
+ */
+#define IPMI_MAX_MCS 256
+
 /*
  * Generic data about the system that is global for the whole system and
  * required for all server types.
@@ -313,7 +318,7 @@ struct sys_data_s {
     char *name;
 
     /* The MCs in the system */
-    lmc_data_t *ipmb[IPMI_MAX_MCS];
+    lmc_data_t *ipmb_addrs[IPMI_MAX_MCS];
 
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)

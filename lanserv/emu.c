@@ -6005,7 +6005,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    }
 	}
 	slave = data[0];
-	mc = emu->sysinfo->ipmb[slave >> 1];
+	mc = emu->sysinfo->ipmb_addrs[slave];
 	if (!mc || !mc->enabled) {
 	    ordata[0] = 0x83; /* NAK on Write */
 	    *ordata_len = 1;
@@ -6471,13 +6471,7 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
     lmc_data_t *mc;
     unsigned int i;
     
-    if (ipmb & 1) {
-	sys->log(sys, SETUP_ERROR, NULL,
-		 "Odd numbered MC IPMB specified: 0x%x.", ipmb);
-	return EINVAL;
-    }
-
-    mc = sys->ipmb[ipmb >> 1];
+    mc = sys->ipmb_addrs[ipmb];
     if (mc) {
 	if (mc->configured) {
 	    sys->log(sys, SETUP_ERROR, NULL,
@@ -6492,7 +6486,7 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 	return ENOMEM;
     memset(mc, 0, sizeof(*mc));
     mc->ipmb = ipmb;
-    sys->ipmb[ipmb >> 1] = mc;
+    sys->ipmb_addrs[ipmb] = mc;
 
     mc->startcmd.poweroff_wait_time = 60;
     mc->startcmd.kill_wait_time = 20;
@@ -6790,11 +6784,9 @@ ipmi_get_product_id(lmc_data_t *mc, unsigned char product_id[2])
 int
 ipmi_emu_get_mc_by_addr(emu_data_t *emu, unsigned char ipmb, lmc_data_t **mc)
 {
-    if (ipmb & 1)
-	return EINVAL;
-    if (!emu->sysinfo->ipmb[ipmb >> 1])
+    if (!emu->sysinfo->ipmb_addrs[ipmb])
 	return ENOSYS;
-    *mc = emu->sysinfo->ipmb[ipmb >> 1];
+    *mc = emu->sysinfo->ipmb_addrs[ipmb];
     return 0;
 }
 

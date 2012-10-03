@@ -1132,7 +1132,7 @@ sol_shutdown(sys_data_t *sys)
     unsigned int i;
 
     for (i = 0; i < IPMI_MAX_MCS; i++) {
-	lmc_data_t *mc = sys->ipmb[i];
+	lmc_data_t *mc = sys->ipmb_addrs[i];
 	ipmi_sol_t *sol;
 
 	if (!mc)

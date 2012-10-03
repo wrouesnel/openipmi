@@ -72,7 +72,7 @@ read_persist_users(sys_data_t *sys)
     unsigned int i, j;
 
     for (i = 0; i < IPMI_MAX_MCS; i++) {
-	lmc_data_t *mc = sys->ipmb[i];
+	lmc_data_t *mc = sys->ipmb_addrs[i];
 	user_t *users;
 	persist_t *p;
 	long iv;
@@ -122,7 +122,7 @@ write_persist_users(sys_data_t *sys)
     unsigned int i, j;
 
     for (i = 0; i < IPMI_MAX_MCS; i++) {
-	lmc_data_t *mc = sys->ipmb[i];
+	lmc_data_t *mc = sys->ipmb_addrs[i];
 	user_t *users;
 	persist_t *p;
 
@@ -159,7 +159,7 @@ read_sol_config(sys_data_t *sys)
     int rv;
 
     for (i = 0; i < IPMI_MAX_MCS; i++) {
-	lmc_data_t *mc = sys->ipmb[i];
+	lmc_data_t *mc = sys->ipmb_addrs[i];
 	ipmi_sol_t *sol;
 	persist_t *p;
 	long iv;

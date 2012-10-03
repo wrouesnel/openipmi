@@ -1,3 +1,15 @@
+2012-10-03 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/serv.h: Increase the number of IPMBs to 256
+	and modify the code to allow odd IPMB addresses.
+	* lanserv/config.c: ditto
+	* lanserv/emu.c: ditto
+	* lanserv/ipmi_sim.c: ditto
+	* lanserv/sol.c: ditto
+
+	* lib/Makefile.am: Remove '-L$(libdir)' from the LDFLAGS, as that
+	causes issues with cross compiling.
+
 2012-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sol.c, lanserv/config.c: Add a way to disable RTS/CTS

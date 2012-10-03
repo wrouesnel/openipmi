@@ -1418,7 +1418,7 @@ main(int argc, const char *argv[])
     if (command_string)
 	ipmi_emu_cmd(&stdio_console.out, data.emu, command_string);
 
-    if (!sysinfo.bmc_ipmb || !sysinfo.ipmb[sysinfo.bmc_ipmb >> 1]) {
+    if (!sysinfo.bmc_ipmb || !sysinfo.ipmb_addrs[sysinfo.bmc_ipmb]) {
 	sysinfo.log(&sysinfo, SETUP_ERROR, NULL,
 		    "No bmc_ipmb specified or configured.");
 	goto out;
