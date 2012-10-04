@@ -1635,6 +1635,7 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
     if (fru->get) {
 	channel_t *channel;
 	fru_session_t *ses;
+	int link_in = 0;
 
 	ses = fru->sessions;
 	while (ses) {
@@ -1652,8 +1653,7 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 	    memset(ses, 0, sizeof(*ses));
 	    ses->sid = msg->sid;
 	    ses->fru = fru;
-	    ses->next = fru->sessions;
-	    fru->sessions = ses;
+	    link_in = 1;
 	}
 
 	/* Set up to free the FRU data when the session closes. */
@@ -1685,10 +1685,15 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 	ses->data_to_free = data;
 	if (size > 65535) {
 	    ses->data = data + (size - 65535);
-	    ses->length = 65535;
+	    size = 65535;
 	} else {
 	    ses->data = data;
-	    ses->length = size;
+	}
+	ses->length = size;
+
+	if (link_in) {
+	    ses->next = fru->sessions;
+	    fru->sessions = ses;
 	}
     } else {
 	size = fru->length;
