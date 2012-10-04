@@ -172,17 +172,17 @@ read_sol_config(sys_data_t *sys)
 
 	sys->sol_present = 1;
 
+	sol->solparm.enabled = 1;
+	sol->solparm.bitrate_nonv = 0;
+
 	p = read_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
 	if (p) {
 	    if (!read_persist_int(p, &iv, "enabled"))
 		sol->solparm.enabled = iv;
-	    else
-		sol->solparm.enabled = 1;
 
 	    if (!read_persist_int(p, &iv, "bitrate"))
 		sol->solparm.bitrate_nonv = iv;
-	    else
-		sol->solparm.bitrate_nonv = 0;
+
 	    sol->solparm.bitrate = sol->solparm.bitrate_nonv;
 
 	    free_persist(p);
