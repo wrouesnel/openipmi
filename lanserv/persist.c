@@ -318,7 +318,7 @@ read_persist(const char *name, ...)
 	case PITEM_INT:
 	    pi->data = NULL;
 	    pi->dval = strtol(val, &end, 0);
-	    if (*end != '\n' || *end != '\0')
+	    if (*end != '\n' && *end != '\0')
 		goto bad_data;
 	    break;
 	case PITEM_STR:

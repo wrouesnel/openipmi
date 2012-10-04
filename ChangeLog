@@ -10,6 +10,12 @@
 	* lib/Makefile.am: Remove '-L$(libdir)' from the LDFLAGS, as that
 	causes issues with cross compiling.
 
+	* lanserv/persist.c: Fix a problem reading integet persisten
+	values.
+
+	* lanserv/sol.c, lanserv/emu.c: Fix some bugs with SOL config
+	handling.
+
 2012-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sol.c, lanserv/config.c: Add a way to disable RTS/CTS

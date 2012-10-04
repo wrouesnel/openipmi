@@ -217,6 +217,12 @@ ipmi_sol_activate(lmc_data_t    *mc,
     msg_t *dmsg;
     unsigned int instance;
 
+    if (!sol->solparm.enabled) {
+	rdata[0] = 0x81; /* Payload is disabled. */
+	*rdata_len = 1;
+	return;
+    }
+
     /*
      * FIXME - we are currently ignoring all the payload encryption and
      * authentication bits in the message.

@@ -3357,7 +3357,6 @@ handle_set_sol_config_parms(lmc_data_t    *mc,
 			    unsigned char *rdata,
 			    unsigned int  *rdata_len)
 {
-    unsigned char chan;
     unsigned char err = 0;
     unsigned char val;
     int write_config = 0;
@@ -3375,22 +3374,10 @@ handle_set_sol_config_parms(lmc_data_t    *mc,
     }
 
     /*
-     * I am not sure of the point of the channel, as there is nothing
-     * aobut SOL associated with it, but at least validate it.
+     * There is a channel in this message, but as far as I can tell,
+     * it is completely without point.  The data is generic to the
+     * management controller.  So just ignore it.
      */
-    chan = msg->data[0];
-    if (chan == 0xe)
-	chan = msg->channel;
-    else if (chan >= IPMI_MAX_CHANNELS) {
-	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	*rdata_len = 1;
-	return;
-    }
-    if (!mc->channels[chan]) {
-	rdata[0] = IPMI_NOT_PRESENT_CC;
-	*rdata_len = 1;
-	return;
-    }
 
     switch (msg->data[1]) {
     case 0:
@@ -3467,7 +3454,6 @@ handle_get_sol_config_parms(lmc_data_t    *mc,
 			    unsigned char *rdata,
 			    unsigned int  *rdata_len)
 {
-    unsigned char chan;
     ipmi_sol_t *sol = &mc->sol;
     unsigned char databyte = 0;
 
@@ -3483,22 +3469,10 @@ handle_get_sol_config_parms(lmc_data_t    *mc,
     }
 
     /*
-     * I am not sure of the point of the channel, as there is nothing
-     * aobut SOL associated with it, but at least validate it.
+     * There is a channel in this message, but as far as I can tell,
+     * it is completely without point.  The data is generic to the
+     * management controller.  So just ignore it.
      */
-    chan = msg->data[0];
-    if (chan == 0xe)
-	chan = msg->channel;
-    else if (chan >= IPMI_MAX_CHANNELS) {
-	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	*rdata_len = 1;
-	return;
-    }
-    if (!mc->channels[chan]) {
-	rdata[0] = IPMI_NOT_PRESENT_CC;
-	*rdata_len = 1;
-	return;
-    }
 
     switch (msg->data[1]) {
     case 0:
@@ -3519,7 +3493,7 @@ handle_get_sol_config_parms(lmc_data_t    *mc,
 
     default:
 	rdata[0] = 0x80; /* Parm not supported */
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
@@ -6082,6 +6056,10 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	ordata[0] = 0;
 	*ordata_len = 1;
 
+	if (emu->sysinfo->debug & DEBUG_MSG)
+	    debug_log_raw_msg(emu->sysinfo, rdata, *rdata_len,
+			      "Response message:");
+
 	rmsg->len += 6;
 	rmsg->data[rmsg->len] = ipmb_checksum(rmsg->data, rmsg->len, 0);
 	rmsg->len += 1;
@@ -6097,8 +6075,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    if (bchan->set_atn)
 		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
 	}
-    }
-    if (emu->sysinfo->debug & DEBUG_MSG)
+    } else if (emu->sysinfo->debug & DEBUG_MSG)
 	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
 			  "Response message:");
 }
