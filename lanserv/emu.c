@@ -256,10 +256,11 @@ struct lmc_data_s
 
     ipmi_sol_t sol;
 
-    int (*chassis_control_set_func)(lmc_data_t *mc, int op, unsigned char val,
+    int (*chassis_control_set_func)(lmc_data_t *mc, int op, unsigned char *val,
 				    void *cb_data);
     int (*chassis_control_get_func)(lmc_data_t *mc, int op, unsigned char *val,
 				    void *cb_data);
+    ipmi_timer_t *power_timer;
     void *chassis_control_cb_data;
     char *chassis_control_prog;
 
@@ -373,6 +374,72 @@ ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
 	emu->users_changed = 0;
 	write_persist_users(emu->sysinfo);
     }
+}
+
+static extcmd_map_t boot_map[] = {
+    { 0, "none" },
+    { 1, "pxe" },
+    { 2, "default" },
+    { 0, NULL }
+};
+
+/* Matches the CHASSIS_CONTROL defines. */
+static extcmd_info_t chassis_prog[] = {
+    { "power", extcmd_int, NULL, 0 },
+    { "reset", extcmd_int, NULL, 0 },
+    { "boot", extcmd_uchar, boot_map, 0 },
+};
+
+static int
+set_power(lmc_data_t *mc, int pval)
+{
+    int rv;
+
+    if (mc->chassis_control_set_func) {
+	unsigned char val = !!pval;
+	rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_POWER, &val,
+					  mc->chassis_control_cb_data);
+    } else if (mc->chassis_control_prog) {
+	int val = !!pval;
+	if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			   &chassis_prog[CHASSIS_CONTROL_POWER], NULL, 1)) 
+	    rv = EINVAL;
+    } else if (HW_OP_CAN_POWER(mc->channels[15])) {
+	if (pval)
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
+	else
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
+    } else
+	return ENOTSUP;
+    return 0;
+}
+
+static void
+power_timeout(void *cb_data)
+{
+    lmc_data_t *mc = cb_data;
+
+    mc->sysinfo->free_timer(mc->power_timer);
+    mc->power_timer = NULL;
+    set_power(mc, 1);
+}
+
+static int
+start_poweron_timer(lmc_data_t *mc)
+{
+    int rv;
+    struct timeval tv = { 1, 0 };
+
+    if (mc->power_timer)
+	return 0;
+
+    rv = mc->sysinfo->alloc_timer(mc->sysinfo, power_timeout,
+				  mc, &mc->power_timer);
+    if (rv)
+	return rv;
+    
+    mc->sysinfo->start_timer(mc->power_timer, &tv);
+    return 0;
 }
 
 int
@@ -2056,7 +2123,7 @@ watchdog_timeout(void *cb_data)
     case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
 	set_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
-	/* FIXME - add poweron. */
+	start_poweron_timer(mc);
 	break;
     }
 
@@ -2976,20 +3043,6 @@ handle_get_chassis_capabilities(lmc_data_t    *mc,
     rdata[5] = mc->sysinfo->bmc_ipmb;
 }
 
-static extcmd_map_t boot_map[] = {
-    { 0, "none" },
-    { 1, "pxe" },
-    { 2, "default" },
-    { 0, NULL }
-};
-
-/* Matches the CHASSIS_CONTROL defines. */
-static extcmd_info_t chassis_prog[] = {
-    { "power", extcmd_int, NULL, 0 },
-    { "reset", extcmd_int, NULL, 0 },
-    { "boot", extcmd_uchar, boot_map, 0 },
-};
-
 static void
 handle_get_chassis_status(lmc_data_t    *mc,
 			  msg_t         *msg,
@@ -3031,6 +3084,8 @@ handle_chassis_control(lmc_data_t    *mc,
 		       unsigned char *rdata,
 		       unsigned int  *rdata_len)
 {
+    int rv;
+
     if (msg->len < 1) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	*rdata_len = 1;
@@ -3042,57 +3097,49 @@ handle_chassis_control(lmc_data_t    *mc,
 
     switch(msg->data[0] & 0xf) {
     case 0: /* power down */
-	if (mc->chassis_control_set_func) {
-	    int rv;
-	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_POWER, 0,
-					      mc->chassis_control_cb_data);
-	    if (rv) {
-		rdata[0] = IPMI_UNKNOWN_ERR_CC;
-		*rdata_len = 1;
-		return;
-	    }
-	} else if (mc->chassis_control_prog) {
-	    int val = 0;
-	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
-			       &chassis_prog[CHASSIS_CONTROL_POWER], NULL, 1)) {
-		rdata[0] = IPMI_UNKNOWN_ERR_CC;
-		*rdata_len = 1;
-		return;
-	    }
-	} else if (HW_OP_CAN_POWER(mc->channels[15]))
-	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
-	else
+	rv = set_power(mc, 0);
+	if (rv == ENOTSUP)
 	    goto no_support;
+	else if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	break;
 
     case 1: /* power up */
-	if (mc->chassis_control_set_func) {
-	    int rv;
-	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_POWER, 1,
-					      mc->chassis_control_cb_data);
-	    if (rv) {
-		rdata[0] = IPMI_UNKNOWN_ERR_CC;
-		*rdata_len = 1;
-		return;
-	    }
-	} else if (mc->chassis_control_prog) {
-	    int val = 1;
-	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
-			       &chassis_prog[CHASSIS_CONTROL_POWER], NULL, 1)) {
-		rdata[0] = IPMI_UNKNOWN_ERR_CC;
-		*rdata_len = 1;
-		return;
-	    }
-	} else if (HW_OP_CAN_POWER(mc->channels[15]))
-	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
-	else
+	rv = set_power(mc, 1);
+	if (rv == ENOTSUP)
 	    goto no_support;
+	else if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	break;
+
+    case 2: /* power cycle */
+	rv = start_poweron_timer(mc);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	rv = set_power(mc, 0);
+	if (rv == ENOTSUP)
+	    goto no_support;
+	else if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 	break;
 
     case 3: /* hard reset */
 	if (mc->chassis_control_set_func) {
 	    int rv;
-	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_RESET, 1,
+	    unsigned char val = 1;
+	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_RESET, &val,
 					      mc->chassis_control_cb_data);
 	    if (rv) {
 		rdata[0] = IPMI_UNKNOWN_ERR_CC;
@@ -3113,7 +3160,6 @@ handle_chassis_control(lmc_data_t    *mc,
 	    goto no_support;
 	break;
 
-    case 2: /* power cycle */
     case 4: /* pulse diag interrupt */
     case 5: /* initiate soft-shutdown via overtemp */
     no_support:
@@ -3160,6 +3206,29 @@ set_system_boot_options(lmc_data_t    *mc,
 	}
 	break;
 
+    case 4: /* Boot Info Ack */
+	if (msg->len < 3) {
+	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+
+	if (mc->chassis_control_set_func) {
+	    int rv;
+	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_BOOT_INFO_ACK,
+					      msg->data + 1,
+					      mc->chassis_control_cb_data);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else {
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	}
+	break;
+
     case 5: /* Boot flags */
 	if (msg->len < 6) {
 	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
@@ -3170,7 +3239,7 @@ set_system_boot_options(lmc_data_t    *mc,
 	
 	if (mc->chassis_control_set_func) {
 	    int rv;
-	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_BOOT, val,
+	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_BOOT, &val,
 					      mc->chassis_control_cb_data);
 	    if (rv) {
 		rdata[0] = IPMI_UNKNOWN_ERR_CC;
@@ -3221,6 +3290,21 @@ get_system_boot_options(lmc_data_t    *mc,
 	/* Dummy this out for now */
 	rdata[3] = 0;
 	*rdata_len = 4;
+	break;
+
+    case 4: /* Boot Info Ack */
+	if (mc->chassis_control_set_func) {
+	    int rv;
+	    rv = mc->chassis_control_get_func(mc, CHASSIS_CONTROL_BOOT,
+					      rdata + 3,
+					      mc->chassis_control_cb_data);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	    *rdata_len = 5;
+	}
 	break;
 
     case 5: /* Boot flags */
@@ -6745,7 +6829,7 @@ ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog)
 void
 ipmi_mc_set_chassis_control_func(lmc_data_t *mc,
 				 int (*set)(lmc_data_t *mc, int op,
-					    unsigned char val,
+					    unsigned char *val,
 					    void *cb_data),
 				 int (*get)(lmc_data_t *mc, int op,
 					    unsigned char *val,

@@ -1,3 +1,9 @@
+2012-10-05 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c, lanserv/OpenIPMI/mcserv.h: Reworked the chassis
+	control function a bit to make it more flexible.  Added power
+	cycle capability.
+
 2012-10-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Fix a problem handling FRU data that is larger

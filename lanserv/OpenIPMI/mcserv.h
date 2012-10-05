@@ -264,9 +264,10 @@ int ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
 #define CHASSIS_CONTROL_POWER 0
 #define CHASSIS_CONTROL_RESET 1
 #define CHASSIS_CONTROL_BOOT  2
+#define CHASSIS_CONTROL_BOOT_INFO_ACK  3
 void ipmi_mc_set_chassis_control_func(lmc_data_t *mc,
 				      int (*set)(lmc_data_t *mc, int op,
-						 unsigned char val,
+						 unsigned char *val,
 						 void *cb_data),
 				      int (*get)(lmc_data_t *mc, int op,
 						 unsigned char *val,
