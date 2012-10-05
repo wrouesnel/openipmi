@@ -1244,7 +1244,8 @@ main(int argc, const char *argv[])
     struct sigaction act;
     os_hnd_fd_id_t *conid;
     lmc_data_t *mc;
-	
+
+    printf("Starting IPMI Simulator version %s\n", PVERSION);
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
 	switch (i) {

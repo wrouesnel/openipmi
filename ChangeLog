@@ -4,6 +4,9 @@
 	control function a bit to make it more flexible.  Added power
 	cycle capability.
 
+	* lanserv/Makefile.am, lanserv/ipmi_sim.c: Add a version number to
+	the simulator.
+
 2012-10-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Fix a problem handling FRU data that is larger

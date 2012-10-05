@@ -2,8 +2,10 @@
 LIB_VERSION = 0.0.1
 LD_VERSION = 0:1:0
 
+PVERSION="1.0.0"
+
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
-	$(OPENSSLINCS)
+	$(OPENSSLINCS) -DPVERSION="\"$(PVERSION)\""
 
 AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"' -DSTATEDIR='"$(localstatedir)"'
 
