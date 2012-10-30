@@ -635,6 +635,8 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
 	    }
 	} else if (strncmp(tok, "nortscts", 8) == 0) {
 	    sys->sol->use_rtscts = 0;
+	} else if (strncmp(tok, "noreadclear", 8) == 0) {
+	    sys->sol->noreadclear = 1;
 	} else {
 	    *err = "Invalid item";
 	    return -1;

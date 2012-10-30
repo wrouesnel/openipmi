@@ -3,6 +3,10 @@
 	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c: Add a gen_rand
 	function to the sys_data_t structure.
 
+	* lanserv/OpenIPMI/mcserv.h, lanserv/sol.c, lanserv/config.c:
+	By default clear the SOL history buffer after it is read, but
+	add a parameter to not clear it.
+
 2012-10-05 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c, lanserv/OpenIPMI/mcserv.h: Reworked the chassis

@@ -183,6 +183,12 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
     memcpy(dest + size, end_history_msg, endmsg_size);
     size += endmsg_size;
     *rsize = size;
+
+    if (!sol->noreadclear) {
+	sd->history_start = 0;
+	sd->history_end = 0;
+    }
+
     return dest;
 }
 
