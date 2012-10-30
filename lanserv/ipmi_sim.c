@@ -184,6 +184,12 @@ gen_rand(lanserv_data_t *lan, void *data, int len)
     return rv;
 }
 
+static int
+sys_gen_rand(sys_data_t *lan, void *data, int len)
+{
+    gen_rand(NULL, data, len);
+}
+
 static void
 lan_send(lanserv_data_t *lan,
 	 struct iovec *data, int vecs,
@@ -1290,6 +1296,7 @@ main(int argc, const char *argv[])
     sysinfo.io_set_hnds = ipmi_io_set_hnds;
     sysinfo.io_set_enables = ipmi_io_set_enables;
     sysinfo.remove_io_hnd = ipmi_remove_io_hnd;
+    sysinfo.gen_rand = sys_gen_rand;
     sysinfo.debug = debug;
     sysinfo.log = sim_log;
     sysinfo.csmi_send = smi_send;

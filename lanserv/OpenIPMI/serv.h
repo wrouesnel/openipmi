@@ -379,6 +379,8 @@ struct sys_data_s {
 			void (*except_hnd)(int fd, void *cb_data));
     void (*io_set_enables)(ipmi_io_t *io, int read, int write, int except);
 
+    int (*gen_rand)(sys_data_t *sys, void *data, int len);
+
     /* Called by interface code to report that the target did a reset. */
     /* FIXME - move */
     void (*target_reset)(sys_data_t *sys);
