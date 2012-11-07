@@ -246,7 +246,7 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
     size += endmsg_size;
     *rsize = size;
 
-    if (!sol->noreadclear) {
+    if (sol->readclear) {
 	sd->history_start = 0;
 	sd->history_end = 0;
     }
@@ -1147,8 +1147,8 @@ sol_read_config(char **tokptr, sys_data_t *sys, char **err)
 	    }
 	} else if (strncmp(tok, "nortscts", 8) == 0) {
 	    sys->sol->use_rtscts = 0;
-	} else if (strncmp(tok, "noreadclear", 8) == 0) {
-	    sys->sol->noreadclear = 1;
+	} else if (strncmp(tok, "readclear", 8) == 0) {
+	    sys->sol->readclear = 1;
 	} else {
 	    *err = "Invalid item";
 	    return -1;

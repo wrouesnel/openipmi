@@ -1,3 +1,8 @@
+2012-11-07 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/mcserv.h, lanserv/sol.c, lanserv/lan.conf:
+	Change noreadclear to readclear.
+
 2012-11-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/Makefile.am, lanserv/sol.c, lanserv/config.c: Move the

@@ -89,7 +89,7 @@ typedef struct ipmi_sol_s {
     uint32_t history_session_id;
 
     int use_rtscts;
-    int noreadclear;
+    int readclear;
 
     soldata_t *soldata;
 } ipmi_sol_t;
