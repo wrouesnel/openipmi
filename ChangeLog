@@ -1,3 +1,17 @@
+2012-11-06 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/Makefile.am, lanserv/sol.c, lanserv/config.c: Move the
+	sol code to only be compiled into ipmi_sim, not the lanserv
+	command.
+
+	* lanserv/emu.c, lanserv/OpenIPMI/mcserv.h: Add an IANA handler
+	and a handler for the OpenIPMI-specific IANA and allow other
+	parts of the system to register commands against it.
+
+	* lanserv/sol.c: Add a new command to limit the size fetched from
+	the SOL history buffer.
+
+
 2012-10-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h, lanserv/ipmi_sim.c: Add a gen_rand

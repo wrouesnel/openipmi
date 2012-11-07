@@ -48,6 +48,8 @@
 
 static void ipmi_mc_start_cmd(lmc_data_t *mc);
 
+#define OPENIPMI_IANA		4753 /* MontaVista's number for now */
+
 #define WATCHDOG_SENSOR_NUM 0
 
 typedef struct sel_entry_s
@@ -5989,6 +5991,120 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 	return -csum;
 }
 
+static struct iana_handler_elem {
+    uint32_t iana;
+    cmd_handler_f handler;
+    struct iana_handler_elem *next;
+} *iana_handlers;
+
+static struct iana_handler_elem *find_iana(uint32_t iana)
+{
+    struct iana_handler_elem *p = iana_handlers;
+
+    while (p) {
+	if (p->iana == iana)
+	    return p;
+	p = p->next;
+    }
+    return NULL;
+}
+
+int
+ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler)
+{
+    struct iana_handler_elem *p;
+
+    if (iana > 0xffffff)
+	return EINVAL;
+    if (find_iana(iana))
+	return EAGAIN;
+    p = malloc(sizeof(*p));
+    if (!p)
+	return ENOMEM;
+    p->iana = iana;
+    p->handler = handler;
+    p->next = iana_handlers;
+    iana_handlers = p;
+    return 0;
+}
+
+static void
+handle_iana_netfn(lmc_data_t    *mc,
+		  msg_t         *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len)
+{
+    struct iana_handler_elem *p;
+    uint32_t iana;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    iana = msg->data[0] | (msg->data[1] << 8) | (msg->data[2] << 16);
+    p = find_iana(iana);
+    if (!p) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    p->handler(mc, msg, rdata, rdata_len);
+}
+
+static struct oi_iana_cmd_elem {
+    uint8_t cmd;
+    cmd_handler_f handler;
+    struct oi_iana_cmd_elem *next;
+} *oi_iana_cmds;
+
+static struct oi_iana_cmd_elem *find_oi_iana(uint8_t cmd)
+{
+    struct oi_iana_cmd_elem *p = oi_iana_cmds;
+
+    while (p) {
+	if (p->cmd == cmd)
+	    return p;
+	p = p->next;
+    }
+    return NULL;
+}
+
+static void handle_oi_iana_cmd(lmc_data_t    *mc,
+			       msg_t         *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    struct oi_iana_cmd_elem *p;
+
+    p = find_oi_iana(msg->cmd);
+    if (!p) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    p->handler(mc, msg, rdata, rdata_len);
+}
+
+int
+ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler)
+{
+    struct oi_iana_cmd_elem *p;
+    int rv;
+
+    if (find_oi_iana(cmd))
+	return EAGAIN;
+    rv = ipmi_emu_register_iana_handler(OPENIPMI_IANA, handle_oi_iana_cmd);
+    if (rv != 0 && rv != EAGAIN)
+	return rv;
+    p = malloc(sizeof(*p));
+    if (!p)
+	return ENOMEM;
+    p->cmd = cmd;
+    p->handler = handler;
+    p->next = oi_iana_cmds;
+    oi_iana_cmds = p;
+    return 0;
+}
+
 typedef struct netfn_handler_s {
     cmd_handler_f *handlers;
     cmd_handler_f main_handler;
@@ -6003,6 +6119,7 @@ static netfn_handler_t netfn_handlers[32] = {
     [IPMI_TRANSPORT_NETFN >> 1] = { .handlers = transport_netfn_handlers },
     [IPMI_SENSOR_EVENT_NETFN >> 1] = { .handlers = sensor_event_netfn_handlers },
     [IPMI_GROUP_EXTENSION_NETFN >> 1] = { .main_handler = handle_group_extension_netfn },
+    [IPMI_OEM_GROUP_NETFN >> 1] = { .main_handler = handle_iana_netfn },
     [0x30 >> 1] = { .handlers = oem0_netfn_handlers }
 };
 

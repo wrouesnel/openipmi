@@ -221,6 +221,7 @@ void read_persist_users(sys_data_t *sys);
 int write_persist_users(sys_data_t *sys);
 int read_sol_config(sys_data_t *sys);
 int write_sol_config(lmc_data_t *mc);
+int sol_read_config(char **tokptr, sys_data_t *sys, char **err);
 
 int ipmi_mc_users_changed(lmc_data_t *mc);
 
@@ -233,6 +234,11 @@ typedef void (*cmd_handler_f)(lmc_data_t    *mc,
 			      unsigned int  *rdata_len);
 int ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 				  cmd_handler_f handler);
+int ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler);
+int ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler);
+
+#define OPENIPMI_IANA_CMD_SET_HISTORY_RETURN_SIZE	1
+#define OPENIPMI_IANA_CMD_GET_HISTORY_RETURN_SIZE	2
 
 /*
  * SOL handling

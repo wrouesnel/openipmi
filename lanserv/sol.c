@@ -31,6 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -46,6 +47,7 @@
 #include <OpenIPMI/lanserv.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/persist.h>
 
 /* FIXME - move to configure handling */
 #define USE_UUCP_LOCKING
@@ -80,6 +82,13 @@ struct soldata_s {
     int history_start;
     int history_end;
 
+    /*
+     * The amount of actual history to store when the copy request happens.
+     * If zero, this is ignored.  This is guaranteed to be <= history_size.
+     * If this is non-zero, this is the 
+     */
+    unsigned int history_return_size;
+
     /* A copy of the history, used for reliable streaming. */
     unsigned char *history_copy;
     unsigned int history_copy_size;
@@ -111,6 +120,44 @@ static char *end_history_msg = "\r\n<End Of History>\r\n";
 #define MAX_SOL_RESENDS 4
 static void sol_timeout(void *cb_data);
 static void sol_history_timeout(void *cb_data);
+
+static void sol_set_history_return_size(lmc_data_t    *mc,
+					msg_t         *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
+    unsigned int size;
+
+    if (msg->len < 4) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    size = msg->data[3] * 1024;
+    if (size >= sol->history_size || size == 0)
+	sd->history_return_size = 0;
+    else
+	sd->history_return_size = size;
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void sol_get_history_return_size(lmc_data_t    *mc,
+					msg_t         *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
+
+    rdata[0] = 0;
+    rdata[1] = sd->history_return_size / 1024;
+    *rdata_len = 2;
+}
 
 static void
 reset_modem_state(ipmi_sol_t *sol)
@@ -164,22 +211,37 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
     unsigned int to_copy;
     unsigned int endmsg_size = strlen(end_history_msg);
     unsigned char *dest = sd->sys->alloc(sd->sys,
-					  sol->history_size + endmsg_size);
+					 sol->history_size + endmsg_size);
     unsigned int size;
+    int start;
 
     if (!dest)
 	return NULL;
-    if (sd->history_start > sd->history_end) {
-	/* Buffer is filled, copy in two chunks. */
-	to_copy = sol->history_size - sd->history_start;
-	memcpy(dest + to_copy, sd->history, sd->history_end + 1);
+
+    if (sd->history_start > sd->history_end)
+	/* Buffer is filled. */
 	size = sol->history_size;
+    else
+	/* Buffer is not yet filled, just runs from start to end */
+	size = sd->history_end - sd->history_start + 1;
+
+    start = sd->history_start;
+    if (sd->history_return_size && (size > sd->history_return_size)) {
+	start += size - sd->history_return_size;
+	if (start >= (int) sol->history_size)
+	    start -= sol->history_size;
+	size = sd->history_return_size;
+    }
+
+    if (start > sd->history_end) {
+	/* Buffer spans end, copy in two chunks. */
+	to_copy = sol->history_size - start;
+	memcpy(dest + to_copy, sd->history, sd->history_end + 1);
     } else {
 	/* Buffer is not yet filled, just runs from start to end */
-	to_copy = sd->history_end - sd->history_start + 1;
-	size = to_copy;
+	to_copy = sd->history_end - start + 1;
     }
-    memcpy(dest, sd->history + sd->history_start, to_copy);
+    memcpy(dest, sd->history + start, to_copy);
     memcpy(dest + size, end_history_msg, endmsg_size);
     size += endmsg_size;
     *rsize = size;
@@ -1030,8 +1092,156 @@ sol_data_ready(int fd, void *cb_data)
 }
 
 int
+sol_read_config(char **tokptr, sys_data_t *sys, char **err)
+{
+    unsigned int val;
+    int          rv;
+    char         *tok;
+
+    sys->sol->use_rtscts = 1;
+
+    rv = get_delim_str(tokptr, &sys->sol->device, err);
+    if (rv)
+	return rv;
+
+    rv = get_uint(tokptr, &val, err);
+    if (rv)
+	return rv;
+    switch (val) {
+    case 9600: val = 6; break;
+    case 19200: val = 7; break;
+    case 38400: val = 8; break;
+    case 57600: val = 9; break;
+    case 115200: val = 10; break;
+    default:
+	*err = "Invalid bitrate, must be 9600, 19200, 38400, 57600, or 115200";
+	return -1;
+    }
+
+    while ((tok = mystrtok(NULL, " \t\n", tokptr))) {
+	if (strncmp(tok, "history=", 8) == 0) {
+	    char *end;
+	    sys->sol->history_size = strtoul(tok + 8, &end, 0);
+	    if (*end != '\0') {
+		*err = "Invalid history value";
+		return -1;
+	    }
+	} else if (strncmp(tok, "historyfru=", 11) == 0) {
+	    char *end;
+	    unsigned int history_fru;
+	    history_fru = strtoul(tok + 11, &end, 0);
+	    if (*end != '\0') {
+		*err = "Invalid history FRU value";
+		return -1;
+	    }
+	    if (history_fru >= 0xff) {
+		*err = "history FRU value must be < 0xff";
+		return -1;
+	    }
+	    rv = ipmi_mc_set_frudata_handler(sys->mc, history_fru,
+					     sol_set_frudata,
+					     sol_free_frudata);
+	    if (rv) {
+		*err = "Cannot set frudata handler";
+		return -1;
+	    }
+	} else if (strncmp(tok, "nortscts", 8) == 0) {
+	    sys->sol->use_rtscts = 0;
+	} else if (strncmp(tok, "noreadclear", 8) == 0) {
+	    sys->sol->noreadclear = 1;
+	} else {
+	    *err = "Invalid item";
+	    return -1;
+	}
+    }
+
+    sys->sol->solparm.default_bitrate = val;
+    sys->sol->configured = 1;
+    return 0;
+}
+
+int
+read_sol_config(sys_data_t *sys)
+{
+    unsigned int i;
+    int rv;
+
+    for (i = 0; i < IPMI_MAX_MCS; i++) {
+	lmc_data_t *mc = sys->ipmb_addrs[i];
+	ipmi_sol_t *sol;
+	persist_t *p;
+	long iv;
+
+	if (!mc)
+	    continue;
+	sol = ipmi_mc_get_sol(mc);
+	if (!sol->configured)
+	    continue;
+
+	sys->sol_present = 1;
+
+	sol->solparm.enabled = 1;
+	sol->solparm.bitrate_nonv = 0;
+
+	p = read_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
+	if (p) {
+	    if (!read_persist_int(p, &iv, "enabled"))
+		sol->solparm.enabled = iv;
+
+	    if (!read_persist_int(p, &iv, "bitrate"))
+		sol->solparm.bitrate_nonv = iv;
+
+	    sol->solparm.bitrate = sol->solparm.bitrate_nonv;
+
+	    free_persist(p);
+	}
+	rv = sol_init_mc(sys, mc);
+	if (rv)
+	    return rv;
+    }
+
+    return 0;
+}
+
+int
+write_sol_config(lmc_data_t *mc)
+{
+    ipmi_sol_t *sol;
+    persist_t *p;
+
+    sol = ipmi_mc_get_sol(mc);
+
+    p = alloc_persist("sol.mc%2.2x", ipmi_mc_get_ipmb(mc));
+    if (!p)
+	return ENOMEM;
+
+    sol = ipmi_mc_get_sol(mc);
+
+    add_persist_int(p, sol->solparm.enabled, "enabled");
+    add_persist_int(p, sol->solparm.bitrate_nonv, "bitrate");
+
+    write_persist(p);
+    free_persist(p);
+    return 0;
+}
+
+int
 sol_init(sys_data_t *sys)
 {
+    int rv;
+
+    rv = ipmi_emu_register_oi_iana_handler(
+	OPENIPMI_IANA_CMD_SET_HISTORY_RETURN_SIZE,
+	sol_set_history_return_size);
+    if (rv)
+	return rv;
+
+    rv = ipmi_emu_register_oi_iana_handler(
+	OPENIPMI_IANA_CMD_GET_HISTORY_RETURN_SIZE,
+	sol_get_history_return_size);
+    if (rv)
+	return rv;
+
     return ipmi_register_payload(IPMI_RMCPP_PAYLOAD_TYPE_SOL,
 				 handle_sol_payload);
 }

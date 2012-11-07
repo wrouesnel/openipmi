@@ -650,6 +650,13 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
     return sys->chan_set;
 }
 
+int
+sol_read_config(char **tokptr, sys_data_t *sys, char **err)
+{
+    *err = "SOL not supported in lanserv";
+    return -1;
+}
+
 ipmi_sol_t *
 ipmi_mc_get_sol(lmc_data_t *mc)
 {

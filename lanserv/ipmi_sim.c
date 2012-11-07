@@ -188,6 +188,7 @@ static int
 sys_gen_rand(sys_data_t *lan, void *data, int len)
 {
     gen_rand(NULL, data, len);
+    return 0;
 }
 
 static void
