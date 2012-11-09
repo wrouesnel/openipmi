@@ -1,3 +1,8 @@
+2012-11-09 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c: OpenIPMI was assigned an IANA number, so use it
+	for our custom messages.
+
 2012-11-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/mcserv.h, lanserv/sol.c, lanserv/lan.conf:

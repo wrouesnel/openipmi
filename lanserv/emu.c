@@ -48,7 +48,7 @@
 
 static void ipmi_mc_start_cmd(lmc_data_t *mc);
 
-#define OPENIPMI_IANA		4753 /* MontaVista's number for now */
+#define OPENIPMI_IANA		40820 /* OpenIPMI's own number */
 
 #define WATCHDOG_SENSOR_NUM 0
 
