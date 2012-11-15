@@ -390,6 +390,7 @@ static extcmd_info_t chassis_prog[] = {
     { "power", extcmd_int, NULL, 0 },
     { "reset", extcmd_int, NULL, 0 },
     { "boot", extcmd_uchar, boot_map, 0 },
+    { "shutdown", extcmd_int, NULL, 0 },
 };
 
 static int
@@ -3162,8 +3163,35 @@ handle_chassis_control(lmc_data_t    *mc,
 	    goto no_support;
 	break;
 
-    case 4: /* pulse diag interrupt */
     case 5: /* initiate soft-shutdown via overtemp */
+	if (mc->chassis_control_set_func) {
+	    int rv;
+	    unsigned char val = 1;
+	    rv = mc->chassis_control_set_func(mc,
+					      CHASSIS_CONTROL_GRACEFUL_SHUTDOWN,
+					      &val,
+					      mc->chassis_control_cb_data);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (mc->chassis_control_prog) {
+	    int val = 1;
+	    if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			       &chassis_prog[CHASSIS_CONTROL_GRACEFUL_SHUTDOWN],
+			       NULL, 1)) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (HW_OP_CAN_GRACEFUL_SHUTDOWN(mc->channels[15]))
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_GRACEFUL_SHUTDOWN);
+	else
+	    goto no_support;
+	break;
+
+    case 4: /* pulse diag interrupt */
     no_support:
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;

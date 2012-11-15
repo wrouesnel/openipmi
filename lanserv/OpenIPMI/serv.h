@@ -179,11 +179,14 @@ struct channel_s
 #define HW_OP_SEND_NMI		3
 #define HW_OP_IRQ_ENABLE	4
 #define HW_OP_IRQ_DISABLE	5
+#define HW_OP_GRACEFUL_SHUTDOWN	5
     unsigned int hw_capabilities; /* Bitmask of above bits for capabilities. */
 #define HW_OP_CAN_RESET(chan) ((chan)->hw_capabilities & (1 << HW_OP_RESET))
 #define HW_OP_CAN_POWER(chan) ((chan)->hw_capabilities & (1 << HW_OP_POWERON))
 #define HW_OP_CAN_NMI(chan) ((chan)->hw_capabilities & (1 << HW_OP_SEND_NMI))
 #define HW_OP_CAN_IRQ(chan) ((chan)->hw_capabilities & (1 << HW_OP_IRQ_ENABLE))
+#define HW_OP_CAN_GRACEFUL_SHUTDOWN(chan) ((chan)->hw_capabilities & \
+					   (1 << HW_OP_GRACEFUL_SHUTDOWN))
     void (*hw_op)(channel_t *chan, unsigned int op);
 
     /* Special command handlers. */
