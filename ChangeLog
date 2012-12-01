@@ -1,3 +1,9 @@
+2012-12-01 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/serv.h, lanserv/config.c, lanserv/ipmi_sim.c:
+	Add the ability to print the version of ipmi_sim and any loaded
+	modules.
+
 2012-11-14 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI.mcserv.h, lanserv/OpenIPMI/mcserv.h: Add

@@ -8,7 +8,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2003,2004,2005 MontaVista Software Inc.
+ * Copyright 2003,2004,2005,2012 MontaVista Software Inc.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -637,6 +637,15 @@ static struct poptOption poptOpts[]=
 	""
     },
     {
+	"version",
+	'v',
+	POPT_ARG_NONE,
+	NULL,
+	'v',
+	"version",
+	""
+    },
+    {
 	"nostdio",
 	'n',
 	POPT_ARG_NONE,
@@ -1251,8 +1260,8 @@ main(int argc, const char *argv[])
     struct sigaction act;
     os_hnd_fd_id_t *conid;
     lmc_data_t *mc;
+    int print_version = 0;
 
-    printf("Starting IPMI Simulator version %s\n", PVERSION);
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((i = poptGetNextOpt(poptCtx)) >= 0) {
 	switch (i) {
@@ -1262,9 +1271,14 @@ main(int argc, const char *argv[])
 	    case 'n':
 		nostdio = 1;
 		break;
+	    case 'v':
+		print_version = 1;
+		break;
 	}
     }
     poptFreeContext(poptCtx);
+
+    printf("IPMI Simulator version %s\n", PVERSION);
 
     data.os_hnd = ipmi_posix_setup_os_handler();
     if (!data.os_hnd) {
@@ -1366,8 +1380,11 @@ main(int argc, const char *argv[])
     sysinfo.cusers = ipmi_mc_get_users(mc);
     sysinfo.sol = ipmi_mc_get_sol(mc);
 
-    if (read_config(&sysinfo, config_file))
+    if (read_config(&sysinfo, config_file, print_version))
 	exit(1);
+
+    if (print_version)
+	exit(0);
 
     if (!sysinfo.name) {
 	fprintf(stderr, "name not set in config file\n");
@@ -1397,7 +1414,7 @@ main(int argc, const char *argv[])
 	goto out;
     }
 
-    err = load_dynamic_libs(&sysinfo);
+    err = load_dynamic_libs(&sysinfo, 0);
     if (err)
 	goto out;
 

@@ -799,7 +799,7 @@ main(int argc, const char *argv[])
     memset(channels, 0, sizeof(channels));
     sysinfo.chan_set = channels;
 
-    if (read_config(&sysinfo, config_file))
+    if (read_config(&sysinfo, config_file, 0))
 	exit(1);
 
     data.smi_fd = ipmi_open(ipmi_dev);

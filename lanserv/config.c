@@ -523,7 +523,7 @@ struct dliblist {
 static struct dliblist *dlibs;
 
 int
-load_dynamic_libs(sys_data_t *sys)
+load_dynamic_libs(sys_data_t *sys, int print_version)
 {
     struct dliblist *dlib;
     int (*func)(sys_data_t *sys, char *initstr);
@@ -539,13 +539,26 @@ load_dynamic_libs(sys_data_t *sys)
 	    return EINVAL;
 	}
 
-	func = dlsym(handle, "ipmi_sim_module_init");
-	if (func) {
-	    err = func(sys, dlib->init);
-	    if (err) {
-		fprintf(stderr, "Error from module %s init: %s\n",
-			dlib->file, strerror(err));
-		return EINVAL;
+	if (print_version) {
+	    func = dlsym(handle, "ipmi_sim_module_print_version");
+	    if (func) {
+		err = func(sys, dlib->init);
+		if (err) {
+		    fprintf(stderr, "Error from module %s version print: %s\n",
+			    dlib->file, strerror(err));
+		    return EINVAL;
+		}
+	    }
+	    dlclose(handle);
+	} else {
+	    func = dlsym(handle, "ipmi_sim_module_init");
+	    if (func) {
+		err = func(sys, dlib->init);
+		if (err) {
+		    fprintf(stderr, "Error from module %s init: %s\n",
+			    dlib->file, strerror(err));
+		    return EINVAL;
+		}
 	    }
 	}
 	dlibs = dlib->next;
@@ -559,7 +572,8 @@ load_dynamic_libs(sys_data_t *sys)
 
 int
 read_config(sys_data_t *sys,
-	    char       *config_file)
+	    char       *config_file,
+	    int        print_version)
 {
     FILE         *f = fopen(config_file, "r");
     int          line;
@@ -583,6 +597,42 @@ read_config(sys_data_t *sys,
 	tok = mystrtok(buf, " \t\n", &tokptr);
 	if (!tok || (tok[0] == '#'))
 	    continue;
+
+	if (strcmp(tok, "loadlib") == 0) {
+	    char *library = NULL, *initstr = NULL;
+	    struct dliblist *dlib, *dlibp;
+
+	    err = get_delim_str(&tokptr, &library, &errstr);
+	    if (!err)
+		err = get_delim_str(&tokptr, &initstr, &errstr);
+	    dlib = malloc(sizeof(*dlib));
+	    if (!dlib) {
+		err = ENOMEM;
+		errstr = "Out of memory";
+	    } else {
+		dlib->file = library;
+		dlib->init = initstr;
+		dlib->next = NULL;
+		if (!dlibs) {
+		    dlibs = dlib;
+		} else {
+		    dlibp = dlibs;
+		    while (dlibp->next)
+			dlibp = dlibp->next;
+		    dlibp->next = dlib;
+		}
+	    }
+	    if (err) {
+		if (library)
+		    free(library);
+		if (initstr)
+		    free(initstr);
+	    }
+	    goto next;
+	}
+
+	if (print_version)
+	    goto next;
 
 	if (strcmp(tok, "startlan") == 0) {
 	    err = get_uint(&tokptr, &val, &errstr);
@@ -617,36 +667,6 @@ read_config(sys_data_t *sys,
 			   &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
 	    err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
-	} else if (strcmp(tok, "loadlib") == 0) {
-	    char *library = NULL, *initstr = NULL;
-	    struct dliblist *dlib, *dlibp;
-
-	    err = get_delim_str(&tokptr, &library, &errstr);
-	    if (!err)
-		err = get_delim_str(&tokptr, &initstr, &errstr);
-	    dlib = malloc(sizeof(*dlib));
-	    if (!dlib) {
-		err = ENOMEM;
-		errstr = "Out of memory";
-	    } else {
-		dlib->file = library;
-		dlib->init = initstr;
-		dlib->next = NULL;
-		if (!dlibs) {
-		    dlibs = dlib;
-		} else {
-		    dlibp = dlibs;
-		    while (dlibp->next)
-			dlibp = dlibp->next;
-		    dlibp->next = dlib;
-		}
-	    }
-	    if (err) {
-		if (library)
-		    free(library);
-		if (initstr)
-		    free(initstr);
-	    }
 	} else if (strcmp(tok, "set_working_mc") == 0) {
 	    unsigned char ipmb;
 	    err = get_uchar(&tokptr, &ipmb, &errstr);
@@ -677,6 +697,7 @@ read_config(sys_data_t *sys,
 	    err = -1;
 	}
 
+      next:
 	if (err) {
 	    fprintf(stderr, "Error on line %d: %s\n", line, errstr);
 	    return err;
@@ -684,5 +705,9 @@ read_config(sys_data_t *sys,
     }
 
     fclose(f);
+
+    if (print_version)
+	load_dynamic_libs(sys, print_version);
+
     return 0;
 }
