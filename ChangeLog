@@ -10,6 +10,17 @@
 	* lanserv/lanserv_ipmi.c: ditto
 	* lanserv/serial_ipmi.c: ditto
 
+	* lanserv/bmc.c: Rename from emu.c
+
+	* lanserv/bmc.c, lanserv/Makefile.am: Split this file up into
+	smaller pieces, roughly per NETFN.
+	* lanserv/bmc_app.c: ditto
+	* lanserv/bmc_chassis.c: ditto
+	* lanserv/bmc_picmc.c: ditto
+	* lanserv/bmc_sensor.c: ditto
+	* lanserv/bmc_storage.c: ditto
+	* lanserv/bmc_transport.c: ditto
+
 2012-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h, lanserv/config.c, lanserv/ipmi_sim.c:
