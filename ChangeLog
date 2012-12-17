@@ -1,3 +1,15 @@
+2012-12-17 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu.c: Some reorganization getting ready to split
+	up this file.
+
+	* lanserv/serv.c, lanserv/OpenIPMI/serv.h: Create a common
+	ipmb_checksum routine.
+	* lanserv/emu.c: Use the common ipmb_checksum routine
+	* lanserv/lanserv.c: ditto
+	* lanserv/lanserv_ipmi.c: ditto
+	* lanserv/serial_ipmi.c: ditto
+
 2012-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h, lanserv/config.c, lanserv/ipmi_sim.c:

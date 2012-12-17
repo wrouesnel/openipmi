@@ -360,101 +360,8 @@ static void set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
 #define IPMI_DEVID_SDR_REPOSITORY_DEV	(1 << 1)
 #define IPMI_DEVID_SENSOR_DEV		(1 << 0)
 
-void
-ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
-{
-    if (emu->atca_fru_inv_locked) {
-	emu->atca_fru_inv_lock_timeout -= seconds;
-	if (emu->atca_fru_inv_lock_timeout < 0) {
-	    emu->atca_fru_inv_locked = 0;
-	    free(emu->temp_fru_inv_data);
-	    emu->temp_fru_inv_data = NULL;
-	}
-    }
+static int start_poweron_timer(lmc_data_t *mc);
 
-    if (emu->users_changed) {
-	emu->users_changed = 0;
-	write_persist_users(emu->sysinfo);
-    }
-}
-
-static extcmd_map_t boot_map[] = {
-    { 0, "none" },
-    { 1, "pxe" },
-    { 2, "default" },
-    { 0, NULL }
-};
-
-/* Matches the CHASSIS_CONTROL defines. */
-static extcmd_info_t chassis_prog[] = {
-    { "power", extcmd_int, NULL, 0 },
-    { "reset", extcmd_int, NULL, 0 },
-    { "boot", extcmd_uchar, boot_map, 0 },
-    { "shutdown", extcmd_int, NULL, 0 },
-};
-
-static int
-set_power(lmc_data_t *mc, int pval)
-{
-    int rv;
-
-    if (mc->chassis_control_set_func) {
-	unsigned char val = !!pval;
-	rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_POWER, &val,
-					  mc->chassis_control_cb_data);
-    } else if (mc->chassis_control_prog) {
-	int val = !!pval;
-	if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
-			   &chassis_prog[CHASSIS_CONTROL_POWER], NULL, 1)) 
-	    rv = EINVAL;
-    } else if (HW_OP_CAN_POWER(mc->channels[15])) {
-	if (pval)
-	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
-	else
-	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
-    } else
-	return ENOTSUP;
-    return 0;
-}
-
-static void
-power_timeout(void *cb_data)
-{
-    lmc_data_t *mc = cb_data;
-
-    mc->sysinfo->free_timer(mc->power_timer);
-    mc->power_timer = NULL;
-    set_power(mc, 1);
-}
-
-static int
-start_poweron_timer(lmc_data_t *mc)
-{
-    int rv;
-    struct timeval tv = { 1, 0 };
-
-    if (mc->power_timer)
-	return 0;
-
-    rv = mc->sysinfo->alloc_timer(mc->sysinfo, power_timeout,
-				  mc, &mc->power_timer);
-    if (rv)
-	return rv;
-    
-    mc->sysinfo->start_timer(mc->power_timer, &tv);
-    return 0;
-}
-
-int
-ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
-			    get_frudata_f handler, free_frudata_f freefunc)
-{
-    if (fru > 0xff)
-	return EINVAL;
-    mc->frus[fru].get = handler;
-    mc->frus[fru].free = freefunc;
-    return 0;
-}
 
 /*
  * SEL handling commands.
@@ -1658,6 +1565,17 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
 
     rdata[0] = 0;
     *rdata_len = 1;
+}
+
+int
+ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+			    get_frudata_f handler, free_frudata_f freefunc)
+{
+    if (fru > 0xff)
+	return EINVAL;
+    mc->frus[fru].get = handler;
+    mc->frus[fru].free = freefunc;
+    return 0;
 }
 
 static void
@@ -3031,6 +2949,73 @@ static cmd_handler_f app_netfn_handlers[256] = {
     [IPMI_ACTIVATE_PAYLOAD_CMD] = handle_activate_payload,
     [IPMI_DEACTIVATE_PAYLOAD_CMD] = handle_deactivate_payload
 };
+
+static extcmd_map_t boot_map[] = {
+    { 0, "none" },
+    { 1, "pxe" },
+    { 2, "default" },
+    { 0, NULL }
+};
+
+/* Matches the CHASSIS_CONTROL defines. */
+static extcmd_info_t chassis_prog[] = {
+    { "power", extcmd_int, NULL, 0 },
+    { "reset", extcmd_int, NULL, 0 },
+    { "boot", extcmd_uchar, boot_map, 0 },
+    { "shutdown", extcmd_int, NULL, 0 },
+};
+
+static int
+set_power(lmc_data_t *mc, int pval)
+{
+    int rv;
+
+    if (mc->chassis_control_set_func) {
+	unsigned char val = !!pval;
+	rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_POWER, &val,
+					  mc->chassis_control_cb_data);
+    } else if (mc->chassis_control_prog) {
+	int val = !!pval;
+	if (extcmd_setvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			   &chassis_prog[CHASSIS_CONTROL_POWER], NULL, 1)) 
+	    rv = EINVAL;
+    } else if (HW_OP_CAN_POWER(mc->channels[15])) {
+	if (pval)
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWERON);
+	else
+	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
+    } else
+	return ENOTSUP;
+    return 0;
+}
+
+static void
+power_timeout(void *cb_data)
+{
+    lmc_data_t *mc = cb_data;
+
+    mc->sysinfo->free_timer(mc->power_timer);
+    mc->power_timer = NULL;
+    set_power(mc, 1);
+}
+
+static int
+start_poweron_timer(lmc_data_t *mc)
+{
+    int rv;
+    struct timeval tv = { 1, 0 };
+
+    if (mc->power_timer)
+	return 0;
+
+    rv = mc->sysinfo->alloc_timer(mc->sysinfo, power_timeout,
+				  mc, &mc->power_timer);
+    if (rv)
+	return rv;
+    
+    mc->sysinfo->start_timer(mc->power_timer, &tv);
+    return 0;
+}
 
 static void
 handle_get_chassis_capabilities(lmc_data_t    *mc,
@@ -6008,17 +5993,6 @@ handle_group_extension_netfn(lmc_data_t    *mc,
     }
 }
 
-static uint8_t
-ipmb_checksum(uint8_t *data, int size, uint8_t start)
-{
-	uint8_t csum = start;
-	
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return -csum;
-}
-
 static struct iana_handler_elem {
     uint32_t iana;
     cmd_handler_f handler;
@@ -6169,6 +6143,24 @@ ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 
     netfn_handlers[ni].handlers[cmd] = handler;
     return 0;
+}
+
+void
+ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
+{
+    if (emu->atca_fru_inv_locked) {
+	emu->atca_fru_inv_lock_timeout -= seconds;
+	if (emu->atca_fru_inv_lock_timeout < 0) {
+	    emu->atca_fru_inv_locked = 0;
+	    free(emu->temp_fru_inv_data);
+	    emu->temp_fru_inv_data = NULL;
+	}
+    }
+
+    if (emu->users_changed) {
+	emu->users_changed = 0;
+	write_persist_users(emu->sysinfo);
+    }
 }
 
 void

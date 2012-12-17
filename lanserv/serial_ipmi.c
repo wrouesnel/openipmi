@@ -92,17 +92,6 @@ static int fromhex(unsigned char c)
 	return -1;
 }
 
-static unsigned char
-ipmb_checksum(const unsigned char *data, int size, unsigned char start)
-{
-	unsigned char csum = start;
-
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return csum;
-}
-
 static int
 unformat_ipmb_msg(msg_t *msg, unsigned char *msgd, unsigned int len,
 		  serserv_data_t *si)

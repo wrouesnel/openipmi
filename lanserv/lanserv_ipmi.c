@@ -105,18 +105,6 @@ find_user(lanserv_data_t *lan, uint8_t *user, int name_only_lookup, int priv)
     return rv;
 }
 
-static uint8_t
-ipmb_checksum(uint8_t *data, int size, uint8_t start)
-{
-	uint8_t csum = start;
-	
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return csum;
-}
-
-
 static session_t *
 sid_to_session(lanserv_data_t *lan, unsigned int sid)
 {

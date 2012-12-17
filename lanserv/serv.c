@@ -295,3 +295,14 @@ void ipmi_set_uint32(uint8_t *data, int val)
     data[2] = (val >> 16) & 0xff;
     data[3] = (val >> 24) & 0xff;
 }
+
+uint8_t
+ipmb_checksum(uint8_t *data, int size, uint8_t start)
+{
+	uint8_t csum = start;
+	
+	for (; size > 0; size--, data++)
+		csum += *data;
+
+	return -csum;
+}

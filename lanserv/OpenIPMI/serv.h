@@ -490,4 +490,6 @@ void ipmi_set_uint16(uint8_t *data, int val);
 unsigned int ipmi_get_uint32(uint8_t *data);
 void ipmi_set_uint32(uint8_t *data, int val);
 
+uint8_t ipmb_checksum(uint8_t *data, int size, uint8_t start);
+
 #endif /* __SERV_H_ */

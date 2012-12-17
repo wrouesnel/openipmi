@@ -252,17 +252,6 @@ gen_rand(lanserv_data_t *lan, void *data, int len)
     return rv;
 }
 
-static uint8_t
-ipmb_checksum(uint8_t *data, int size, uint8_t start)
-{
-	uint8_t csum = start;
-	
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return -csum;
-}
-
 static void
 handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 {
