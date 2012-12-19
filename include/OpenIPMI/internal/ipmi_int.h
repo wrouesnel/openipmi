@@ -41,6 +41,7 @@
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmiif.h> /* for ipmi_args_t, sigh */
+#include <OpenIPMI/ipmi_string.h>
 
 #include <OpenIPMI/internal/ipmi_malloc.h>
 #include <OpenIPMI/internal/ipmi_locks.h>
@@ -102,52 +103,6 @@ void ipmi_set_uint32(unsigned char *data, int val);
 
 /* Add a 16-bit integer to the data, IPMI (little-endian) style. */
 void ipmi_set_uint16(unsigned char *data, int val);
-
-/* If we have a 6-bit field, we can have up to 63 items, and with BCD
-   there may be 2 characters per byte, so 126 max. */
-#define IPMI_MAX_STR_LEN 126
-
-/* Fetch an IPMI device string as defined in section 37.14 of the IPMI
-   version 1.5 manual.  The in_len is the number of input bytes in the
-   string, including the type/length byte.  It may be longer than the
-   actual length.  The max_out_len is the maximum number of characters
-   to output, including the nil.  The type will be set to either
-   unicode or ASCII.  The number of bytes put into the output string
-   is returned in out_len.  The input pointer will be updated to point
-   to the character after the used data.  This returns a standard
-   error value. */
-#define IPMI_STR_SDR_SEMANTICS	0
-#define IPMI_STR_FRU_SEMANTICS	1
-int ipmi_get_device_string(unsigned char        **input,
-			   unsigned int         in_len,
-			   char                 *output,
-			   int                  semantics,
-			   int                  force_unicode,
-			   enum ipmi_str_type_e *type,
-			   unsigned int         max_out_len,
-			   unsigned int         *out_len);
-
-/* Store an IPMI device string in the most compact form possible.
-   input is the input string (nil terminated), output is where to
-   place the output (including the type/length byte) and out_len is a
-   pointer to the max size of output (including the type/length byte).
-   Upon return, out_len will be set to the actual output length. */
-void ipmi_set_device_string(const char           *input,
-			    enum ipmi_str_type_e type,
-			    unsigned int         in_len,
-			    unsigned char        *output,
-			    int                  force_unicode,
-			    unsigned int         *out_len);
-
-/* Like ipmi_set_device_string, but include options.  See ipmi_bits.h
-   for IPMI_STRING_OPTION_xxx. */
-void ipmi_set_device_string2(const char           *input,
-			     enum ipmi_str_type_e type,
-			     unsigned int         in_len,
-			     unsigned char        *output,
-			     int                  force_unicode,
-			     unsigned int         *out_len,
-			     unsigned int         options);
 
 /* Generate a log.  Note that logs should not end in a newline, that
    will be automatically added as needed to the log.  */
