@@ -1215,6 +1215,10 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
+/*
+ * FRU Inventory handling
+ */
+
 int
 ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
 			    get_frudata_f handler, free_frudata_f freefunc)

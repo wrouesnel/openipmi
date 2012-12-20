@@ -251,8 +251,10 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
 {
     char *tok = mystrtok(NULL, " \t\n", tokptr);
 
-    if (!tok)
+    if (!tok) {
+	*err = "No boolean value given";
 	return -1;
+    }
     if (strcasecmp(tok, "true") == 0)
 	*rval = 1;
     else if (strcasecmp(tok, "false") == 0)
@@ -260,6 +262,14 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
     else if (strcasecmp(tok, "on") == 0)
 	*rval = 1;
     else if (strcasecmp(tok, "off") == 0)
+	*rval = 0;
+    else if (strcasecmp(tok, "yes") == 0)
+	*rval = 1;
+    else if (strcasecmp(tok, "no") == 0)
+	*rval = 0;
+    else if (strcasecmp(tok, "1") == 0)
+	*rval = 1;
+    else if (strcasecmp(tok, "0") == 0)
 	*rval = 0;
     else {
 	*err = "Invalid boolean value, must be 'true', 'on', 'false', or 'off'";
@@ -275,7 +285,31 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
     char *end;
     char *tok = mystrtok(NULL, " \t\n", tokptr);
 
+    if (!tok) {
+	*err = "No integer value given";
+	return -1;
+    }
+
     *rval = strtoul(tok, &end, 0);
+    if (*end != '\0') {
+	*err = "Invalid integer value";
+	return -1;
+    }
+    return 0;
+}
+
+int
+get_int(char **tokptr, int *rval, char **err)
+{
+    char *end;
+    char *tok = mystrtok(NULL, " \t\n", tokptr);
+
+    if (!tok) {
+	*err = "No integer value given";
+	return -1;
+    }
+
+    *rval = strtol(tok, &end, 0);
     if (*end != '\0') {
 	*err = "Invalid integer value";
 	return -1;
@@ -288,6 +322,11 @@ get_uchar(char **tokptr, unsigned char *rval, char **err)
 {
     char *end;
     char *tok = mystrtok(NULL, " \t\n", tokptr);
+
+    if (!tok) {
+	*err = "No integer value given";
+	return -1;
+    }
 
     *rval = strtoul(tok, &end, 0);
     if (*end != '\0') {

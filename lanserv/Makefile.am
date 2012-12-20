@@ -11,7 +11,7 @@ AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"' -DSTATEDIR='"$(localstatedir)"'
 
 lib_LTLIBRARIES = libIPMIlanserv.la
 
-bin_PROGRAMS = ipmi_sim ipmilan
+bin_PROGRAMS = ipmi_sim ipmilan sdrcomp
 
 noinst_PROGRAMS = ipmi_checksum
 
@@ -39,6 +39,9 @@ ipmi_sim_SOURCES = ipmi_sim.c bmc.c emu_cmd.c sol.c \
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
+
+sdrcomp_SOURCES = sdrcomp.c
+sdrcomp_LDFLAGS = ../utils/libOpenIPMIutils.la
 
 EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
 

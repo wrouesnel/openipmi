@@ -6,6 +6,15 @@
 	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Move the IPMI
 	string handling from here.
 
+	* lanserv/OpenIPMI/serv.h, lanserv/config.h: Add a "get_int"
+	handler for SDRs.
+
+	* lanserv/config.c: Add some other valid boolean values for use in
+	SDRs: (yes, no, 1, 0).
+
+	* lanserv/sdrcomp.c: Add start of code to compile SDRs from human
+	readable text.
+
 2012-12-17 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu.c: Some reorganization getting ready to split

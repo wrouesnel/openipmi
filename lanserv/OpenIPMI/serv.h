@@ -466,6 +466,8 @@ int get_bool(char **tokptr, unsigned int *rval, char **err);
 
 int get_uint(char **tokptr, unsigned int *rval, char **err);
 
+int get_int(char **tokptr, int *rval, char **err);
+
 int get_priv(char **tokptr, unsigned int *rval, char **err);
 
 int get_auths(char **tokptr, unsigned int *rval, char **err);
