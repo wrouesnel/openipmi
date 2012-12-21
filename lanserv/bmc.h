@@ -384,6 +384,11 @@ sdr_t *new_sdr_entry(sdrs_t *sdrs, unsigned char length);
 void add_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, sdr_t *entry);
 void read_mc_sdrs(lmc_data_t *mc, sdrs_t *sdrs, const char *sdrtype);
 
+void iterate_sdrs(lmc_data_t *mc,
+		  sdrs_t     *sdrs,
+		  int (*func)(lmc_data_t *mc, unsigned char *sdr,
+			      unsigned int len, void *cb_data),
+		  void *cb_data);
 
 void mc_new_event(lmc_data_t *mc,
 		  unsigned char record_type,

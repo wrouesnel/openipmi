@@ -1186,6 +1186,19 @@ handle_partial_add_sdr(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
+void
+iterate_sdrs(lmc_data_t *mc,
+	     sdrs_t     *sdrs,
+	     int (*func)(lmc_data_t *mc, unsigned char *sdr,
+			 unsigned int len, void *cb_data),
+	     void *cb_data)
+{
+    sdr_t *entry;
+
+    for (entry = sdrs->sdrs; entry; entry = entry->next)
+	func(mc, entry->data, entry->length, cb_data);
+}
+
 static void
 handle_delete_sdr(lmc_data_t    *mc,
 		  msg_t         *msg,

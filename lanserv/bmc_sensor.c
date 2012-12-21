@@ -868,6 +868,73 @@ ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
     return 0;
 }
 
+static void
+unpack_bitmask(unsigned char *bits, unsigned int mask, unsigned int len)
+{
+    while (len) {
+	*bits = mask & 1;
+	bits++;
+	mask >>= 1;
+	len--;
+    }
+}
+
+static int
+init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
+{
+    int err;
+    unsigned int len = sdr[4];
+    unsigned char num = sdr[7];
+    unsigned char lun = sdr[6] & 0x3;
+    unsigned char assert_sup[15], deassert_sup[15];
+    unsigned char assert_en[15], deassert_en[15];
+    unsigned char scan_on = (sdr[10] >> 6) & 1;
+    unsigned char events_on = (sdr[10] >> 5) & 1;
+    unsigned char event_sup = sdr[11] & 0x3;
+
+    if (len < 20)
+	return 0;
+    if ((sdr[3] < 1) || (sdr[3] > 2))
+	return 0; /* Not a sensor SDR we set from */
+    
+    unpack_bitmask(assert_sup, sdr[14] | (sdr[15] << 8), 15);
+    unpack_bitmask(deassert_sup, sdr[16] | (sdr[17] << 8), 15);
+    unpack_bitmask(assert_en, sdr[14] | (sdr[15] << 8), 15);
+    unpack_bitmask(deassert_en, sdr[16] | (sdr[17] << 8), 15);
+
+    err = ipmi_mc_sensor_set_event_support(mc, lun, num,
+					   events_on,
+					   scan_on,
+					   event_sup,
+					   assert_sup,
+					   deassert_sup,
+					   assert_en,
+					   deassert_en);
+    return err;
+}
+
+static int check_sensor_sdr(lmc_data_t *mc, unsigned char *sdr,
+			    unsigned int len, void *cb_data)
+{
+    sensor_t *sensor = cb_data;
+    uint8_t mc_ipmb = ipmi_mc_get_ipmb(mc);
+
+    if (len < 8)
+	return 0;
+    if ((sdr[3] != 1) && (sdr[3] != 2))
+	return 0;
+    if (sdr[5] != mc_ipmb)
+	return 0;
+    if ((sdr[6] & 0x3) != sensor->lun)
+	return 0;
+    if (sdr[7] != sensor->num)
+	return 0;
+
+    init_sensor_from_sdr(mc, sdr);
+
+    return 1;
+}
+
 int
 ipmi_mc_add_sensor(lmc_data_t    *mc,
 		   unsigned char lun,
@@ -876,6 +943,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 		   unsigned char event_reading_code)
 {
     sensor_t *sensor;
+    lmc_data_t *bmc;
 
     if ((lun >= 4) || (sens_num >= 255) || (mc->sensors[lun][sens_num]))
 	return EINVAL;
@@ -896,6 +964,10 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 	mc->hs_sensor = sensor;
 	sensor->sensor_update_handler = picmg_led_set;
     }
+
+    bmc = ipmi_emu_get_bmc_mc(mc->emu);
+    if (bmc)
+	iterate_sdrs(mc, &mc->main_sdrs, check_sensor_sdr, sensor);
 
     return 0;
 }

@@ -551,57 +551,6 @@ ipmi_mc_set_num_leds(lmc_data_t   *mc,
     return 0;
 }
 
-static void
-unpack_bitmask(unsigned char *bits, unsigned int mask, unsigned int len)
-{
-    while (len) {
-	*bits = mask & 1;
-	bits++;
-	mask >>= 1;
-	len--;
-    }
-}
-
-static int
-init_sensor_from_sdr(lmc_data_t *mc, sdr_t *sdr)
-{
-    int err;
-    unsigned int len = sdr->data[4];
-    unsigned char num = sdr->data[7];
-    unsigned char lun = sdr->data[6] & 0x3;
-    unsigned char type = sdr->data[12];
-    unsigned char ev_read_code = sdr->data[13];
-    unsigned char assert_sup[15], deassert_sup[15];
-    unsigned char assert_en[15], deassert_en[15];
-    unsigned char scan_on = (sdr->data[10] >> 6) & 1;
-    unsigned char events_on = (sdr->data[10] >> 5) & 1;
-    unsigned char event_sup = sdr->data[11] & 0x3;
-
-    if (len < 20)
-	return 0;
-    if ((sdr->data[3] < 1) || (sdr->data[3] > 2))
-	return 0; /* Not a sensor SDR we set from */
-    
-    err = ipmi_mc_add_sensor(mc, lun, num, type, ev_read_code);
-    if (err)
-	return err;
-
-    unpack_bitmask(assert_sup, sdr->data[14] | (sdr->data[15] << 8), 15);
-    unpack_bitmask(deassert_sup, sdr->data[16] | (sdr->data[17] << 8), 15);
-    unpack_bitmask(assert_en, sdr->data[14] | (sdr->data[15] << 8), 15);
-    unpack_bitmask(deassert_en, sdr->data[16] | (sdr->data[17] << 8), 15);
-
-    err = ipmi_mc_sensor_set_event_support(mc, lun, num,
-					   events_on,
-					   scan_on,
-					   event_sup,
-					   assert_sup,
-					   deassert_sup,
-					   assert_en,
-					   deassert_en);
-    return err;
-}
-
 static int
 init_mc(emu_data_t *emu, lmc_data_t *mc)
 {

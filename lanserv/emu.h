@@ -99,7 +99,6 @@ int ipmi_emu_get_mc_by_addr(emu_data_t    *emu,
 			    unsigned char ipmb,
 			    lmc_data_t    **mc);
 
-
 /* ATCA support */
 int ipmi_emu_atca_enable(emu_data_t *emu);
 int ipmi_emu_atca_set_site(emu_data_t    *emu,

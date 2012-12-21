@@ -10,6 +10,14 @@
 
 	* lanserv/sdrcomp.c: Add type 16 and 17 SDR types.
 
+	* lanserv/bmc.h, lanserv/bmc_storage.c: Add a function to iterate
+	SDRs.
+
+	* lanserv/bmc.c: Remove init_sensor_from_sdr().
+
+	* lanserv/bmc_sensor.c: Add initialization of a sensor from the
+	BMC's main SDR repository.
+
 2012-12-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/persist.h, lanserv/persist.c: Add the ability
