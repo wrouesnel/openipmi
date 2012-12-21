@@ -598,9 +598,11 @@ rewrite_sdrs(lmc_data_t *mc, sdrs_t *sdrs)
     sdr_t *sdr;
     int err;
 
-    p = alloc_persist("sdr.%d.main", ipmi_mc_get_ipmb(mc));
-    if (!p)
+    p = alloc_persist("sdr.%2.2x.main", ipmi_mc_get_ipmb(mc));
+    if (!p) {
+	err = ENOMEM;
 	goto out_err;
+    }
 
     err = add_persist_int(p, sdrs->last_add_time, "last_add_time");
     if (err)
@@ -624,7 +626,9 @@ rewrite_sdrs(lmc_data_t *mc, sdrs_t *sdrs)
     return;
 
   out_err:
-    /* FIXME - log */
+    mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+		     "Unable to write persistent SDRs for MC %d: %d",
+		     ipmi_mc_get_ipmb(mc), err);
     if (p)
 	free_persist(p);
 }
@@ -700,11 +704,12 @@ read_mc_sdrs(lmc_data_t *mc, sdrs_t *sdrs, const char *sdrtype)
 {
     persist_t *p;
 
-    p = read_persist("sdr.%d.%s", ipmi_mc_get_ipmb(mc), sdrtype);
+    p = read_persist("sdr.%2.2x.%s", ipmi_mc_get_ipmb(mc), sdrtype);
     if (!p)
 	return;
 
     iterate_persist(p, sdrs, handle_sdr, handle_sdr_time);
+    free_persist(p);
 }
 
 int

@@ -467,20 +467,54 @@ static struct sdr_field type9[] =
     { "entity_1_dev_chan",	SDR_BITS,	 12, 0, 8, .required = 1 },
     { "entity_1_id",		SDR_BITS,	 13, 0, 8, .required = 1 },
     { "entity_1_inst",		SDR_BITS,	 14, 0, 8, .required = 1 },
-    { "entity_2_dev_addr",	SDR_BITS,	 15, 0, 8, .required = 1 },
-    { "entity_2_dev_chan",	SDR_BITS,	 16, 0, 8, .required = 1 },
+    { "entity_2_dev_addr",	SDR_BITS,	 15, 0, 8 },
+    { "entity_2_dev_chan",	SDR_BITS,	 16, 0, 8 },
     { "entity_2_id",		SDR_BITS,	 17, 0, 8 },
     { "entity_2_inst",		SDR_BITS,	 18, 0, 8 },
-    { "entity_3_dev_addr",	SDR_BITS,	 19, 0, 8, .required = 1 },
-    { "entity_3_dev_chan",	SDR_BITS,	 20, 0, 8, .required = 1 },
+    { "entity_3_dev_addr",	SDR_BITS,	 19, 0, 8 },
+    { "entity_3_dev_chan",	SDR_BITS,	 20, 0, 8 },
     { "entity_3_id",		SDR_BITS,	 21, 0, 8 },
     { "entity_3_inst",		SDR_BITS,	 22, 0, 8 },
-    { "entity_4_dev_addr",	SDR_BITS,	 23, 0, 8, .required = 1 },
-    { "entity_4_dev_chan",	SDR_BITS,	 24, 0, 8, .required = 1 },
+    { "entity_4_dev_addr",	SDR_BITS,	 23, 0, 8 },
+    { "entity_4_dev_chan",	SDR_BITS,	 24, 0, 8 },
     { "entity_4_id",		SDR_BITS,	 25, 0, 8 },
     { "entity_4_inst",		SDR_BITS,	 26, 0, 8 },
 };
 #define TYPE9_LEN (sizeof(type9) / sizeof(struct sdr_field))
+
+static struct sdr_field type16[] =
+{
+    { "device_access_address",	SDR_BITS,	 6, 0, 8, .required = 1 },
+    { "device_slave_address",	SDR_BITS,	 7, 0, 8, .required = 1 },
+    { "channel_number",		SDR_BITS,	 8, 5, 3 },
+    { "lun",			SDR_BITS,	 8, 3, 2 },
+    { "private_bus_id",		SDR_BITS,	 8, 0, 3 },
+    { "address_span",		SDR_BITS,	 9, 0, 3 },
+    { "device_type",		SDR_BITS,	11, 0, 8, .required = 1 },
+    { "device_type_modifier",	SDR_BITS,	12, 0, 8, .required = 1 },
+    { "entity_id",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "entity_instance",	SDR_BITS,	14, 0, 8, .required = 1 },
+    { "oem",			SDR_BITS,	15, 0, 8 },
+    { "id_string",		SDR_STRING,	16, 0, 8, .required = 1 },
+};
+#define TYPE16_LEN (sizeof(type16) / sizeof(struct sdr_field))
+
+static struct sdr_field type17[] =
+{
+    { "device_access_address",	SDR_BITS,	 6, 0, 8, .required = 1 },
+    { "fru_device_address",	SDR_BITS,	 7, 0, 8, .required = 1 },
+    { "logical_fru",		SDR_BOOLBIT,	 8, 7, 1 },
+    { "lun",			SDR_BITS,	 8, 3, 2 },
+    { "private_bus_id",		SDR_BITS,	 8, 0, 3 },
+    { "channel_number",		SDR_BITS,	 9, 4, 4 },
+    { "device_type",		SDR_BITS,	11, 0, 8, .required = 1 },
+    { "device_type_modifier",	SDR_BITS,	12, 0, 8, .required = 1 },
+    { "fru_entity_id",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "fru_entity_instance",	SDR_BITS,	14, 0, 8, .required = 1 },
+    { "oem",			SDR_BITS,	15, 0, 8 },
+    { "id_string",		SDR_STRING,	16, 0, 8, .required = 1 },
+};
+#define TYPE17_LEN (sizeof(type17) / sizeof(struct sdr_field))
 
 /*
  * To parse more complex expressions, we really need to know what the
@@ -699,28 +733,52 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 
     *errstr2 = NULL;
 
-    if (type == 1) {
+    switch (type) {
+    case 1:
 	t = type1;
 	tlen = TYPE1_LEN;
 	sdr_len = 48;
-    } else if (type == 2) {
+	break;
+
+    case 2:
 	t = type2;
 	tlen = TYPE2_LEN;
 	sdr_len = 32;
-    } else if (type == 3) {
+	break;
+
+    case 3:
 	t = type3;
 	tlen = TYPE3_LEN;
 	sdr_len = 17;
-    } else if (type == 8) {
+	break;
+
+    case 8:
 	t = type8;
 	tlen = TYPE8_LEN;
 	sdr_len = 16;
-    } else if (type == 9) {
+	break;
+
+    case 9:
 	t = type9;
 	tlen = TYPE9_LEN;
 	sdr_len = 32;
-    } else {
-	*errstr = "Unknown SDR type";
+	break;
+
+    case 16:
+	t = type16;
+	tlen = TYPE16_LEN;
+	sdr_len = 16;
+	break;
+
+    case 17:
+	t = type17;
+	tlen = TYPE17_LEN;
+	sdr_len = 16;
+	break;
+
+    default:
+	*errstr = "Unknown SDR type, supported types are 1, 2, 3, 8, 9,"
+	    " 16 (0x10) and 17 (0x11)";
 	return -1;
     }
 
@@ -1035,12 +1093,6 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	if ((sdrtype > 3 && sdrtype < 8) || (sdrtype > 9)) {
-	    fprintf(stderr, "%3d: Invalid sdr type, supported types are"
-		    " 1, 2, 3, 8, and 9\n", line);
-	    exit(1);
-	}
-
 	err = ipmi_compile_sdr(f, sdrtype, &sdr, &sdrlen, &errstr, &errstr2,
 			       &line);
 	if (err) {
@@ -1050,6 +1102,9 @@ main(int argc, char *argv[])
 		fprintf(stderr, "%3d: %s\n", line, errstr);
 	    exit(1);
 	}
+
+	sdr[0] = sdrnum & 0xff;
+	sdr[1] = (sdrnum >> 8) & 0xff;
 
 	if (outraw) {
 	    fwrite(sdr, sdrlen, 1, stdout);
