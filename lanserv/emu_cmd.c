@@ -760,7 +760,7 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char data[MAX_FRU_SIZE];
     unsigned char devid;
     unsigned int  length;
-    int           i;
+    unsigned int  i;
     int           rv;
 
     rv = emu_get_uchar(out, toks, &devid, "Device ID", 0);
@@ -771,7 +771,7 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    for (i=0; i<MAX_FRU_SIZE; i++) {
+    for (i=0; i<length; i++) {
 	rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
 	if (rv == ENOSPC)
 	    break;
@@ -781,7 +781,15 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	}
     }
 
-    rv = ipmi_mc_add_fru_data(mc, devid, length, data, i);
+    rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
+    if (rv != ENOSPC) {
+	out->printf(out, "**Error: input data too long for FRU\n", rv, i);
+	return EINVAL;
+    }
+
+    memset(data + i, 0, length - i);
+
+    rv = ipmi_mc_add_fru_data(mc, devid, length, NULL, data);
     if (rv)
 	out->printf(out, "**Unable to add FRU data, error 0x%x\n", rv);
     return rv;
@@ -790,7 +798,7 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 mc_dump_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    unsigned char *data;
+    unsigned char *data = NULL;
     unsigned char devid;
     unsigned int  length;
     unsigned int  i;
@@ -800,7 +808,19 @@ mc_dump_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    rv = ipmi_mc_get_fru_data(mc, devid, &length, &data);
+    rv = ipmi_mc_get_fru_data_len(mc, devid, &length);
+    if (rv) {
+	out->printf(out, "**Unable to dump FRU data, error 0x%x\n", rv);
+	goto out;
+    }
+
+    data = malloc(length);
+    if (!data) {
+	out->printf(out, "**Unable to dump FRU data, out of memory\n", rv);
+	goto out;
+    }
+
+    rv = ipmi_mc_get_fru_data(mc, devid, length, data);
     if (rv) {
 	out->printf(out, "**Unable to dump FRU data, error 0x%x\n", rv);
 	goto out;
@@ -814,6 +834,8 @@ mc_dump_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     out->printf(out, "\n");
 
  out:
+    if (data)
+	free(data);
     return rv;
 }
 

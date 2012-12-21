@@ -68,11 +68,60 @@ find_sel_event_by_recid(lmc_data_t  *mc,
     return entry;
 }
 
+static int
+handle_sel(const char *name, void *data, unsigned int len, void *cb_data)
+{
+    sel_entry_t *e, *n;
+    lmc_data_t *mc = cb_data;
+
+    if (len != 16) {
+	mc->sysinfo->log(mc->sysinfo, INFO, NULL,
+			 "Got invalid SEL entry for %2.2x, name is %s",
+			 ipmi_mc_get_ipmb(mc), name);
+	goto out;
+    }
+
+    n = malloc(sizeof(*n));
+    if (!n)
+	return ENOMEM;
+
+    memcpy(n->data, data, 16);
+    n->record_id = n->data[0] | (n->data[1] << 8);
+    n->next = NULL;
+
+    e = mc->sel.entries;
+    if (!e)
+	mc->sel.entries = n;
+    else {
+	while (e->next)
+	    e = e->next;
+	e->next = n;
+    }
+    mc->sel.count++;
+
+  out:
+    return ITER_PERSIST_CONTINUE;
+}
+
+static int
+handle_sel_time(const char *name, long val, void *cb_data)
+{
+    lmc_data_t *mc = cb_data;
+
+    if (strcmp(name, "last_add_time") == 0)
+	mc->sel.last_add_time = val;
+    else if (strcmp(name, "last_erase_time") == 0)
+	mc->sel.last_erase_time = val;
+    return ITER_PERSIST_CONTINUE;
+}
+
 int
 ipmi_mc_enable_sel(lmc_data_t    *mc,
 		   int           max_entries,
 		   unsigned char flags)
 {
+    persist_t *p;
+
     mc->sel.entries = NULL;
     mc->sel.count = 0;
     mc->sel.max_count = max_entries;
@@ -81,9 +130,56 @@ ipmi_mc_enable_sel(lmc_data_t    *mc,
     mc->sel.flags = flags & 0xb;
     mc->sel.reservation = 0;
     mc->sel.next_entry = 1;
+
+    p = read_persist("sel.%2.2x", ipmi_mc_get_ipmb(mc));
+    if (!p)
+	return 0;
+
+    iterate_persist(p, mc, handle_sel, handle_sel_time);
+    free_persist(p);
     return 0;
 }
 		    
+static void
+rewrite_sels(lmc_data_t *mc)
+{
+    persist_t *p = NULL;
+    sel_entry_t *e;
+    int err;
+
+    p = alloc_persist("sel.%2.2x", ipmi_mc_get_ipmb(mc));
+    if (!p) {
+	err = ENOMEM;
+	goto out_err;
+    }
+
+    err = add_persist_int(p, mc->sel.last_add_time, "last_add_time");
+    if (err)
+	goto out_err;
+
+    err = add_persist_int(p, mc->sel.last_erase_time, "last_erase_time");
+    if (err)
+	goto out_err;
+
+    for (e = mc->sel.entries; e; e = e->next) {
+	err = add_persist_data(p, e->data, 16, "%d", e->record_id);
+	if (err)
+	    goto out_err;
+    }
+
+    err = write_persist(p);
+    if (err)
+	goto out_err;
+    free_persist(p);
+    return;
+
+  out_err:
+    mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+		     "Unable to write persistent SELs for MC %d: %d",
+		     ipmi_mc_get_ipmb(mc), err);
+    if (p)
+	free_persist(p);
+}
 
 int
 ipmi_mc_add_to_sel(lmc_data_t    *mc,
@@ -145,6 +241,9 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 
     if (recid)
 	*recid = e->record_id;
+
+    rewrite_sels(mc);
+
     return 0;
 }
 
@@ -418,6 +517,8 @@ handle_delete_sel_entry(lmc_data_t    *mc,
 
     mc->sel.count--;
     free(entry);
+
+    rewrite_sels(mc);
 }
 
 static void
@@ -482,6 +583,8 @@ handle_clear_sel(lmc_data_t    *mc,
 
     rdata[0] = 0;
     *rdata_len = 2;
+
+    rewrite_sels(mc);
 }
 
 static void
@@ -1456,7 +1559,7 @@ handle_read_fru_data(lmc_data_t    *mc,
     unsigned char devid;
     unsigned int  offset;
     unsigned int  count;
-    unsigned char *data;
+    unsigned char *data = NULL;
     unsigned int  size;
     fru_session_t *ses;
     fru_data_t *fru;
@@ -1475,26 +1578,29 @@ handle_read_fru_data(lmc_data_t    *mc,
     offset = ipmi_get_uint16(msg->data+1);
     count = msg->data[3];
 
-    data = fru->data;
     size = fru->length;
-    ses = fru->sessions;
-    while (ses && (ses->sid != msg->sid))
-	ses = ses->next;
-    if (ses) {
-	data = ses->data;
-	size = ses->length;
-    }
 
-    if (!data) {
-	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	*rdata_len = 1;
-	return;
-    }
+    if (!fru->fru_io_cb) {
+	data = fru->data;
+	ses = fru->sessions;
+	while (ses && (ses->sid != msg->sid))
+	    ses = ses->next;
+	if (ses) {
+	    data = ses->data;
+	    size = ses->length;
+	}
 
-    if (offset >= size) {
-	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
-	*rdata_len = 1;
-	return;
+	if (!data) {
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+
+	if (offset >= size) {
+	    rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+	    *rdata_len = 1;
+	    return;
+	}
     }
 
     if ((offset+count) > size)
@@ -1506,9 +1612,21 @@ handle_read_fru_data(lmc_data_t    *mc,
 	return;
     }
 
+    if (fru->fru_io_cb) {
+	int rv;
+
+	rv = fru->fru_io_cb(fru->data, FRU_IO_READ, rdata + 2, offset, size);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    } else {
+	memcpy(rdata + 2, data + offset, count);
+    }
+
     rdata[0] = 0;
     rdata[1] = count;
-    memcpy(rdata + 2, data + offset, count);
     *rdata_len = 2 + count;
 }
 
@@ -1518,59 +1636,107 @@ handle_write_fru_data(lmc_data_t    *mc,
 		      unsigned char *rdata,
 		      unsigned int  *rdata_len)
 {
-    unsigned char devid;
+    unsigned char device_id;
     unsigned int  offset;
     unsigned int  count;
+    fru_data_t    *fru;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
 
-    devid = msg->data[0];
-    if ((devid >= 255) || (!mc->frus[devid].data)) {
+    device_id = msg->data[0];
+    if ((device_id >= 255) || (!mc->frus[device_id].data)) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
+    fru = &mc->frus[device_id];
+
     offset = ipmi_get_uint16(msg->data+1);
     count = msg->len - 3;
 
-    if (offset >= mc->frus[devid].length) {
+    if (offset >= fru->length) {
 	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    if ((offset+count) > mc->frus[devid].length) {
+    if ((offset+count) > fru->length) {
 	/* Too much data to put into FRU. */
 	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    memcpy(mc->frus[devid].data+offset, msg->data+3, count);
+    if (fru->fru_io_cb) {
+	int rv;
+
+	rv = fru->fru_io_cb(fru->data, FRU_IO_WRITE, fru->data + 3, offset,
+			    count);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    } else {
+	memcpy(fru->data+offset, msg->data+3, count);
+    }
     rdata[0] = 0;
     rdata[1] = count;
     *rdata_len = 2;
 }
 
 int
-ipmi_mc_get_fru_data(lmc_data_t    *mc,
-		     unsigned char device_id,
-		     unsigned int  *length,
-		     unsigned char **data)
+ipmi_mc_get_fru_data_len(lmc_data_t    *mc,
+			 unsigned char device_id,
+			 unsigned int  *length)
 {
+    fru_data_t *fru;
+
     if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
 	return ENOSYS;
 
     if (device_id >= 255)
 	return EINVAL;
 
-    if (!mc->frus[device_id].data)
+    fru = &mc->frus[device_id];
+
+    if (!fru->data)
 	return EINVAL;
 
-    *data = mc->frus[device_id].data;
-    *length = mc->frus[device_id].length;
+    *length = fru->length;
+
+    return 0;
+}
+
+int
+ipmi_mc_get_fru_data(lmc_data_t    *mc,
+		     unsigned char device_id,
+		     unsigned int  length,
+		     unsigned char *data)
+{
+    fru_data_t *fru;
+
+    if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
+	return ENOSYS;
+
+    if (device_id >= 255)
+	return EINVAL;
+
+    fru = &mc->frus[device_id];
+
+    if (!fru->data)
+	return EINVAL;
+
+    if (length > fru->length)
+	return EINVAL;
+
+    if (fru->fru_io_cb) {
+    } else {
+	memcpy(data, fru->data, length);
+    }
+
     return 0;
 }
 
@@ -1578,30 +1744,125 @@ int
 ipmi_mc_add_fru_data(lmc_data_t    *mc,
 		     unsigned char device_id,
 		     unsigned int  length,
-		     unsigned char *data,
-		     unsigned int  data_len)
+		     fru_io_cb     fru_io_cb,
+		     void          *data)
 {
+    fru_data_t *fru;
+
     if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
 	return ENOSYS;
 
     if (device_id >= 255)
 	return EINVAL;
 
-    if (data_len > length)
-	return EINVAL;
+    fru = &mc->frus[device_id];
 
-    if (mc->frus[device_id].data) {
-	free(mc->frus[device_id].data);
-	mc->frus[device_id].length = 0;
+    if (fru->data) {
+	free(fru->data);
+	fru->length = 0;
     }
 
-    mc->frus[device_id].data = malloc(length);
-    if (!mc->frus[device_id].data)
-	return ENOMEM;
-    mc->frus[device_id].length = length;
-    memset(mc->frus[device_id].data, 0, length);
-    memcpy(mc->frus[device_id].data, data, data_len);
+    if (fru_io_cb) {
+	fru->fru_io_cb = fru_io_cb;
+    } else {
+	fru->data = malloc(length);
+	if (!fru->data)
+	    return ENOMEM;
+	memcpy(fru->data, data, length);
+    }
+
+    fru->length = length;
+
     return 0;
+}
+
+struct fru_file_io_info {
+    char         *filename;
+    unsigned int file_offset;
+    unsigned int length;
+};
+
+static int fru_file_io_cb(void *cb_data,
+			  enum fru_io_cb_op op,
+			  unsigned char *data,
+			  unsigned int offset,
+			  unsigned int length)
+{
+    struct fru_file_io_info *info = cb_data;
+    FILE *f;
+    int rv = 0;
+    size_t l;
+
+    if (offset + length > info->length)
+	return EINVAL;
+
+    switch (op) {
+    case FRU_IO_READ:
+	f = fopen(info->filename, "r");
+	if (!f)
+	    return errno;
+	rv = fseek(f, info->file_offset + offset, SEEK_SET);
+	if (rv == -1) {
+	    rv = errno;
+	    fclose(f);
+	    return rv;
+	}
+	l = fread(data, length, 1, f);
+	if (l == 0)
+	    rv = EIO;
+	fclose(f);
+	break;
+
+    case FRU_IO_WRITE:
+	f = fopen(info->filename, "r+");
+	if (!f)
+	    return errno;
+	rv = fseek(f, info->file_offset + offset, SEEK_SET);
+	if (rv == -1) {
+	    rv = errno;
+	    fclose(f);
+	    return rv;
+	}
+	l = fwrite(data, length, 1, f);
+	if (l == 0)
+	    rv = EIO;
+	fclose(f);
+	break;
+
+    default:
+	return EINVAL;
+    }
+
+    return rv;
+}
+
+int ipmi_mc_add_fru_file(lmc_data_t    *mc,
+			 unsigned char device_id,
+			 unsigned int  length,
+			 unsigned int  file_offset,
+			 const char    *filename)
+{
+    struct fru_file_io_info *info;
+    int rv;
+    
+    info = malloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    info->filename = strdup(filename);
+    if (!info->filename) {
+	free(info);
+	return ENOMEM;
+    }
+    info->length = length;
+    info->file_offset = file_offset;
+
+    rv = ipmi_mc_add_fru_data(mc, device_id, length, fru_file_io_cb, info);
+    if (rv) {
+	free(info->filename);
+	free(info);
+    }
+
+    return rv;
 }
 
 /* We don't currently care about partial sel adds, since they are

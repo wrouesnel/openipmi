@@ -603,7 +603,7 @@ init_sensor_from_sdr(lmc_data_t *mc, sdr_t *sdr)
 }
 
 static int
-init_sys(emu_data_t *emu, lmc_data_t *mc)
+init_mc(emu_data_t *emu, lmc_data_t *mc)
 {
     int err;
 
@@ -916,7 +916,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
 
 	mc->sysinfo = emu->sysinfo;
-	err = init_sys(emu, mc);
+	err = init_mc(emu, mc);
     }
 
     if (mc->startcmd.startcmd) {

@@ -1,3 +1,15 @@
+2012-12-21 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/mcserv.h, lanserv/bmc_storage.c: Add the
+	ability to represent a FRU inventory device with a function, and
+	add a helper function for doing this with a file.
+
+	* lanserv/emu_cmd.c: Adjust for the previous change.
+
+	* lanserv/sel.c: Add persistence to the SEL.
+
+	* lanserv/sdrcomp.c: Add type 16 and 17 SDR types.
+
 2012-12-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/persist.h, lanserv/persist.c: Add the ability

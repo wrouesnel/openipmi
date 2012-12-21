@@ -133,16 +133,44 @@ int ipmi_mc_add_device_sdr(lmc_data_t    *mc,
 			   unsigned char *data,
 			   unsigned int  data_len);
 
+enum fru_io_cb_op { FRU_IO_READ, FRU_IO_WRITE };
+
+typedef int (*fru_io_cb)(void *cb_data,
+			 enum fru_io_cb_op op,
+			 unsigned char *data,
+			 unsigned int offset,
+			 unsigned int length);
+
+/*
+ * Add a fru inventory device to the MC.  If fru_io_cb is NULL, the data
+ * and length is the initial data for the FRU.  Otherwise, fru_io_cb is
+ * called for reads and writes, and the data is the callback data for
+ * fru_io_cb.
+ */
 int ipmi_mc_add_fru_data(lmc_data_t    *mc,
 			 unsigned char device_id,
 			 unsigned int  length,
-			 unsigned char *data,
-			 unsigned int  data_len);
+			 fru_io_cb     fru_io_cb,
+			 void          *data);
+
+/*
+ * Add a fru inventory device to the MC, mapping it to a file at the
+ * given filename, starting in the file at the given offset.
+ */
+int ipmi_mc_add_fru_file(lmc_data_t    *mc,
+			 unsigned char device_id,
+			 unsigned int  length,
+			 unsigned int  file_offset,
+			 const char    *filename);
+
+int ipmi_mc_get_fru_data_len(lmc_data_t    *mc,
+			     unsigned char device_id,
+			     unsigned int  *length);
 
 int ipmi_mc_get_fru_data(lmc_data_t    *mc,
 			 unsigned char device_id,
-			 unsigned int  *length,
-			 unsigned char **data);
+			 unsigned int  length,
+			 unsigned char *data);
 
 int ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 			   unsigned char lun,

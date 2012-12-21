@@ -151,12 +151,12 @@ typedef struct fru_session_s
     unsigned int length;
     unsigned int sid;
     fru_data_t *fru;
-    struct fru_session_s *next;
-    
+    struct fru_session_s *next;    
 } fru_session_t;
 
 struct fru_data_s
 {
+    fru_io_cb     fru_io_cb;
     unsigned int  length;
     unsigned char *data;
     fru_session_t *sessions;
