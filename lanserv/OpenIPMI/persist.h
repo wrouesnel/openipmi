@@ -63,6 +63,7 @@ int persist_init(const char *app, const char *instance);
 persist_t *alloc_persist(const char *name, ...);
 persist_t *read_persist(const char *name, ...);
 int write_persist(persist_t *p);
+int write_persist_file(persist_t *p, FILE *f);
 void free_persist(persist_t *p);
 
 int add_persist_data(persist_t *p, void *data, unsigned int len,
@@ -73,6 +74,21 @@ int add_persist_int(persist_t *p, long val, const char *name, ...);
 int read_persist_int(persist_t *p, long *val, const char *name, ...);
 int add_persist_str(persist_t *p, const char *val, const char *name, ...);
 int read_persist_str(persist_t *p, char **val, const char *name, ...);
+
+/*
+ * Iterate over all the values in the persist.  Call the data function
+ * for each data or string entry, and call the int function for each
+ * integer.
+ */
+#define ITER_PERSIST_CONTINUE 0
+#define ITER_PERSIST_STOP 1
+int iterate_persist(persist_t *p,
+		    void *cb_data,
+		    int (*data_func)(const char *name,
+				     void *data, unsigned int len,
+				     void *cb_data),
+		    int (*int_func)(const char *name,
+				    long val, void *cb_data));
 
 /* Free the values return by read_persist_data() and read_persist_str() */
 void free_persist_data(void *data);

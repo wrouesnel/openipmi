@@ -245,7 +245,7 @@ write_data(void *idata, unsigned int len, FILE *f)
     unsigned int i;
 
     for (i = 0; i < len; i++, d++) {
-	if (isprint(*d))
+	if (isprint(*d) && (*d != '\\'))
 	    fputc(*d, f);
 	else
 	    fprintf(f, "\\%2.2x", *d);
@@ -341,9 +341,28 @@ read_persist(const char *name, ...)
 }
 
 int
-write_persist(persist_t *p)
+write_persist_file(persist_t *p, FILE *f)
 {
     struct pitem *pi;
+
+    for (pi = p->items; pi; pi = pi->next) {
+	fprintf(f, "%s:%c:", pi->iname, pi->type);
+	switch (pi->type) {
+	case PITEM_DATA:
+	case PITEM_STR:
+	    write_data(pi->data, pi->dval, f);
+	    break;
+	case PITEM_INT:
+	    fprintf(f, "%ld", pi->dval);
+	}
+	fputc('\n', f);
+    }
+    return 0;
+}
+
+int
+write_persist(persist_t *p)
+{
     char *fname, *fname2;
     int rv = 0;
     FILE *f;
@@ -366,18 +385,7 @@ write_persist(persist_t *p)
 	return ENOMEM;
     }
 
-    for (pi = p->items; pi; pi = pi->next) {
-	fprintf(f, "%s:%c:", pi->iname, pi->type);
-	switch (pi->type) {
-	case PITEM_DATA:
-	case PITEM_STR:
-	    write_data(pi->data, pi->dval, f);
-	    break;
-	case PITEM_INT:
-	    fprintf(f, "%ld", pi->dval);
-	}
-	fputc('\n', f);
-    }
+    write_persist_file(p, f);
     fclose(f);
 
     if (rename(fname, fname2) != 0)
@@ -385,6 +393,40 @@ write_persist(persist_t *p)
 
     free(fname);
     free(fname2);
+
+    return rv;
+}
+
+int
+iterate_persist(persist_t *p,
+		void *cb_data,
+		int (*data_func)(const char *name,
+				 void *data, unsigned int len,
+				 void *cb_data),
+		int (*int_func)(const char *name,
+				long val, void *cb_data))
+{
+    struct pitem *pi;
+    int rv = 0;
+
+    for (pi = p->items; pi; pi = pi->next) {
+	rv = ITER_PERSIST_CONTINUE;
+	switch (pi->type) {
+	case PITEM_DATA:
+	case PITEM_STR:
+	    if (data_func)
+		rv = data_func(pi->iname, pi->data, pi->dval, cb_data);
+	    break;
+
+	case PITEM_INT:
+	    if (int_func)
+		rv = int_func(pi->iname, pi->dval, cb_data);
+	    break;
+	}
+
+	if (rv != ITER_PERSIST_CONTINUE)
+	    return rv;
+    }
 
     return rv;
 }

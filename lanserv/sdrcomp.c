@@ -40,6 +40,8 @@
 /* Primarily to get string handling routines */
 #include <OpenIPMI/ipmi_string.h>
 
+#include "persist.c"
+
 #define MAX_SDR_LINE 256
 
 struct sdr_field_name {
@@ -951,7 +953,7 @@ static char *progname;
 
 static void help(void)
 {
-    fprintf(stderr, "%s <input file>\n", progname);
+    fprintf(stderr, "%s [-r] <input file>\n", progname);
     exit(1);
 }
 
@@ -962,9 +964,27 @@ main(int argc, char *argv[])
     char *s, *tok, *tokptr;
     char buf[MAX_SDR_LINE];
     unsigned int line = 0;
+    persist_t *p = NULL;
+    unsigned int sdrnum = 1;
+    int argn;
+    int outraw = 0;
 
     progname = argv[0];
-    if (argc < 2) {
+
+    for (argn = 1; argn < argc; argn++) {
+	if (argv[argn][0] != '-')
+	    break;
+	if (strcmp(argv[argn], "--") == 0)
+	    break;
+	if (strcmp(argv[argn], "-r") == 0) {
+	    outraw = 1;
+	} else {
+	    fprintf(stderr, "Invalid option: %s\n", argv[argn]);
+	    exit(1);
+	}
+    }
+
+    if ((argc - argn) < 1) {
 	fprintf(stderr, "No input file given\n");
 	help();
     }
@@ -973,6 +993,14 @@ main(int argc, char *argv[])
     if (!f) {
 	fprintf(stderr, "Unable to open input file %s\n", argv[1]);
 	exit(1);
+    }
+
+    if (!outraw) {
+	p = alloc_persist("");
+	if (!p) {
+	    fprintf(stderr, "Out of memory\n");
+	    exit(1);
+	}
     }
 
     while ((s = fgets(buf, sizeof(buf), f))) {
@@ -1022,8 +1050,23 @@ main(int argc, char *argv[])
 		fprintf(stderr, "%3d: %s\n", line, errstr);
 	    exit(1);
 	}
-	fwrite(sdr, sdrlen, 1, stdout);
+
+	if (outraw) {
+	    fwrite(sdr, sdrlen, 1, stdout);
+	} else {
+	    err = add_persist_data(p, sdr, sdrlen, "%d", sdrnum);
+	    if (err) {
+		fprintf(stderr, "Out of memory\n");
+		exit(1);
+	    }
+	}
+	sdrnum++;
 	free(sdr);
+    }
+
+    if (!outraw) {
+	write_persist_file(p, stdout);
+	free_persist(p);
     }
 
     return 0;

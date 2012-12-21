@@ -38,6 +38,7 @@
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/persist.h>
 
 /*
  * SEL handling commands.
@@ -537,8 +538,7 @@ handle_set_sel_time(lmc_data_t    *mc,
 #define IPMI_SDR_MODAL_BOTH		3
 
 sdr_t *
-find_sdr_by_recid(lmc_data_t *mc,
-		  sdrs_t     *sdrs,
+find_sdr_by_recid(sdrs_t     *sdrs,
 		  uint16_t   record_id,
 		  sdr_t      **prev)
 {
@@ -558,13 +558,13 @@ find_sdr_by_recid(lmc_data_t *mc,
 }
 
 sdr_t *
-new_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, unsigned char length)
+new_sdr_entry(sdrs_t *sdrs, unsigned char length)
 {
     sdr_t    *entry;
     uint16_t start_recid;
 
     start_recid = sdrs->next_entry;
-    while (find_sdr_by_recid(mc, sdrs, sdrs->next_entry, NULL)) {
+    while (find_sdr_by_recid(sdrs, sdrs->next_entry, NULL)) {
 	sdrs->next_entry++;
 	if (sdrs->next_entry == 0xffff)
 	    sdrs->next_entry = 1;
@@ -591,6 +591,44 @@ new_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, unsigned char length)
     return entry;
 }
 
+static void
+rewrite_sdrs(lmc_data_t *mc, sdrs_t *sdrs)
+{
+    persist_t *p = NULL;
+    sdr_t *sdr;
+    int err;
+
+    p = alloc_persist("sdr.%d.main", ipmi_mc_get_ipmb(mc));
+    if (!p)
+	goto out_err;
+
+    err = add_persist_int(p, sdrs->last_add_time, "last_add_time");
+    if (err)
+	goto out_err;
+
+    err = add_persist_int(p, sdrs->last_erase_time, "last_erase_time");
+    if (err)
+	goto out_err;
+
+    for (sdr = sdrs->sdrs; sdr; sdr = sdr->next) {
+	unsigned int recid = ipmi_get_uint16(sdr->data);
+	err = add_persist_data(p, sdr->data, sdr->length, "%d", recid);
+	if (err)
+	    goto out_err;
+    }
+
+    err = write_persist(p);
+    if (err)
+	goto out_err;
+    free_persist(p);
+    return;
+
+  out_err:
+    /* FIXME - log */
+    if (p)
+	free_persist(p);
+}
+
 void
 add_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, sdr_t *entry)
 {
@@ -610,6 +648,8 @@ add_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, sdr_t *entry)
     gettimeofday(&t, NULL);
     sdrs->last_add_time = t.tv_sec + mc->main_sdrs.time_offset;
     sdrs->sdr_count++;
+
+    rewrite_sdrs(mc, sdrs);
 }
 
 static void
@@ -617,6 +657,54 @@ free_sdr(sdr_t *sdr)
 {
     free(sdr->data);
     free(sdr);
+}
+
+static int
+handle_sdr(const char *name, void *data, unsigned int len, void *cb_data)
+{
+    sdr_t *sdr, *p;
+    sdrs_t *sdrs = cb_data;
+
+    sdr = new_sdr_entry(sdrs, len);
+    if (!sdr)
+	return ENOMEM;
+
+    sdr->next = NULL;
+    p = sdrs->sdrs;
+    if (!p)
+	sdrs->sdrs = sdr;
+    else {
+	while (p->next)
+	    p = p->next;
+	p->next = sdr;
+    }
+    sdrs->sdr_count++;
+
+    return ITER_PERSIST_CONTINUE;
+}
+
+static int
+handle_sdr_time(const char *name, long val, void *cb_data)
+{
+    sdrs_t *sdrs = cb_data;
+
+    if (strcmp(name, "last_add_time") == 0)
+	sdrs->last_add_time = val;
+    else if (strcmp(name, "last_erase_time") == 0)
+	sdrs->last_erase_time = val;
+    return ITER_PERSIST_CONTINUE;
+}
+
+void
+read_mc_sdrs(lmc_data_t *mc, sdrs_t *sdrs, const char *sdrtype)
+{
+    persist_t *p;
+
+    p = read_persist("sdr.%d.%s", ipmi_mc_get_ipmb(mc), sdrtype);
+    if (!p)
+	return;
+
+    iterate_persist(p, sdrs, handle_sdr, handle_sdr_time);
 }
 
 int
@@ -632,7 +720,7 @@ ipmi_mc_add_main_sdr(lmc_data_t    *mc,
     if ((data_len < 5) || (data_len != (((unsigned int) data[4]) + 5)))
 	return EINVAL;
 
-    entry = new_sdr_entry(mc, &mc->main_sdrs, data_len);
+    entry = new_sdr_entry(&mc->main_sdrs, data_len);
     if (!entry)
 	return ENOMEM;
 
@@ -658,7 +746,7 @@ ipmi_mc_add_device_sdr(lmc_data_t    *mc,
 	return ENOSYS;
     }
 
-    entry = new_sdr_entry(mc, &mc->device_sdrs[lun], data_len);
+    entry = new_sdr_entry(&mc->device_sdrs[lun], data_len);
     if (!entry)
 	return ENOMEM;
 
@@ -799,7 +887,7 @@ handle_get_sdr(lmc_data_t    *mc,
 	    }
 	}
     } else {
-	entry = find_sdr_by_recid(mc, &mc->main_sdrs, record_id, NULL);
+	entry = find_sdr_by_recid(&mc->main_sdrs, record_id, NULL);
     }
 
     if (entry == NULL) {
@@ -867,7 +955,7 @@ handle_add_sdr(lmc_data_t    *mc,
 	return;
     }
 
-    entry = new_sdr_entry(mc, &mc->main_sdrs, msg->data[5]);
+    entry = new_sdr_entry(&mc->main_sdrs, msg->data[5]);
     if (!entry) {
 	rdata[0] = IPMI_OUT_OF_SPACE_CC;
 	*rdata_len = 1;
@@ -946,7 +1034,7 @@ handle_partial_add_sdr(lmc_data_t    *mc,
 	    *rdata_len = 1;
 	    return;
 	}
-	mc->part_add_sdr = new_sdr_entry(mc, &mc->main_sdrs, msg->data[11]);
+	mc->part_add_sdr = new_sdr_entry(&mc->main_sdrs, msg->data[11]);
 	memcpy(mc->part_add_sdr->data+2, msg->data+8, msg->len - 8);
 	mc->part_add_next = msg->len - 8;
     } else {
@@ -1033,7 +1121,7 @@ handle_delete_sdr(lmc_data_t    *mc,
 	    }
 	}
     } else {
-	entry = find_sdr_by_recid(mc, &mc->main_sdrs, record_id, &p_entry);
+	entry = find_sdr_by_recid(&mc->main_sdrs, record_id, &p_entry);
     }
     if (!entry) {
 	rdata[0] = IPMI_NOT_PRESENT_CC;
@@ -1055,6 +1143,7 @@ handle_delete_sdr(lmc_data_t    *mc,
     gettimeofday(&t, NULL);
     mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
     mc->main_sdrs.sdr_count--;
+    rewrite_sdrs(mc, &mc->main_sdrs);
 }
 
 static void
@@ -1117,6 +1206,7 @@ handle_clear_sdr_repository(lmc_data_t    *mc,
 
     gettimeofday(&t, NULL);
     mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
+    rewrite_sdrs(mc, &mc->main_sdrs);
 }
 
 static void

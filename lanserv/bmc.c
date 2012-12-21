@@ -602,21 +602,9 @@ init_sensor_from_sdr(lmc_data_t *mc, sdr_t *sdr)
     return err;
 }
 
-static const uint8_t init_sdrs[] = {
-    /* Watchdog device */
-    0x00, 0x00, 0x51, 0x02,   40, 0x20, 0x00, WATCHDOG_SENSOR_NUM,
-    0x23, 0x01, 0x63, 0x00, 0x23, 0x6f, 0x0f, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc8,
-    'W',  'a',  't',  'c',  'h',  'd',  'o',  'g',
-    /* End */
-    0xff, 0xff, 0x00, 0x00, 0x00
-};
-
 static int
 init_sys(emu_data_t *emu, lmc_data_t *mc)
 {
-    unsigned int i;
     int err;
 
     err = mc->sysinfo->alloc_timer(mc->sysinfo, watchdog_timeout,
@@ -626,43 +614,15 @@ init_sys(emu_data_t *emu, lmc_data_t *mc)
 	return err;
     }
 
-    for (i = 0;;) {
-	unsigned int len;
-	unsigned int recid;
-	sdr_t *entry;
-
-	if ((i + 5) > sizeof(init_sdrs)) {
-	    //printf("IPMI: Problem with recid 0x%4.4x\n", i);
-	    err = -1;
-	    break;
-	}
-	len = init_sdrs[i + 4];
-	recid = init_sdrs[i] | (init_sdrs[i + 1] << 8);
-	if (recid == 0xffff)
-	    break;
-	if ((i + len) > sizeof(init_sdrs)) {
-	    //printf("IPMI: Problem with recid 0x%4.4x\n", i);
-	    err = -1;
-	    break;
-	}
-
-	entry = new_sdr_entry(mc, &mc->main_sdrs, len);
-	if (!entry) {
-	    err = ENOMEM;
-	    break;
-	}
-
-	add_sdr_entry(mc, &mc->main_sdrs, entry);
-
-	memcpy(entry->data + 2, init_sdrs + i + 2, len - 2);
-	entry->data[5] = mc->ipmb;
-
-	err = init_sensor_from_sdr(mc, entry);
-	if (err)
-	    break;
-
-	i += len;
+    if (mc->has_device_sdrs) {
+	read_mc_sdrs(mc, &mc->device_sdrs[0], "device0");
+	read_mc_sdrs(mc, &mc->device_sdrs[1], "device1");
+	read_mc_sdrs(mc, &mc->device_sdrs[2], "device2");
+	read_mc_sdrs(mc, &mc->device_sdrs[3], "device3");
     }
+
+    if (mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)
+	read_mc_sdrs(mc, &mc->main_sdrs, "main");
 
     return err;
 }

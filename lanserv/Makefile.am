@@ -40,6 +40,7 @@ ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
 
+sdrcomp_DEPENDENCIES = persist.c
 sdrcomp_SOURCES = sdrcomp.c
 sdrcomp_LDFLAGS = ../utils/libOpenIPMIutils.la
 

@@ -376,13 +376,14 @@ int check_msg_length(msg_t         *msg,
 		     unsigned int  *rdata_len);
 
 
-sdr_t *find_sdr_by_recid(lmc_data_t *mc,
-			 sdrs_t     *sdrs,
+sdr_t *find_sdr_by_recid(sdrs_t     *sdrs,
 			 uint16_t   record_id,
 			 sdr_t      **prev);
 
-sdr_t *new_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, unsigned char length);
+sdr_t *new_sdr_entry(sdrs_t *sdrs, unsigned char length);
 void add_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, sdr_t *entry);
+void read_mc_sdrs(lmc_data_t *mc, sdrs_t *sdrs, const char *sdrtype);
+
 
 void mc_new_event(lmc_data_t *mc,
 		  unsigned char record_type,

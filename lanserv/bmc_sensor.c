@@ -174,7 +174,7 @@ handle_get_device_sdr(lmc_data_t    *mc,
 	    }
 	}
     } else {
-	entry = find_sdr_by_recid(mc, &mc->device_sdrs[msg->rs_lun],
+	entry = find_sdr_by_recid(&mc->device_sdrs[msg->rs_lun],
 				  record_id, NULL);
     }
 
