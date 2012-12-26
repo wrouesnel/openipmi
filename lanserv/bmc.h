@@ -113,6 +113,8 @@ typedef struct sdrs_s
 typedef struct sensor_s sensor_t;
 struct sensor_s
 {
+    lmc_data_t *mc;
+
     unsigned char num;
     unsigned int  lun              : 2;
     unsigned int  scanning_enabled : 1;
@@ -140,6 +142,11 @@ struct sensor_s
 
     /* Called when the sensor changes values. */
     void (*sensor_update_handler)(lmc_data_t *mc, sensor_t *sensor);
+
+    ipmi_timer_t *poll_timer;
+    struct timeval poll_timer_time;
+    void (*poll)(lmc_data_t *mc, sensor_t *sensor, void *cb_data);
+    void *cb_data;
 };
 
 typedef struct fru_data_s fru_data_t;

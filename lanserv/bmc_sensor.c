@@ -34,6 +34,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <malloc.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -953,6 +954,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 	return ENOMEM;
     memset(sensor, 0, sizeof(*sensor));
 
+    sensor->mc = mc;
     sensor->lun = lun;
     sensor->num = sens_num;
     sensor->sensor_type = type;
@@ -969,6 +971,59 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     if (bmc)
 	iterate_sdrs(mc, &mc->main_sdrs, check_sensor_sdr, sensor);
 
+    return 0;
+}
+
+void
+free_sensor(lmc_data_t *mc, sensor_t *sensor)
+{
+    mc->sensors[sensor->lun][sensor->num] = NULL;
+    free(sensor);
+}
+
+static void
+sensor_poll(void *cb_data)
+{
+    sensor_t *sensor = cb_data;
+    lmc_data_t *mc = sensor->mc;
+
+    sensor->poll(mc, sensor, sensor->cb_data);
+    mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
+}
+
+int
+ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
+			  unsigned char lun,
+			  unsigned char sens_num,
+			  unsigned char type,
+			  unsigned char event_reading_code,
+			  unsigned int poll_rate,
+			  void (*poll)(lmc_data_t *mc, sensor_t *sensor,
+				       void *cb_data),
+			  void *cb_data)
+{
+    sensor_t *sensor;
+    int err;
+
+    err = ipmi_mc_add_sensor(mc, lun, sens_num, type, event_reading_code);
+    if (err)
+	return err;
+
+    sensor = mc->sensors[lun][sens_num];
+
+    sensor->poll = poll;
+    sensor->poll_timer_time.tv_sec = poll_rate / 1000;
+    sensor->poll_timer_time.tv_usec = (poll_rate % 1000) * 1000;
+    sensor->cb_data = cb_data;
+    
+    err = mc->sysinfo->alloc_timer(mc->sysinfo, sensor_poll, sensor,
+				   &sensor->poll_timer);
+    if (err) {
+	free_sensor(mc, sensor);
+	return err;
+    }
+
+    sensor_poll(sensor);
     return 0;
 }
 
