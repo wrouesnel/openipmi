@@ -347,6 +347,7 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char num;
     unsigned char type;
     unsigned char code;
+    char *tok;
 
     rv = emu_get_uchar(out, toks, &lun, "LUN", 0);
     if (rv)
@@ -364,9 +365,38 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
-    if (rv)
-	out->printf(out, "**Unable to add to sensor, error 0x%x\n", rv);
+    tok = mystrtok(NULL, " \t\n", toks);
+    if (tok) {
+	ipmi_sensor_handler_t *handler = ipmi_sensor_find_handler(tok);
+	unsigned int poll_rate;
+	void *rcb_data;
+	char *errstr;
+
+	if (!handler) {
+	    out->printf(out, "**Invalid sensor handler: %s\n", tok);
+	    return -1;
+	}
+
+	rv = emu_get_uint(out, toks, &poll_rate, "poll rate");
+	if (rv)
+	    return rv;
+
+	rv = handler->init(mc, lun, num, toks, handler->cb_data, &rcb_data,
+			   &errstr);
+	if (rv) {
+	    out->printf(out, "**Error initializing sensor handler: %s\n", 
+			errstr);
+	    return rv;
+	}
+
+	rv = ipmi_mc_add_polled_sensor(mc, lun, num, type, code,
+				       poll_rate, handler->poll, rcb_data);
+				       
+    } else {
+	rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
+    }
+	if (rv)
+	    out->printf(out, "**Unable to add to sensor, error 0x%x\n", rv);
     return rv;
 }
 

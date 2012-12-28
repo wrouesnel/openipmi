@@ -95,7 +95,7 @@ typedef struct ipmi_sol_s {
 } ipmi_sol_t;
 
 int ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
-				  lmc_data_t **rmc);
+			       lmc_data_t **rmc);
 
 unsigned char ipmi_mc_get_ipmb(lmc_data_t *mc);
 channel_t **ipmi_mc_get_channelset(lmc_data_t *mc);
@@ -185,6 +185,11 @@ int ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
 				    unsigned char bit,
 				    int           gen_event);
 
+int ipmi_mc_sensor_set_enabled(lmc_data_t    *mc,
+			       unsigned char lun,
+			       unsigned char sens_num,
+			       unsigned char enabled);
+
 int ipmi_mc_sensor_set_value(lmc_data_t    *mc,
 			     unsigned char lun,
 			     unsigned char sens_num,
@@ -216,11 +221,35 @@ int ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 				     unsigned char assert_enabled[15],
 				     unsigned char deassert_enabled[15]);
 
+struct ipmi_sensor_handler_s
+{
+    char *name;
+    void (*poll)(lmc_data_t *mc, void *cb_data);
+    int (*init)(lmc_data_t *mc, unsigned char lun, unsigned char sensor_num,
+		char **toks, void *cb_data, void **rcb_data, char **errstr);
+    void *cb_data;
+
+    struct ipmi_sensor_handler_s *next;
+};
+typedef struct ipmi_sensor_handler_s ipmi_sensor_handler_t;
+
+int ipmi_sensor_add_handler(ipmi_sensor_handler_t *handler);
+ipmi_sensor_handler_t *ipmi_sensor_find_handler(char *name);
+
 int ipmi_mc_add_sensor(lmc_data_t    *mc,
 		       unsigned char lun,
 		       unsigned char sens_num,
 		       unsigned char type,
 		       unsigned char event_reading_code);
+
+int ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
+			      unsigned char lun,
+			      unsigned char sens_num,
+			      unsigned char type,
+			      unsigned char event_reading_code,
+			      unsigned int poll_rate,
+			      void (*poll)(lmc_data_t *mc, void *cb_data),
+			      void *cb_data);
 
 int ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_int);
 

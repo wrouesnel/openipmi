@@ -34,11 +34,14 @@
 
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include <malloc.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_bits.h>
+
+static void sensor_poll(void *cb_data);
 
 static void
 handle_get_event_receiver(lmc_data_t    *mc,
@@ -543,6 +546,8 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 
     sensor->events_enabled = (msg->data[1] >> 7) & 1;
     sensor->scanning_enabled = (msg->data[1] >> 6) & 1;
+
+    sensor_poll(sensor);
 	
     if (op == 0)
 	return;
@@ -611,7 +616,7 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
 
     rdata[0] = 0;
     rdata[1] = ((sensor->events_enabled << 7)
-		| (sensor->scanning_enabled << 6));
+		| ((sensor->scanning_enabled && sensor->enabled) << 6));
 	
     if (sensor->event_support == IPMI_EVENT_SUPPORT_ENTIRE_SENSOR) {
 	*rdata_len = 2;
@@ -700,7 +705,7 @@ handle_get_sensor_reading(lmc_data_t    *mc,
     rdata[0] = 0;
     rdata[1] = sensor->value;
     rdata[2] = ((sensor->events_enabled << 7)
-		| (sensor->scanning_enabled << 6));
+		| ((sensor->scanning_enabled && sensor->enabled) << 6));
     e = 0;
     for (i=3; i<=4; i++) {
 	rdata[i] = 0;
@@ -768,6 +773,26 @@ ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
+
+    return 0;
+}
+
+int
+ipmi_mc_sensor_set_enabled(lmc_data_t    *mc,
+			   unsigned char lun,
+			   unsigned char sens_num,
+			   unsigned char enabled)
+{
+    sensor_t *sensor;
+
+    if ((lun >= 4) || (sens_num >= 255) || (!mc->sensors[lun][sens_num]))
+	return EINVAL;
+
+    sensor = mc->sensors[lun][sens_num];
+
+    sensor->enabled = enabled;
+
+    sensor_poll(sensor);
 
     return 0;
 }
@@ -866,6 +891,8 @@ ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
     memcpy(sensor->event_enabled[0], assert_enabled, 15);
     memcpy(sensor->event_enabled[1], deassert_enabled, 15);
 
+    sensor_poll(sensor);
+	
     return 0;
 }
 
@@ -974,7 +1001,143 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     return 0;
 }
 
-void
+struct file_data {
+    char *filename;
+    unsigned char lun;
+    unsigned char sensor_num;
+    int div;
+    int base;
+};
+
+static void
+ascii_file_poll(lmc_data_t *mc, void *cb_data)
+{
+    struct file_data *f = cb_data;
+    FILE *file;
+    char data[100];
+    size_t rv;
+    int val;
+    char *end;
+
+    file = fopen(f->filename, "r");
+    if (!file) {
+	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			 "Unable to open sensor file %s: %s",
+			 f->filename, strerror(errno));
+	return;
+    }
+
+    rv = fread(data, sizeof(data), 1, file);
+    fclose(file);
+    if (rv <= 0) {
+	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			 "No data read from file %s", f->filename);
+	return;
+    }
+
+    val = strtol(data, &end, f->base);
+    if (*end != '\0') {
+	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			 "Invalid data read from file %s: '%s'",
+			 f->filename, data);
+	return;
+    }
+
+    if (f->div)
+	val /= f->div;
+
+    rv = ipmi_mc_sensor_set_value(mc, f->lun, f->sensor_num, val, 1);
+    if (rv) {
+	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			 "Error setting value from file %s: %s",
+			 f->filename, strerror(rv));
+    }
+}
+
+static int
+ascii_file_init(lmc_data_t *mc,
+		unsigned char lun, unsigned char sensor_num,
+		char **toks, void *cb_data, void **rcb_data,
+		char **errstr)
+{
+    char *fname;
+    int div = 0;
+    int base = 0;
+    struct file_data *f;
+    char *end;
+    int err;
+    char *tok;
+
+    err = get_delim_str(toks, &fname, errstr);
+    if (err)
+	return err;
+    tok = mystrtok(NULL, " \t\n", toks);
+    while (tok) {
+	if (strncmp("div=", tok, 4) == 0) {
+	    div = strtol(tok + 4, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid div value";
+		return -1;
+	    }
+	} else if (strncmp("base=", tok, 5) == 0) {
+	    div = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid base value";
+		return -1;
+	    }
+	} else {
+	    *errstr = "Invalid ascii_file option, options are div= and base=";
+	    return -1;
+	}
+    }
+
+    f = malloc(sizeof(*f));
+    if (!f)
+	return ENOMEM;
+    f->filename = strdup(fname);
+    if (!f->filename) {
+	free(f);
+	return ENOMEM;
+    }
+    f->div = div;
+    f->base = base;
+    f->lun = lun;
+    f->sensor_num = sensor_num;
+
+    *rcb_data = f;
+    return 0;
+}
+
+static ipmi_sensor_handler_t ascii_file_sensor =
+{
+    .name = "ascii_file",
+    .poll = ascii_file_poll,
+    .init = ascii_file_init
+};
+
+static ipmi_sensor_handler_t *sensor_handlers = &ascii_file_sensor;
+
+int
+ipmi_sensor_add_handler(ipmi_sensor_handler_t *handler)
+{
+    handler->next = sensor_handlers;
+    sensor_handlers = handler;
+    return 0;
+}
+
+ipmi_sensor_handler_t *
+ipmi_sensor_find_handler(char *name)
+{
+    ipmi_sensor_handler_t *handler = sensor_handlers;
+
+    while (handler) {
+	if (strcmp(handler->name, name) == 0)
+	    return handler;
+    }
+    return NULL;
+}
+
+static void
 free_sensor(lmc_data_t *mc, sensor_t *sensor)
 {
     mc->sensors[sensor->lun][sensor->num] = NULL;
@@ -985,10 +1148,14 @@ static void
 sensor_poll(void *cb_data)
 {
     sensor_t *sensor = cb_data;
-    lmc_data_t *mc = sensor->mc;
 
-    sensor->poll(mc, sensor, sensor->cb_data);
-    mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
+    if (sensor->enabled && sensor->scanning_enabled) {
+	lmc_data_t *mc = sensor->mc;
+
+	sensor->poll(mc, sensor->cb_data);
+	check_thresholds(mc, sensor, 1);
+	mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
+    }
 }
 
 int
@@ -998,8 +1165,7 @@ ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 			  unsigned char type,
 			  unsigned char event_reading_code,
 			  unsigned int poll_rate,
-			  void (*poll)(lmc_data_t *mc, sensor_t *sensor,
-				       void *cb_data),
+			  void (*poll)(lmc_data_t *mc, void *cb_data),
 			  void *cb_data)
 {
     sensor_t *sensor;

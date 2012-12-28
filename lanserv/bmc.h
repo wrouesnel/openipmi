@@ -119,6 +119,7 @@ struct sensor_s
     unsigned int  lun              : 2;
     unsigned int  scanning_enabled : 1;
     unsigned int  events_enabled   : 1;
+    unsigned int  enabled          : 1;
 
     unsigned char sensor_type;
     unsigned char event_reading_code;
@@ -145,7 +146,7 @@ struct sensor_s
 
     ipmi_timer_t *poll_timer;
     struct timeval poll_timer_time;
-    void (*poll)(lmc_data_t *mc, sensor_t *sensor, void *cb_data);
+    void (*poll)(lmc_data_t *mc, void *cb_data);
     void *cb_data;
 };
 
