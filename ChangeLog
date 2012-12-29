@@ -1,3 +1,8 @@
+2012-12-28 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/serv.h, lanserv/config.c, lanserv/ipmi_sim.c:
+	Add a post-init function for modules.
+
 2012-12-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc.h, lanserv/bmc_sensor.c, lanserv/OpenIPMI/mcserv.h:

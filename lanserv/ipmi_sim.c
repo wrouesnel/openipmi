@@ -1503,6 +1503,8 @@ main(int argc, const char *argv[])
 	}
     }
 
+    post_init_dynamic_libs(&sysinfo);
+
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);

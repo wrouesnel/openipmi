@@ -482,6 +482,7 @@ int read_config(sys_data_t    *sys,
 		char          *config_file,
 		int	      print_version);
 int load_dynamic_libs(sys_data_t *sys, int print_version);
+void post_init_dynamic_libs(sys_data_t *sys);
 
 void debug_log_raw_msg(sys_data_t *sys,
 		       unsigned char *data, unsigned int len,

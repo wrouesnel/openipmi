@@ -556,6 +556,7 @@ get_user(char **tokptr, sys_data_t *sys, char **err)
 struct dliblist {
     char *file;
     char *init;
+    void *handle;
     struct dliblist *next;
 };
 
@@ -564,13 +565,12 @@ static struct dliblist *dlibs;
 int
 load_dynamic_libs(sys_data_t *sys, int print_version)
 {
-    struct dliblist *dlib;
+    struct dliblist *dlib = dlibs;
     int (*func)(sys_data_t *sys, char *initstr);
     void *handle;
     int err;
 
-    while (dlibs) {
-	dlib = dlibs;
+    while (dlib) {
 	handle = dlopen(dlib->file, RTLD_NOW | RTLD_GLOBAL);
 	if (!handle) {
 	    fprintf(stderr, "Unable to load dynamic library %s: %s\n",
@@ -599,14 +599,26 @@ load_dynamic_libs(sys_data_t *sys, int print_version)
 		    return EINVAL;
 		}
 	    }
+	    dlib->handle = handle;
 	}
-	dlibs = dlib->next;
-	free(dlib->file);
-	free(dlib->init);
-	free(dlib);
+	dlib = dlib->next;
     }
 
     return 0;
+}
+
+void
+post_init_dynamic_libs(sys_data_t *sys)
+{
+    struct dliblist *dlib = dlibs;
+    void (*func)(sys_data_t *sys);
+
+    while (dlib) {
+	func = dlsym(dlib->handle, "ipmi_sim_module_post_init");
+	if (func)
+	    func(sys);
+	dlib = dlib->next;
+    }
 }
 
 int
