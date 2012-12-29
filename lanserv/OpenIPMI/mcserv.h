@@ -224,7 +224,7 @@ int ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 struct ipmi_sensor_handler_s
 {
     char *name;
-    void (*poll)(lmc_data_t *mc, void *cb_data);
+    int (*poll)(void *cb_data, unsigned int *val, const char **errstr);
     int (*init)(lmc_data_t *mc, unsigned char lun, unsigned char sensor_num,
 		char **toks, void *cb_data, void **rcb_data, char **errstr);
     void *cb_data;
@@ -248,7 +248,8 @@ int ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 			      unsigned char type,
 			      unsigned char event_reading_code,
 			      unsigned int poll_rate,
-			      void (*poll)(lmc_data_t *mc, void *cb_data),
+			      int (*poll)(void *cb_data, unsigned int *val,
+					  const char **errstr),
 			      void *cb_data);
 
 int ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_int);

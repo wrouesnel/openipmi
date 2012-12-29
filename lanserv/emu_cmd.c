@@ -676,7 +676,9 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char product_id[2];
     unsigned int  product_id_i;
     unsigned char dyn_sens = 0;
+    unsigned int  flags = 0;
     int           rv;
+    char          *tok;
     
     rv = emu_get_uchar(out, toks, &ipmb, "IPMB address", 0);
     if (rv)
@@ -710,8 +712,16 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    /* Don't care on an error */
-    emu_get_uchar(out, toks, &dyn_sens, "Dynamic Sensor Population", 1);
+    while ((tok = strtok_r(NULL, " \t\n", toks))) {
+	if (strcmp("dynsens", tok) == 0)
+	    flags |= IPMI_MC_DYNAMIC_SENSOR_POPULATION;
+	else if (strcmp("persist_sdr", tok) == 0)
+	    flags |= IPMI_MC_PERSIST_SDR;
+	else {
+	    out->printf(out, "**Invalid MC flag: %s\n", tok);
+	    return -1;
+	}
+    }
 
     mfg_id[0] = mfg_id_i & 0xff;
     mfg_id[1] = (mfg_id_i >> 8) & 0xff;
@@ -720,7 +730,7 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     product_id[1] = (product_id_i >> 8) & 0xff;
     rv = ipmi_emu_add_mc(emu, ipmb, device_id, has_device_sdrs,
 			 device_revision, major_fw_rev, minor_fw_rev,
-			 device_support, mfg_id, product_id, dyn_sens);
+			 device_support, mfg_id, product_id, flags);
     if (rv)
 	out->printf(out, "**Unable to add the MC, error 0x%x\n", rv);
     return rv;

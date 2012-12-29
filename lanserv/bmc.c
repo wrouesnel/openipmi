@@ -552,7 +552,7 @@ ipmi_mc_set_num_leds(lmc_data_t   *mc,
 }
 
 static int
-init_mc(emu_data_t *emu, lmc_data_t *mc)
+init_mc(emu_data_t *emu, lmc_data_t *mc, unsigned int persist_sdr)
 {
     int err;
 
@@ -563,14 +563,14 @@ init_mc(emu_data_t *emu, lmc_data_t *mc)
 	return err;
     }
 
-    if (mc->has_device_sdrs) {
+    if (persist_sdr && mc->has_device_sdrs) {
 	read_mc_sdrs(mc, &mc->device_sdrs[0], "device0");
 	read_mc_sdrs(mc, &mc->device_sdrs[1], "device1");
 	read_mc_sdrs(mc, &mc->device_sdrs[2], "device2");
 	read_mc_sdrs(mc, &mc->device_sdrs[3], "device3");
     }
 
-    if (mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)
+    if (persist_sdr && (mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV))
 	read_mc_sdrs(mc, &mc->main_sdrs, "main");
 
     return err;
@@ -779,7 +779,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 		unsigned char device_support,
 		unsigned char mfg_id[3],
 		unsigned char product_id[2],
-		unsigned char dynamic_sensor_population)
+		unsigned int  flags)
 {
     lmc_data_t     *mc;
     struct timeval t;
@@ -800,7 +800,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     mc->major_fw_rev = major_fw_rev;
     mc->minor_fw_rev = minor_fw_rev;
     mc->device_support = device_support;
-    mc->dynamic_sensor_population = dynamic_sensor_population;
+    mc->dynamic_sensor_population = flags & IPMI_MC_DYNAMIC_SENSOR_POPULATION;
     memcpy(mc->mfg_id, mfg_id, 3);
     memcpy(mc->product_id, product_id, 2);
 
@@ -865,7 +865,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
 
 	mc->sysinfo = emu->sysinfo;
-	err = init_mc(emu, mc);
+	err = init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
     }
 
     if (mc->startcmd.startcmd) {

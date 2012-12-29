@@ -34,6 +34,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <malloc.h>
 
@@ -334,10 +335,10 @@ set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
 	sensor->event_status[bit] = value;
 	if (value && sensor->event_enabled[0][bit]) {
 	    do_event(mc, sensor, gen_event, IPMI_ASSERTION,
-		     0x00 | bit, 0, 0);
+		     evd1 | bit, evd2, evd3);
 	} else if (!value && sensor->event_enabled[1][bit]) {
 	    do_event(mc, sensor, gen_event, IPMI_DEASSERTION,
-		     0x00 | bit, 0, 0);
+		     evd1 | bit, evd2, evd3);
 	}
     }
 }
@@ -736,7 +737,7 @@ ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 
     sensor = mc->sensors[lun][sens_num];
 
-    set_bit(mc, sensor, bit, value, 0, 0, 0, gen_event);
+    set_bit(mc, sensor, bit, value, 0, 0xff, 0xff, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -765,11 +766,11 @@ ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
     /* Clear all the other bits. */
     for (i=0; i<15; i++) {
 	if ((i != bit) && (sensor->event_status[i]))
-	    set_bit(mc, sensor, i, 0, 0, 0, 0, gen_event);
+	    set_bit(mc, sensor, i, 0, 0, 0xff, 0xff, gen_event);
     }
 
     sensor->value = bit;
-    set_bit(mc, sensor, bit, 1, 0, 0, 0, gen_event);
+    set_bit(mc, sensor, bit, 1, 0, 0xff, 0xff, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -797,6 +798,20 @@ ipmi_mc_sensor_set_enabled(lmc_data_t    *mc,
     return 0;
 }
 
+static void
+set_sensor_value(lmc_data_t    *mc,
+		 sensor_t      *sensor,
+		 unsigned char value,
+		 int           gen_event)
+{
+    sensor->value = value;
+
+    if (sensor->sensor_update_handler)
+	sensor->sensor_update_handler(mc, sensor);
+
+    check_thresholds(mc, sensor, gen_event);
+}
+
 int
 ipmi_mc_sensor_set_value(lmc_data_t    *mc,
 			 unsigned char lun,
@@ -811,13 +826,7 @@ ipmi_mc_sensor_set_value(lmc_data_t    *mc,
 
     sensor = mc->sensors[lun][sens_num];
 
-    sensor->value = value;
-
-    if (sensor->sensor_update_handler)
-	sensor->sensor_update_handler(mc, sensor);
-
-    check_thresholds(mc, sensor, gen_event);
-
+    set_sensor_value(mc, sensor, value, gen_event);
     return 0;
 }
 
@@ -986,6 +995,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     sensor->num = sens_num;
     sensor->sensor_type = type;
     sensor->event_reading_code = event_reading_code;
+    sensor->enabled = 1;
     mc->sensors[lun][sens_num] = sensor;
 
     if (mc->emu->atca_mode && (type == 0xf0)) {
@@ -1003,14 +1013,12 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 
 struct file_data {
     char *filename;
-    unsigned char lun;
-    unsigned char sensor_num;
     int div;
     int base;
 };
 
-static void
-ascii_file_poll(lmc_data_t *mc, void *cb_data)
+static int
+ascii_file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 {
     struct file_data *f = cb_data;
     FILE *file;
@@ -1018,40 +1026,35 @@ ascii_file_poll(lmc_data_t *mc, void *cb_data)
     size_t rv;
     int val;
     char *end;
+    int errv;
 
     file = fopen(f->filename, "r");
     if (!file) {
-	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
-			 "Unable to open sensor file %s: %s",
-			 f->filename, strerror(errno));
-	return;
+	errv = errno;
+	*errstr = "Unable to open sensor file";
+	return errv;
     }
 
-    rv = fread(data, sizeof(data), 1, file);
+    rv = fread(data, 1, sizeof(data) - 1, file);
+    errv = errno;
     fclose(file);
     if (rv <= 0) {
-	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
-			 "No data read from file %s", f->filename);
-	return;
+	*errstr = "No data read from file";
+	return errv;
     }
+    data[rv] = '\0';
 
     val = strtol(data, &end, f->base);
-    if (*end != '\0') {
-	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
-			 "Invalid data read from file %s: '%s'",
-			 f->filename, data);
-	return;
+    if ((*end != '\0' && !isspace(*end)) || (end == data)) {
+	*errstr = "Invalid data read from file";
+	return EINVAL;
     }
 
     if (f->div)
-	val /= f->div;
+	val = (val + (f->div / 2)) / f->div;
 
-    rv = ipmi_mc_sensor_set_value(mc, f->lun, f->sensor_num, val, 1);
-    if (rv) {
-	mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
-			 "Error setting value from file %s: %s",
-			 f->filename, strerror(rv));
-    }
+    *rval = val;
+    return 0;
 }
 
 static int
@@ -1101,8 +1104,6 @@ ascii_file_init(lmc_data_t *mc,
     }
     f->div = div;
     f->base = base;
-    f->lun = lun;
-    f->sensor_num = sensor_num;
 
     *rcb_data = f;
     return 0;
@@ -1149,11 +1150,28 @@ sensor_poll(void *cb_data)
 {
     sensor_t *sensor = cb_data;
 
-    if (sensor->enabled && sensor->scanning_enabled) {
+    if (sensor->poll && sensor->enabled && sensor->scanning_enabled) {
 	lmc_data_t *mc = sensor->mc;
+	unsigned int val;
+	const char *errstr;
+	int err;
 
-	sensor->poll(mc, sensor->cb_data);
-	check_thresholds(mc, sensor, 1);
+	err = sensor->poll(sensor->cb_data, &val, &errstr);
+	if (err) {
+	    mc->sysinfo->log(mc->sysinfo, OS_ERROR, NULL,
+			     "Error getting sensor value (%2.2x,%d,%d): %s, %s",
+			     ipmi_mc_get_ipmb(mc), sensor->lun, sensor->num,
+			     strerror(err), errstr);
+	}
+	
+	if (sensor->event_reading_code == IPMI_EVENT_READING_TYPE_THRESHOLD) {
+	    set_sensor_value(mc, sensor, val, 1);
+	} else {
+	    unsigned int i;
+	    
+	    for (i = 0; i < 15; i++)
+		set_bit(mc, sensor, i, ((val >> i) & 1), 0, 0xff, 0xff, 1);
+	}
 	mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
     }
 }
@@ -1165,7 +1183,8 @@ ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 			  unsigned char type,
 			  unsigned char event_reading_code,
 			  unsigned int poll_rate,
-			  void (*poll)(lmc_data_t *mc, void *cb_data),
+			  int (*poll)(void *cb_data, unsigned int *val,
+				      const char **errstr),
 			  void *cb_data)
 {
     sensor_t *sensor;

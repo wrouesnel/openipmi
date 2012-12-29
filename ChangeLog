@@ -1,3 +1,19 @@
+2012-12-29 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/mcserv.h, lanserv/bmc.h, lanserv/bmc_sensor.h:
+	Rework the just added poll sensor capability to have it return the
+	new value.  This will make it easier to run in a separate thread,
+	if necessary.
+
+	* lanserv/bmc_sensor.c: Fix event delivery handling of the data
+	values.
+
+	* lanserv/bmc_storage.c: Fix issues with the persistent storage of
+	data.
+
+	* lanserv/emu.h, lanserv/bmc.c, lanserv/emu_cmd.c: Add options to
+	the MC and add an option to use or not use SDR persistence.
+
 2012-12-28 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/serv.h, lanserv/config.c, lanserv/ipmi_sim.c:

@@ -775,6 +775,7 @@ handle_sdr(const char *name, void *data, unsigned int len, void *cb_data)
     sdr = new_sdr_entry(sdrs, len);
     if (!sdr)
 	return ENOMEM;
+    memcpy(sdr->data, data, len);
 
     sdr->next = NULL;
     p = sdrs->sdrs;
@@ -832,9 +833,10 @@ ipmi_mc_add_main_sdr(lmc_data_t    *mc,
     if (!entry)
 	return ENOMEM;
 
+    memcpy(entry->data+2, data+2, data_len-2);
+
     add_sdr_entry(mc, &mc->main_sdrs, entry);
 
-    memcpy(entry->data+2, data+2, data_len-2);
     return 0;
 }
 
@@ -1014,7 +1016,7 @@ handle_get_sdr(lmc_data_t    *mc,
 	count = entry->length - offset;
     if (count+3 > *rdata_len) {
 	/* Too much data to put into response. */
-	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
+	rdata[0] = IPMI_CANNOT_RETURN_REQ_LENGTH_CC;
 	*rdata_len = 1;
 	return;
     }

@@ -146,7 +146,7 @@ struct sensor_s
 
     ipmi_timer_t *poll_timer;
     struct timeval poll_timer_time;
-    void (*poll)(lmc_data_t *mc, void *cb_data);
+    int (*poll)(void *cb_data, unsigned int *val, const char **errstr);
     void *cb_data;
 };
 

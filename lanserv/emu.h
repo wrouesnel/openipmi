@@ -79,6 +79,9 @@ void ipmi_emu_handle_msg(emu_data_t    *emu,
 			 unsigned char *rdata,
 			 unsigned int  *rdata_len);
 
+#define IPMI_MC_DYNAMIC_SENSOR_POPULATION	(1 << 0)
+#define IPMI_MC_PERSIST_SDR			(1 << 1)
+
 int ipmi_emu_add_mc(emu_data_t    *emu,
 		    unsigned char ipmb,
 		    unsigned char device_id,
@@ -89,7 +92,7 @@ int ipmi_emu_add_mc(emu_data_t    *emu,
 		    unsigned char device_support,
 		    unsigned char mfg_id[3],
 		    unsigned char product_id[2],
-		    unsigned char dynamic_sensor_population);
+		    unsigned int  flags);
 
 lmc_data_t *ipmi_emu_get_bmc_mc(emu_data_t *emu);
 
