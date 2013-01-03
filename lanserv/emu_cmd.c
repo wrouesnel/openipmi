@@ -6,6 +6,8 @@
 #include <stdarg.h>
 #include "emu.h"
 
+#define BASE_CONF_STR SYSCONFDIR "/ipmi"
+
 typedef int (*ipmi_emu_cmd_handler)(emu_out_t  *out,
 				    emu_data_t *emu,
 				    lmc_data_t *mc,
@@ -202,7 +204,7 @@ read_command_file(emu_out_t *out, emu_data_t *emu, const char *command_file)
 
     if (!f) {
 	out->printf(out, "Unable to open command file '%s'\n", command_file);
-	rv = EINVAL;
+	rv = ENOENT;
     } else {
 	char *buffer;
 	int  pos = 0;
@@ -963,7 +965,32 @@ read_cmds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	return err;
     }
 
-    return read_command_file(out, emu, filename);
+    err = read_command_file(out, emu, filename);
+    if (err == ENOENT &&
+	filename[0] != '/' &&
+	strncmp(filename, "./", 2) &&
+	strncmp(filename, "../", 3))
+    {
+	char *nf = malloc(strlen(BASE_CONF_STR) + strlen(filename) + 2);
+	if (!nf) {
+	    out->printf(out, "Out of memory in include\n", errstr);
+	    goto out_err;
+	}
+	strcpy(nf, BASE_CONF_STR);
+	strcat(nf, "/");
+	strcat(nf, filename);
+	free((char *) filename);
+	filename = nf;
+	err = read_command_file(out, emu, filename);
+	if (err) {
+	    out->printf(out, "Could not get open include file %s: %s\n",
+			filename, errstr);
+	}
+    }
+
+  out_err:
+    free((char *) filename);
+    return err;
 }
 
 static int
