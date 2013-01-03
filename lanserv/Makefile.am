@@ -42,7 +42,7 @@ ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 
 sdrcomp_DEPENDENCIES = persist.c
 sdrcomp_SOURCES = sdrcomp.c
-sdrcomp_LDFLAGS = ../utils/libOpenIPMIutils.la
+sdrcomp_LDFLAGS = ../utils/libOpenIPMIutils.la -lm
 
 EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
 

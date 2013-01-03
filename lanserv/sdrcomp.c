@@ -36,6 +36,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <math.h>
 
 /* Primarily to get string handling routines */
 #include <OpenIPMI/ipmi_string.h>
@@ -52,7 +53,7 @@ struct sdr_field_name {
 struct sdr_field {
     char *name;
     enum { SDR_BITS, SDR_SBITS, SDR_MULTIBITS, SDR_MULTISBITS, SDR_MULTIBITS2,
-	   SDR_STRING, SDR_BOOLBIT } type;
+	   SDR_STRING, SDR_BOOLBIT, SDR_THRESH } type;
     /*
      * IMPORTANT: pos is offset + 1, the values given in the IPMI spec.
      * It is not zero-based.
@@ -65,13 +66,116 @@ struct sdr_field {
     struct sdr_field_name *strvals;
 };
 
+static struct sdr_field_name entity_id_fields[] = {
+    { "unspecified", 0 },
+    { "other", 1 },
+    { "unknown", 2 },
+    { "processor", 3 },
+    { "disk_or_disk_bay", 4 },
+    { "peripheral_bay", 5 },
+    { "system_management_module", 6 },
+    { "system_board", 7 },
+    { "memory_module", 8 },
+    { "processor_module", 9 },
+    { "power_supply", 10 },
+    { "add-in_card", 11 },
+    { "front_panel_board", 12 },
+    { "back_panel_board", 13 },
+    { "power_system_board", 14 },
+    { "drive_backplane", 15 },
+    { "system_internal_expansion_board", 16 },
+    { "other_system_board", 17 },
+    { "processor_board", 18 },
+    { "power_unit", 19 },
+    { "power_module", 20 },
+    { "power_management", 21 },
+    { "chassis_back_panel_board", 22 },
+    { "system_chassis", 23 },
+    { "sub-chassis", 24 },
+    { "Other_chassis_board", 25 },
+    { "Disk_Drive_Bay", 26 },
+    { "Peripheral_Bay", 27 },
+    { "Device_Bay", 28 },
+    { "fan_cooling_device", 29 },
+    { "cooling_unit", 30 },
+    { "cable_interconnect", 31 },
+    { "memory_device", 32 },
+    { "system_management_software", 33  },
+    { "bios", 34  },
+    { "operating_system", 35  },
+    { "system_bus", 36  },
+    { "group", 37  },
+    { "remote_management_communication_device", 38 },
+    { "external_environment", 39 },
+    { "battery", 40 },
+    { "processing_blade", 41 },
+    { "connectivity_switch", 42 },
+    { "processor/memory_module", 43 },
+    { "i/o_module", 44 },
+    { "processor/_io_module", 45 },
+    { "management_controller_firmware", 46 },
+    { "ipmi_channel", 47 },
+    { "pci_bus", 48 },
+    { "pci_express_bus", 49 },
+    { "scsi_bus", 50 },
+    { "sata_/_sas_bus", 51 },
+    { "processor_/_front-side_bus", 52 }
+};
+
+static struct sdr_field_name sensor_type_fields[] = {
+    { "Temperature", 1 },
+    { "Voltage", 2 },
+    { "Current", 3 },
+    { "Fan", 4 },
+    { "Physical_Security", 5 },
+    { "Platform_Security_Violation_Attempt", 6 },
+    { "Processor", 7 },
+    { "Power_Supply", 8 },
+    { "Power_Unit", 9 },
+    { "Cooling_Device", 10 },
+    { "Other_Units_Based_Sensor", 11 },
+    { "Memory", 12 },
+    { "Drive_Slot", 13 },
+    { "POST_Memory_Resize", 14 },
+    { "System_Firmware_Progress", 15 },
+    { "Event_Logging_Disabled", 16 },
+    { "Watchdog_1", 17 },
+    { "System_Event", 18 },
+    { "Critical_Interrupt", 19 },
+    { "Button_Switch", 20 },
+    { "Module_Board", 21 },
+    { "Microcontroller_Coprocessor", 22 },
+    { "Add_In_Card", 23 },
+    { "Chassis", 24 },
+    { "Chip_Set", 25 },
+    { "Other_Fru", 26 },
+    { "Cable_Interconnect", 27 },
+    { "Terminator", 28 },
+    { "System_Boot_Initiated", 29 },
+    { "Boot_Error", 30 },
+    { "OS_Boot", 31 },
+    { "OS_Critical_Stop", 32 },
+    { "Slot_Connector", 33 },
+    { "System_ACPI_Power_State", 34 },
+    { "Watchdog_2", 35 },
+    { "Platform_Alert", 36 },
+    { "Entity_Presence", 37 },
+    { "Monitor_ASIC_IC", 38 },
+    { "LAN", 39 },
+    { "Management_Subsystem_Health", 40 },
+    { "Battery", 41 },
+    { "Session_Audit", 42 },
+    { "Version_Change", 43 },
+    { "FRU_State", 44 }
+};
+
 static struct sdr_field_name sensor_access_fields[] = {
     { "no", 0 }, { "readable", 1 }, { "settable", 2 }, { "fixed", 3 },
     { NULL }
 };
 
 static struct sdr_field_name sensor_event_msg_ctrl_fields[] = {
-    { "per_state", 0 }, { "entire_sensor", 1 }, { "glbobal", 2 }, { "no", 3 },
+    { "per_state", 0 }, { "entire_sensor", 1 }, { "global", 2 }, { "no", 3 },
     { NULL }
 };
 
@@ -93,6 +197,100 @@ static struct sdr_field_name modifier_unit_fields[] = {
     { NULL }
 };
 
+static struct sdr_field_name base_unit_fields[] = {
+    { "unspecified", 0 },
+    { "degrees_C", 1 },
+    { "degrees_F", 2 },
+    { "degrees_K", 3 },
+    { "Volts", 4 },
+    { "Amps", 5 },
+    { "Watts", 6 },
+    { "Joules", 7 },
+    { "Coulombs", 8 },
+    { "VA", 9 },
+    { "Nits", 10 },
+    { "lumen", 11 },
+    { "lux", 12 },
+    { "Candela", 13 },
+    { "kPa", 14 },
+    { "PSI", 15 },
+    { "Newton", 16 },
+    { "CFM", 17 },
+    { "RPM", 18 },
+    { "Hz", 19 },
+    { "microsecond", 20 },
+    { "millisecond", 21 },
+    { "second", 22 },
+    { "minute", 23 },
+    { "hour", 24 },
+    { "day", 25 },
+    { "week", 26 },
+    { "mil", 27 },
+    { "inches", 28 },
+    { "feet", 29 },
+    { "cu_in", 30 },
+    { "cu_feet", 31 },
+    { "mm", 32 },
+    { "cm", 33 },
+    { "m", 34 },
+    { "cu_cm", 35 },
+    { "cu_m", 36 },
+    { "liters", 37 },
+    { "fluid_ounce", 38 },
+    { "radians", 39 },
+    { "steradians", 40 },
+    { "revolutions", 41 },
+    { "cycles", 42 },
+    { "gravities", 43 },
+    { "ounce", 44 },
+    { "pound", 45 },
+    { "ft-lb", 46 },
+    { "oz-in", 47 },
+    { "gauss", 48 },
+    { "gilberts", 49 },
+    { "henry", 50 },
+    { "millihenry", 51 },
+    { "farad", 52 },
+    { "microfarad", 53 },
+    { "ohms", 54 },
+    { "siemens", 55 },
+    { "mole", 56 },
+    { "becquerel", 57 },
+    { "PPM", 58 },
+    { "reserved", 59 },
+    { "Decibels", 60 },
+    { "DbA", 61 },
+    { "DbC", 62 },
+    { "gray", 63 },
+    { "sievert", 64 },
+    { "color_temp_deg_K", 65 },
+    { "bit", 66 },
+    { "kilobit", 67 },
+    { "megabit", 68 },
+    { "gigabit", 69 },
+    { "byte", 70 },
+    { "kilobyte", 71 },
+    { "megabyte", 72 },
+    { "gigabyte", 73 },
+    { "word", 74 },
+    { "dword", 75 },
+    { "qword", 76 },
+    { "line", 77 },
+    { "hit", 78 },
+    { "miss", 79 },
+    { "retry", 80 },
+    { "reset", 81 },
+    { "overrun_overflow", 82 },
+    { "underrun", 83 },
+    { "collision", 84 },
+    { "packets", 85 },
+    { "messages", 86 },
+    { "characters", 87 },
+    { "error", 88 },
+    { "correctable_error", 89 },
+    { "uncorrectable_error", 90 }
+};
+
 static struct sdr_field_name linearization_fields[] = {
     { "linear", 0 }, { "ln", 1 },       { "log10", 2 },    { "log2", 3 },
     { "e", 4 },      { "exp10", 5 },    { "exp2", 6 },     { "1/x", 7 },
@@ -112,13 +310,14 @@ static struct sdr_field type1[] =
     { "channel_number",		SDR_BITS,	 7, 4, 4, .required = 1 },
     { "sensor_owner_lun",	SDR_BITS,	 7, 0, 2, .required = 1 },
     { "sensor_number",		SDR_BITS,	 8, 0, 8, .required = 1 },
-    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1 },
+    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "logical_entity",		SDR_BOOLBIT,	10, 7, 1 },
     { "entity_instance",	SDR_BITS,	10, 0, 8, .required = 1 },
     { "init_scanning",		SDR_BOOLBIT,	11, 6, 1 },
     { "init_events",		SDR_BOOLBIT,	11, 5, 1 },
     { "init_thresholds",	SDR_BOOLBIT,	11, 4, 1 },
-    { "init_systeresis",	SDR_BOOLBIT,	11, 3, 1 },
+    { "init_hysteresis",	SDR_BOOLBIT,	11, 3, 1 },
     { "init_sensor_type",	SDR_BOOLBIT,	11, 2, 1 },
     { "default_event_gen_on",	SDR_BOOLBIT,	11, 1, 1 },
     { "default_sensor_scan_on",	SDR_BOOLBIT,	11, 0, 1 },
@@ -130,7 +329,8 @@ static struct sdr_field type1[] =
       .strvals = sensor_access_fields },
     { "sensor_event_msg_ctrl",	SDR_BITS,	12, 0, 2,
       .strvals = sensor_event_msg_ctrl_fields },
-    { "sensor_type",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "sensor_type",		SDR_BITS,	13, 0, 8, .required = 1,
+      .strvals = sensor_type_fields },
     { "event_reading_type_code",SDR_BITS,	14, 0, 8, .required = 1 },
 
     { "assert_event14",		SDR_BOOLBIT,	16, 6, 1 },
@@ -148,9 +348,9 @@ static struct sdr_field type1[] =
     { "assert_event2",		SDR_BOOLBIT,	15, 2, 1 },
     { "assert_event1",		SDR_BOOLBIT,	15, 1, 1 },
     { "assert_event0",		SDR_BOOLBIT,	15, 0, 1 },
-    { "assert_lnr",		SDR_BOOLBIT,	16, 6, 1 },
-    { "assert_lc",		SDR_BOOLBIT,	16, 5, 1 },
-    { "assert_lnc",		SDR_BOOLBIT,	16, 4, 1 },
+    { "return_lnr",		SDR_BOOLBIT,	16, 6, 1 },
+    { "return_lc",		SDR_BOOLBIT,	16, 5, 1 },
+    { "return_lnc",		SDR_BOOLBIT,	16, 4, 1 },
     { "assert_unrgh",		SDR_BOOLBIT,	16, 3, 1 },
     { "assert_unrgl",		SDR_BOOLBIT,	16, 2, 1 },
     { "assert_ucgh",		SDR_BOOLBIT,	16, 1, 1 },
@@ -179,9 +379,9 @@ static struct sdr_field type1[] =
     { "deassert_event2",	SDR_BOOLBIT,	17, 2, 1 },
     { "deassert_event1",	SDR_BOOLBIT,	17, 1, 1 },
     { "deassert_event0",	SDR_BOOLBIT,	17, 0, 1 },
-    { "deassert_lnr",		SDR_BOOLBIT,	18, 6, 1 },
-    { "deassert_lc",		SDR_BOOLBIT,	18, 5, 1 },
-    { "deassert_lnc",		SDR_BOOLBIT,	18, 4, 1 },
+    { "return_unr",		SDR_BOOLBIT,	18, 6, 1 },
+    { "return_uc",		SDR_BOOLBIT,	18, 5, 1 },
+    { "return_unc",		SDR_BOOLBIT,	18, 4, 1 },
     { "deassert_unrgh",		SDR_BOOLBIT,	18, 3, 1 },
     { "deassert_unrgl",		SDR_BOOLBIT,	18, 2, 1 },
     { "deassert_ucgh",		SDR_BOOLBIT,	18, 1, 1 },
@@ -230,8 +430,10 @@ static struct sdr_field type1[] =
     { "modifier_unit",		SDR_BITS,	21, 1, 2,
       .strvals = modifier_unit_fields },
     { "percentage",		SDR_BOOLBIT,	21, 0, 1 },
-    { "base_unit",		SDR_BITS,	22, 0, 8 },
-    { "modifier_unit",		SDR_BITS,	23, 0, 8 },
+    { "base_unit",		SDR_BITS,	22, 0, 8,
+      .strvals = base_unit_fields },
+    { "modifier_unit_code",	SDR_BITS,	23, 0, 8,
+      .strvals = base_unit_fields },
     { "linearization",		SDR_BITS,	24, 0, 7,
       .strvals = linearization_fields },
     { "m",			SDR_MULTISBITS,	25, 0, 8 },
@@ -244,12 +446,13 @@ static struct sdr_field type1[] =
     { "accuracy_exp",		SDR_BITS,	29, 2, 2 },
     { "sensor_direction",	SDR_BITS,	29, 0, 2,
       .strvals = sensor_direction_fields },
-    { "r_exp",			SDR_BITS,	30, 4, 4 },
-    { "b_exp",			SDR_BITS,	30, 0, 4 },
+    { "r_exp",			SDR_SBITS,	30, 4, 4 },
+    { "b_exp",			SDR_SBITS,	30, 0, 4 },
     { "normal_min_specified",	SDR_BOOLBIT,	31, 2, 1 },
     { "normal_max_specified",	SDR_BOOLBIT,	31, 1, 1 },
     { "nominal_specified",	SDR_BOOLBIT,	31, 0, 1 },
     { "nominal_reading",	SDR_BITS,	32, 0, 8 },
+    { "nominal_freading",	SDR_THRESH,	32, 0, 8 },
     { "normal_maximum",		SDR_BITS,	33, 0, 8 },
     { "normal_minimum",		SDR_BITS,	34, 0, 8 },
     { "sensor_maximum",		SDR_BITS,	35, 0, 8 },
@@ -260,6 +463,12 @@ static struct sdr_field type1[] =
     { "lnr_thresh",		SDR_BITS,	40, 0, 8 },
     { "lc_thresh",		SDR_BITS,	41, 0, 8 },
     { "lnc_thresh",		SDR_BITS,	42, 0, 8 },
+    { "unr_fthresh",		SDR_THRESH,	37, 0, 8 },
+    { "uc_fthresh",		SDR_THRESH,	38, 0, 8 },
+    { "unc_fthresh",		SDR_THRESH,	39, 0, 8 },
+    { "lnr_fthresh",		SDR_THRESH,	40, 0, 8 },
+    { "lc_fthresh",		SDR_THRESH,	41, 0, 8 },
+    { "lnc_fthresh",		SDR_THRESH,	42, 0, 8 },
     { "positive_hysteresis",	SDR_BITS,	43, 0, 8 },
     { "negative_hysteresis",	SDR_BITS,	44, 0, 8 },
     { "oem",			SDR_BITS,	47, 0, 8 },
@@ -516,12 +725,74 @@ static struct sdr_field type17[] =
 };
 #define TYPE17_LEN (sizeof(type17) / sizeof(struct sdr_field))
 
+struct variable {
+    char *name;
+    char *value;
+    struct variable *next;
+} *vars;
+
+static int
+add_variable(const char *name, const char *value)
+{
+    struct variable *var = vars, *last = NULL;
+
+    while (var) {
+	if (strcmp(name, var->name) == 0)
+	    break;
+	last = var;
+	var = var->next;
+    }
+    if (var) {
+	free(var->value);
+    } else {
+	var = malloc(sizeof(*var));
+	if (!var) {
+	    fprintf(stderr, "Out of memory\n");
+	    return ENOMEM;
+	}
+	var->name = strdup(name);
+	if (!var->name) {
+	    fprintf(stderr, "Out of memory\n");
+	    return ENOMEM;
+	}
+	var->next = NULL;
+	if (last)
+	    last->next = var;
+	else
+	    vars = var;
+    }
+    
+    var->value = strdup(value);
+    if (!var->value) {
+	fprintf(stderr, "Out of memory\n");
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+const char
+*find_var(const char *name)
+{
+    struct variable *var = vars;
+    while (var) {
+	if (strcmp(name, var->name) == 0)
+	    break;
+	var = var->next;
+    }
+    if (!var) {
+	fprintf(stderr, "Unknown variable named %s\n", name);
+	return NULL;
+    }
+    return var->value;
+}
+
 /*
  * To parse more complex expressions, we really need to know what the
  * save state is.  So we, unfortunately, have to create our own
  * version of strtok so we know what it is.
  */
-char *
+const char *
 mystrtok(char *str, const char *delim, char **next)
 {
     char *pos;
@@ -569,15 +840,24 @@ mystrtok(char *str, const char *delim, char **next)
 	curr++;
     }
  out:
-    return pos;
+    if (*pos == '$')
+	return find_var(pos + 1);
+    else
+	return pos;
 }
 
 int
-get_delim_str(char **rtokptr, char **rval, char **err)
+isquote(char c)
+{
+    return c == '\'' || c == '"';
+}
+
+int
+get_delim_str(char **rtokptr, const char **rval, char **err)
 {
     char *tokptr = *rtokptr;
     char endc;
-    char *rv;
+    char *rv = NULL;
 
     while (isspace(*tokptr))
 	tokptr++;
@@ -585,27 +865,64 @@ get_delim_str(char **rtokptr, char **rval, char **err)
 	*err = "missing string value";
 	return -1;
     }
-    if (*tokptr != '"' && *tokptr != '\'') {
-	*err = "string value must start with '\"' or '''";
-	return -1;
-    }
-    endc = *tokptr;
-    tokptr++;
-    rv = tokptr;
-    while (*tokptr != endc) {
-	if (*tokptr == '\0') {
-	    *err = "End of line in string";
+    for (;;) {
+	const char *val;
+
+	if (*tokptr == '$') {
+	    char oldc;
+
+	    tokptr++;
+	    val = tokptr;
+	    while (*tokptr && *tokptr != '$' &&
+		   !isspace(*tokptr) && !isquote(*tokptr)) {
+		tokptr++;
+	    }
+	    oldc = *tokptr;
+	    *tokptr = '\0';
+	    val = find_var(val);
+	    if (!val)
+		return -1;
+	    *tokptr = oldc;
+	} else if (isquote(*tokptr)) {
+	    endc = *tokptr;
+	    tokptr++;
+	    val = tokptr;
+	    while (*tokptr != endc) {
+		if (*tokptr == '\0') {
+		    *err = "End of line in string";
+		    return -1;
+		}
+		tokptr++;
+	    }
+	    *tokptr = '\0';
+	    tokptr++;
+	} else {
+	    *err = "string value must start with '\"' or '''";
 	    return -1;
 	}
-	tokptr++;
+
+	if (rv) {
+	    char *newrv = malloc(strlen(rv) + strlen(val) + 1);
+	    if (!newrv) {
+		*err = "Out of memory copying string";
+		return -1;
+	    }
+	    strcpy(newrv, rv);
+	    strcat(newrv, val);
+	    free(rv);
+	    rv = newrv;
+	} else {
+	    rv = strdup(val);
+	    if (!rv) {
+		*err = "Out of memory copying string";
+		return -1;
+	    }
+	}
+
+	if (*tokptr == '\0' || isspace(*tokptr))
+	    break;
     }
-    *tokptr = '\0';
-    *rtokptr = tokptr + 1;
-    rv = strdup(rv);
-    if (!rv) {
-	*err = "Out of memory copying string";
-	return -1;
-    }
+    *rtokptr = tokptr;
     *rval = rv;
     return 0;
 }
@@ -613,7 +930,7 @@ get_delim_str(char **rtokptr, char **rval, char **err)
 int
 get_bool(char **tokptr, unsigned int *rval, char **err)
 {
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No boolean value given";
@@ -644,20 +961,59 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
 }
 
 int
-get_uint(char **tokptr, unsigned int *rval, char **err)
+get_uint(char **tokptr, unsigned int *rval, char **err, const char *start)
 {
     char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok;
 
-    if (!tok) {
-	*err = "No integer value given";
-	return -1;
+    if (start)
+	tok = start;
+    else {
+	tok = mystrtok(NULL, " \t\n", tokptr);
+	if (!tok) {
+	    *err = "No integer value given";
+	    return -1;
+	}
     }
 
     *rval = strtoul(tok, &end, 0);
     if (*end != '\0') {
 	*err = "Invalid integer value";
 	return -1;
+    }
+
+    tok = mystrtok(NULL, " \t\n", tokptr);
+    if (tok) {
+	const char *tok2 = mystrtok(NULL, " \t\n", tokptr);
+	unsigned int val2;
+
+	if (!tok2) {
+	    *err = "No value after operator";
+	    return -1;
+	}
+	val2 = strtoul(tok2, &end, 0);
+	if (*end != '\0') {
+	    *err = "Invalid integer value";
+	    return -1;
+	}
+
+	if (strlen(tok) > 1) {
+	    *err = "Invalid operator";
+	    return -1;
+	}
+	switch (*tok) {
+	case '+':
+	    *rval += val2;
+	    break;
+
+	case '-':
+	    *rval -= val2;
+	    break;
+
+	default:
+	    *err = "Invalid operator";
+	    return -1;
+	}
     }
     return 0;
 }
@@ -666,7 +1022,7 @@ int
 get_int(char **tokptr, int *rval, char **err)
 {
     char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No integer value given";
@@ -678,14 +1034,66 @@ get_int(char **tokptr, int *rval, char **err)
 	*err = "Invalid integer value";
 	return -1;
     }
+
+    tok = mystrtok(NULL, " \t\n", tokptr);
+    if (tok) {
+	const char *tok2 = mystrtok(NULL, " \t\n", tokptr);
+	int val2;
+
+	if (!tok2) {
+	    *err = "No value after operator";
+	    return -1;
+	}
+	val2 = strtol(tok2, &end, 0);
+	if (*end != '\0') {
+	    *err = "Invalid integer value";
+	    return -1;
+	}
+
+	if (strlen(tok) > 1) {
+	    *err = "Invalid operator";
+	    return -1;
+	}
+	switch (*tok) {
+	case '+':
+	    *rval += val2;
+	    break;
+
+	case '-':
+	    *rval -= val2;
+	    break;
+
+	default:
+	    *err = "Invalid operator";
+	    return -1;
+	}
+    }
+    return 0;
+}
+
+int
+get_float(char **tokptr, double *rval, char **err)
+{
+    char *end;
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
+
+    if (!tok) {
+	*err = "No floating point value given";
+	return -1;
+    }
+
+    *rval = strtod(tok, &end);
+    if (*end != '\0') {
+	*err = "Invalid floating point value";
+	return -1;
+    }
     return 0;
 }
 
 static int
 get_uint_str(struct sdr_field *t, char **tokptr, unsigned int *rval, char **err)
 {
-    char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (t->strvals) {
 	struct sdr_field_name *s = t->strvals;
@@ -694,14 +1102,10 @@ get_uint_str(struct sdr_field *t, char **tokptr, unsigned int *rval, char **err)
 		*rval = s->val;
 		return 0;
 	    }
+	    s++;
 	}
     }
-    *rval = strtol(tok, &end, 0);
-    if (*end != '\0') {
-	*err = "Invalid integer value";
-	return -1;
-    }
-    return 0;
+    return get_uint(tokptr, rval, err, tok);
 }
 
 static int
@@ -715,6 +1119,13 @@ store_sdr_bits(struct sdr_field *t, unsigned char *sdr, unsigned int len,
 
     sdr[t->pos - 1] |= (bits & ((1 << t->bitsize) - 1)) << t->bitoff;
     return 0;
+}
+
+static unsigned int
+get_sdr_bits(unsigned char *sdr, unsigned int pos, unsigned int bitoff,
+	     unsigned int len)
+{
+    return (sdr[pos - 1] >> bitoff) & ((1 << len) - 1);
 }
 
 int
@@ -811,7 +1222,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
     }
 
     for (;;) {
-	char *tok;
+	const char *tok;
 	char *s = fgets(buf, sizeof(buf), f);
 	if (s == NULL) {
 	    err = -1;
@@ -941,10 +1352,10 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		if (err)
 		    goto out_err;
 		for (j = i + 1; t[j].type == SDR_MULTIBITS2; j++) {
+		    uval >>= t[j - 1].bitsize;
 		    err = store_sdr_bits(&t[j], sdr, sdr_len, uval, errstr);
 		    if (err)
 			goto out_err;
-		    uval >>= t[i].bitsize;
 		}
 		break;
 	    }
@@ -952,7 +1363,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 	    case SDR_STRING:
 	    {
 		unsigned char str[IPMI_MAX_STR_LEN];
-		char *sval;
+		const char *sval;
 		unsigned int out_len = sizeof(str);
 
 		err = get_delim_str(&tokptr, &sval, errstr);
@@ -979,6 +1390,50 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		*errstr = "Internal error: multibits2 showed up";
 		goto out_err;
 		break;
+
+	    case SDR_THRESH:
+	    {
+		double fval, fx;
+		int m, b, r_exp, b_exp;
+
+		err = get_float(&tokptr, &fval, errstr);
+		if (err)
+		    goto out_err;
+
+		m = get_sdr_bits(sdr, 25, 0, 8);
+		m |= get_sdr_bits(sdr, 26, 6, 2) << 8;
+		if (m & (1 << 9))
+		    m |= (~0 << 10);
+		b = get_sdr_bits(sdr, 27, 0, 8);
+		b |= get_sdr_bits(sdr, 28, 6, 2) << 8;
+		if (b & (1 << 9))
+		    b |= (~0 << 10);
+		r_exp = get_sdr_bits(sdr, 30, 4, 4);
+		if (r_exp & (1 << 3))
+		    r_exp |= (~0 << 4);
+		b_exp = get_sdr_bits(sdr, 30, 0, 4);
+		if (b_exp & (1 << 3))
+		    b_exp |= (~0 << 4);
+
+		fx = (((fval / pow(10, r_exp)) - ((double) b) * pow(10, b_exp))
+		      / ((double) m));
+
+		if (t[i].name[0] == 'u')
+		    fx = ceil(fx);
+		else if (t[i].name[0] != 'l')
+		    fx += .5; /* round */
+
+		if (fx < 0.0 || fx > 255.0) {
+		    err = -1;
+		    *errstr = "Value out of range type";
+		    goto out_err;
+		}
+		err = store_sdr_bits(&t[i], sdr, sdr_len,
+				     (unsigned int) fx, errstr);
+		if (err)
+		    goto out_err;
+		break;
+	    }
 	}
     }
 
@@ -1015,13 +1470,129 @@ static void help(void)
     exit(1);
 }
 
+static void
+parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
+	   unsigned int *sdrnum)
+{
+    char buf[MAX_SDR_LINE];
+    char *s;
+    unsigned int line = 0;
+
+    while ((s = fgets(buf, sizeof(buf), f))) {
+	int err;
+	unsigned int sdrtype;
+	char *errstr, *errstr2;
+	unsigned char *sdr;
+	unsigned int sdrlen;
+	char *tokptr;
+	const char *tok;
+
+	line++;
+	tok = mystrtok(buf, " \t\n", &tokptr);
+	if (!tok || (tok[0] == '#'))
+	    continue;
+
+	if (strcmp(tok, "sdr") == 0) {
+	    tok = mystrtok(NULL, " \n\t", &tokptr);
+	    if (!tok || strcmp(tok, "type") != 0) {
+		fprintf(stderr,
+			"%s:%3d: Invalid input, expecting \"sdr type <n>\"\n",
+			filename, line);
+		exit(1);
+	    }
+
+	    err = get_uint(&tokptr, &sdrtype, &errstr, NULL);
+	    if (err) {
+		fprintf(stderr,
+			"%s:%3d: Invalid input, expecting \"sdr type <n>\":"
+			" %s\n",
+			filename, line, errstr);
+		exit(1);
+	    }
+
+	    err = ipmi_compile_sdr(f, sdrtype, &sdr, &sdrlen, &errstr, &errstr2,
+				   &line);
+	    if (err) {
+		if (errstr2)
+		    fprintf(stderr, "%s:%3d: %s: %s\n", filename, line,
+			    errstr, errstr2);
+		else
+		    fprintf(stderr, "%s:%3d: %s\n", filename, line, errstr);
+		exit(1);
+	    }
+
+	    sdr[0] = *sdrnum & 0xff;
+	    sdr[1] = (*sdrnum >> 8) & 0xff;
+
+	    if (outraw) {
+		fwrite(sdr, sdrlen, 1, stdout);
+	    } else {
+		err = add_persist_data(p, sdr, sdrlen, "%d", *sdrnum);
+		if (err) {
+		    fprintf(stderr, "Out of memory\n");
+		    exit(1);
+		}
+	    }
+	    (*sdrnum)++;
+	    free(sdr);
+	} else if (strcmp(tok, "define") == 0) {
+	    const char *name;
+	    const char *value;
+	    name = mystrtok(NULL, " \n\t", &tokptr);
+	    if (!name) {
+		fprintf(stderr,
+			"%s:%3d: Invalid input, expecting variable name\n",
+			filename, line);
+		exit(1);
+	    }
+
+	    err = get_delim_str(&tokptr, &value, &errstr);
+	    if (err) {
+		fprintf(stderr,
+			"%s:%3d: Invalid value, expecting quote delimited"
+			" string: %s\n", filename, line, errstr);
+		exit(1);
+	    }
+	    
+	    err = add_variable(name, value);
+	    if (err)
+		exit(1);
+	} else if (strcmp(tok, "include") == 0) {
+	    const char *nfilename;
+	    FILE *f2;
+
+	    err = get_delim_str(&tokptr, &nfilename, &errstr);
+	    if (err) {
+		fprintf(stderr,
+			"%s:%3d: Invalid filename, expecting quote delimited"
+			" string: %s\n", filename, line, errstr);
+		exit(1);
+	    }
+
+	    f2 = fopen(nfilename, "r");
+	    if (!f2) {
+		fprintf(stderr, "%s:%3d: Unable to open included file %s\n",
+			filename, line, nfilename);
+		exit(1);
+	    }
+
+	    parse_file(nfilename, f2, p, outraw, sdrnum);
+	    
+	    fclose(f2);
+	} else {
+	    fprintf(stderr, "%s:%3d: Invalid input,"
+		    " expecting \"sdr type <n>\"\n",
+		    filename, line);
+	    exit(1);
+	}
+    }
+
+}
+
 int
 main(int argc, char *argv[])
 {
     FILE *f;
-    char *s, *tok, *tokptr;
-    char buf[MAX_SDR_LINE];
-    unsigned int line = 0;
     persist_t *p = NULL;
     unsigned int sdrnum = 1;
     int argn;
@@ -1061,63 +1632,9 @@ main(int argc, char *argv[])
 	}
     }
 
-    while ((s = fgets(buf, sizeof(buf), f))) {
-	int err;
-	unsigned int sdrtype;
-	char *errstr, *errstr2;
-	unsigned char *sdr;
-	unsigned int sdrlen;
+    parse_file(argv[1], f, p, outraw, &sdrnum);
 
-	line++;
-	tok = mystrtok(buf, " \t\n", &tokptr);
-	if (!tok || (tok[0] == '#'))
-	    continue;
-
-	if (strcmp(tok, "sdr") != 0) {
-	    fprintf(stderr, "%3d: Invalid input, expecting \"sdr type <n>\"\n",
-		    line);
-	    exit(1);
-	}
-
-	tok = mystrtok(NULL, " \n\t", &tokptr);
-	if (!tok || strcmp(tok, "type") != 0) {
-	    fprintf(stderr, "%3d: Invalid input, expecting \"sdr type <n>\"\n",
-		    line);
-	    exit(1);
-	}
-
-	err = get_uint(&tokptr, &sdrtype, &errstr);
-	if (err) {
-	    fprintf(stderr, "%3d: Invalid input, expecting \"sdr type <n>\": "
-		    "%s\n", line, errstr);
-	    exit(1);
-	}
-
-	err = ipmi_compile_sdr(f, sdrtype, &sdr, &sdrlen, &errstr, &errstr2,
-			       &line);
-	if (err) {
-	    if (errstr2)
-		fprintf(stderr, "%3d: %s: %s\n", line, errstr, errstr2);
-	    else
-		fprintf(stderr, "%3d: %s\n", line, errstr);
-	    exit(1);
-	}
-
-	sdr[0] = sdrnum & 0xff;
-	sdr[1] = (sdrnum >> 8) & 0xff;
-
-	if (outraw) {
-	    fwrite(sdr, sdrlen, 1, stdout);
-	} else {
-	    err = add_persist_data(p, sdr, sdrlen, "%d", sdrnum);
-	    if (err) {
-		fprintf(stderr, "Out of memory\n");
-		exit(1);
-	    }
-	}
-	sdrnum++;
-	free(sdr);
-    }
+    fclose(f);
 
     if (!outraw) {
 	write_persist_file(p, stdout);

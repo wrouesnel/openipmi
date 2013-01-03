@@ -1013,7 +1013,9 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 
 struct file_data {
     char *filename;
+    int mult;
     int div;
+    int sub;
     int base;
 };
 
@@ -1050,8 +1052,18 @@ ascii_file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	return EINVAL;
     }
 
+    val -= f->sub;
+
+    if (f->mult)
+	val = val * f->mult;
+
     if (f->div)
 	val = (val + (f->div / 2)) / f->div;
+
+    if (val < 0)
+	val = 0;
+    else if (val > 255)
+	val = 255;
 
     *rval = val;
     return 0;
@@ -1065,7 +1077,9 @@ ascii_file_init(lmc_data_t *mc,
 {
     char *fname;
     int div = 0;
+    int mult = 0;
     int base = 0;
+    int sub = 0;
     struct file_data *f;
     char *end;
     int err;
@@ -1080,6 +1094,18 @@ ascii_file_init(lmc_data_t *mc,
 	    div = strtol(tok + 4, &end, 0);
 	    if (*end != '\0') {
 		*errstr = "Invalid div value";
+		return -1;
+	    }
+	} else if (strncmp("mult=", tok, 4) == 0) {
+	    mult = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid base value";
+		return -1;
+	    }
+	} else if (strncmp("sub=", tok, 4) == 0) {
+	    sub = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid base value";
 		return -1;
 	    }
 	} else if (strncmp("base=", tok, 5) == 0) {
@@ -1103,6 +1129,8 @@ ascii_file_init(lmc_data_t *mc,
 	return ENOMEM;
     }
     f->div = div;
+    f->mult = mult;
+    f->sub = sub;
     f->base = base;
 
     *rcb_data = f;
