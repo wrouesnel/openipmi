@@ -975,7 +975,7 @@ ipmi_set_product_id(lmc_data_t *mc, unsigned char product_id[2])
 }
 
 void
-ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog)
+ipmi_set_chassis_control_prog(lmc_data_t *mc, const char *prog)
 {
     mc->chassis_control_prog = prog;
 }

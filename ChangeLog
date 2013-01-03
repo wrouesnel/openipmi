@@ -1,3 +1,10 @@
+2012-01-03 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/*: Fix const correctness issues.
+
+	* lanserv/emu_cmd.c, lanserv/config.c: Add variable definition and
+	include commands.
+
 2012-01-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp.c: Lots of enhancements, names for fields,

@@ -284,7 +284,7 @@ struct lmc_data_s
 				    void *cb_data);
     ipmi_timer_t *power_timer;
     void *chassis_control_cb_data;
-    char *chassis_control_prog;
+    const char *chassis_control_prog;
 
     unsigned char power_value;
 #define MAX_LEDS 8

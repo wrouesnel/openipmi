@@ -1073,9 +1073,9 @@ static int
 ascii_file_init(lmc_data_t *mc,
 		unsigned char lun, unsigned char sensor_num,
 		char **toks, void *cb_data, void **rcb_data,
-		char **errstr)
+		const char **errstr)
 {
-    char *fname;
+    const char *fname;
     int div = 0;
     int mult = 0;
     int base = 0;
@@ -1083,7 +1083,7 @@ ascii_file_init(lmc_data_t *mc,
     struct file_data *f;
     char *end;
     int err;
-    char *tok;
+    const char *tok;
 
     err = get_delim_str(toks, &fname, errstr);
     if (err)
@@ -1155,7 +1155,7 @@ ipmi_sensor_add_handler(ipmi_sensor_handler_t *handler)
 }
 
 ipmi_sensor_handler_t *
-ipmi_sensor_find_handler(char *name)
+ipmi_sensor_find_handler(const char *name)
 {
     ipmi_sensor_handler_t *handler = sensor_handlers;
 

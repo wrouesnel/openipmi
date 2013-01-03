@@ -217,7 +217,7 @@ process_extcmd_value(void *baseloc, extcmd_info_t *t, char *buf)
 }
 
 static int
-add_cmd(char **cmd, char *name,	char *value, int freevalue)
+add_cmd(char **cmd, const char *name, char *value, int freevalue)
 {
     unsigned int size;
     char *newcmd;
@@ -258,24 +258,24 @@ add_cmd(char **cmd, char *name,	char *value, int freevalue)
 
 int
 extcmd_getvals(sys_data_t *sys,
-	       void *baseloc, char *cmd, extcmd_info_t *ts, unsigned int count)
+	       void *baseloc, const char *incmd, extcmd_info_t *ts,
+	       unsigned int count)
 {
     int rv;
-    char *newcmd;
+    char *cmd;
     FILE *f;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
 
-    if (!cmd)
+    if (!incmd)
 	return 0;
 
-    newcmd = malloc(strlen(cmd) + 5);
-    if (!newcmd)
+    cmd = malloc(strlen(incmd) + 5);
+    if (!cmd)
 	return ENOMEM;
-    strcpy(newcmd, cmd);
-    strcat(newcmd, " get");
-    cmd = newcmd;
+    strcpy(cmd, incmd);
+    strcat(cmd, " get");
 
     for (i = 0; i < count; i++) {
 	rv = add_cmd(&cmd, ts[i].name, NULL, 0);
@@ -327,26 +327,25 @@ extcmd_getvals(sys_data_t *sys,
 
 int
 extcmd_setvals(sys_data_t *sys,
-	       void *baseloc, char *cmd, extcmd_info_t *ts,
+	       void *baseloc, const char *incmd, extcmd_info_t *ts,
 	       unsigned char *setit, unsigned int count)
 {
     int rv = 0;
-    char *newcmd;
+    char *cmd;
     FILE *f;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
     int oneset = 0;
 
-    if (!cmd)
+    if (!incmd)
 	return 0;
 
-    newcmd = malloc(strlen(cmd) + 5);
-    if (!newcmd)
+    cmd = malloc(strlen(incmd) + 5);
+    if (!cmd)
 	return ENOMEM;
-    strcpy(newcmd, cmd);
-    strcat(newcmd, " set");
-    cmd = newcmd;
+    strcpy(cmd, incmd);
+    strcat(cmd, " set");
 
     for (i = 0; i < count; i++) {
 	if (setit && !setit[i])
@@ -394,25 +393,24 @@ extcmd_setvals(sys_data_t *sys,
 
 int
 extcmd_checkvals(sys_data_t *sys,
-		 void *baseloc, char *cmd, extcmd_info_t *ts,
+		 void *baseloc, const char *incmd, extcmd_info_t *ts,
 		 unsigned int count)
 {
     int rv = 0;
-    char *newcmd;
+    char *cmd;
     FILE *f;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
 
-    if (!cmd)
+    if (!incmd)
 	return 0;
 
-    newcmd = malloc(strlen(cmd) + 7);
-    if (!newcmd)
+    cmd = malloc(strlen(incmd) + 7);
+    if (!cmd)
 	return ENOMEM;
-    strcpy(newcmd, cmd);
-    strcat(newcmd, " check");
-    cmd = newcmd;
+    strcpy(cmd, incmd);
+    strcat(cmd, " check");
 
     for (i = 0; i < count; i++) {
 	rv = add_cmd(&cmd, ts[i].name, extcmd_setval(baseloc, ts + i), 1);

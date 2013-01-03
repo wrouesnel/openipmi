@@ -123,7 +123,8 @@ typedef struct emu_out_s
 /* In emu_cmd.c */
 void ipmi_emu_shutdown(emu_data_t *emu);
 int ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str);
-int read_command_file(emu_out_t *out, emu_data_t *emu, char *command_file);
+int read_command_file(emu_out_t *out, emu_data_t *emu,
+		      const char *command_file);
 
 void emu_set_debug_level(emu_data_t *emu, unsigned int debug_level);
 

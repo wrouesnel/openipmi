@@ -299,7 +299,7 @@ typedef struct lan_addr_s {
 
 struct startcmd_s {
     /* Command to start a VM */
-    char *startcmd;
+    const char *startcmd;
     unsigned int startnow; /* Start startcmd at simulator startup? */
     unsigned int poweroff_wait_time;
     unsigned int kill_wait_time;
@@ -318,7 +318,7 @@ struct startcmd_s {
  * required for all server types.
  */
 struct sys_data_s {
-    char *name;
+    const char *name;
 
     /* The MCs in the system */
     lmc_data_t *ipmb_addrs[IPMI_MAX_MCS];
@@ -458,25 +458,27 @@ void sysinfo_init(sys_data_t *sys);
 
 #define MAX_CONFIG_LINE 1024
 
-char *mystrtok(char *str, const char *delim, char **next);
+const char *mystrtok(char *str, const char *delim, char **next);
+int add_variable(const char *name, const char *value);
+const char *find_bvariable(const char *name);
 
-int get_delim_str(char **rtokptr, char **rval, char **err);
+int get_delim_str(char **rtokptr, const char **rval, const char **err);
 
-int get_bool(char **tokptr, unsigned int *rval, char **err);
+int get_bool(char **tokptr, unsigned int *rval, const char **err);
 
-int get_uint(char **tokptr, unsigned int *rval, char **err);
+int get_uint(char **tokptr, unsigned int *rval, const char **err);
 
-int get_int(char **tokptr, int *rval, char **err);
+int get_int(char **tokptr, int *rval, const char **err);
 
-int get_priv(char **tokptr, unsigned int *rval, char **err);
+int get_priv(char **tokptr, unsigned int *rval, const char **err);
 
-int get_auths(char **tokptr, unsigned int *rval, char **err);
+int get_auths(char **tokptr, unsigned int *rval, const char **err);
 
-int read_bytes(char **tokptr, unsigned char *data, char **err,
+int read_bytes(char **tokptr, unsigned char *data, const char **err,
 	       unsigned int len);
 
 int get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
-		  char *def_port, int socktype, char **err);
+		  char *def_port, int socktype, const char **err);
 
 int read_config(sys_data_t    *sys,
 		char          *config_file,

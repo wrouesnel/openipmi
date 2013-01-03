@@ -1031,7 +1031,7 @@ static ser_codec_t codecs[] = {
 };
 
 static ser_codec_t *
-ser_lookup_codec(char *name)
+ser_lookup_codec(const char *name)
 {
     unsigned int i;
 
@@ -1131,7 +1131,7 @@ static ser_oem_handler_t oem_handlers[] = {
 };
 
 static ser_oem_handler_t *
-ser_lookup_oem(char *name)
+ser_lookup_oem(const char *name)
 {
     unsigned int i;
 
@@ -1186,10 +1186,11 @@ serserv_init(serserv_data_t *ser)
 }
 
 int
-serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
+serserv_read_config(char **tokptr, sys_data_t *sys, const char **errstr)
 {
     serserv_data_t *ser;
-    char *tok, *tok2, *endp;
+    const char *tok, *tok2;
+    char *endp;
     int err;
     unsigned int chan_num;
 
@@ -1279,7 +1280,7 @@ serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr)
 	    }
 
 	    ser->do_attn = 1;
-	    tok2 = mystrtok(tok2, ",", &tokptr2);
+	    tok2 = mystrtok((char *) tok2, ",", &tokptr2);
 	    while (tok2) {
 		if (pos >= sizeof(ser->attn_chars)) {
 		    *errstr = "Too many attn characters";

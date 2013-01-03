@@ -75,11 +75,11 @@ lanserv_read_config(sys_data_t    *sys,
 		    unsigned int  channel_num)
 {
     char         buf[MAX_CONFIG_LINE];
-    char         *tok;
+    const char   *tok;
     char         *tokptr;
     unsigned int val;
     int          err = 0;
-    char         *errstr;
+    const char   *errstr;
     lanserv_data_t *lan;
 
 

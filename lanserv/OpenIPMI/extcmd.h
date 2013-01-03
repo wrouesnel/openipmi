@@ -78,20 +78,20 @@ typedef struct extcmd_map_s {
     [extcmdglue(name, _o)] = { #name, extcmd_uchar, map,		\
 			       offsetof(BASETYPE, name) }
 typedef struct extcmd_info_s {
-    char *name;
+    const char *name;
     enum extcmd_info_type_e type;
     extcmd_map_t *map;
     size_t offset;
 } extcmd_info_t;
 
 int extcmd_getvals(sys_data_t *sys,
-		   void *baseloc, char *cmd,
+		   void *baseloc, const char *cmd,
 		   extcmd_info_t *ts, unsigned int count);
 int extcmd_setvals(sys_data_t *sys,
-		   void *baseloc, char *cmd,
+		   void *baseloc, const char *cmd,
 		   extcmd_info_t *ts, unsigned char *setit,
 		   unsigned int count);
-int extcmd_checkvals(sys_data_t *sys, void *baseloc, char *cmd,
+int extcmd_checkvals(sys_data_t *sys, void *baseloc, const char *cmd,
 		     extcmd_info_t *ts, unsigned int count);
 
 

@@ -152,12 +152,66 @@ write_persist_users(sys_data_t *sys)
     return 0;
 }
 
+struct variable {
+    char *name;
+    char *value;
+    struct variable *next;
+} *vars;
+
+int
+add_variable(const char *name, const char *value)
+{
+    struct variable *var = vars, *last = NULL;
+
+    while (var) {
+	if (strcmp(name, var->name) == 0)
+	    break;
+	last = var;
+	var = var->next;
+    }
+    if (var) {
+	free(var->value);
+    } else {
+	var = malloc(sizeof(*var));
+	if (!var)
+	    return ENOMEM;
+	var->name = strdup(name);
+	if (!var->name)
+	    return ENOMEM;
+	var->next = NULL;
+	if (last)
+	    last->next = var;
+	else
+	    vars = var;
+    }
+    
+    var->value = strdup(value);
+    if (!var->value)
+	return ENOMEM;
+
+    return 0;
+}
+
+const char
+*find_variable(const char *name)
+{
+    struct variable *var = vars;
+    while (var) {
+	if (strcmp(name, var->name) == 0)
+	    break;
+	var = var->next;
+    }
+    if (!var)
+	return NULL;
+    return var->value;
+}
+
 /*
  * To parse more complex expressions, we really need to know what the
  * save state is.  So we, unfortunately, have to create our own
  * version of strtok so we know what it is.
  */
-char *
+const char *
 mystrtok(char *str, const char *delim, char **next)
 {
     char *pos;
@@ -205,15 +259,24 @@ mystrtok(char *str, const char *delim, char **next)
 	curr++;
     }
  out:
-    return pos;
+    if (*pos == '$')
+	return find_variable(pos + 1);
+    else
+	return pos;
 }
 
 int
-get_delim_str(char **rtokptr, char **rval, char **err)
+isquote(char c)
+{
+    return c == '\'' || c == '"';
+}
+
+int
+get_delim_str(char **rtokptr, const char **rval, const char **err)
 {
     char *tokptr = *rtokptr;
     char endc;
-    char *rv;
+    char *rv = NULL;
 
     while (isspace(*tokptr))
 	tokptr++;
@@ -221,35 +284,72 @@ get_delim_str(char **rtokptr, char **rval, char **err)
 	*err = "missing string value";
 	return -1;
     }
-    if (*tokptr != '"' && *tokptr != '\'') {
-	*err = "string value must start with '\"' or '''";
-	return -1;
-    }
-    endc = *tokptr;
-    tokptr++;
-    rv = tokptr;
-    while (*tokptr != endc) {
-	if (*tokptr == '\0') {
-	    *err = "End of line in string";
+    for (;;) {
+	const char *val;
+
+	if (*tokptr == '$') {
+	    char oldc;
+
+	    tokptr++;
+	    val = tokptr;
+	    while (*tokptr && *tokptr != '$' &&
+		   !isspace(*tokptr) && !isquote(*tokptr)) {
+		tokptr++;
+	    }
+	    oldc = *tokptr;
+	    *tokptr = '\0';
+	    val = find_variable(val);
+	    if (!val)
+		return -1;
+	    *tokptr = oldc;
+	} else if (isquote(*tokptr)) {
+	    endc = *tokptr;
+	    tokptr++;
+	    val = tokptr;
+	    while (*tokptr != endc) {
+		if (*tokptr == '\0') {
+		    *err = "End of line in string";
+		    return -1;
+		}
+		tokptr++;
+	    }
+	    *tokptr = '\0';
+	    tokptr++;
+	} else {
+	    *err = "string value must start with '\"' or '''";
 	    return -1;
 	}
-	tokptr++;
+
+	if (rv) {
+	    char *newrv = malloc(strlen(rv) + strlen(val) + 1);
+	    if (!newrv) {
+		*err = "Out of memory copying string";
+		return -1;
+	    }
+	    strcpy(newrv, rv);
+	    strcat(newrv, val);
+	    free(rv);
+	    rv = newrv;
+	} else {
+	    rv = strdup(val);
+	    if (!rv) {
+		*err = "Out of memory copying string";
+		return -1;
+	    }
+	}
+
+	if (*tokptr == '\0' || isspace(*tokptr))
+	    break;
     }
-    *tokptr = '\0';
-    *rtokptr = tokptr + 1;
-    rv = strdup(rv);
-    if (!rv) {
-	*err = "Out of memory copying string";
-	return -1;
-    }
+    *rtokptr = tokptr;
     *rval = rv;
     return 0;
 }
 
 int
-get_bool(char **tokptr, unsigned int *rval, char **err)
+get_bool(char **tokptr, unsigned int *rval, const char **err)
 {
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No boolean value given";
@@ -280,10 +380,10 @@ get_bool(char **tokptr, unsigned int *rval, char **err)
 }
 
 int
-get_uint(char **tokptr, unsigned int *rval, char **err)
+get_uint(char **tokptr, unsigned int *rval, const char **err)
 {
     char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No integer value given";
@@ -299,10 +399,10 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
 }
 
 int
-get_int(char **tokptr, int *rval, char **err)
+get_int(char **tokptr, int *rval, const char **err)
 {
     char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No integer value given";
@@ -318,10 +418,10 @@ get_int(char **tokptr, int *rval, char **err)
 }
 
 int
-get_uchar(char **tokptr, unsigned char *rval, char **err)
+get_uchar(char **tokptr, unsigned char *rval, const char **err)
 {
     char *end;
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No integer value given";
@@ -337,9 +437,9 @@ get_uchar(char **tokptr, unsigned char *rval, char **err)
 }
 
 int
-get_priv(char **tokptr, unsigned int *rval, char **err)
+get_priv(char **tokptr, unsigned int *rval, const char **err)
 {
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
 
     if (!tok) {
 	*err = "No privilege specified, must be 'callback', 'user',"
@@ -364,9 +464,9 @@ get_priv(char **tokptr, unsigned int *rval, char **err)
 }
 
 int
-get_auths(char **tokptr, unsigned int *rval, char **err)
+get_auths(char **tokptr, unsigned int *rval, const char **err)
 {
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
     int  val = 0;
 
     while (tok) {
@@ -393,9 +493,10 @@ get_auths(char **tokptr, unsigned int *rval, char **err)
 }
 
 int
-read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
+read_bytes(char **tokptr, unsigned char *data, const char **err,
+	   unsigned int len)
 {
-    char *tok = mystrtok(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
     char *end;
 
     if (!tok) {
@@ -403,7 +504,7 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 	return -1;
     }
     if (*tok == '"') {
-	int end;
+	unsigned int end;
 	/* Ascii PW */
 	tok++;
 	end = strlen(tok) - 1;
@@ -411,8 +512,10 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 	    *err = "ASCII password or username doesn't end in '\"'";
 	    return -1;
 	}
-	tok[end] = '\0';
-	strncpy((char *) data, tok, len);
+	if (end > (len - 1))
+	    end = len - 1;
+	memcpy(data, tok, end);
+	data[end] = '\0';
 	zero_extend_ascii(data, len);
     } else {
 	unsigned int i;
@@ -441,9 +544,9 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 
 int
 get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
-	      char *def_port, int socktype, char **err)
+	      char *def_port, int socktype, const char **err)
 {
-    char *s, *p;
+    const char *s, *p;
 
     s = mystrtok(NULL, " \t\n", tokptr);
     if (!s) {
@@ -507,7 +610,7 @@ get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len,
 }
 
 static int
-get_user(char **tokptr, sys_data_t *sys, char **err)
+get_user(char **tokptr, sys_data_t *sys, const char **err)
 {
     unsigned int num;
     unsigned int val;
@@ -554,8 +657,8 @@ get_user(char **tokptr, sys_data_t *sys, char **err)
 }
 
 struct dliblist {
-    char *file;
-    char *init;
+    const char *file;
+    const char *init;
     void *handle;
     struct dliblist *next;
 };
@@ -566,7 +669,7 @@ int
 load_dynamic_libs(sys_data_t *sys, int print_version)
 {
     struct dliblist *dlib = dlibs;
-    int (*func)(sys_data_t *sys, char *initstr);
+    int (*func)(sys_data_t *sys, const char *initstr);
     void *handle;
     int err;
 
@@ -630,10 +733,10 @@ read_config(sys_data_t *sys,
     int          line;
     unsigned int val;
     char         buf[MAX_CONFIG_LINE];
-    char         *tok;
+    const char   *tok;
     char         *tokptr;
     int          err = 0;
-    char         *errstr;
+    const char   *errstr;
 
     if (!f) {
 	fprintf(stderr, "Unable to open configuration file '%s'\n",
@@ -649,35 +752,55 @@ read_config(sys_data_t *sys,
 	if (!tok || (tok[0] == '#'))
 	    continue;
 
-	if (strcmp(tok, "loadlib") == 0) {
-	    char *library = NULL, *initstr = NULL;
+	if (strcmp(tok, "define") == 0) {
+	    const char *varname, *value;
+
+	    varname = mystrtok(NULL, " \t\n", &tokptr);
+	    if (!varname) {
+		err = EINVAL;
+		errstr = "No variable supplied for define";
+		goto next;
+	    }
+	    err = get_delim_str(&tokptr, &value, &errstr);
+	    if (err)
+		goto next;
+	    err = add_variable(varname, value);
+	    if (err) {
+		err = ENOMEM;
+		errstr = "Out of memory";
+		goto next;
+	    }
+	} else if (strcmp(tok, "loadlib") == 0) {
+	    const char *library = NULL, *initstr = NULL;
 	    struct dliblist *dlib, *dlibp;
 
 	    err = get_delim_str(&tokptr, &library, &errstr);
 	    if (!err)
 		err = get_delim_str(&tokptr, &initstr, &errstr);
-	    dlib = malloc(sizeof(*dlib));
-	    if (!dlib) {
-		err = ENOMEM;
-		errstr = "Out of memory";
-	    } else {
-		dlib->file = library;
-		dlib->init = initstr;
-		dlib->next = NULL;
-		if (!dlibs) {
-		    dlibs = dlib;
+	    if (!err) {
+		dlib = malloc(sizeof(*dlib));
+		if (!dlib) {
+		    err = ENOMEM;
+		    errstr = "Out of memory";
 		} else {
-		    dlibp = dlibs;
-		    while (dlibp->next)
-			dlibp = dlibp->next;
-		    dlibp->next = dlib;
+		    dlib->file = library;
+		    dlib->init = initstr;
+		    dlib->next = NULL;
+		    if (!dlibs) {
+			dlibs = dlib;
+		    } else {
+			dlibp = dlibs;
+			while (dlibp->next)
+			    dlibp = dlibp->next;
+			dlibp->next = dlib;
+		    }
 		}
 	    }
 	    if (err) {
 		if (library)
-		    free(library);
+		    free((char *) library);
 		if (initstr)
-		    free(initstr);
+		    free((char *) initstr);
 	    }
 	    goto next;
 	}
@@ -703,7 +826,7 @@ read_config(sys_data_t *sys,
 	} else if (strcmp(tok, "sol") == 0) {
 	    err = sol_read_config(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "chassis_control") == 0) {
-	    char *prog;
+	    const char *prog;
 	    err = get_delim_str(&tokptr, &prog, &errstr);
 	    if (!err)
 		ipmi_set_chassis_control_prog(sys->mc, prog);

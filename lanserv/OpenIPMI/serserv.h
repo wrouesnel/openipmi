@@ -62,7 +62,7 @@
 typedef struct serserv_data_s serserv_data_t;
 
 typedef struct ser_codec_s {
-    char *name;
+    const char *name;
     void (*handle_char)(unsigned char ch, serserv_data_t *si);
     void (*send)(msg_t *msg, serserv_data_t *si);
     int (*setup)(serserv_data_t *si);
@@ -71,7 +71,7 @@ typedef struct ser_codec_s {
 } ser_codec_t;
 
 typedef struct ser_oem_handler_s {
-    char *name;
+    const char *name;
     int (*handler)(channel_t *chan, msg_t *msg, unsigned char *rdata,
 		   unsigned int *rdata_len);
     void (*init)(serserv_data_t *si);
@@ -113,7 +113,7 @@ struct serserv_data_s {
     unsigned int  attn_chars_len;
 };
 
-int serserv_read_config(char **tokptr, sys_data_t *sys, char **errstr);
+int serserv_read_config(char **tokptr, sys_data_t *sys, const char **errstr);
 int serserv_init(serserv_data_t *ser);
 void serserv_handle_data(serserv_data_t *ser, uint8_t *data, unsigned int len);
 

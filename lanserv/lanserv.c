@@ -613,7 +613,7 @@ ipmi_mc_get_next_recv_q(lmc_data_t *mc)
 }
 
 void
-ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog)
+ipmi_set_chassis_control_prog(lmc_data_t *mc, const char *prog)
 {
 }
 
@@ -640,7 +640,7 @@ ipmi_mc_get_channelset(lmc_data_t *mc)
 }
 
 int
-sol_read_config(char **tokptr, sys_data_t *sys, char **err)
+sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 {
     *err = "SOL not supported in lanserv";
     return -1;

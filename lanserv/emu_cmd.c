@@ -15,9 +15,10 @@ static int
 emu_get_uchar(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 	      int empty_ok)
 {
-    char *str, *tmpstr;
+    const char *str;
+    char *tmpstr;
 
-    str = strtok_r(NULL, " \t\n", toks);
+    str = mystrtok(NULL, " \t\n", toks);
     if (!str) {
 	if (empty_ok)
 	    return ENOSPC;
@@ -44,11 +45,12 @@ emu_get_uchar_with_vals(emu_out_t *out, char **toks,
 			unsigned char *val, char *errstr,
 			int empty_ok, unsigned int numopts, ...)
 {
-    char *str, *tmpstr;
+    const char *str;
+    char *tmpstr;
     va_list ap;
     unsigned int i;
 
-    str = strtok_r(NULL, " \t\n", toks);
+    str = mystrtok(NULL, " \t\n", toks);
     if (!str) {
 	if (empty_ok)
 	    return ENOSPC;
@@ -87,10 +89,10 @@ static int
 emu_get_bitmask(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 		unsigned int size, int empty_ok)
 {
-    char *str;
+    const char *str;
     int  i, j;
 
-    str = strtok_r(NULL, " \t\n", toks);
+    str = mystrtok(NULL, " \t\n", toks);
     if (!str) {
 	if (empty_ok)
 	    return ENOSPC;
@@ -121,9 +123,10 @@ emu_get_bitmask(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 static int
 emu_get_uint(emu_out_t *out, char **toks, unsigned int *val, char *errstr)
 {
-    char *str, *tmpstr;
+    const char *str;
+    char *tmpstr;
 
-    str = strtok_r(NULL, " \t\n", toks);
+    str = mystrtok(NULL, " \t\n", toks);
     if (!str) {
 	if (errstr)
 	    out->printf(out, "**No %s given\n", errstr);
@@ -143,7 +146,7 @@ static int
 emu_get_bytes(emu_out_t *out, char **tokptr, unsigned char *data, char *errstr,
 	      unsigned int len)
 {
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
+    const char *tok = mystrtok(NULL, " \t\n", tokptr);
     char *end;
 
     if (!tok) {
@@ -152,7 +155,7 @@ emu_get_bytes(emu_out_t *out, char **tokptr, unsigned char *data, char *errstr,
 	return EINVAL;
     }
     if (*tok == '"') {
-	int end;
+	unsigned int end;
 	/* Ascii PW */
 	tok++;
 	end = strlen(tok) - 1;
@@ -160,8 +163,10 @@ emu_get_bytes(emu_out_t *out, char **tokptr, unsigned char *data, char *errstr,
 	  out->printf(out, "**ASCII %s doesn't end in '\"'", errstr);
 	    return EINVAL;
 	}
-	tok[end] = '\0';
-	strncpy((char *) data, tok, len);
+	if (end > (len - 1))
+	    end = len - 1;
+	memcpy(data, tok, end);
+	data[end] = '\0';
 	zero_extend_ascii(data, len);
     } else {
 	unsigned int i;
@@ -190,13 +195,14 @@ emu_get_bytes(emu_out_t *out, char **tokptr, unsigned char *data, char *errstr,
 
 #define INPUT_BUFFER_SIZE 65536
 int
-read_command_file(emu_out_t *out, emu_data_t *emu, char *command_file)
+read_command_file(emu_out_t *out, emu_data_t *emu, const char *command_file)
 {
     FILE *f = fopen(command_file, "r");
-    int  rv;
+    int  rv = 0;
 
     if (!f) {
 	out->printf(out, "Unable to open command file '%s'\n", command_file);
+	rv = EINVAL;
     } else {
 	char *buffer;
 	int  pos = 0;
@@ -204,6 +210,7 @@ read_command_file(emu_out_t *out, emu_data_t *emu, char *command_file)
 	buffer = malloc(INPUT_BUFFER_SIZE);
 	if (!buffer) {
 	    out->printf(out, "Could not allocate buffer memory\n");
+	    rv = ENOMEM;
 	    goto out;
 	}
 	while (fgets(buffer+pos, INPUT_BUFFER_SIZE-pos, f)) {
@@ -237,7 +244,7 @@ read_command_file(emu_out_t *out, emu_data_t *emu, char *command_file)
 	fclose(f);
     }
 
-    return 0;
+    return rv;
 }
 
 static int
@@ -347,7 +354,7 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char num;
     unsigned char type;
     unsigned char code;
-    char *tok;
+    const char *tok;
 
     rv = emu_get_uchar(out, toks, &lun, "LUN", 0);
     if (rv)
@@ -370,7 +377,7 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	ipmi_sensor_handler_t *handler = ipmi_sensor_find_handler(tok);
 	unsigned int poll_rate;
 	void *rcb_data;
-	char *errstr;
+	const char *errstr;
 
 	if (!handler) {
 	    out->printf(out, "**Invalid sensor handler: %s\n", tok);
@@ -675,10 +682,9 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  mfg_id_i;
     unsigned char product_id[2];
     unsigned int  product_id_i;
-    unsigned char dyn_sens = 0;
     unsigned int  flags = 0;
     int           rv;
-    char          *tok;
+    const char    *tok;
     
     rv = emu_get_uchar(out, toks, &ipmb, "IPMB address", 0);
     if (rv)
@@ -712,7 +718,7 @@ mc_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    while ((tok = strtok_r(NULL, " \t\n", toks))) {
+    while ((tok = mystrtok(NULL, " \t\n", toks))) {
 	if (strcmp("dynsens", tok) == 0)
 	    flags |= IPMI_MC_DYNAMIC_SENSOR_POPULATION;
 	else if (strcmp("persist_sdr", tok) == 0)
@@ -948,11 +954,13 @@ mc_set_num_leds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 read_cmds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    char *filename = strtok_r(NULL, " \t\n", toks);
+    const char *filename, *errstr;
+    int err;
 
-    if (!filename) {
-	out->printf(out, "**No filename specified\n");
-	return EINVAL;
+    err = get_delim_str(toks, &filename, &errstr);
+    if (err) {
+	out->printf(out, "Could not get include filename: %s\n", errstr);
+	return err;
     }
 
     return read_command_file(out, emu, filename);
@@ -978,10 +986,10 @@ sleep_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 debug_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    unsigned int   level = 0;
-    char           *tok;
+    unsigned int level = 0;
+    const char   *tok;
 
-    while ((tok = strtok_r(NULL, " \t\n", toks))) {
+    while ((tok = mystrtok(NULL, " \t\n", toks))) {
 	if (strcmp(tok, "raw") == 0) {
 	    level |= DEBUG_RAW_MSG;
 	} else if (strcmp(tok, "msg") == 0) {
@@ -1005,6 +1013,31 @@ quit(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     return 0;
 }
 
+static int
+do_define(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    const char *name, *value;
+    int err;
+    const char *errstr;
+
+    name = mystrtok(NULL, "\t\n", toks);
+    if (!name) {
+	out->printf(out, "No varaible name given for define\n");
+	return EINVAL;
+    }
+    err = get_delim_str(toks, &value, &errstr);
+    if (err) {
+	out->printf(out, "Could not get variable %s value: %s\n", name, errstr);
+	return err;
+    }
+    err = add_variable(name, value);
+    if (err) {
+	out->printf(out, "Out of memory setting variable %s\n", name);
+	return err;
+    }
+    return 0;
+}
+
 #define MC	1
 #define NOMC	0
 static struct {
@@ -1014,6 +1047,7 @@ static struct {
 } cmds[] =
 {
     { "quit",		NOMC,		quit },
+    { "define",		NOMC,		do_define },
     { "sel_enable",	MC,		sel_enable },
     { "sel_add",	MC,		sel_add },
     { "main_sdr_add",	MC,		main_sdr_add },
@@ -1038,6 +1072,7 @@ static struct {
     { "atca_enable",    NOMC,	        atca_enable },
     { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },
+    { "include",	NOMC,		read_cmds },
     { "sleep",		NOMC,		sleep_cmd },
     { "debug",		NOMC,		debug_cmd },
     { NULL }
@@ -1047,12 +1082,12 @@ int
 ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str)
 {
     char       *toks;
-    char       *cmd;
+    const char *cmd;
     int        i;
     int        rv = EINVAL;
     lmc_data_t *mc = NULL;
 
-    cmd = strtok_r(cmd_str, " \t\n", &toks);
+    cmd = mystrtok(cmd_str, " \t\n", &toks);
     if (!cmd)
 	return 0;
     if (cmd[0] == '#')

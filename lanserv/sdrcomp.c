@@ -731,7 +731,7 @@ struct variable {
     struct variable *next;
 } *vars;
 
-static int
+int
 add_variable(const char *name, const char *value)
 {
     struct variable *var = vars, *last = NULL;

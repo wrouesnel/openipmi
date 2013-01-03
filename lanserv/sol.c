@@ -439,9 +439,9 @@ static char *uucp_lck_dir = "/var/lock";
 static char *progname = "ipmisim";
 
 static int
-uucp_fname_lock_size(char *devname)
+uucp_fname_lock_size(const char *devname)
 {
-    char *ptr;
+    const char *ptr;
 
     (ptr = strrchr(devname, '/'));
     if (ptr == NULL) {
@@ -454,9 +454,9 @@ uucp_fname_lock_size(char *devname)
 }
 
 static void
-uucp_fname_lock(char *buf, char *devname)
+uucp_fname_lock(char *buf, const char *devname)
 {
-    char *ptr;
+    const char *ptr;
 
     (ptr = strrchr(devname, '/'));
     if (ptr == NULL) {
@@ -486,7 +486,7 @@ write_full(int fd, char *data, size_t count)
 }
 
 static void
-uucp_rm_lock(sys_data_t *sys, char *devname)
+uucp_rm_lock(sys_data_t *sys, const char *devname)
 {
     char *lck_file;
 
@@ -501,7 +501,7 @@ uucp_rm_lock(sys_data_t *sys, char *devname)
 
 /* return 0=OK, -1=error, 1=locked by other proces */
 static int
-uucp_mk_lock(sys_data_t *sys, char *devname)
+uucp_mk_lock(sys_data_t *sys, const char *devname)
 {
     struct stat stt;
     int pid = -1;
@@ -1092,11 +1092,11 @@ sol_data_ready(int fd, void *cb_data)
 }
 
 int
-sol_read_config(char **tokptr, sys_data_t *sys, char **err)
+sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 {
     unsigned int val;
     int          rv;
-    char         *tok;
+    const char   *tok;
 
     sys->sol->use_rtscts = 1;
 

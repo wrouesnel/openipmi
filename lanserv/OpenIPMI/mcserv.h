@@ -73,7 +73,7 @@ typedef struct soldata_s soldata_t;
 typedef struct ipmi_sol_s {
     int configured;
 
-    char *device;
+    const char *device;
 
     int set_in_progress;
     solparm_t solparm;
@@ -226,7 +226,8 @@ struct ipmi_sensor_handler_s
     char *name;
     int (*poll)(void *cb_data, unsigned int *val, const char **errstr);
     int (*init)(lmc_data_t *mc, unsigned char lun, unsigned char sensor_num,
-		char **toks, void *cb_data, void **rcb_data, char **errstr);
+		char **toks, void *cb_data, void **rcb_data,
+		const char **errstr);
     void *cb_data;
 
     struct ipmi_sensor_handler_s *next;
@@ -234,7 +235,7 @@ struct ipmi_sensor_handler_s
 typedef struct ipmi_sensor_handler_s ipmi_sensor_handler_t;
 
 int ipmi_sensor_add_handler(ipmi_sensor_handler_t *handler);
-ipmi_sensor_handler_t *ipmi_sensor_find_handler(char *name);
+ipmi_sensor_handler_t *ipmi_sensor_find_handler(const char *name);
 
 int ipmi_mc_add_sensor(lmc_data_t    *mc,
 		       unsigned char lun,
@@ -273,13 +274,13 @@ void ipmi_set_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_get_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_set_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
-void ipmi_set_chassis_control_prog(lmc_data_t *mc, char *prog);
+void ipmi_set_chassis_control_prog(lmc_data_t *mc, const char *prog);
 
 void read_persist_users(sys_data_t *sys);
 int write_persist_users(sys_data_t *sys);
 int read_sol_config(sys_data_t *sys);
 int write_sol_config(lmc_data_t *mc);
-int sol_read_config(char **tokptr, sys_data_t *sys, char **err);
+int sol_read_config(char **tokptr, sys_data_t *sys, const char **err);
 
 int ipmi_mc_users_changed(lmc_data_t *mc);
 
