@@ -297,6 +297,7 @@ do_event(lmc_data_t    *mc,
     int           rv;
 
     if ((mc->event_receiver == 0)
+	|| (!sensor->enabled)
 	|| (!sensor->events_enabled)
 	|| (!gen_event))
 	return;
