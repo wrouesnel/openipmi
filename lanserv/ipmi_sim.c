@@ -1010,7 +1010,7 @@ static void
 io_except_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
     ipmi_io_t *io = cb_data;
-    io->write_cb(fd, io->cb_data);
+    io->except_cb(fd, io->cb_data);
 }
 
 static void
@@ -1178,6 +1178,7 @@ handle_sigchld(int sig)
 {
     unsigned char c = 1;
     int rv;
+
     rv = write(sigpipeh[1], &c, 1);
 }
 

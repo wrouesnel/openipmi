@@ -756,26 +756,9 @@ sel_select_loop(selector_t      *sel,
 		void            *cb_data)
 {
     int             err;
-    sel_wait_list_t wait_entry;
-    struct timeval  loc_timeout;
 
     for (;;) {
-	if (sel->have_timer_lock)
-	    sel->os_hnd->lock(sel->os_hnd, sel->timer_lock);
-    	process_timers(sel, &loc_timeout);
-	add_sel_wait_list(sel, &wait_entry, send_sig, cb_data, thread_id,
-			  &loc_timeout);
-	if (sel->have_timer_lock)
-	    sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
-	
-	err = process_fds(sel, send_sig, thread_id, cb_data, &loc_timeout);
-
-	if (sel->have_timer_lock)
-	    sel->os_hnd->lock(sel->os_hnd, sel->timer_lock);
-	remove_sel_wait_list(sel, &wait_entry);
-	if (sel->have_timer_lock)
-	    sel->os_hnd->unlock(sel->os_hnd, sel->timer_lock);
-
+	err = sel_select(sel, send_sig, thread_id, cb_data, NULL);
     	if ((err < 0) && (errno != EINTR)) {
 	    err = errno;
 	    /* An error occurred. */

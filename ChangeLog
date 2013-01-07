@@ -1,5 +1,15 @@
 2012-01-07 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv/ipmi_sim.c: Fix the IO exception callback.
+
+	* lanserv/Makefile.am: Update version.
+
+	* unix/posix_os_hnd.c: Remove some dead code.
+
+	* unix/selector.c: Consolidate the processing.
+
+2012-01-06 Corey Minyard <cminyard@mvista.com>
+
 	* lanserv/mcserv.h, lanserv/bmc_sensor.c: Add flags to the threshold
 	and event support settings to allow values to be passed in to control
 	which parts are initialized.

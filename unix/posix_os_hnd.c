@@ -81,9 +81,7 @@ static void
 fd_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
-    void            *cb_data;
 
-    cb_data = fd_data->cb_data;
     fd_data->data_ready(fd, fd_data->cb_data, fd_data);
 }
 
@@ -91,9 +89,7 @@ static void
 fd_write_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
-    void            *cb_data;
 
-    cb_data = fd_data->cb_data;
     fd_data->write_ready(fd, fd_data->cb_data, fd_data);
 }
 
@@ -101,9 +97,7 @@ static void
 fd_except_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
-    void            *cb_data;
 
-    cb_data = fd_data->cb_data;
     fd_data->except_ready(fd, fd_data->cb_data, fd_data);
 }
 
