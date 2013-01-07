@@ -487,7 +487,8 @@ static struct sdr_field type2[] =
     { "channel_number",		SDR_BITS,	 7, 4, 4, .required = 1 },
     { "sensor_owner_lun",	SDR_BITS,	 7, 0, 2, .required = 1 },
     { "sensor_number",		SDR_BITS,	 8, 0, 8, .required = 1 },
-    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1 },
+    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "logical_entity",		SDR_BOOLBIT,	10, 7, 1 },
     { "entity_instance",	SDR_BITS,	10, 0, 8, .required = 1 },
     { "init_scanning",		SDR_BOOLBIT,	11, 6, 1 },
@@ -505,7 +506,8 @@ static struct sdr_field type2[] =
       .strvals = sensor_access_fields },
     { "sensor_event_msg_ctrl",	SDR_BITS,	12, 0, 2,
       .strvals = sensor_event_msg_ctrl_fields },
-    { "sensor_type",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "sensor_type",		SDR_BITS,	13, 0, 8, .required = 1,
+      .strvals = sensor_type_fields },
     { "event_reading_type_code",SDR_BITS,	14, 0, 8, .required = 1 },
 
     { "assert_event14",		SDR_BOOLBIT,	16, 6, 1 },
@@ -1449,7 +1451,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
     free(sets);
     sdr[2] = 0x51;
     sdr[3] = type;
-    sdr[4] = sdr_len;
+    sdr[4] = sdr_len - 5;
     *retbuf = sdr;
     *retlen = sdr_len;
     return 0;
