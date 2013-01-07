@@ -859,6 +859,7 @@ ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
 			     unsigned char sens_num,
 			     unsigned char support,
 			     unsigned char supported[6],
+			     int set_values,
 			     unsigned char values[6])
 {
     sensor_t *sensor;
@@ -869,7 +870,8 @@ ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
     sensor = mc->sensors[lun][sens_num];
     sensor->threshold_support = support;
     memcpy(sensor->threshold_supported, supported, 6);
-    memcpy(sensor->thresholds, values, 6);
+    if (set_values)
+	memcpy(sensor->thresholds, values, 6);
 
     return 0;
 }
@@ -878,9 +880,11 @@ int
 ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 				 unsigned char lun,
 				 unsigned char sens_num,
+				 unsigned char init_events,
 				 unsigned char events_enable,
-				 unsigned char scanning,
-				 unsigned char support,
+				 unsigned char init_scanning,
+				 unsigned char scanning_enable,
+				 unsigned char event_support,
 				 unsigned char assert_supported[15],
 				 unsigned char deassert_supported[15],
 				 unsigned char assert_enabled[15],
@@ -893,9 +897,11 @@ ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 
     sensor = mc->sensors[lun][sens_num];
 
-    sensor->events_enabled = events_enable;
-    sensor->scanning_enabled = scanning;
-    sensor->event_support = support;
+    if (init_events)
+	sensor->events_enabled = events_enable;
+    if (init_scanning)
+	sensor->scanning_enabled = scanning_enable;
+    sensor->event_support = event_support;
     memcpy(sensor->event_supported[0], assert_supported, 15);
     memcpy(sensor->event_supported[1], deassert_supported, 15);
     memcpy(sensor->event_enabled[0], assert_enabled, 15);
@@ -926,28 +932,90 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
     unsigned char lun = sdr[6] & 0x3;
     unsigned char assert_sup[15], deassert_sup[15];
     unsigned char assert_en[15], deassert_en[15];
-    unsigned char scan_on = (sdr[10] >> 6) & 1;
-    unsigned char events_on = (sdr[10] >> 5) & 1;
+    unsigned char events_on = (sdr[10] >> 1) & 1;
+    unsigned char scan_on = (sdr[10] >> 0) & 1;
+    unsigned char init_events = (sdr[10] >> 6) & 1;
+    unsigned char init_scan = (sdr[10] >> 5) & 1;
+    unsigned char init_thresh = (sdr[10] >> 4) & 1;
+    unsigned char init_hyst = (sdr[10] >> 3) & 1;
+    unsigned char init_type = (sdr[10] >> 2) & 1;
     unsigned char event_sup = sdr[11] & 0x3;
+    unsigned char thresh_sup = (sdr[11] >> 2) & 0x3;
+    unsigned char thresh_set[6];
+    unsigned char hyst_sup = (sdr[11] >> 4) & 3;
+    sensor_t *sensor;
+
+    if ((lun >= 4) || (num >= 255) || (!mc->sensors[lun][num]))
+	return EINVAL;
+
+    sensor = mc->sensors[lun][num];
 
     if (len < 20)
 	return 0;
     if ((sdr[3] < 1) || (sdr[3] > 2))
 	return 0; /* Not a sensor SDR we set from */
     
+    thresh_set[0] = (sdr[15] >> 4) & 1;
+    thresh_set[1] = (sdr[15] >> 5) & 1;
+    thresh_set[2] = (sdr[15] >> 6) & 1;
+    thresh_set[3] = (sdr[17] >> 4) & 1;
+    thresh_set[4] = (sdr[17] >> 5) & 1;
+    thresh_set[5] = (sdr[17] >> 6) & 1;
+
     unpack_bitmask(assert_sup, sdr[14] | (sdr[15] << 8), 15);
     unpack_bitmask(deassert_sup, sdr[16] | (sdr[17] << 8), 15);
     unpack_bitmask(assert_en, sdr[14] | (sdr[15] << 8), 15);
     unpack_bitmask(deassert_en, sdr[16] | (sdr[17] << 8), 15);
 
+    if (init_type) {
+	sensor->sensor_type = sdr[12];
+	sensor->sensor_type = sdr[13];
+    }
+
     err = ipmi_mc_sensor_set_event_support(mc, lun, num,
+					   init_events,
 					   events_on,
+					   init_scan,
 					   scan_on,
 					   event_sup,
 					   assert_sup,
 					   deassert_sup,
 					   assert_en,
 					   deassert_en);
+    if (err)
+	return err;
+
+    if (init_thresh) {
+	if (thresh_sup == 2 && sdr[3] == 1) {
+	    unsigned char thresh_val[6];
+	    thresh_val[0] = sdr[41];
+	    thresh_val[1] = sdr[40];
+	    thresh_val[2] = sdr[39];
+	    thresh_val[3] = sdr[38];
+	    thresh_val[4] = sdr[37];
+	    thresh_val[5] = sdr[36];
+	    err = ipmi_mc_sensor_set_threshold(mc, lun, num,
+					       thresh_sup, thresh_set,
+					       1, thresh_val);
+	} else {
+	    err = ipmi_mc_sensor_set_threshold(mc, lun, num,
+					       thresh_sup, thresh_set,
+					       0, NULL);
+	}
+	if (err)
+	    return err;
+    }
+
+    if (init_hyst) {
+	if (sdr[3] == 1) {
+	    err = ipmi_mc_sensor_set_hysteresis(mc, lun, num,
+						hyst_sup, sdr[25], sdr[26]);
+	} else if (sdr[3] == 2) {
+	    err = ipmi_mc_sensor_set_hysteresis(mc, lun, num,
+						hyst_sup, sdr[42], sdr[43]);
+	}
+    }
+
     return err;
 }
 
@@ -1007,13 +1075,16 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 
     bmc = ipmi_emu_get_bmc_mc(mc->emu);
     if (bmc)
-	iterate_sdrs(mc, &mc->main_sdrs, check_sensor_sdr, sensor);
+	iterate_sdrs(mc, &bmc->main_sdrs, check_sensor_sdr, sensor);
 
     return 0;
 }
 
 struct file_data {
     char *filename;
+    unsigned int offset;
+    unsigned int length;
+    int is_raw;
     int mult;
     int div;
     int sub;
@@ -1021,11 +1092,10 @@ struct file_data {
 };
 
 static int
-ascii_file_poll(void *cb_data, unsigned int *rval, const char **errstr)
+file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 {
     struct file_data *f = cb_data;
     FILE *file;
-    char data[100];
     size_t rv;
     int val;
     char *end;
@@ -1037,20 +1107,48 @@ ascii_file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	*errstr = "Unable to open sensor file";
 	return errv;
     }
-
-    rv = fread(data, 1, sizeof(data) - 1, file);
-    errv = errno;
-    fclose(file);
-    if (rv <= 0) {
-	*errstr = "No data read from file";
-	return errv;
+    if (f->offset) {
+	if (fseek(file, f->offset, SEEK_SET) == -1) {
+	    errv = errno;
+	    fclose(file);
+	    *errstr = "Unable to seek file";
+	    return errv;
+	}
     }
-    data[rv] = '\0';
 
-    val = strtol(data, &end, f->base);
-    if ((*end != '\0' && !isspace(*end)) || (end == data)) {
-	*errstr = "Invalid data read from file";
-	return EINVAL;
+    if (f->is_raw) {
+	unsigned char data[4];
+	unsigned int i, length = f->length;
+
+	if (length > 4)
+	    length = 4;
+	rv = fread(data, 1, length, file);
+	errv = errno;
+	fclose(file);
+	if (rv <= 0) {
+	    *errstr = "No data read from file";
+	    return errv;
+	}
+	val = 0;
+	for (i = 0; i < length; i++)
+	    val |= data[i] << (i * 8);
+    } else {
+	char data[100];
+
+	rv = fread(data, 1, sizeof(data) - 1, file);
+	errv = errno;
+	fclose(file);
+	if (rv <= 0) {
+	    *errstr = "No data read from file";
+	    return errv;
+	}
+	data[rv] = '\0';
+
+	val = strtol(data, &end, f->base);
+	if ((*end != '\0' && !isspace(*end)) || (end == data)) {
+	    *errstr = "Invalid data read from file";
+	    return EINVAL;
+	}
     }
 
     val -= f->sub;
@@ -1061,26 +1159,17 @@ ascii_file_poll(void *cb_data, unsigned int *rval, const char **errstr)
     if (f->div)
 	val = (val + (f->div / 2)) / f->div;
 
-    if (val < 0)
-	val = 0;
-    else if (val > 255)
-	val = 255;
-
     *rval = val;
     return 0;
 }
 
 static int
-ascii_file_init(lmc_data_t *mc,
-		unsigned char lun, unsigned char sensor_num,
-		char **toks, void *cb_data, void **rcb_data,
-		const char **errstr)
+file_init(lmc_data_t *mc,
+	  unsigned char lun, unsigned char sensor_num,
+	  char **toks, void *cb_data, void **rcb_data,
+	  const char **errstr)
 {
     const char *fname;
-    int div = 0;
-    int mult = 0;
-    int base = 0;
-    int sub = 0;
     struct file_data *f;
     char *end;
     int err;
@@ -1089,63 +1178,79 @@ ascii_file_init(lmc_data_t *mc,
     err = get_delim_str(toks, &fname, errstr);
     if (err)
 	return err;
-    tok = mystrtok(NULL, " \t\n", toks);
-    while (tok) {
-	if (strncmp("div=", tok, 4) == 0) {
-	    div = strtol(tok + 4, &end, 0);
-	    if (*end != '\0') {
-		*errstr = "Invalid div value";
-		return -1;
-	    }
-	} else if (strncmp("mult=", tok, 4) == 0) {
-	    mult = strtol(tok + 5, &end, 0);
-	    if (*end != '\0') {
-		*errstr = "Invalid base value";
-		return -1;
-	    }
-	} else if (strncmp("sub=", tok, 4) == 0) {
-	    sub = strtol(tok + 5, &end, 0);
-	    if (*end != '\0') {
-		*errstr = "Invalid base value";
-		return -1;
-	    }
-	} else if (strncmp("base=", tok, 5) == 0) {
-	    div = strtol(tok + 5, &end, 0);
-	    if (*end != '\0') {
-		*errstr = "Invalid base value";
-		return -1;
-	    }
-	} else {
-	    *errstr = "Invalid ascii_file option, options are div= and base=";
-	    return -1;
-	}
-    }
-
     f = malloc(sizeof(*f));
     if (!f)
 	return ENOMEM;
+    tok = mystrtok(NULL, " \t\n", toks);
+    while (tok) {
+	if (strncmp("div=", tok, 4) == 0) {
+	    f->div = strtol(tok + 4, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid div value";
+		goto out_err;
+	    }
+	} else if (strncmp("mult=", tok, 5) == 0) {
+	    f->mult = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid mult value";
+		goto out_err;
+	    }
+	} else if (strncmp("sub=", tok, 4) == 0) {
+	    f->sub = strtol(tok + 4, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid sub value";
+		goto out_err;
+	    }
+	} else if (strncmp("base=", tok, 5) == 0) {
+	    f->base = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid base value";
+		goto out_err;
+	    }
+	} else if (strcmp("raw", tok) == 0) {
+	    f->is_raw = 1;
+	} else if (strcmp("ascii", tok) == 0) {
+	    f->is_raw = 0;
+	} else if (strncmp("offset=", tok, 7) == 0) {
+	    f->offset = strtoul(tok + 7, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid offset value";
+		goto out_err;
+	    }
+	} else if (strncmp("length=", tok, 7) == 0) {
+	    f->length = strtoul(tok + 7, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid length value";
+		goto out_err;
+	    }
+	} else {
+	    *errstr = "Invalid file option, options are div= and base=";
+	    goto out_err;
+	}
+    }
+
     f->filename = strdup(fname);
     if (!f->filename) {
 	free(f);
 	return ENOMEM;
     }
-    f->div = div;
-    f->mult = mult;
-    f->sub = sub;
-    f->base = base;
 
     *rcb_data = f;
     return 0;
+
+  out_err:
+    free(f);
+    return -1;
 }
 
-static ipmi_sensor_handler_t ascii_file_sensor =
+static ipmi_sensor_handler_t file_sensor =
 {
-    .name = "ascii_file",
-    .poll = ascii_file_poll,
-    .init = ascii_file_init
+    .name = "file",
+    .poll = file_poll,
+    .init = file_init
 };
 
-static ipmi_sensor_handler_t *sensor_handlers = &ascii_file_sensor;
+static ipmi_sensor_handler_t *sensor_handlers = &file_sensor;
 
 int
 ipmi_sensor_add_handler(ipmi_sensor_handler_t *handler)
@@ -1194,6 +1299,10 @@ sensor_poll(void *cb_data)
 	}
 	
 	if (sensor->event_reading_code == IPMI_EVENT_READING_TYPE_THRESHOLD) {
+	    if (val < 0)
+		val = 0;
+	    else if (val > 255)
+		val = 255;
 	    set_sensor_value(mc, sensor, val, 1);
 	} else {
 	    unsigned int i;

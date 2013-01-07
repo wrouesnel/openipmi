@@ -32,7 +32,7 @@ emu_get_uchar(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 	*val = str[1];
 	return 0;
     }
-    *val = strtoul(str, &tmpstr, 16);
+    *val = strtoul(str, &tmpstr, 0);
     if (*tmpstr != '\0') {
 	if (errstr)
 	    out->printf(out, "**Invalid %s given\n", errstr);
@@ -77,7 +77,7 @@ emu_get_uchar_with_vals(emu_out_t *out, char **toks,
     }
     va_end(ap);
 
-    *val = strtoul(str, &tmpstr, 16);
+    *val = strtoul(str, &tmpstr, 0);
     if (*tmpstr != '\0') {
 	if (errstr)
 	    out->printf(out, "**Invalid %s given\n", errstr);
@@ -134,7 +134,7 @@ emu_get_uint(emu_out_t *out, char **toks, unsigned int *val, char *errstr)
 	    out->printf(out, "**No %s given\n", errstr);
 	return EINVAL;
     }
-    *val = strtoul(str, &tmpstr, 16);
+    *val = strtoul(str, &tmpstr, 0);
     if (*tmpstr != '\0') {
 	if (errstr)
 	    out->printf(out, "**Invalid %s given\n", errstr);
@@ -203,7 +203,6 @@ read_command_file(emu_out_t *out, emu_data_t *emu, const char *command_file)
     int  rv = 0;
 
     if (!f) {
-	out->printf(out, "Unable to open command file '%s'\n", command_file);
 	rv = ENOENT;
     } else {
 	char *buffer;
@@ -376,11 +375,23 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     tok = mystrtok(NULL, " \t\n", toks);
     if (tok) {
-	ipmi_sensor_handler_t *handler = ipmi_sensor_find_handler(tok);
+	ipmi_sensor_handler_t *handler;
 	unsigned int poll_rate;
 	void *rcb_data;
 	const char *errstr;
 
+	if (strcmp(tok, "poll") != 0) {
+	    out->printf(out, "**Only polled sensors supported\n", tok);
+	    return -1;
+	}
+
+	tok = mystrtok(NULL, " \t\n", toks);
+	if (!tok) {
+	    out->printf(out, "**No polled sensor handler given\n", tok);
+	    return -1;
+	}
+
+	handler = ipmi_sensor_find_handler(tok);
 	if (!handler) {
 	    out->printf(out, "**Invalid sensor handler: %s\n", tok);
 	    return -1;
@@ -404,8 +415,8 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     } else {
 	rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
     }
-	if (rv)
-	    out->printf(out, "**Unable to add to sensor, error 0x%x\n", rv);
+    if (rv)
+	out->printf(out, "**Unable to add to sensor, error 0x%x\n", rv);
     return rv;
 }
 
@@ -589,7 +600,7 @@ sensor_set_threshold(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **tok
     }
 
     rv = ipmi_mc_sensor_set_threshold(mc, lun, num, support,
-				      enabled, thresholds);
+				      enabled, 1, thresholds);
     if (rv)
 	out->printf(out, "**Unable to set sensor thresholds, error 0x%x\n", rv);
     return rv;
@@ -661,7 +672,7 @@ sensor_set_event_support(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char *
 	return rv;
 
     rv = ipmi_mc_sensor_set_event_support(mc, lun, num,
-					  events_enable, scanning,
+					  1, events_enable, 1, scanning,
 					  support,
 					  assert_support, deassert_support,
 					  assert_enabled, deassert_enabled);
@@ -1047,9 +1058,9 @@ do_define(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     int err;
     const char *errstr;
 
-    name = mystrtok(NULL, "\t\n", toks);
+    name = mystrtok(NULL, " \t\n", toks);
     if (!name) {
-	out->printf(out, "No varaible name given for define\n");
+	out->printf(out, "No variable name given for define\n");
 	return EINVAL;
     }
     err = get_delim_str(toks, &value, &errstr);

@@ -1,3 +1,25 @@
+2012-01-07 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/mcserv.h, lanserv/bmc_sensor.c: Add flags to the threshold
+	and event support settings to allow values to be passed in to control
+	which parts are initialized.
+	* lanserv/emu_cmd.c: Adjust for the previous changes.
+
+	* lanserv/bmc_sensor.c: Finish the SDR initialization code.
+
+	* lanserv/bmc_sensor.c: Convert the ascii file scanner to a general
+	scanner that can be used for raw or ascii files.
+
+	* lanserv/bmc_sensor.c: Fix the polling to to limit threshold values
+	from 0-255.
+
+	* lanserv/emu_cmd.c: Use standard, not base 16, for all integer values
+	except raw data input.
+
+	* lanserv/persist.c: Fix a bug reading lower-case hex values.
+
+	
+
 2012-01-03 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Fix const correctness issues.

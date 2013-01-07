@@ -199,7 +199,9 @@ fromhex(char c)
 {
     if (c >= '0' && c <= '9')
 	return c - '0';
-    return c - 'A' + 10;
+    if (c >= 'A' && c <= 'Z')
+	return (c - 'A' + 10) & 0xf;
+    return c - 'a' + 10;
 }
 
 static void *
