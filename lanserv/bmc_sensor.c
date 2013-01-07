@@ -1296,6 +1296,7 @@ sensor_poll(void *cb_data)
 			     "Error getting sensor value (%2.2x,%d,%d): %s, %s",
 			     ipmi_mc_get_ipmb(mc), sensor->lun, sensor->num,
 			     strerror(err), errstr);
+	    goto out_restart;
 	}
 	
 	if (sensor->event_reading_code == IPMI_EVENT_READING_TYPE_THRESHOLD) {
@@ -1310,6 +1311,8 @@ sensor_poll(void *cb_data)
 	    for (i = 0; i < 15; i++)
 		set_bit(mc, sensor, i, ((val >> i) & 1), 0, 0xff, 0xff, 1);
 	}
+
+      out_restart:
 	mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
     }
 }

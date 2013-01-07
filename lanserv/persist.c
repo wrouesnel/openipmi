@@ -227,7 +227,7 @@ read_data(char *l, long *rsize, int isstr)
 	return NULL;
     *rsize = size;
 
-    for (c = l, p = r; *c; c++, p++) {
+    for (c = l, p = r; *c && *c != '\n'; c++, p++) {
 	if (*c == '\\') {
 	    *p = (fromhex(*(c + 1)) << 4) | fromhex(*(c + 2));
 	    c += 2;

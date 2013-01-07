@@ -22,6 +22,11 @@
 
 	* lanserv/ipmisim1.emu: Adjust for the previous changes.
 
+	* lanserv/persist.c: Fix a memory overwrite reading data.
+
+	* lanserv/bmc_sensor.c: Don't process polled sensor data if it's
+	not valid.
+
 2012-01-03 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Fix const correctness issues.
