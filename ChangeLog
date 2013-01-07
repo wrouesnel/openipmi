@@ -18,7 +18,9 @@
 
 	* lanserv/persist.c: Fix a bug reading lower-case hex values.
 
-	
+	* lanserv/sdrcomp.c: Fix some issues with type 2 sdrs.
+
+	* lanserv/ipmisim1.emu: Adjust for the previous changes.
 
 2012-01-03 Corey Minyard <cminyard@mvista.com>
 
