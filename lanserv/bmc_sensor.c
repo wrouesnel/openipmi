@@ -934,8 +934,8 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
     unsigned char assert_en[15], deassert_en[15];
     unsigned char events_on = (sdr[10] >> 1) & 1;
     unsigned char scan_on = (sdr[10] >> 0) & 1;
-    unsigned char init_events = (sdr[10] >> 6) & 1;
-    unsigned char init_scan = (sdr[10] >> 5) & 1;
+    unsigned char init_events = (sdr[10] >> 5) & 1;
+    unsigned char init_scan = (sdr[10] >> 6) & 1;
     unsigned char init_thresh = (sdr[10] >> 4) & 1;
     unsigned char init_hyst = (sdr[10] >> 3) & 1;
     unsigned char init_type = (sdr[10] >> 2) & 1;
@@ -969,7 +969,7 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
 
     if (init_type) {
 	sensor->sensor_type = sdr[12];
-	sensor->sensor_type = sdr[13];
+	sensor->event_reading_code = sdr[13];
     }
 
     err = ipmi_mc_sensor_set_event_support(mc, lun, num,
@@ -1107,6 +1107,7 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	*errstr = "Unable to open sensor file";
 	return errv;
     }
+
     if (f->offset) {
 	if (fseek(file, f->offset, SEEK_SET) == -1) {
 	    errv = errno;
@@ -1181,6 +1182,7 @@ file_init(lmc_data_t *mc,
     f = malloc(sizeof(*f));
     if (!f)
 	return ENOMEM;
+    memset(f, 0, sizeof(*f));
     tok = mystrtok(NULL, " \t\n", toks);
     while (tok) {
 	if (strncmp("div=", tok, 4) == 0) {
@@ -1227,6 +1229,7 @@ file_init(lmc_data_t *mc,
 	    *errstr = "Invalid file option, options are div= and base=";
 	    goto out_err;
 	}
+	tok = mystrtok(NULL, " \t\n", toks);
     }
 
     f->filename = strdup(fname);
@@ -1268,6 +1271,7 @@ ipmi_sensor_find_handler(const char *name)
     while (handler) {
 	if (strcmp(handler->name, name) == 0)
 	    return handler;
+	handler = handler->next;
     }
     return NULL;
 }

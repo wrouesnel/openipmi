@@ -385,6 +385,10 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    return -1;
 	}
 
+	rv = emu_get_uint(out, toks, &poll_rate, "poll rate");
+	if (rv)
+	    return rv;
+
 	tok = mystrtok(NULL, " \t\n", toks);
 	if (!tok) {
 	    out->printf(out, "**No polled sensor handler given\n", tok);
@@ -396,10 +400,6 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    out->printf(out, "**Invalid sensor handler: %s\n", tok);
 	    return -1;
 	}
-
-	rv = emu_get_uint(out, toks, &poll_rate, "poll rate");
-	if (rv)
-	    return rv;
 
 	rv = handler->init(mc, lun, num, toks, handler->cb_data, &rcb_data,
 			   &errstr);
