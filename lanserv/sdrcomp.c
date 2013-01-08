@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <math.h>
+#include <time.h>
 
 /* Primarily to get string handling routines */
 #include <OpenIPMI/ipmi_string.h>
@@ -509,7 +510,6 @@ static struct sdr_field type2[] =
     { "sensor_type",		SDR_BITS,	13, 0, 8, .required = 1,
       .strvals = sensor_type_fields },
     { "event_reading_type_code",SDR_BITS,	14, 0, 8, .required = 1 },
-
     { "assert_event14",		SDR_BOOLBIT,	16, 6, 1 },
     { "assert_event13",		SDR_BOOLBIT,	16, 5, 1 },
     { "assert_event12",		SDR_BOOLBIT,	16, 4, 1 },
@@ -629,10 +629,12 @@ static struct sdr_field type3[] =
     { "channel_number",		SDR_BITS,	 7, 4, 4, .required = 1 },
     { "sensor_owner_lun",	SDR_BITS,	 7, 0, 2, .required = 1 },
     { "sensor_number",		SDR_BITS,	 8, 0, 8, .required = 1 },
-    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1 },
+    { "entity_id",		SDR_BITS,	 9, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "logical_entity",		SDR_BOOLBIT,	10, 7, 1 },
     { "entity_instance",	SDR_BITS,	10, 0, 8, .required = 1 },
-    { "sensor_type",		SDR_BITS,	11, 0, 8, .required = 1 },
+    { "sensor_type",		SDR_BITS,	11, 0, 8, .required = 1,
+      .strvals = sensor_type_fields },
     { "event_reading_type_code",SDR_BITS,	12, 0, 8, .required = 1 },
     { "sensor_direction",	SDR_BITS,	13, 6, 2,
       .strvals = sensor_direction_fields },
@@ -648,26 +650,32 @@ static struct sdr_field type3[] =
 
 static struct sdr_field type8[] =
 {
-    { "container_entity_id",	SDR_BITS,	 6, 0, 8, .required = 1 },
-    { "container_entity_inst",	SDR_BITS,	 7, 4, 4, .required = 1 },
+    { "container_entity_id",	SDR_BITS,	 6, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
+    { "container_entity_inst",	SDR_BITS,	 7, 0, 8, .required = 1 },
     { "entities_are_range",	SDR_BOOLBIT,	 8, 7, 1 },
     { "linked_ears",		SDR_BOOLBIT,	 8, 6, 1 },
     { "presense_sensor_always_there",SDR_BOOLBIT, 8, 5, 1 },
 
-    { "entity_1_id",		SDR_BITS,	 9, 0, 8, .required = 1 },
+    { "entity_1_id",		SDR_BITS,	 9, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "entity_1_inst",		SDR_BITS,	 10, 0, 8, .required = 1 },
-    { "entity_2_id",		SDR_BITS,	 11, 0, 8 },
+    { "entity_2_id",		SDR_BITS,	 11, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_2_inst",		SDR_BITS,	 12, 0, 8 },
-    { "entity_3_id",		SDR_BITS,	 13, 0, 8 },
+    { "entity_3_id",		SDR_BITS,	 13, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_3_inst",		SDR_BITS,	 14, 0, 8 },
-    { "entity_4_id",		SDR_BITS,	 15, 0, 8 },
+    { "entity_4_id",		SDR_BITS,	 15, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_4_inst",		SDR_BITS,	 16, 0, 8 },
 };
 #define TYPE8_LEN (sizeof(type8) / sizeof(struct sdr_field))
 
 static struct sdr_field type9[] =
 {
-    { "container_entity_id",	SDR_BITS,	 6, 0, 8, .required = 1 },
+    { "container_entity_id",	SDR_BITS,	 6, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "container_entity_inst",	SDR_BITS,	 7, 4, 4, .required = 1 },
     { "container_entity_dev_addr", SDR_BITS,	 8, 0, 8, .required = 1 },
     { "container_entity_dev_chan", SDR_BITS,	 9, 0, 8, .required = 1 },
@@ -676,19 +684,23 @@ static struct sdr_field type9[] =
     { "presense_sensor_always_there",SDR_BOOLBIT, 10, 5, 1 },
     { "entity_1_dev_addr",	SDR_BITS,	 11, 0, 8, .required = 1 },
     { "entity_1_dev_chan",	SDR_BITS,	 12, 0, 8, .required = 1 },
-    { "entity_1_id",		SDR_BITS,	 13, 0, 8, .required = 1 },
+    { "entity_1_id",		SDR_BITS,	 13, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "entity_1_inst",		SDR_BITS,	 14, 0, 8, .required = 1 },
     { "entity_2_dev_addr",	SDR_BITS,	 15, 0, 8 },
     { "entity_2_dev_chan",	SDR_BITS,	 16, 0, 8 },
-    { "entity_2_id",		SDR_BITS,	 17, 0, 8 },
+    { "entity_2_id",		SDR_BITS,	 17, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_2_inst",		SDR_BITS,	 18, 0, 8 },
     { "entity_3_dev_addr",	SDR_BITS,	 19, 0, 8 },
     { "entity_3_dev_chan",	SDR_BITS,	 20, 0, 8 },
-    { "entity_3_id",		SDR_BITS,	 21, 0, 8 },
+    { "entity_3_id",		SDR_BITS,	 21, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_3_inst",		SDR_BITS,	 22, 0, 8 },
     { "entity_4_dev_addr",	SDR_BITS,	 23, 0, 8 },
     { "entity_4_dev_chan",	SDR_BITS,	 24, 0, 8 },
-    { "entity_4_id",		SDR_BITS,	 25, 0, 8 },
+    { "entity_4_id",		SDR_BITS,	 25, 0, 8,
+      .strvals = entity_id_fields },
     { "entity_4_inst",		SDR_BITS,	 26, 0, 8 },
 };
 #define TYPE9_LEN (sizeof(type9) / sizeof(struct sdr_field))
@@ -703,7 +715,8 @@ static struct sdr_field type16[] =
     { "address_span",		SDR_BITS,	 9, 0, 3 },
     { "device_type",		SDR_BITS,	11, 0, 8, .required = 1 },
     { "device_type_modifier",	SDR_BITS,	12, 0, 8, .required = 1 },
-    { "entity_id",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "entity_id",		SDR_BITS,	13, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "entity_instance",	SDR_BITS,	14, 0, 8, .required = 1 },
     { "oem",			SDR_BITS,	15, 0, 8 },
     { "id_string",		SDR_STRING,	16, 0, 8, .required = 1 },
@@ -720,7 +733,8 @@ static struct sdr_field type17[] =
     { "channel_number",		SDR_BITS,	 9, 4, 4 },
     { "device_type",		SDR_BITS,	11, 0, 8, .required = 1 },
     { "device_type_modifier",	SDR_BITS,	12, 0, 8, .required = 1 },
-    { "fru_entity_id",		SDR_BITS,	13, 0, 8, .required = 1 },
+    { "fru_entity_id",		SDR_BITS,	13, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
     { "fru_entity_instance",	SDR_BITS,	14, 0, 8, .required = 1 },
     { "oem",			SDR_BITS,	15, 0, 8 },
     { "id_string",		SDR_STRING,	16, 0, 8, .required = 1 },
@@ -1639,6 +1653,7 @@ main(int argc, char *argv[])
     fclose(f);
 
     if (!outraw) {
+	add_persist_int(p, time(NULL), "last_add_time");
 	write_persist_file(p, stdout);
 	free_persist(p);
     }
