@@ -1084,6 +1084,7 @@ struct file_data {
     char *filename;
     unsigned int offset;
     unsigned int length;
+    unsigned int mask;
     int is_raw;
     int mult;
     int div;
@@ -1154,6 +1155,9 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 
     val -= f->sub;
 
+    if (f->mask)
+	val &= f->mask;
+
     if (f->mult)
 	val = val * f->mult;
 
@@ -1207,6 +1211,12 @@ file_init(lmc_data_t *mc,
 	    f->base = strtol(tok + 5, &end, 0);
 	    if (*end != '\0') {
 		*errstr = "Invalid base value";
+		goto out_err;
+	    }
+	} else if (strncmp("mask=", tok, 5) == 0) {
+	    f->mask = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid mask value";
 		goto out_err;
 	    }
 	} else if (strcmp("raw", tok) == 0) {

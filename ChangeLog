@@ -8,6 +8,8 @@
 
 	* unix/selector.c: Consolidate the processing.
 
+	* lanserv/bmc_sensor.c: Add mask capability to the file sensor.
+
 2012-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/mcserv.h, lanserv/bmc_sensor.c: Add flags to the threshold
