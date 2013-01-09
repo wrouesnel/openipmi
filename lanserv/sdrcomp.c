@@ -741,6 +741,40 @@ static struct sdr_field type17[] =
 };
 #define TYPE17_LEN (sizeof(type17) / sizeof(struct sdr_field))
 
+static struct sdr_field_name gen_events_modifier_fields[] = {
+    { "enable_event_msg_gen", 0 },
+    { "disable_event_msg_gen", 1 },
+    { "do_not_init", 2 },
+    { NULL }
+};
+
+static struct sdr_field type18[] =
+{
+    { "device_slave_address",	SDR_BITS,	 6, 0, 8, .required = 1 },
+    { "device_channel_number",	SDR_BITS,	 7, 0, 4, .required = 1 },
+    { "ACPI_sys_power_state",	SDR_BOOLBIT,	 8, 7, 1 },
+    { "ACPI_dev_power_state",	SDR_BOOLBIT,	 8, 6, 1 },
+    { "static_controller",	SDR_BOOLBIT,	 8, 5, 1 },
+    { "controller_logs_init",	SDR_BOOLBIT,	 8, 3, 1 },
+    { "log_init",		SDR_BOOLBIT,	 8, 2, 1 },
+    { "gen_events",		SDR_BITS,	 8, 0, 2,
+      .strvals = gen_events_modifier_fields },
+    { "chassis",		SDR_BOOLBIT,	 9, 7, 1 },
+    { "bridge",			SDR_BOOLBIT,	 9, 6, 1 },
+    { "ipmb_event_gen",		SDR_BOOLBIT,	 9, 5, 1 },
+    { "ipmb_event_recv",	SDR_BOOLBIT,	 9, 4, 1 },
+    { "fru_inventory",		SDR_BOOLBIT,	 9, 3, 1 },
+    { "sel",			SDR_BOOLBIT,	 9, 2, 1 },
+    { "sdr",			SDR_BOOLBIT,	 9, 1, 1 },
+    { "sensor",			SDR_BOOLBIT,	 9, 0, 1 },
+    { "entity_id",		SDR_BITS,	13, 0, 8, .required = 1,
+      .strvals = entity_id_fields },
+    { "entity_instance",	SDR_BITS,	14, 0, 8, .required = 1 },
+    { "oem",			SDR_BITS,	15, 0, 8 },
+    { "id_string",		SDR_STRING,	16, 0, 8, .required = 1 },
+};
+#define TYPE18_LEN (sizeof(type18) / sizeof(struct sdr_field))
+
 struct variable {
     char *name;
     char *value;
@@ -1200,6 +1234,12 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
     case 17:
 	t = type17;
 	tlen = TYPE17_LEN;
+	sdr_len = 16;
+	break;
+
+    case 18:
+	t = type18;
+	tlen = TYPE18_LEN;
 	sdr_len = 16;
 	break;
 

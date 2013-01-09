@@ -1,3 +1,7 @@
+2012-01-09 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/sdrcomp.c: Add type 18 SDR.
+
 2012-01-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/ipmi_sim.c: Fix the IO exception callback.
