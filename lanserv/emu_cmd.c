@@ -821,6 +821,7 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  length;
     unsigned int  i;
     int           rv;
+    const char    *tok;
 
     rv = emu_get_uchar(out, toks, &devid, "Device ID", 0);
     if (rv)
@@ -830,27 +831,50 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
-    for (i=0; i<length; i++) {
-	rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
-	if (rv == ENOSPC)
-	    break;
-	if (rv) {
-	    out->printf(out, "**Error 0x%x in data byte %d\n", rv, i);
+    tok = mystrtok(NULL, " \t\n", toks);
+    if (!tok) {
+	out->printf(out, "**No FRU data type given");
+	return -1;
+    }
+    if (strcmp(tok, "file") == 0) {
+	unsigned int file_offset;
+
+	rv = emu_get_uint(out, toks, &file_offset, "file offset");
+	if (rv)
 	    return rv;
+
+	tok = mystrtok(NULL, " \t\n", toks);
+	if (!tok) {
+	    out->printf(out, "**No FRU filename given");
+	    return -1;
 	}
+	rv = ipmi_mc_add_fru_file(mc, devid, length, file_offset, (void *) tok);
+	if (rv)
+	    out->printf(out, "**Unable to add FRU file, error 0x%x\n", rv);
+	
+    } else if (strcmp(tok, "data") == 0) {
+	for (i=0; i<length; i++) {
+	    rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
+	    if (rv == ENOSPC)
+		break;
+	    if (rv) {
+		out->printf(out, "**Error 0x%x in data byte %d\n", rv, i);
+		return rv;
+	    }
+	}
+
+	rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
+	if (rv != ENOSPC) {
+	    out->printf(out, "**Error: input data too long for FRU\n", rv, i);
+	    return EINVAL;
+	}
+
+	memset(data + i, 0, length - i);
+
+	rv = ipmi_mc_add_fru_data(mc, devid, length, NULL, data);
+	if (rv)
+	    out->printf(out, "**Unable to add FRU data, error 0x%x\n", rv);
     }
-
-    rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
-    if (rv != ENOSPC) {
-	out->printf(out, "**Error: input data too long for FRU\n", rv, i);
-	return EINVAL;
-    }
-
-    memset(data + i, 0, length - i);
-
-    rv = ipmi_mc_add_fru_data(mc, devid, length, NULL, data);
-    if (rv)
-	out->printf(out, "**Unable to add FRU data, error 0x%x\n", rv);
     return rv;
 }
 

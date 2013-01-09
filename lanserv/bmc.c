@@ -852,8 +852,6 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     mc->channels[0] = &mc->ipmb_channel;
 
     if (ipmb == emu->sysinfo->bmc_ipmb) {
-	int err;
-
 	if (!mc->channels[15]) {
 	    /* No one specified a system channel, make one up */
 	    mc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
@@ -865,7 +863,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
 
 	mc->sysinfo = emu->sysinfo;
-	err = init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
+	init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
     }
 
     if (mc->startcmd.startcmd) {

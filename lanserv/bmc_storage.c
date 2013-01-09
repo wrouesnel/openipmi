@@ -1748,11 +1748,11 @@ ipmi_mc_get_fru_data(lmc_data_t    *mc,
 	return EINVAL;
 
     if (fru->fru_io_cb) {
+	return fru->fru_io_cb(fru->data, FRU_IO_READ, data, 0, length);
     } else {
 	memcpy(data, fru->data, length);
+	return 0;
     }
-
-    return 0;
 }
 
 int
@@ -1779,6 +1779,7 @@ ipmi_mc_add_fru_data(lmc_data_t    *mc,
 
     if (fru_io_cb) {
 	fru->fru_io_cb = fru_io_cb;
+	fru->data = data;
     } else {
 	fru->data = malloc(length);
 	if (!fru->data)

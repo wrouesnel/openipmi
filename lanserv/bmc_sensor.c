@@ -1090,6 +1090,14 @@ struct file_data {
     int div;
     int sub;
     int base;
+    emu_data_t *emu;
+    lmc_data_t *sensor_mc;
+    unsigned char sensor_lun;
+    unsigned char sensor_num;
+    unsigned char depends_mc_addr;
+    unsigned char depends_lun;
+    unsigned char depends_sensor_num;
+    unsigned char depends_sensor_bit;
 };
 
 static int
@@ -1101,6 +1109,32 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
     int val;
     char *end;
     int errv;
+
+    if (f->depends_mc_addr) {
+	lmc_data_t *mc;
+	sensor_t *sensor, *dsensor;
+
+	if ((f->sensor_lun >= 4) ||
+	    (!mc->sensors[f->sensor_lun][f->sensor_num]))
+	    return EINVAL;
+	sensor = mc->sensors[f->sensor_lun][f->sensor_num];
+	if (!sensor)
+	    return EINVAL;
+
+	dsensor = mc->sensors[f->depends_lun][f->depends_sensor_num];
+	if (!dsensor)
+	    return EINVAL;
+
+	errv = ipmi_emu_get_mc_by_addr(mc->emu, f->depends_mc_addr, &mc);
+	if (errv)
+	    return errv;
+	dsensor = mc->sensors[f->depends_lun][f->depends_sensor_num];
+	if (!dsensor)
+	    return EINVAL;
+	sensor->enabled = sensor->event_status[f->depends_sensor_bit];
+	if (!sensor->enabled) 
+	    return 0;
+    }
 
     file = fopen(f->filename, "r");
     if (!file) {
@@ -1187,6 +1221,7 @@ file_init(lmc_data_t *mc,
     if (!f)
 	return ENOMEM;
     memset(f, 0, sizeof(*f));
+    f->emu = mc->emu;
     tok = mystrtok(NULL, " \t\n", toks);
     while (tok) {
 	if (strncmp("div=", tok, 4) == 0) {
@@ -1233,6 +1268,52 @@ file_init(lmc_data_t *mc,
 	    f->length = strtoul(tok + 7, &end, 0);
 	    if (*end != '\0') {
 		*errstr = "Invalid length value";
+		goto out_err;
+	    }
+	} else if (strncmp("depends=", tok, 8) == 0) {
+	    char *toks2;
+
+	    tok = mystrtok((char *) tok + 8, ",", &toks2);
+	    if (!tok) {
+		*errstr = "No mc address for sensor depends";
+		goto out_err;
+	    }
+	    f->depends_mc_addr = strtoul((char *) tok, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid depends mc addr";
+		goto out_err;
+	    }
+
+	    tok = mystrtok(NULL, ",", &toks2);
+	    if (!tok) {
+		*errstr = "No lun for sensor depends";
+		goto out_err;
+	    }
+	    f->depends_lun = strtoul(tok, &end, 0);
+	    if (*end != '\0' || f->depends_lun >= 4) {
+		*errstr = "Invalid depends lun";
+		goto out_err;
+	    }
+
+	    tok = mystrtok(NULL, ",", &toks2);
+	    if (!tok) {
+		*errstr = "No sensor number for sensor depends";
+		goto out_err;
+	    }
+	    f->depends_sensor_num = strtoul(tok, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid depends sensor_number";
+		goto out_err;
+	    }
+
+	    tok = mystrtok(NULL, ",", &toks2);
+	    if (!tok) {
+		*errstr = "No sensor bit for sensor depends";
+		goto out_err;
+	    }
+	    f->depends_sensor_bit = strtoul(tok, &end, 0);
+	    if (*end != '\0' || f->depends_sensor_bit >= 15) {
+		*errstr = "Invalid depends sensor_number";
 		goto out_err;
 	    }
 	} else {
