@@ -822,6 +822,7 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  i;
     int           rv;
     const char    *tok;
+    const char    *errstr;
 
     rv = emu_get_uchar(out, toks, &devid, "Device ID", 0);
     if (rv)
@@ -843,10 +844,10 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	if (rv)
 	    return rv;
 
-	tok = mystrtok(NULL, " \t\n", toks);
-	if (!tok) {
-	    out->printf(out, "**No FRU filename given");
-	    return -1;
+	rv = get_delim_str(toks, &tok, &errstr);
+	if (rv) {
+	    out->printf(out, "**Error with FRU filename: %d", strerror(rv));
+	    return rv;
 	}
 	rv = ipmi_mc_add_fru_file(mc, devid, length, file_offset, (void *) tok);
 	if (rv)
@@ -1018,8 +1019,7 @@ read_cmds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	filename = nf;
 	err = read_command_file(out, emu, filename);
 	if (err) {
-	    out->printf(out, "Could not get open include file %s: %s\n",
-			filename, errstr);
+	    out->printf(out, "Could not read include file %s\n", filename);
 	}
     }
 

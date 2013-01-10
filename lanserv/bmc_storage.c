@@ -1630,7 +1630,7 @@ handle_read_fru_data(lmc_data_t    *mc,
     if (fru->fru_io_cb) {
 	int rv;
 
-	rv = fru->fru_io_cb(fru->data, FRU_IO_READ, rdata + 2, offset, size);
+	rv = fru->fru_io_cb(fru->data, FRU_IO_READ, rdata + 2, offset, count);
 	if (rv) {
 	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	    *rdata_len = 1;
@@ -1815,16 +1815,18 @@ static int fru_file_io_cb(void *cb_data,
     switch (op) {
     case FRU_IO_READ:
 	f = fopen(info->filename, "r");
-	if (!f)
-	    return errno;
+	if (!f) {
+	    rv = errno;
+	    return rv;
+	}
 	rv = fseek(f, info->file_offset + offset, SEEK_SET);
 	if (rv == -1) {
 	    rv = errno;
 	    fclose(f);
 	    return rv;
 	}
-	l = fread(data, length, 1, f);
-	if (l == 0)
+	l = fread(data, 1, length, f);
+	if (l != length)
 	    rv = EIO;
 	fclose(f);
 	break;

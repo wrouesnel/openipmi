@@ -1111,27 +1111,30 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
     int errv;
 
     if (f->depends_mc_addr) {
-	lmc_data_t *mc;
+	lmc_data_t *mc = f->sensor_mc;
 	sensor_t *sensor, *dsensor;
 
-	if ((f->sensor_lun >= 4) ||
-	    (!mc->sensors[f->sensor_lun][f->sensor_num]))
+	if (f->sensor_lun >= 4) {
+	    *errstr = "Invalid sensor LUN";
 	    return EINVAL;
+	}
 	sensor = mc->sensors[f->sensor_lun][f->sensor_num];
-	if (!sensor)
+	if (!sensor) {
+	    *errstr = "Invalid sensor";
 	    return EINVAL;
-
-	dsensor = mc->sensors[f->depends_lun][f->depends_sensor_num];
-	if (!dsensor)
-	    return EINVAL;
+	}
 
 	errv = ipmi_emu_get_mc_by_addr(mc->emu, f->depends_mc_addr, &mc);
-	if (errv)
+	if (errv) {
+	    *errstr = "Invalid depends mc address";
 	    return errv;
+	}
 	dsensor = mc->sensors[f->depends_lun][f->depends_sensor_num];
-	if (!dsensor)
+	if (!dsensor) {
+	    *errstr = "Invalid depends sensor number or LUN";
 	    return EINVAL;
-	sensor->enabled = sensor->event_status[f->depends_sensor_bit];
+	}
+	sensor->enabled = dsensor->event_status[f->depends_sensor_bit];
 	if (!sensor->enabled) 
 	    return 0;
     }
@@ -1222,6 +1225,9 @@ file_init(lmc_data_t *mc,
 	return ENOMEM;
     memset(f, 0, sizeof(*f));
     f->emu = mc->emu;
+    f->sensor_mc = mc;
+    f->sensor_lun = lun;
+    f->sensor_num = sensor_num;
     tok = mystrtok(NULL, " \t\n", toks);
     while (tok) {
 	if (strncmp("div=", tok, 4) == 0) {
