@@ -57,7 +57,32 @@ handle_get_device_id(lmc_data_t    *mc,
     rdata[6] = mc->device_support;
     memcpy(rdata+7, mc->mfg_id, 3);
     memcpy(rdata+10, mc->product_id, 2);
-    *rdata_len = 12;
+    memcpy(rdata+12, mc->aux_fw_rev, 4);
+    *rdata_len = 16;
+}
+
+void
+ipmi_mc_set_dev_revision(lmc_data_t *mc, unsigned char dev_revision)
+{
+    mc->device_revision = dev_revision;
+}
+
+void
+ipmi_mc_set_fw_revision(lmc_data_t *mc, unsigned char fw_revision_major,
+			unsigned char fw_revision_minor)
+{
+    mc->major_fw_rev = fw_revision_major;
+    mc->minor_fw_rev = fw_revision_minor;
+}
+
+void
+ipmi_mc_set_aux_fw_revision(lmc_data_t *mc, unsigned char aux_fw_revision[4])
+{
+    memcpy(mc->aux_fw_rev, aux_fw_revision, 4);
+}
+
+void
+ipmi_mc_setfw_versions() {
 }
 
 /* Returns tenths of a second (deciseconds). */

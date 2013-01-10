@@ -37,6 +37,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -1104,8 +1108,8 @@ static int
 file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 {
     struct file_data *f = cb_data;
-    FILE *file;
-    size_t rv;
+    int fd;
+    int rv;
     int val;
     char *end;
     int errv;
@@ -1139,17 +1143,17 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	    return 0;
     }
 
-    file = fopen(f->filename, "r");
-    if (!file) {
+    fd = open(f->filename, O_RDONLY);
+    if (fd == -1) {
 	errv = errno;
 	*errstr = "Unable to open sensor file";
 	return errv;
     }
 
     if (f->offset) {
-	if (fseek(file, f->offset, SEEK_SET) == -1) {
+	if (lseek(fd, f->offset, SEEK_SET) == -1) {
 	    errv = errno;
-	    fclose(file);
+	    close(fd);
 	    *errstr = "Unable to seek file";
 	    return errv;
 	}
@@ -1157,16 +1161,20 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 
     if (f->is_raw) {
 	unsigned char data[4];
-	unsigned int i, length = f->length;
+	int i;
+	int length = f->length;
 
 	if (length > 4)
 	    length = 4;
-	rv = fread(data, 1, length, file);
+	rv = read(fd, data, length);
 	errv = errno;
-	fclose(file);
-	if (rv <= 0) {
+	close(fd);
+	if (rv == -1) {
 	    *errstr = "No data read from file";
 	    return errv;
+	} else if (rv < length) {
+	    *errstr = "Short data read from file";
+	    return -1;
 	}
 	val = 0;
 	for (i = 0; i < length; i++)
@@ -1174,10 +1182,10 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
     } else {
 	char data[100];
 
-	rv = fread(data, 1, sizeof(data) - 1, file);
+	rv = read(fd, data, sizeof(data) - 1);
 	errv = errno;
-	fclose(file);
-	if (rv <= 0) {
+	close(fd);
+	if (rv == -1) {
 	    *errstr = "No data read from file";
 	    return errv;
 	}

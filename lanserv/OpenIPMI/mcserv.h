@@ -344,4 +344,23 @@ void ipmi_mc_set_chassis_control_func(lmc_data_t *mc,
 						 void *cb_data),
 				      void *cb_data);
 
+/*
+ * Message handling.
+ */
+
+void handle_invalid_cmd(lmc_data_t    *mc,
+			unsigned char *rdata,
+			unsigned int  *rdata_len);
+int check_msg_length(msg_t         *msg,
+		     unsigned int  len,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len);
+
+void ipmi_mc_set_dev_revision(lmc_data_t *mc, unsigned char dev_revision);
+void ipmi_mc_set_fw_revision(lmc_data_t *mc, unsigned char fw_revision_major,
+			     unsigned char fw_revision_minor);
+void ipmi_mc_set_aux_fw_revision(lmc_data_t *mc,
+				 unsigned char aux_fw_revision[4]);
+const char *get_lanserv_version(void);
+
 #endif /* __MCSERV_H */

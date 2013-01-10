@@ -1,3 +1,17 @@
+2012-01-10 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc.h, lanserv/bmc_app.c, lanserv/OpenIPMI/mcserv.h: Add
+	version setting capability to the MC.
+
+	* lanserv/bmc.c, lanserv/OpenIPMI/mcserv.h: Add a way to fetch the
+	openipmi lanserv version.
+
+	* lanserv/bmc_sensor.c: Convert reading raw data for sensors to
+	using raw, not buffered, I/O.  ASCII reading remains buffered.
+
+	* lanserv/bmc_storace.c: Convert reading/writing EEPROM data to
+	use raw I/O, not buffered I/O.
+
 2012-01-09 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp.c: Add type 18 SDR.

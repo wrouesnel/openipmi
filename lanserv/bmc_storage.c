@@ -35,6 +35,10 @@
 #include <errno.h>
 #include <malloc.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -1805,46 +1809,48 @@ static int fru_file_io_cb(void *cb_data,
 			  unsigned int length)
 {
     struct fru_file_io_info *info = cb_data;
-    FILE *f;
+    int fd;
     int rv = 0;
-    size_t l;
+    int l;
 
     if (offset + length > info->length)
 	return EINVAL;
 
     switch (op) {
     case FRU_IO_READ:
-	f = fopen(info->filename, "r");
-	if (!f) {
+	fd = open(info->filename, O_RDONLY);
+	if (fd == -1) {
 	    rv = errno;
 	    return rv;
 	}
-	rv = fseek(f, info->file_offset + offset, SEEK_SET);
-	if (rv == -1) {
+	if (lseek(fd, info->file_offset + offset, SEEK_SET) == -1) {
 	    rv = errno;
-	    fclose(f);
+	    close(fd);
 	    return rv;
 	}
-	l = fread(data, 1, length, f);
-	if (l != length)
+	l = read(fd, data, length);
+	if (l == -1)
+	    rv = errno;
+	else if (((unsigned int) l) != length)
 	    rv = EIO;
-	fclose(f);
+	close(fd);
 	break;
 
     case FRU_IO_WRITE:
-	f = fopen(info->filename, "r+");
-	if (!f)
+	fd = open(info->filename, O_WRONLY);
+	if (fd == -1)
 	    return errno;
-	rv = fseek(f, info->file_offset + offset, SEEK_SET);
-	if (rv == -1) {
+	if (lseek(fd, info->file_offset + offset, SEEK_SET) == -1) {
 	    rv = errno;
-	    fclose(f);
+	    close(fd);
 	    return rv;
 	}
-	l = fwrite(data, length, 1, f);
-	if (l == 0)
+	l = write(fd, data, length);
+	if (l == -1)
+	    rv = errno;
+	else if (((unsigned int) l) != length)
 	    rv = EIO;
-	fclose(f);
+	close(fd);
 	break;
 
     default:

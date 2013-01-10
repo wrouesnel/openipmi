@@ -48,6 +48,12 @@
 static void ipmi_mc_start_cmd(lmc_data_t *mc);
 
 
+const char *
+get_lanserv_version(void)
+{
+    return PVERSION;
+}
+
 static void
 handle_group_extension_netfn(lmc_data_t    *mc,
 			     msg_t         *msg,

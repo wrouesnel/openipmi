@@ -225,6 +225,7 @@ struct lmc_data_s
     unsigned char device_support;  /* byte 7 */
     unsigned char mfg_id[3];	   /* bytes 8-10 */
     unsigned char product_id[2];   /* bytes 11-12 */
+    unsigned char aux_fw_rev[4];   /* bytes 13-16 */
 
 #define IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK	(1 << 3)
 #define IPMI_MC_MSG_FLAG_EVT_BUF_FULL		(1 << 1)
@@ -375,14 +376,6 @@ struct emu_data_s
 #define IPMI_DEVID_SENSOR_DEV		(1 << 0)
 
 int start_poweron_timer(lmc_data_t *mc);
-void handle_invalid_cmd(lmc_data_t    *mc,
-			unsigned char *rdata,
-			unsigned int  *rdata_len);
-int check_msg_length(msg_t         *msg,
-		     unsigned int  len,
-		     unsigned char *rdata,
-		     unsigned int  *rdata_len);
-
 
 sdr_t *find_sdr_by_recid(sdrs_t     *sdrs,
 			 uint16_t   record_id,
