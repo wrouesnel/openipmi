@@ -314,41 +314,28 @@ lan_channel_init(void *info, channel_t *chan)
 	    ipmi_emu_set_mc_guid(sys, lan->guid, 0);
     }
 
-    if (!lan->lan_addr_set) {
-#ifdef AF_INET6
-	struct sockaddr_in6 *ipaddr = (void *) &lan->lan_addr.addr;
-	memcpy(ipaddr, &in6addr_any, sizeof(*ipaddr));
-	ipaddr->sin6_port = htons(623);
-#else
-	struct sockaddr_in *ipaddr = (void *) &lan->lan_addrs.addr;
-	ipaddr->sin_family = AF_INET;
-	ipaddr->sin_port = htons(623);
-	ipaddr->sin_addr.s_addr = INADDR_ANY;
-#endif
-	lan->lan_addr.addr_len = sizeof(*ipaddr);
-	lan->lan_addr_set = 1;
-    }
+    if (lan->lan_addr_set) {
+	lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
+			     lan->lan_addr.addr_len);
+	if (lan_fd == -1) {
+	    fprintf(stderr, "Unable to open LAN address\n");
+	    exit(1);
+	}
 
-    lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
-			 lan->lan_addr.addr_len);
-    if (lan_fd == -1) {
-	fprintf(stderr, "Unable to open LAN address\n");
-	exit(1);
-    }
+	memcpy(addr_data,
+	       &lan->lan_addr.addr.s_ipsock.s_addr4.sin_addr.s_addr,
+	       4);
+	memcpy(addr_data + 4,
+	       &lan->lan_addr.addr.s_ipsock.s_addr4.sin_port, 2);
+	ipmi_emu_set_addr(data->emu, 0, 0, addr_data, 6);
 
-    memcpy(addr_data,
-	   &lan->lan_addr.addr.s_ipsock.s_addr4.sin_addr.s_addr,
-	   4);
-    memcpy(addr_data + 4,
-	   &lan->lan_addr.addr.s_ipsock.s_addr4.sin_port, 2);
-    ipmi_emu_set_addr(data->emu, 0, 0, addr_data, 6);
-
-    err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, lan_fd,
-					   lan_data_ready, lan,
-					   NULL, &fd_id);
-    if (err) {
-	fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
-	exit(1);
+	err = data->os_hnd->add_fd_to_wait_for(data->os_hnd, lan_fd,
+					       lan_data_ready, lan,
+					       NULL, &fd_id);
+	if (err) {
+	    fprintf(stderr, "Unable to add socket wait: 0x%x\n", err);
+	    exit(1);
+	}
     }
 
     return err;

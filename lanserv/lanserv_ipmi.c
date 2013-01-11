@@ -1566,13 +1566,13 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	databyte = 0x1f; /* We support all authentications. */
 	break;
 
-    case 2: /* Read only, all authtypes enabled on all channels */
+    case 2:
 	data = databytes;
-	data[0] = 0x1f;
-	data[1] = 0x1f;
-	data[2] = 0x1f;
-	data[3] = 0x1f;
-	data[4] = 0x1f;
+	data[0] = chan->priv_info[0].allowed_auths;
+	data[1] = chan->priv_info[1].allowed_auths;
+	data[2] = chan->priv_info[2].allowed_auths;
+	data[3] = chan->priv_info[3].allowed_auths;
+	data[4] = 0;
 	length = 5;
 	break;
 
@@ -1683,7 +1683,7 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 
     case 16:
 	/* Dummy value, we don't support this. */
-	data = (unsigned char *) "public            ";
+	data = (unsigned char *) "public\0\0\0\0\0\0\0\0\0\0\0\0";
 	length = 18;
 	break;
 

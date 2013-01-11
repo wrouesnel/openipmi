@@ -72,6 +72,7 @@ extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
     unsigned char *loc = baseloc;
     char *end;
     int ival;
+    struct in_addr iaddr;
 
     while (isspace(*val))
 	val++;
@@ -80,8 +81,12 @@ extcmd_getval(void *baseloc, extcmd_info_t *t, char *val)
 
     switch (t->type) {
     case extcmd_ip:
-	if (inet_aton(val, (struct in_addr *) loc) == 0)
+	if (inet_aton(val, &iaddr) == 0)
 	    return EINVAL;
+	loc[3] = (iaddr.s_addr >> 24) & 0xff;
+	loc[2] = (iaddr.s_addr >> 16) & 0xff;
+	loc[1] = (iaddr.s_addr >> 8) & 0xff;
+	loc[0] = (iaddr.s_addr >> 0) & 0xff;
 	break;
 
     case extcmd_mac:

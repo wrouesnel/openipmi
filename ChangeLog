@@ -1,5 +1,13 @@
 2012-01-10 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv/extcmd.c: Fix issues with IP addresses on ARM.
+
+	* lanserv/ipmi_sim: Don't bring up a LAN channel if the address
+	is not configured.
+
+	* lanserv/lanserv_ipmi.c: Fix allowed auths settings to use the
+	actual values, and fix the type 16 parameter.
+
 	* lanserv/bmc.h, lanserv/bmc_app.c, lanserv/OpenIPMI/mcserv.h: Add
 	version setting capability to the MC.
 
