@@ -151,14 +151,19 @@ static char *
 extcmd_setval(void *baseloc, extcmd_info_t *t)
 {
     unsigned char *loc = baseloc;
-    char cbuf[18]; /* Big enough to hold IP, MAC and src */
+    char cbuf[20]; /* Big enough to hold IP, MAC and src */
     char *buf = cbuf;
+    struct in_addr iaddr;
 
     loc += t->offset;
 
     switch (t->type) {
     case extcmd_ip:
-	if (!inet_ntop(AF_INET, loc, buf, sizeof(buf)))
+	iaddr.s_addr = loc[3] << 24;
+	iaddr.s_addr |= loc[2] << 16;
+	iaddr.s_addr |= loc[1] << 8;
+	iaddr.s_addr |= loc[0] << 0;
+	if (!inet_ntop(AF_INET, &iaddr, buf, sizeof(cbuf)))
 	    return NULL;
 	break;
 

@@ -53,7 +53,7 @@
 #define USE_UUCP_LOCKING
 
 #define SOL_INBUF_SIZE 32
-#define SOL_OUTBUF_SIZE 32
+#define SOL_OUTBUF_SIZE 16384
 
 struct soldata_s {
     int fd;
@@ -364,6 +364,7 @@ ipmi_sol_activate(lmc_data_t    *mc,
 	sol->active = 1;
 	sol->session_id = msg->sid;
 	sd->channel = channel;
+	sd->outlen = 0;
 	ipmi_set_uint16(rdata + 5, sizeof(sd->inbuf));
 	ipmi_set_uint16(rdata + 7, sizeof(sd->outbuf));
     } else if (instance == 2 && sol->history_size) {
@@ -633,13 +634,16 @@ set_read_enable(soldata_t *sd)
 {
     int val;
 
-    if (sizeof(sd->outbuf) == sd->outlen)
-	/* Read is always disabled if we have nothing to read into. */
-	val = 0;
-    else
-	val = !sd->in_nack;
-    if (sd->read_enabled == val)
+    if (sd->history)
 	return;
+
+    if (sizeof(sd->outbuf) == sd->outlen)
+       /* Read is always disabled if we have nothing to read into. */
+       val = 0;
+    else
+       val = !sd->in_nack;
+    if (sd->read_enabled == val)
+       return;
 
     sd->read_enabled = val;
     sd->sys->io_set_enables(sd->fd_id, sd->read_enabled, sd->write_enabled, 0);
@@ -663,6 +667,7 @@ send_data(ipmi_sol_t *sol, int need_send_ack)
     soldata_t *sd = sol->soldata;
     rsp_msg_t msg;
     unsigned char data[SOL_OUTBUF_SIZE + 4];
+    unsigned int size = sd->outlen;
 
     data[0] = sd->curr_packet_seq;
     if (need_send_ack) {
@@ -673,9 +678,11 @@ send_data(ipmi_sol_t *sol, int need_send_ack)
 	data[2] = 0;
     }
     data[3] = (sd->inlen == sizeof(sd->inbuf)) << 6;
-    memcpy(data + 4, sd->outbuf, sd->outlen);
+    if (size > 255)
+	size = 255;
+    memcpy(data + 4, sd->outbuf, size);
     msg.data = data;
-    msg.data_len = sd->outlen + 4;
+    msg.data_len = size + 4;
     sd->waiting_ack = 1;
 
     sd->channel->return_rsp(sd->channel, &sd->dummy_send_msg, &msg);
@@ -724,7 +731,7 @@ sol_timeout(void *cb_data)
     send_data(sol, 0);
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    sd->sys->start_timer(sd->history_timer, &tv);
+    sd->sys->start_timer(sd->timer, &tv);
 }
 
 static void
@@ -923,7 +930,6 @@ handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
     soldata_t *sd = sol->soldata;
     unsigned char seq, ack;
     char isnack;
-    unsigned char *data;
     unsigned int len;
     int need_send_ack = 0;
 
@@ -934,7 +940,6 @@ handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
     ack = msg->data[1] & 0xf;
     isnack = msg->data[3] & (1 << 6);
 
-    data = msg->data + 4;
     len = msg->len - 4;
 
     if (seq != 0) {
@@ -955,7 +960,7 @@ handle_sol_history_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 	    sol_history_next_packet(sd);
 	    need_send_ack = send_history_data(sol, need_send_ack);
 	}
-	sd->sys->stop_timer(sd->timer);
+	sd->sys->stop_timer(sd->history_timer);
     }
 
     if (need_send_ack)
@@ -1058,8 +1063,13 @@ sol_data_ready(int fd, void *cb_data)
     soldata_t *sd = sol->soldata;
     int rv;
     struct timeval tv;
+    unsigned char buf[128];
+    unsigned int readsize = sizeof(buf);
 
-    rv = read(fd, sd->outbuf + sd->outlen, sizeof(sd->outbuf) - sd->outlen);
+    if (!sd->history && (readsize > (sizeof(sd->outbuf) - sd->outlen)))
+	readsize = sizeof(sd->outbuf) - sd->outlen;
+
+    rv = read(fd, buf, readsize);
     if (rv < 0) {
 	sd->channel->log(sd->channel, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
@@ -1070,14 +1080,19 @@ sol_data_ready(int fd, void *cb_data)
 	return;
     }
 
-    add_to_history(sol, sd->outbuf + sd->outlen, rv);
+    add_to_history(sol, buf, rv);
 
-    sd->outlen += rv;
+    if (((unsigned int) rv) > (sizeof(sd->outbuf) - sd->outlen)) {
+	/* Overflow happened. */
+	rv = sizeof(sd->outbuf) - sd->outlen;
+    }
 
     if (!sol->active) {
 	sd->outlen = 0;
 	return;
     }
+    memcpy(sd->outbuf + sd->outlen, buf, rv);
+    sd->outlen += rv;
 
     /* Looks strange, but will turn off read if the buffer is full */
     set_read_enable(sd);
@@ -1330,6 +1345,7 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 	goto out;
 
     sd->sys->io_set_hnds(sd->fd_id, sol_write_ready, NULL);
+    set_write_enable(sd);
 
   out:
     if (err) {

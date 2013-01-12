@@ -1,3 +1,28 @@
+2012-01-11 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/sol.c: Fix a bug where a sol connection can hang on an
+	overflow of data.  The handling of sol reading was reworked quite
+	a bit because of this, and to fix other issues related to history.
+	The history handling throws a bit of a curve into this, because
+	you want data to go to the history even if you can't read any more
+	to send out the network interface.  So reading data is no longer
+	flow-controlled if history is enabled.  Instead the buffer size
+	was increased and reads always are enabled on the port.
+
+	In addition, the maximum send size was increased to 255 bytes and
+	a few places were a wrong timer was started were fixed.
+
+	* lanserv/extcmd.c: Fix handling of IP addresses to work on any
+	endianness.
+
+	* lanserv/lanserv_ipmi.c: Change the maximum message size to ~1024.
+
+	* lanserv/lanserv_ipmi.c: Modify the reading of values during a
+	set so that it reads values from the local data, not the external
+	data, when the parameter has been set but not committed. ipmitool
+	expects to be able to re-read parameters and get the value it
+	wrote.
+
 2012-01-10 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/extcmd.c: Fix issues with IP addresses on ARM.

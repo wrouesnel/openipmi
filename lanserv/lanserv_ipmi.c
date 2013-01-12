@@ -228,7 +228,7 @@ check_challenge(lanserv_data_t *lan,
 }
 
 #define IPMI_LAN_MAX_HEADER_SIZE 64
-#define IPMI_LAN_MAX_TRAILER_SIZE 64
+#define IPMI_LAN_MAX_TRAILER_SIZE 960
 
 static void
 raw_send(lanserv_data_t *lan,
@@ -1381,6 +1381,12 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
     int rv;
     unsigned char oldval;
 
+    /*
+     * Note that in all of these, if a set is in progress and the data
+     * value has been modified (but not committed), it will return the
+     * modified value, not the one from the external command.
+     */
+
     switch (msg->data[1])
     {
     case 0:
@@ -1581,47 +1587,59 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	break;
 
     case 3:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + ip_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[ip_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + ip_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.ip_addr;
 	length = 4;
 	break;
 
     case 4:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + ip_addr_src_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[ip_addr_src_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + ip_addr_src_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	databyte = lan->lanparm.ip_addr_src;
 	break;
 
     case 5:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + mac_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[mac_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + mac_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.mac_addr;
 	length = 6;
 	break;
 
     case 6:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + subnet_mask_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[subnet_mask_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + subnet_mask_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.subnet_mask;
 	length = 4;
@@ -1634,48 +1652,60 @@ get_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	break;
 
     case 12:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + default_gw_ip_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[default_gw_ip_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + default_gw_ip_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.default_gw_ip_addr;
 	length = 4;
 	break;
 
     case 13:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + default_gw_mac_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[default_gw_mac_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + default_gw_mac_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.default_gw_mac_addr;
 	length = 6;
 	break;
 
     case 14:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + backup_gw_ip_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[backup_gw_ip_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + backup_gw_ip_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.backup_gw_ip_addr;
 	length = 4;
 	break;
 
     case 15:
-	rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
-			    lanread_vals + backup_gw_mac_addr_o, 1);
-	if (rv) {
-	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
-	    *rdata_len = 1;
-	    return;
+	if (!lan->lanparm.set_in_progress ||
+	    !lan->lanparm_changed[backup_gw_mac_addr_o]) {
+	    rv = extcmd_getvals(lan->sysinfo, &lan->lanparm, lan->config_prog,
+				lanread_vals + backup_gw_mac_addr_o, 1);
+	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
 	}
 	data = lan->lanparm.backup_gw_mac_addr;
 	length = 6;
