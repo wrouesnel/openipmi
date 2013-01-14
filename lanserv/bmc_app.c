@@ -176,14 +176,14 @@ watchdog_timeout(void *cb_data)
 	case IPMI_MC_WATCHDOG_PRE_NMI:
 	    mc->msg_flags |= IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
 	    bchan->hw_op(bchan, HW_OP_SEND_NMI);
-	    set_bit(mc, sens, 8, 1, 0xc8, (2 << 4) | 0xf, 0xff, 1);
+	    set_sensor_bit(mc, sens, 8, 1, 0xc8, (2 << 4) | 0xf, 0xff, 1);
 	    break;
 
 	case IPMI_MC_WATCHDOG_PRE_MSG_INT:
 	    mc->msg_flags |= IPMI_MC_MSG_FLAG_WATCHDOG_TIMEOUT_MASK;
 	    if (bchan->set_atn && !IPMI_MC_MSG_FLAG_EVT_BUF_FULL_SET(mc))
 		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
-	    set_bit(mc, sens, 8, 1, 0xc8, (3 << 4) | 0xf, 0xff, 1);
+	    set_sensor_bit(mc, sens, 8, 1, 0xc8, (3 << 4) | 0xf, 0xff, 1);
 	    break;
 
 	default:
@@ -208,21 +208,21 @@ watchdog_timeout(void *cb_data)
     mc->watchdog_expired |= (1 << IPMI_MC_WATCHDOG_GET_USE(mc));
     switch (IPMI_MC_WATCHDOG_GET_ACTION(mc)) {
     case IPMI_MC_WATCHDOG_ACTION_NONE:
-	set_bit(mc, sens, 0, 1, 0xc0, mc->watchdog_use & 0xf, 0xff, 1);
+	set_sensor_bit(mc, sens, 0, 1, 0xc0, mc->watchdog_use & 0xf, 0xff, 1);
 	break;
 
     case IPMI_MC_WATCHDOG_ACTION_RESET:
-	set_bit(mc, sens, 1, 1, 0xc1, mc->watchdog_use & 0xf, 0xff, 1);
+	set_sensor_bit(mc, sens, 1, 1, 0xc1, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_RESET);
 	break;
 
     case IPMI_MC_WATCHDOG_ACTION_POWER_DOWN:
-	set_bit(mc, sens, 2, 1, 0xc2, mc->watchdog_use & 0xf, 0xff, 1);
+	set_sensor_bit(mc, sens, 2, 1, 0xc2, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
 	break;
 
     case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
-	set_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
+	set_sensor_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
 	start_poweron_timer(mc);
 	break;

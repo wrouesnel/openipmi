@@ -131,15 +131,20 @@ struct sensor_s
     unsigned char negative_hysteresis;
 
     unsigned char threshold_support;
-    unsigned char threshold_supported[6];
+    uint16_t threshold_supported; /* Bitmask */
     unsigned char thresholds[6];
 
-    /* 1st array is 0 for assertion, 1 for deassertion. */
     unsigned char event_support;
-    unsigned char event_supported[2][15];
-    unsigned char event_enabled[2][15];
 
-    unsigned char event_status[15];
+    /* 0 for assertion, 1 for deassertion. */
+    uint16_t event_supported[2];
+    uint16_t event_enabled[2];
+    int (*rearm_handler)(void *cb_data, uint16_t assert, uint16_t deassert);
+    void *rearm_cb_data;
+
+
+    /* Current bit values */
+    uint16_t event_status;
 
     /* Called when the sensor changes values. */
     void (*sensor_update_handler)(lmc_data_t *mc, sensor_t *sensor);
@@ -401,10 +406,10 @@ void mc_new_event(lmc_data_t *mc,
 #define IPMI_SDR_GET_SDR_ALLOC_INFO_SDR_SUPPORTED	(1 << 0)
 
 void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
-void set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
-	     unsigned char value,
-	     unsigned char evd1, unsigned char evd2, unsigned char evd3,
-	     int gen_event);
+void set_sensor_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
+		    unsigned char value,
+		    unsigned char evd1, unsigned char evd2, unsigned char evd3,
+		    int gen_event);
 
 void watchdog_timeout(void *cb_data);
 
@@ -419,5 +424,8 @@ void handle_picmg_msg(lmc_data_t    *mc,
 		      msg_t         *msg,
 		      unsigned char *rdata,
 		      unsigned int  *rdata_len);
+
+#define set_bit(m, b, v) (m) = (v) ? ((m) | (1 << (b))) : ((m) & ~(1 << (b)))
+#define bit_set(m, b) (!!((m) & (1 << (b))))
 
 #endif /* __BMC_H_ */

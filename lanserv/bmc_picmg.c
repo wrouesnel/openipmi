@@ -568,9 +568,9 @@ handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
     hssens = mc->hs_sensor;
     switch (op) {
     case 0:
-	if ((hssens->event_status[3])
-	    || (hssens->event_status[4])
-	    || (hssens->event_status[5]))
+	if (bit_set(hssens->event_status, 3)
+	    || bit_set(hssens->event_status, 4)
+	    || bit_set(hssens->event_status, 5))
 	{
 	    /* Transition to m6. */
 	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
@@ -583,7 +583,7 @@ handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
 	break;
 
     case 1:
-	if (hssens->event_status[2]) {
+	if (bit_set(hssens->event_status, 2)) {
 	    /* Transition to m3. */
 	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
 					    3, 1);

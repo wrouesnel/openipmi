@@ -330,18 +330,18 @@ do_event(lmc_data_t    *mc,
 }
 
 void
-set_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
-	unsigned char value,
-	unsigned char evd1, unsigned char evd2, unsigned char evd3,
-	int gen_event)
+set_sensor_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
+	       unsigned char value,
+	       unsigned char evd1, unsigned char evd2, unsigned char evd3,
+	       int gen_event)
 {
-    if (value != sensor->event_status[bit]) {
+    if (value != bit_set(sensor->event_status, bit)) {
 	/* The bit value has changed. */
-	sensor->event_status[bit] = value;
-	if (value && sensor->event_enabled[0][bit]) {
+	set_bit(sensor->event_status, bit, value);
+	if (value && bit_set(sensor->event_enabled[0], bit)) {
 	    do_event(mc, sensor, gen_event, IPMI_ASSERTION,
 		     evd1 | bit, evd2, evd3);
-	} else if (!value && sensor->event_enabled[1][bit]) {
+	} else if (!value && bit_set(sensor->event_enabled[1], bit)) {
 	    do_event(mc, sensor, gen_event, IPMI_DEASSERTION,
 		     evd1 | bit, evd2, evd3);
 	}
@@ -356,8 +356,7 @@ check_thresholds(lmc_data_t *mc, sensor_t *sensor, int gen_event)
     int bits_to_clear = 0;
 
     for (i=0; i<3; i++) {
-	if (sensor->threshold_supported[i])
-	{
+	if (bit_set(sensor->threshold_supported, i)) {
 	    if (sensor->value <= sensor->thresholds[i])
 		bits_to_set |= (1 << i);
 	    else if ((sensor->value - sensor->negative_hysteresis)
@@ -366,7 +365,7 @@ check_thresholds(lmc_data_t *mc, sensor_t *sensor, int gen_event)
 	}
     }
     for (; i<6; i++) {
-	if (sensor->threshold_supported[i]) {
+	if (bit_set(sensor->threshold_supported, i)) {
 	    if (sensor->value >= sensor->thresholds[i])
 		bits_to_set |= (1 << i);
 	    else if ((sensor->value + sensor->positive_hysteresis)
@@ -378,34 +377,36 @@ check_thresholds(lmc_data_t *mc, sensor_t *sensor, int gen_event)
     /* We don't support lower assertions for high thresholds or higher
        assertions for low thresholds because that's just stupid. */
     for (i=0; i<3; i++) {
-	if (((bits_to_set >> i) & 1) && !sensor->event_status[i]) {
+	if (((bits_to_set >> i) & 1) && !bit_set(sensor->event_status, i)) {
 	    /* This bit was not set, but we need to set it. */
-	    sensor->event_status[i] = 1;
-	    if (sensor->event_enabled[0][i*2]) {
+	    set_bit(sensor->event_status, i, 1);
+	    if (bit_set(sensor->event_enabled[0], i * 2)) {
 		do_event(mc, sensor, gen_event, IPMI_ASSERTION,
 			 0x50 | (i*2), sensor->value, sensor->thresholds[i]);
 	    }
-	} else if (((bits_to_clear >> i) & 1) && sensor->event_status[i]) {
+	} else if (((bits_to_clear >> i) & 1)
+		   && bit_set(sensor->event_status, i)) {
 	    /* This bit was not clear, but we need to clear it. */
-	    sensor->event_status[i] = 0;
-	    if (sensor->event_enabled[1][i*2]) {
+	    set_bit(sensor->event_status, i, 0);
+	    if (bit_set(sensor->event_enabled[1], i * 2)) {
 		do_event(mc, sensor, gen_event, IPMI_DEASSERTION,
 			 0x50 | (i*2), sensor->value, sensor->thresholds[i]);
 	    }
 	}
     }
     for (; i<6; i++) {
-	if (((bits_to_set >> i) & 1) && !sensor->event_status[i]) {
+	if (((bits_to_set >> i) & 1) && !bit_set(sensor->event_status, i)) {
 	    /* This bit was not set, but we need to set it. */
-	    sensor->event_status[i] = 1;
-	    if (sensor->event_enabled[0][i*2+1]) {
+	    set_bit(sensor->event_status, i, 1);
+	    if (bit_set(sensor->event_enabled[0], i * 2 + 1)) {
 		do_event(mc, sensor, gen_event, IPMI_ASSERTION,
 			 0x50 | (i*2+1), sensor->value, sensor->thresholds[i]);
 	    }
-	} else if (((bits_to_clear >> i) & 1) && sensor->event_status[i]) {
+	} else if (((bits_to_clear >> i) & 1)
+		   && bit_set(sensor->event_status, i)) {
 	    /* This bit was not clear, but we need to clear it. */
-	    sensor->event_status[i] = 0;
-	    if (sensor->event_enabled[1][i*2+1]) {
+	    set_bit(sensor->event_status, i, 0);
+	    if (bit_set(sensor->event_enabled[1], i * 2 + 1)) {
 		do_event(mc, sensor, gen_event, IPMI_DEASSERTION,
 			 0x50 | (i*2+1), sensor->value, sensor->thresholds[i]);
 	    }
@@ -443,7 +444,8 @@ handle_set_sensor_thresholds(lmc_data_t    *mc,
     }
 
     for (i=0; i<6; i++) {
-	if ((msg->data[1] & (1 << i)) && (!sensor->threshold_supported[i])) {
+	if ((msg->data[1] & (1 << i))
+		&& (!bit_set(sensor->threshold_supported, i))) {
 	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	    *rdata_len = 1;
 	    return;
@@ -495,7 +497,7 @@ handle_get_sensor_thresholds(lmc_data_t    *mc,
     rdata[0] = 0;
     rdata[1] = 0;
     for (i=0; i<6; i++) {
-	if (sensor->threshold_supported[i]) {
+	if (bit_set(sensor->threshold_supported, i)) {
 	    rdata[1] |= 1 << i;
 	    rdata[2+i] = sensor->thresholds[i];
 	} else
@@ -571,8 +573,9 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 	for (j=0; j<8; j++, e++) {
 	    if (e >= 15)
 		break;
-	    if ((msg->data[i] >> j) & 1)
-		sensor->event_enabled[0][e] = op;
+	    if (((msg->data[i] >> j) & 1)
+		    && bit_set(sensor->event_supported[0], e))
+		set_bit(sensor->event_enabled[0], e, op);
 	}
     }
     e = 0;
@@ -582,8 +585,9 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 	for (j=0; j<8; j++, e++) {
 	    if (e >= 15)
 		break;
-	    if ((msg->data[i] >> j) & 1)
-		sensor->event_enabled[1][e] = op;
+	    if (((msg->data[i] >> j) & 1)
+		    && bit_set(sensor->event_supported[1], e))
+		set_bit(sensor->event_enabled[1], e, op);
 	}
     }
 
@@ -599,7 +603,6 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
 {
     int           sens_num;
     sensor_t      *sensor;
-    int           i, j, e;
 
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -629,24 +632,10 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
 	return;
     }
 
-    e = 0;
-    for (i=2; i<=3; i++) {
-	rdata[i] = 0;
-	for (j=0; j<8; j++, e++) {
-	    if (e >= 15)
-		break;
-	    rdata[i] |= sensor->event_enabled[0][e] << j;
-	}
-    }
-    e = 0;
-    for (i=4; i<=5; i++) {
-	rdata[i] = 0;
-	for (j=0; j<8; j++, e++) {
-	    if (e >= 15)
-		break;
-	    rdata[i] |= sensor->event_enabled[1][e] << j;
-	}
-    }
+    rdata[2] = sensor->event_enabled[0] & 0xff;
+    rdata[3] = (sensor->event_enabled[0] >> 8) & 0xff;
+    rdata[4] = sensor->event_enabled[1] & 0xff;
+    rdata[5] = (sensor->event_enabled[1] >> 8) & 0xff;
 
     *rdata_len = 6;
 }
@@ -694,7 +683,6 @@ handle_get_sensor_reading(lmc_data_t    *mc,
 {
     int      sens_num;
     sensor_t *sensor;
-    int      i, j, e;
 
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -712,16 +700,90 @@ handle_get_sensor_reading(lmc_data_t    *mc,
     rdata[1] = sensor->value;
     rdata[2] = ((sensor->events_enabled << 7)
 		| ((sensor->scanning_enabled && sensor->enabled) << 6));
-    e = 0;
-    for (i=3; i<=4; i++) {
-	rdata[i] = 0;
-	for (j=0; j<8; j++, e++) {
-	    if (e >= 15)
-		break;
-	    rdata[i] |= sensor->event_status[e] << j;
+    rdata[3] = sensor->event_status & 0xff;
+    rdata[4] = (sensor->event_status >> 8) & 0xff;
+    *rdata_len = 5;
+}
+
+static void
+handle_rearm_sensor_events(lmc_data_t    *mc,
+			   msg_t         *msg,
+			   unsigned char *rdata,
+			   unsigned int  *rdata_len)
+{
+    int      sens_num;
+    sensor_t *sensor;
+    uint16_t rearm_assert = 0, rearm_deassert = 0;
+    unsigned int i;
+    int rv;
+
+    if (check_msg_length(msg, 2, rdata, rdata_len))
+	return;
+
+    sens_num = msg->data[0];
+    if ((sens_num >= 255) || (!mc->sensors[msg->rs_lun][sens_num])) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    sensor = mc->sensors[msg->rs_lun][sens_num];
+
+    if (msg->data[1] & (1 << 7)) {
+	rearm_assert = 0x7fff;
+	rearm_deassert = 0x7fff;
+    } else {
+	if (msg->len > 2)
+	    rearm_assert = msg->data[2];
+	if (msg->len > 3)
+	    rearm_assert |= msg->data[3] << 8;
+	if (msg->len > 4)
+	    rearm_deassert = msg->data[4];
+	if (msg->len > 5)
+	    rearm_deassert |= msg->data[5] << 8;
+    }
+
+    if (sensor->rearm_handler) {
+	rv = sensor->rearm_handler(sensor->rearm_cb_data,
+				   rearm_assert, rearm_deassert);
+	if (rv) {
+	    rdata[0] = 0xff;
+	    *rdata_len = 1;
+	    return;
 	}
     }
-    *rdata_len = 5;
+
+    rearm_assert &= sensor->event_enabled[0] & sensor->event_status;
+    rearm_deassert &= sensor->event_enabled[1] & ~sensor->event_status;
+
+    for (i = 0; i < 15; i++) {
+	if (bit_set(rearm_assert, i))
+	    do_event(mc, sensor, 1, IPMI_ASSERTION, 0, 0xff, 0xff);
+	else if (bit_set(rearm_deassert, i))
+	    do_event(mc, sensor, 1, IPMI_DEASSERTION, 0, 0xff, 0xff);
+    }
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+int
+ipmi_mc_sensor_add_rearm_handler(lmc_data_t    *mc,
+				 unsigned char lun,
+				 unsigned char sens_num,
+				 int (*handler)(void *cb_data,
+						uint16_t assert,
+						uint16_t deassert),
+				 void *cb_data)
+{
+    sensor_t *sensor;
+
+    if ((sens_num >= 255) || (!mc->sensors[lun][sens_num]))
+	return EINVAL;
+
+    sensor = mc->sensors[lun][sens_num];
+    sensor->rearm_handler = handler;
+    sensor->rearm_cb_data = cb_data;
+    return 0;
 }
 
 int
@@ -742,7 +804,7 @@ ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 
     sensor = mc->sensors[lun][sens_num];
 
-    set_bit(mc, sensor, bit, value, 0, 0xff, 0xff, gen_event);
+    set_sensor_bit(mc, sensor, bit, value, 0, 0xff, 0xff, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -770,12 +832,12 @@ ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
 
     /* Clear all the other bits. */
     for (i=0; i<15; i++) {
-	if ((i != bit) && (sensor->event_status[i]))
-	    set_bit(mc, sensor, i, 0, 0, 0xff, 0xff, gen_event);
+	if ((i != bit) && bit_set(sensor->event_status, i))
+	    set_sensor_bit(mc, sensor, i, 0, 0, 0xff, 0xff, gen_event);
     }
 
     sensor->value = bit;
-    set_bit(mc, sensor, bit, 1, 0, 0xff, 0xff, gen_event);
+    set_sensor_bit(mc, sensor, bit, 1, 0, 0xff, 0xff, gen_event);
 
     if (sensor->sensor_update_handler)
 	sensor->sensor_update_handler(mc, sensor);
@@ -862,7 +924,7 @@ ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
 			     unsigned char lun,
 			     unsigned char sens_num,
 			     unsigned char support,
-			     unsigned char supported[6],
+			     uint16_t supported,
 			     int set_values,
 			     unsigned char values[6])
 {
@@ -873,7 +935,7 @@ ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
 
     sensor = mc->sensors[lun][sens_num];
     sensor->threshold_support = support;
-    memcpy(sensor->threshold_supported, supported, 6);
+    sensor->threshold_supported = supported;
     if (set_values)
 	memcpy(sensor->thresholds, values, 6);
 
@@ -889,10 +951,10 @@ ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 				 unsigned char init_scanning,
 				 unsigned char scanning_enable,
 				 unsigned char event_support,
-				 unsigned char assert_supported[15],
-				 unsigned char deassert_supported[15],
-				 unsigned char assert_enabled[15],
-				 unsigned char deassert_enabled[15])
+				 uint16_t assert_supported,
+				 uint16_t deassert_supported,
+				 uint16_t assert_enabled,
+				 uint16_t deassert_enabled)
 {
     sensor_t *sensor;
 
@@ -906,25 +968,14 @@ ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
     if (init_scanning)
 	sensor->scanning_enabled = scanning_enable;
     sensor->event_support = event_support;
-    memcpy(sensor->event_supported[0], assert_supported, 15);
-    memcpy(sensor->event_supported[1], deassert_supported, 15);
-    memcpy(sensor->event_enabled[0], assert_enabled, 15);
-    memcpy(sensor->event_enabled[1], deassert_enabled, 15);
+    sensor->event_supported[0] = assert_supported;
+    sensor->event_supported[1] = deassert_supported;
+    sensor->event_enabled[0] = assert_enabled & assert_supported;
+    sensor->event_enabled[1] = deassert_enabled & deassert_supported;
 
     sensor_poll(sensor);
 	
     return 0;
-}
-
-static void
-unpack_bitmask(unsigned char *bits, unsigned int mask, unsigned int len)
-{
-    while (len) {
-	*bits = mask & 1;
-	bits++;
-	mask >>= 1;
-	len--;
-    }
 }
 
 static int
@@ -934,8 +985,7 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
     unsigned int len = sdr[4];
     unsigned char num = sdr[7];
     unsigned char lun = sdr[6] & 0x3;
-    unsigned char assert_sup[15], deassert_sup[15];
-    unsigned char assert_en[15], deassert_en[15];
+    uint16_t assert_sup, deassert_sup, assert_en, deassert_en;
     unsigned char events_on = (sdr[10] >> 1) & 1;
     unsigned char scan_on = (sdr[10] >> 0) & 1;
     unsigned char init_events = (sdr[10] >> 5) & 1;
@@ -945,7 +995,7 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
     unsigned char init_type = (sdr[10] >> 2) & 1;
     unsigned char event_sup = sdr[11] & 0x3;
     unsigned char thresh_sup = (sdr[11] >> 2) & 0x3;
-    unsigned char thresh_set[6];
+    uint16_t thresh_set;
     unsigned char hyst_sup = (sdr[11] >> 4) & 3;
     sensor_t *sensor;
 
@@ -958,18 +1008,12 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
 	return 0;
     if ((sdr[3] < 1) || (sdr[3] > 2))
 	return 0; /* Not a sensor SDR we set from */
-    
-    thresh_set[0] = (sdr[15] >> 4) & 1;
-    thresh_set[1] = (sdr[15] >> 5) & 1;
-    thresh_set[2] = (sdr[15] >> 6) & 1;
-    thresh_set[3] = (sdr[17] >> 4) & 1;
-    thresh_set[4] = (sdr[17] >> 5) & 1;
-    thresh_set[5] = (sdr[17] >> 6) & 1;
 
-    unpack_bitmask(assert_sup, sdr[14] | (sdr[15] << 8), 15);
-    unpack_bitmask(deassert_sup, sdr[16] | (sdr[17] << 8), 15);
-    unpack_bitmask(assert_en, sdr[14] | (sdr[15] << 8), 15);
-    unpack_bitmask(deassert_en, sdr[16] | (sdr[17] << 8), 15);
+    thresh_set = ((sdr[15] >> 4) & 0x7) | (((sdr[17] >> 4) & 0x7) << 3);
+    assert_sup = sdr[14] | (sdr[15] << 8);
+    deassert_sup = sdr[16] | (sdr[17] << 8);
+    assert_en = sdr[14] | (sdr[15] << 8);
+    deassert_en = sdr[16] | (sdr[17] << 8);
 
     if (init_type) {
 	sensor->sensor_type = sdr[12];
@@ -1138,7 +1182,7 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	    *errstr = "Invalid depends sensor number or LUN";
 	    return EINVAL;
 	}
-	sensor->enabled = dsensor->event_status[f->depends_sensor_bit];
+	sensor->enabled = bit_set(dsensor->event_status, f->depends_sensor_bit);
 	if (!sensor->enabled) 
 	    return 0;
     }
@@ -1418,7 +1462,8 @@ sensor_poll(void *cb_data)
 	    unsigned int i;
 	    
 	    for (i = 0; i < 15; i++)
-		set_bit(mc, sensor, i, ((val >> i) & 1), 0, 0xff, 0xff, 1);
+		set_sensor_bit(mc, sensor,
+			       i, ((val >> i) & 1), 0, 0xff, 0xff, 1);
 	}
 
       out_restart:
@@ -1823,6 +1868,6 @@ cmd_handler_f sensor_event_netfn_handlers[256] = {
     [IPMI_SET_PEF_CONFIG_PARMS_CMD] = handle_ipmi_set_pef_config_parms,
     [IPMI_GET_PEF_CONFIG_PARMS_CMD] = handle_ipmi_get_pef_config_parms,
     [IPMI_GET_SENSOR_EVENT_STATUS_CMD] = NULL,
-    [IPMI_REARM_SENSOR_EVENTS_CMD] = NULL,
+    [IPMI_REARM_SENSOR_EVENTS_CMD] = handle_rearm_sensor_events,
     [IPMI_GET_SENSOR_READING_FACTORS_CMD] = NULL
 };

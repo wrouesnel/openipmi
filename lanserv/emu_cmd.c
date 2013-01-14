@@ -88,7 +88,7 @@ emu_get_uchar_with_vals(emu_out_t *out, char **toks,
 }
 
 static int
-emu_get_bitmask(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
+emu_get_bitmask(emu_out_t *out, char **toks, uint16_t *val, char *errstr,
 		unsigned int size, int empty_ok)
 {
     const char *str;
@@ -107,14 +107,16 @@ emu_get_bitmask(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
 	    out->printf(out, "**invalid number of bits in %s\n", errstr);
 	return EINVAL;
     }
+    *val = 0;
     for (i=size-1, j=0; i>=0; i--, j++) {
 	if (str[j] == '0') {
-	    val[i] = 0;
+	    /* Nothing to do */
 	} else if (str[j] == '1') {
-	    val[i] = 1;
+	    *val |= 1 << i;
 	} else {
 	    if (errstr)
-		out->printf(out, "**Invalid bit value '%c' in %s\n", str[j], errstr);
+		out->printf(out, "**Invalid bit value '%c' in %s\n", str[j],
+			    errstr);
 	    return EINVAL;
 	}
     }
@@ -568,7 +570,7 @@ sensor_set_threshold(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **tok
     unsigned char lun;
     unsigned char num;
     unsigned char support;
-    unsigned char enabled[6];
+    uint16_t      enabled;
     unsigned char thresholds[6];
     int           i;
 
@@ -589,7 +591,7 @@ sensor_set_threshold(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **tok
     if (rv)
 	return rv;
 
-    rv = emu_get_bitmask(out, toks, enabled, "threshold enabled", 6, 0);
+    rv = emu_get_bitmask(out, toks, &enabled, "threshold enabled", 6, 0);
     if (rv)
 	return rv;
 
@@ -615,10 +617,10 @@ sensor_set_event_support(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char *
     unsigned char support;
     unsigned char events_enable;
     unsigned char scanning;
-    unsigned char assert_support[15];
-    unsigned char deassert_support[15];
-    unsigned char assert_enabled[15];
-    unsigned char deassert_enabled[15];
+    uint16_t      assert_support;
+    uint16_t      deassert_support;
+    uint16_t      assert_enabled;
+    uint16_t      deassert_enabled;
 
     rv = emu_get_uchar(out, toks, &lun, "LUN", 0);
     if (rv)
@@ -655,19 +657,21 @@ sensor_set_event_support(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char *
     if (rv)
 	return rv;
 
-    rv = emu_get_bitmask(out, toks, assert_support, "assert support", 15, 0);
+    rv = emu_get_bitmask(out, toks, &assert_support, "assert support", 15, 0);
     if (rv)
 	return rv;
 
-    rv = emu_get_bitmask(out, toks, deassert_support, "deassert support", 15, 0);
+    rv = emu_get_bitmask(out, toks, &deassert_support, "deassert support",
+			 15, 0);
     if (rv)
 	return rv;
 
-    rv = emu_get_bitmask(out, toks, assert_enabled, "assert enabled", 15, 0);
+    rv = emu_get_bitmask(out, toks, &assert_enabled, "assert enabled", 15, 0);
     if (rv)
 	return rv;
 
-    rv = emu_get_bitmask(out, toks, deassert_enabled, "deassert enabled", 15, 0);
+    rv = emu_get_bitmask(out, toks, &deassert_enabled, "deassert enabled",
+			 15, 0);
     if (rv)
 	return rv;
 

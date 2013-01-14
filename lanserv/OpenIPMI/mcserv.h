@@ -207,9 +207,17 @@ int ipmi_mc_sensor_set_threshold(lmc_data_t    *mc,
 				 unsigned char lun,
 				 unsigned char sens_num,
 				 unsigned char support,
-				 unsigned char supported[6],
+				 uint16_t supported,
 				 int set_values,
 				 unsigned char values[6]);
+
+int ipmi_mc_sensor_add_rearm_handler(lmc_data_t    *mc,
+				     unsigned char lun,
+				     unsigned char sens_num,
+				     int (*handler)(void *cb_data,
+						    uint16_t assert,
+						    uint16_t deassert),
+				     void *cb_data);
 
 int ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 				     unsigned char lun,
@@ -219,10 +227,10 @@ int ipmi_mc_sensor_set_event_support(lmc_data_t    *mc,
 				     unsigned char init_scanning,
 				     unsigned char scanning_enable,
 				     unsigned char support,
-				     unsigned char assert_supported[15],
-				     unsigned char deassert_supported[15],
-				     unsigned char assert_enabled[15],
-				     unsigned char deassert_enabled[15]);
+				     uint16_t assert_supported,
+				     uint16_t deassert_supported,
+				     uint16_t assert_enabled,
+				     uint16_t deassert_enabled);
 
 struct ipmi_sensor_handler_s
 {

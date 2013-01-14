@@ -1,3 +1,17 @@
+2012-01-14 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc.h, lanserv/OpenIPMI/mcserv.h, lanserv/bmc_sensor.h:
+	Modify the sensor bit settings to use bitmasks of a uint16_t
+	instead of an array of characters.  Less code, less memory, and
+	faster.
+
+	* lanserv/bmc_app.c, lanserv/bmc_picmg.c: Adjust for the previous
+	change.
+
+	* lanserv/bmc_sensor.c, lanserv/OpenIPMI/mcserv.h: Add handling of
+	sensor rearm and add a way to register to get called if a sensor
+	is rearmed.
+
 2012-01-11 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sol.c: Fix a bug where a sol connection can hang on an
