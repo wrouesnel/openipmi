@@ -85,7 +85,8 @@ static void
 handle_set_power(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
-		 unsigned int  *rdata_len)
+		 unsigned int  *rdata_len,
+		 void          *cb_data)
 {
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -100,7 +101,8 @@ static void
 handle_get_power(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
-		 unsigned int  *rdata_len)
+		 unsigned int  *rdata_len,
+		 void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = mc->power_value;
@@ -111,7 +113,8 @@ static void
 handle_set_hs_led(lmc_data_t    *mc,
 		  msg_t         *msg,
 		  unsigned char *rdata,
-		  unsigned int  *rdata_len)
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
 {
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -128,7 +131,8 @@ static void
 handle_get_hs_led(lmc_data_t    *mc,
 		  msg_t         *msg,
 		  unsigned char *rdata,
-		  unsigned int  *rdata_len)
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = mc->leds[0].color;
@@ -146,7 +150,8 @@ static void
 handle_picmg_get_properties(lmc_data_t    *mc,
 			    msg_t         *msg,
 			    unsigned char *rdata,
-			    unsigned int  *rdata_len)
+			    unsigned int  *rdata_len,
+			    void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
@@ -160,7 +165,8 @@ static void
 handle_picmg_get_address_info(lmc_data_t    *mc,
 			      msg_t         *msg,
 			      unsigned char *rdata,
-			      unsigned int  *rdata_len)
+			      unsigned int  *rdata_len,
+			      void          *cb_data)
 {
     atca_site_t  *sites = mc->emu->atca_sites;
     unsigned char hw_addr = mc->ipmb >> 1;
@@ -236,7 +242,8 @@ static void
 handle_picmg_cmd_fru_control(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
@@ -265,7 +272,8 @@ static void
 handle_picmg_cmd_get_fru_led_properties(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     if (check_msg_length(msg, 2, rdata, rdata_len))
 	return;
@@ -296,7 +304,8 @@ static void
 handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
 					    msg_t         *msg,
 					    unsigned char *rdata,
-					    unsigned int  *rdata_len)
+					    unsigned int  *rdata_len,
+					    void          *cb_data)
 {
     unsigned int led;
 
@@ -379,7 +388,8 @@ static void
 handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     unsigned int led;
 
@@ -447,7 +457,8 @@ static void
 handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     unsigned int led;
 
@@ -494,7 +505,8 @@ static void
 handle_picmg_cmd_get_shelf_address_info(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -503,7 +515,8 @@ static void
 handle_picmg_cmd_set_shelf_address_info(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -512,7 +525,8 @@ static void
 handle_picmg_cmd_set_ipmb_state(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -521,7 +535,8 @@ static void
 handle_picmg_cmd_set_fru_activation_policy(lmc_data_t    *mc,
 					   msg_t         *msg,
 					   unsigned char *rdata,
-					   unsigned int  *rdata_len)
+					   unsigned int  *rdata_len,
+					   void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -530,7 +545,8 @@ static void
 handle_picmg_cmd_get_fru_activation_policy(lmc_data_t    *mc,
 					   msg_t         *msg,
 					   unsigned char *rdata,
-					   unsigned int  *rdata_len)
+					   unsigned int  *rdata_len,
+					   void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -539,7 +555,8 @@ static void
 handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
 				    msg_t         *msg,
 				    unsigned char *rdata,
-				    unsigned int  *rdata_len)
+				    unsigned int  *rdata_len,
+				    void          *cb_data)
 {
     int      op;
     sensor_t *hssens;
@@ -603,7 +620,8 @@ static void
 handle_picmg_cmd_get_device_locator_record(lmc_data_t    *mc,
 					   msg_t         *msg,
 					   unsigned char *rdata,
-					   unsigned int  *rdata_len)
+					   unsigned int  *rdata_len,
+					   void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -612,7 +630,8 @@ static void
 handle_picmg_cmd_set_port_state(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -621,7 +640,8 @@ static void
 handle_picmg_cmd_get_port_state(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -630,7 +650,8 @@ static void
 handle_picmg_cmd_compute_power_properties(lmc_data_t    *mc,
 					  msg_t         *msg,
 					  unsigned char *rdata,
-					  unsigned int  *rdata_len)
+					  unsigned int  *rdata_len,
+					  void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -639,7 +660,8 @@ static void
 handle_picmg_cmd_set_power_level(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -648,7 +670,8 @@ static void
 handle_picmg_cmd_get_power_level(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -657,7 +680,8 @@ static void
 handle_picmg_cmd_renegotiate_power(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -666,7 +690,8 @@ static void
 handle_picmg_cmd_get_fan_speed_properties(lmc_data_t    *mc,
 					  msg_t         *msg,
 					  unsigned char *rdata,
-					  unsigned int  *rdata_len)
+					  unsigned int  *rdata_len,
+					  void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -675,7 +700,8 @@ static void
 handle_picmg_cmd_set_fan_level(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -684,7 +710,8 @@ static void
 handle_picmg_cmd_get_fan_level(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -693,7 +720,8 @@ static void
 handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -702,7 +730,8 @@ static void
 handle_picmg_cmd_ipmb_link_info(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -711,7 +740,8 @@ static void
 handle_picmg_cmd_shelf_power_allocation(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     if (check_msg_length(msg, 2, rdata, rdata_len))
 	return;
@@ -739,7 +769,8 @@ static void
 handle_picmg_cmd_shelf_manager_ipmb_address(lmc_data_t    *mc,
 					    msg_t         *msg,
 					    unsigned char *rdata,
-					    unsigned int  *rdata_len)
+					    unsigned int  *rdata_len,
+					    void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -748,7 +779,8 @@ static void
 handle_picmg_cmd_set_fan_policy(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -757,7 +789,8 @@ static void
 handle_picmg_cmd_get_fan_policy(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -767,7 +800,8 @@ static void
 handle_picmg_cmd_fru_control_capabilities(lmc_data_t    *mc,
 					  msg_t         *msg,
 					  unsigned char *rdata,
-					  unsigned int  *rdata_len)
+					  unsigned int  *rdata_len,
+					  void          *cb_data)
 {
     if (check_msg_length(msg, 2, rdata, rdata_len))
 	return;
@@ -788,7 +822,8 @@ static void
 handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 						   msg_t         *msg,
 						   unsigned char *rdata,
-						   unsigned int  *rdata_len)
+						   unsigned int  *rdata_len,
+						   void          *cb_data)
 {
     emu_data_t *emu = mc->emu;
     uint16_t   lock_id;
@@ -898,7 +933,8 @@ static void
 handle_picmg_cmd_fru_inventory_device_write(lmc_data_t    *mc,
 					    msg_t         *msg,
 					    unsigned char *rdata,
-					    unsigned int  *rdata_len)
+					    unsigned int  *rdata_len,
+					    void          *cb_data)
 {
     emu_data_t   *emu = mc->emu;
     uint16_t     lock_id;
@@ -959,7 +995,8 @@ static void
 handle_picmg_cmd_get_shelf_manager_ip_addresses(lmc_data_t    *mc,
 						msg_t         *msg,
 						unsigned char *rdata,
-						unsigned int  *rdata_len)
+						unsigned int  *rdata_len,
+						void          *cb_data)
 {
     emu_data_t   *emu = mc->emu;
     unsigned int addr;
@@ -1031,137 +1068,150 @@ handle_picmg_msg(lmc_data_t    *mc,
 {
     switch(msg->cmd) {
     case IPMI_PICMG_CMD_GET_PROPERTIES:
-	handle_picmg_get_properties(mc, msg, rdata, rdata_len);
+	handle_picmg_get_properties(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_ADDRESS_INFO:
-	handle_picmg_get_address_info(mc, msg, rdata, rdata_len);
+	handle_picmg_get_address_info(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_FRU_CONTROL:
-	handle_picmg_cmd_fru_control(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_fru_control(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FRU_LED_PROPERTIES:
-	handle_picmg_cmd_get_fru_led_properties(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fru_led_properties(mc, msg, rdata, rdata_len,
+						NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES:
-	handle_picmg_cmd_get_led_color_capabilities(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_led_color_capabilities(mc, msg, rdata, rdata_len,
+						    NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_FRU_LED_STATE:
-	handle_picmg_cmd_set_fru_led_state(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_fru_led_state(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FRU_LED_STATE:
-	handle_picmg_cmd_get_fru_led_state(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fru_led_state(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_SHELF_ADDRESS_INFO:
-	handle_picmg_cmd_get_shelf_address_info(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_shelf_address_info(mc, msg, rdata, rdata_len,
+						NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_SHELF_ADDRESS_INFO:
-	handle_picmg_cmd_set_shelf_address_info(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_shelf_address_info(mc, msg, rdata, rdata_len,
+						NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_IPMB_STATE:
-	handle_picmg_cmd_set_ipmb_state(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_ipmb_state(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_FRU_ACTIVATION_POLICY:
-	handle_picmg_cmd_set_fru_activation_policy(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_fru_activation_policy(mc, msg, rdata, rdata_len,
+						   NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FRU_ACTIVATION_POLICY:
-	handle_picmg_cmd_get_fru_activation_policy(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fru_activation_policy(mc, msg, rdata, rdata_len,
+						   NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_FRU_ACTIVATION:
-	handle_picmg_cmd_set_fru_activation(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_fru_activation(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_DEVICE_LOCATOR_RECORD:
-	handle_picmg_cmd_get_device_locator_record(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_device_locator_record(mc, msg, rdata, rdata_len,
+						   NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_PORT_STATE:
-	handle_picmg_cmd_set_port_state(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_port_state(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_PORT_STATE:
-	handle_picmg_cmd_get_port_state(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_port_state(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_COMPUTE_POWER_PROPERTIES:
-	handle_picmg_cmd_compute_power_properties(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_compute_power_properties(mc, msg, rdata, rdata_len,
+						  NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_POWER_LEVEL:
-	handle_picmg_cmd_set_power_level(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_power_level(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_POWER_LEVEL:
-	handle_picmg_cmd_get_power_level(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_power_level(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_RENEGOTIATE_POWER:
-	handle_picmg_cmd_renegotiate_power(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_renegotiate_power(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FAN_SPEED_PROPERTIES:
-	handle_picmg_cmd_get_fan_speed_properties(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fan_speed_properties(mc, msg, rdata, rdata_len,
+						  NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_FAN_LEVEL:
-	handle_picmg_cmd_set_fan_level(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_fan_level(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FAN_LEVEL:
-	handle_picmg_cmd_get_fan_level(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fan_level(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_BUSED_RESOURCE:
-	handle_picmg_cmd_bused_resource(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_bused_resource(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_IPMB_LINK_INFO:
-	handle_picmg_cmd_ipmb_link_info(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_ipmb_link_info(mc, msg, rdata, rdata_len, NULL);
 	break;
       
     case IPMI_PICMG_CMD_SHELF_POWER_ALLOCATION:
-	handle_picmg_cmd_shelf_power_allocation(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_shelf_power_allocation(mc, msg, rdata, rdata_len,
+						NULL);
 	break;
 
     case IPMI_PICMG_CMD_SHELF_MANAGER_IPMB_ADDRESS:
-	handle_picmg_cmd_shelf_manager_ipmb_address(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_shelf_manager_ipmb_address(mc, msg, rdata, rdata_len,
+						    NULL);
 	break;
 
     case IPMI_PICMG_CMD_SET_FAN_POLICY:
-	handle_picmg_cmd_set_fan_policy(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_set_fan_policy(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_FAN_POLICY:
-	handle_picmg_cmd_get_fan_policy(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_get_fan_policy(mc, msg, rdata, rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_FRU_CONTROL_CAPABILITIES:
-	handle_picmg_cmd_fru_control_capabilities(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_fru_control_capabilities(mc, msg, rdata, rdata_len,
+						  NULL);
 	break;
 
     case IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL:
 	handle_picmg_cmd_fru_inventory_device_lock_control(mc, msg, rdata,
-							   rdata_len);
+							   rdata_len, NULL);
 	break;
 
     case IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_WRITE:
-	handle_picmg_cmd_fru_inventory_device_write(mc, msg, rdata, rdata_len);
+	handle_picmg_cmd_fru_inventory_device_write(mc, msg, rdata, rdata_len,
+						    NULL);
 	break;
 
     case IPMI_PICMG_CMD_GET_SHELF_MANAGER_IP_ADDRESSES:
 	handle_picmg_cmd_get_shelf_manager_ip_addresses(mc, msg, rdata,
-							rdata_len);
+							rdata_len, NULL);
 	break;
 
     default:

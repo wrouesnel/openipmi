@@ -42,7 +42,8 @@ static void
 handle_ipmi_set_lan_config_parms(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     unsigned char lchan;
     channel_t *chan;
@@ -82,7 +83,8 @@ static void
 handle_ipmi_get_lan_config_parms(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     unsigned char lchan;
     channel_t *chan;
@@ -123,7 +125,8 @@ static void
 handle_set_sol_config_parms(lmc_data_t    *mc,
 			    msg_t         *msg,
 			    unsigned char *rdata,
-			    unsigned int  *rdata_len)
+			    unsigned int  *rdata_len,
+			    void          *cb_data)
 {
     unsigned char err = 0;
     unsigned char val;
@@ -220,7 +223,8 @@ static void
 handle_get_sol_config_parms(lmc_data_t    *mc,
 			    msg_t         *msg,
 			    unsigned char *rdata,
-			    unsigned int  *rdata_len)
+			    unsigned int  *rdata_len,
+			    void          *cb_data)
 {
     ipmi_sol_t *sol = &mc->sol;
     unsigned char databyte = 0;

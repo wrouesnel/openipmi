@@ -52,7 +52,8 @@ static void
 handle_get_event_receiver(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_IPMB_EVENT_GEN)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -69,7 +70,8 @@ static void
 handle_set_event_receiver(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_IPMB_EVENT_GEN)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -90,7 +92,8 @@ static void
 handle_get_device_sdr_info(lmc_data_t    *mc,
 			   msg_t         *msg,
 			   unsigned char *rdata,
-			   unsigned int  *rdata_len)
+			   unsigned int  *rdata_len,
+			   void          *cb_data)
 {
     if (! mc->has_device_sdrs) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -117,7 +120,8 @@ static void
 handle_reserve_device_sdr_repository(lmc_data_t    *mc,
 				     msg_t         *msg,
 				     unsigned char *rdata,
-				     unsigned int  *rdata_len)
+				     unsigned int  *rdata_len,
+				     void          *cb_data)
 {
     if (!(mc->has_device_sdrs)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -142,7 +146,8 @@ static void
 handle_get_device_sdr(lmc_data_t    *mc,
 		      msg_t         *msg,
 		      unsigned char *rdata,
-		      unsigned int  *rdata_len)
+		      unsigned int  *rdata_len,
+		      void          *cb_data)
 {
     uint16_t     record_id;
     unsigned int offset;
@@ -224,7 +229,8 @@ static void
 handle_set_sensor_hysteresis(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -257,7 +263,8 @@ static void
 handle_get_sensor_hysteresis(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -418,7 +425,8 @@ static void
 handle_set_sensor_thresholds(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -468,7 +476,8 @@ static void
 handle_get_sensor_thresholds(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -510,7 +519,8 @@ static void
 handle_set_sensor_event_enable(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     int           sens_num;
     sensor_t      *sensor;
@@ -599,7 +609,8 @@ static void
 handle_get_sensor_event_enable(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     int           sens_num;
     sensor_t      *sensor;
@@ -644,7 +655,8 @@ static void
 handle_set_sensor_type(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     handle_invalid_cmd(mc, rdata, rdata_len);
 }
@@ -653,7 +665,8 @@ static void
 handle_get_sensor_type(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     int           sens_num;
     sensor_t      *sensor;
@@ -679,7 +692,8 @@ static void
 handle_get_sensor_reading(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -709,7 +723,8 @@ static void
 handle_rearm_sensor_events(lmc_data_t    *mc,
 			   msg_t         *msg,
 			   unsigned char *rdata,
-			   unsigned int  *rdata_len)
+			   unsigned int  *rdata_len,
+			   void          *cb_data)
 {
     int      sens_num;
     sensor_t *sensor;
@@ -1511,7 +1526,8 @@ static void
 handle_ipmi_get_pef_capabilities(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -1530,7 +1546,8 @@ static void
 handle_ipmi_set_pef_config_parms(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     unsigned char err = 0;
     int           set, block;
@@ -1705,7 +1722,8 @@ static void
 handle_ipmi_get_pef_config_parms(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     int           set, block;
     unsigned char databyte = 0;

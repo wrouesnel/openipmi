@@ -301,11 +301,14 @@ int ipmi_mc_users_changed(lmc_data_t *mc);
 typedef void (*cmd_handler_f)(lmc_data_t    *mc,
 			      msg_t         *msg,
 			      unsigned char *rdata,
-			      unsigned int  *rdata_len);
+			      unsigned int  *rdata_len,
+			      void          *cb_data);
 int ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
-				  cmd_handler_f handler);
-int ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler);
-int ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler);
+				  cmd_handler_f handler, void *cb_data);
+int ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler,
+				   void *cb_data);
+int ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler,
+				      void *cb_data);
 
 #define OPENIPMI_IANA_CMD_SET_HISTORY_RETURN_SIZE	1
 #define OPENIPMI_IANA_CMD_GET_HISTORY_RETURN_SIZE	2

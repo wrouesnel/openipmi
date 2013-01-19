@@ -45,7 +45,8 @@ static void
 handle_get_device_id(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     memset(rdata, 0, 12);
     rdata[1] = mc->device_id;
@@ -130,7 +131,8 @@ static void
 handle_get_watchdog_timer(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     long v = 0;
     static struct timeval zero_tv = {0, 0};
@@ -263,7 +265,8 @@ static void
 handle_set_watchdog_timer(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     unsigned int val;
     channel_t *bchan;
@@ -348,7 +351,8 @@ static void
 handle_reset_watchdog_timer(lmc_data_t    *mc,
 			    msg_t         *msg,
 			    unsigned char *rdata,
-			    unsigned int  *rdata_len)
+			    unsigned int  *rdata_len,
+			    void          *cb_data)
 {
     if (!mc->watchdog_timer) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -369,7 +373,8 @@ static void
 handle_get_channel_info(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
-			unsigned int  *rdata_len)
+			unsigned int  *rdata_len,
+			void          *cb_data)
 {
     unsigned char lchan;
     unsigned char medium_type;
@@ -428,7 +433,8 @@ static void
 handle_get_channel_access(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     unsigned char lchan;
     channel_t *chan;
@@ -485,7 +491,8 @@ static void
 handle_set_global_enables(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     unsigned char old_evint = IPMI_MC_EVBUF_FULL_INT_ENABLED(mc);
     unsigned char old_int = IPMI_MC_MSG_INTS_ON(mc);
@@ -516,7 +523,8 @@ static void
 handle_get_global_enables(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = mc->global_enables;
@@ -551,7 +559,8 @@ static void
 handle_set_user_access(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     uint8_t user;
     uint8_t priv;
@@ -628,7 +637,8 @@ static void
 handle_get_user_access(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     int     i;
     uint8_t user;
@@ -676,7 +686,8 @@ static void
 handle_set_user_name(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     uint8_t user;
 
@@ -712,7 +723,8 @@ static void
 handle_get_user_name(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     uint8_t user;
 
@@ -744,7 +756,8 @@ static void
 handle_set_user_password(lmc_data_t    *mc,
 			 msg_t         *msg,
 			 unsigned char *rdata,
-			 unsigned int  *rdata_len)
+			 unsigned int  *rdata_len,
+			 void          *cb_data)
 {
     uint8_t user;
     uint8_t op;
@@ -796,7 +809,8 @@ static void
 handle_set_channel_access(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     unsigned char lchan;
     channel_t *chan;
@@ -842,7 +856,8 @@ static void
 handle_read_event_msg_buffer(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     channel_t *chan = mc->channels[15];
 
@@ -871,7 +886,8 @@ static void
 handle_get_msg_flags(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = mc->msg_flags;
@@ -882,7 +898,8 @@ static void
 handle_clear_msg_flags(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -896,7 +913,8 @@ static void
 handle_get_msg(lmc_data_t    *mc,
 	       msg_t         *msg,
 	       unsigned char *rdata,
-	       unsigned int  *rdata_len)
+	       unsigned int  *rdata_len,
+	       void          *cb_data)
 {
     msg_t *qmsg;
 
@@ -942,7 +960,8 @@ static void
 handle_get_payload_activation_status(lmc_data_t    *mc,
 				     msg_t         *msg,
 				     unsigned char *rdata,
-				     unsigned int  *rdata_len)
+				     unsigned int  *rdata_len,
+				     void          *cb_data)
 {
     channel_t *channel = mc->channels[msg->channel];
 
@@ -976,7 +995,8 @@ static void
 handle_get_payload_instance_info(lmc_data_t    *mc,
 				 msg_t         *msg,
 				 unsigned char *rdata,
-				 unsigned int  *rdata_len)
+				 unsigned int  *rdata_len,
+				 void          *cb_data)
 {
     channel_t *channel = mc->channels[msg->channel];
 
@@ -1015,7 +1035,8 @@ static void
 handle_get_channel_payload_support(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     channel_t *channel;
 
@@ -1038,7 +1059,8 @@ static void
 handle_activate_payload(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
-			unsigned int  *rdata_len)
+			unsigned int  *rdata_len,
+			void          *cb_data)
 {
     channel_t *channel = msg->orig_channel;
 
@@ -1073,7 +1095,8 @@ static void
 handle_deactivate_payload(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     channel_t *channel = msg->orig_channel;
 

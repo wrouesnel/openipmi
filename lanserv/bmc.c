@@ -58,7 +58,8 @@ static void
 handle_group_extension_netfn(lmc_data_t    *mc,
 			     msg_t         *msg,
 			     unsigned char *rdata,
-			     unsigned int  *rdata_len)
+			     unsigned int  *rdata_len,
+			     void          *cb_data)
 {
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
@@ -80,6 +81,7 @@ handle_group_extension_netfn(lmc_data_t    *mc,
 static struct iana_handler_elem {
     uint32_t iana;
     cmd_handler_f handler;
+    void *cb_data;
     struct iana_handler_elem *next;
 } *iana_handlers;
 
@@ -96,7 +98,8 @@ static struct iana_handler_elem *find_iana(uint32_t iana)
 }
 
 int
-ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler)
+ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler,
+			       void *cb_data)
 {
     struct iana_handler_elem *p;
 
@@ -109,6 +112,7 @@ ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler)
 	return ENOMEM;
     p->iana = iana;
     p->handler = handler;
+    p->cb_data = cb_data;
     p->next = iana_handlers;
     iana_handlers = p;
     return 0;
@@ -118,7 +122,8 @@ static void
 handle_iana_netfn(lmc_data_t    *mc,
 		  msg_t         *msg,
 		  unsigned char *rdata,
-		  unsigned int  *rdata_len)
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
 {
     struct iana_handler_elem *p;
     uint32_t iana;
@@ -133,12 +138,13 @@ handle_iana_netfn(lmc_data_t    *mc,
 	return;
     }
 
-    p->handler(mc, msg, rdata, rdata_len);
+    p->handler(mc, msg, rdata, rdata_len, p->cb_data);
 }
 
 static struct oi_iana_cmd_elem {
     uint8_t cmd;
     cmd_handler_f handler;
+    void *cb_data;
     struct oi_iana_cmd_elem *next;
 } *oi_iana_cmds;
 
@@ -157,7 +163,8 @@ static struct oi_iana_cmd_elem *find_oi_iana(uint8_t cmd)
 static void handle_oi_iana_cmd(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     struct oi_iana_cmd_elem *p;
 
@@ -167,18 +174,20 @@ static void handle_oi_iana_cmd(lmc_data_t    *mc,
 	return;
     }
 
-    p->handler(mc, msg, rdata, rdata_len);
+    p->handler(mc, msg, rdata, rdata_len, p->cb_data);
 }
 
 int
-ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler)
+ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler,
+				  void *cb_data)
 {
     struct oi_iana_cmd_elem *p;
     int rv;
 
     if (find_oi_iana(cmd))
 	return EAGAIN;
-    rv = ipmi_emu_register_iana_handler(OPENIPMI_IANA, handle_oi_iana_cmd);
+    rv = ipmi_emu_register_iana_handler(OPENIPMI_IANA, handle_oi_iana_cmd,
+					NULL);
     if (rv != 0 && rv != EAGAIN)
 	return rv;
     p = malloc(sizeof(*p));
@@ -186,6 +195,7 @@ ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler)
 	return ENOMEM;
     p->cmd = cmd;
     p->handler = handler;
+    p->cb_data = cb_data;
     p->next = oi_iana_cmds;
     oi_iana_cmds = p;
     return 0;
@@ -199,7 +209,9 @@ check_chassis_capable(lmc_data_t *mc)
 
 typedef struct netfn_handler_s {
     cmd_handler_f *handlers;
+    void          **cb_data;
     cmd_handler_f main_handler;
+    void          *main_handler_cb_data;
     int (*check_capable)(lmc_data_t *mc);
 } netfn_handler_t;
 
@@ -217,7 +229,7 @@ static netfn_handler_t netfn_handlers[32] = {
 
 int
 ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
-			      cmd_handler_f handler)
+			      cmd_handler_f handler, void *cb_data)
 {
     unsigned int ni = netfn >> 1;
 
@@ -229,8 +241,16 @@ ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 	if (!netfn_handlers[ni].handlers)
 	    return ENOMEM;
 	memset(netfn_handlers[ni].handlers, 0, 256 * sizeof(cmd_handler_f));
+	netfn_handlers[ni].cb_data = malloc(256 * sizeof(void *));
+	if (!netfn_handlers[ni].cb_data) {
+	    free(netfn_handlers[ni].handlers);
+	    netfn_handlers[ni].handlers = NULL;
+	    return ENOMEM;
+	}
+	memset(netfn_handlers[ni].cb_data, 0, 256 * sizeof(void *));
     }
 
+    netfn_handlers[ni].cb_data[cmd] = cb_data;
     netfn_handlers[ni].handlers[cmd] = handler;
     return 0;
 }
@@ -352,11 +372,12 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	!netfn_handlers[msg->netfn >> 1].check_capable(mc))
 	handle_invalid_cmd(mc, rdata, rdata_len);
     else if (netfn_handlers[msg->netfn >> 1].main_handler)
-	netfn_handlers[msg->netfn >> 1].main_handler(mc, msg, rdata, rdata_len);
+	netfn_handlers[msg->netfn >> 1].main_handler(mc, msg, rdata, rdata_len,
+			 netfn_handlers[msg->netfn >> 1].main_handler_cb_data);
     else if (netfn_handlers[msg->netfn >> 1].handlers &&
 	     netfn_handlers[msg->netfn >> 1].handlers[msg->cmd])
 	netfn_handlers[msg->netfn >> 1].handlers[msg->cmd](mc, msg, rdata,
-							   rdata_len);
+		 rdata_len, netfn_handlers[msg->netfn >> 1].cb_data[msg->cmd]);
     else
 	handle_invalid_cmd(mc, rdata, rdata_len);
 

@@ -57,7 +57,7 @@ static extcmd_info_t chassis_prog[] = {
 static int
 set_power(lmc_data_t *mc, int pval)
 {
-    int rv;
+    int rv = 0;
 
     if (mc->chassis_control_set_func) {
 	unsigned char val = !!pval;
@@ -75,7 +75,7 @@ set_power(lmc_data_t *mc, int pval)
 	    mc->channels[15]->hw_op(mc->channels[15], HW_OP_POWEROFF);
     } else
 	return ENOTSUP;
-    return 0;
+    return rv;
 }
 
 static void
@@ -110,7 +110,8 @@ static void
 handle_get_chassis_capabilities(lmc_data_t    *mc,
 				msg_t         *msg,
 				unsigned char *rdata,
-				unsigned int  *rdata_len)
+				unsigned int  *rdata_len,
+				void          *cb_data)
 {
     rdata[0] = 0;
     rdata[1] = 0;
@@ -124,7 +125,8 @@ static void
 handle_get_chassis_status(lmc_data_t    *mc,
 			  msg_t         *msg,
 			  unsigned char *rdata,
-			  unsigned int  *rdata_len)
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
 {
     rdata[0] = 0;
     if (mc->chassis_control_get_func) {
@@ -159,7 +161,8 @@ static void
 handle_chassis_control(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     int rv;
 
@@ -277,7 +280,8 @@ static void
 set_system_boot_options(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
-			unsigned int  *rdata_len)
+			unsigned int  *rdata_len,
+			void          *cb_data)
 {
     unsigned char val;
 
@@ -374,7 +378,8 @@ static void
 get_system_boot_options(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
-			unsigned int  *rdata_len)
+			unsigned int  *rdata_len,
+			void          *cb_data)
 {
     unsigned char val;
 

@@ -1,3 +1,8 @@
+2012-01-18 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/*: Change the command handler to take a cb_data
+	parameter.
+
 2012-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc.h, lanserv/OpenIPMI/mcserv.h, lanserv/bmc_sensor.h:

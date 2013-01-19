@@ -124,7 +124,8 @@ static void sol_history_timeout(void *cb_data);
 static void sol_set_history_return_size(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd = sol->soldata;
@@ -149,7 +150,8 @@ static void sol_set_history_return_size(lmc_data_t    *mc,
 static void sol_get_history_return_size(lmc_data_t    *mc,
 					msg_t         *msg,
 					unsigned char *rdata,
-					unsigned int  *rdata_len)
+					unsigned int  *rdata_len,
+					void          *cb_data)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd = sol->soldata;
@@ -1247,13 +1249,13 @@ sol_init(sys_data_t *sys)
 
     rv = ipmi_emu_register_oi_iana_handler(
 	OPENIPMI_IANA_CMD_SET_HISTORY_RETURN_SIZE,
-	sol_set_history_return_size);
+	sol_set_history_return_size, NULL);
     if (rv)
 	return rv;
 
     rv = ipmi_emu_register_oi_iana_handler(
 	OPENIPMI_IANA_CMD_GET_HISTORY_RETURN_SIZE,
-	sol_get_history_return_size);
+	sol_get_history_return_size, NULL);
     if (rv)
 	return rv;
 

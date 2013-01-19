@@ -281,7 +281,8 @@ static void
 handle_get_sel_info(lmc_data_t    *mc,
 		    msg_t         *msg,
 		    unsigned char *rdata,
-		    unsigned int  *rdata_len)
+		    unsigned int  *rdata_len,
+		    void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -308,7 +309,8 @@ static void
 handle_get_sel_allocation_info(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -334,7 +336,8 @@ static void
 handle_reserve_sel(lmc_data_t    *mc,
 		   msg_t         *msg,
 		   unsigned char *rdata,
-		   unsigned int  *rdata_len)
+		   unsigned int  *rdata_len,
+		   void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -358,7 +361,8 @@ static void
 handle_get_sel_entry(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     uint16_t    record_id;
     int         offset;
@@ -430,7 +434,8 @@ static void
 handle_add_sel_entry(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     int          rv;
     unsigned int r;
@@ -459,7 +464,8 @@ static void
 handle_delete_sel_entry(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
-			unsigned int  *rdata_len)
+			unsigned int  *rdata_len,
+			void          *cb_data)
 {
     uint16_t    record_id;
     sel_entry_t *entry, *p_entry;
@@ -529,7 +535,8 @@ static void
 handle_clear_sel(lmc_data_t    *mc,
 		 msg_t         *msg,
 		 unsigned char *rdata,
-		 unsigned int  *rdata_len)
+		 unsigned int  *rdata_len,
+		 void          *cb_data)
 {
     sel_entry_t    *entry, *n_entry;
     unsigned char  op;
@@ -595,7 +602,8 @@ static void
 handle_get_sel_time(lmc_data_t    *mc,
 		    msg_t         *msg,
 		    unsigned char *rdata,
-		    unsigned int  *rdata_len)
+		    unsigned int  *rdata_len,
+		    void          *cb_data)
 {
     struct timeval t;
 
@@ -614,7 +622,8 @@ static void
 handle_set_sel_time(lmc_data_t    *mc,
 		    msg_t         *msg,
 		    unsigned char *rdata,
-		    unsigned int  *rdata_len)
+		    unsigned int  *rdata_len,
+		    void          *cb_data)
 {
     struct timeval t;
 
@@ -879,7 +888,8 @@ static void
 handle_get_sdr_repository_info(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     unsigned int space;
 
@@ -905,7 +915,8 @@ static void
 handle_get_sdr_repository_alloc_info(lmc_data_t    *mc,
 				     msg_t         *msg,
 				     unsigned char *rdata,
-				     unsigned int  *rdata_len)
+				     unsigned int  *rdata_len,
+				     void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -930,7 +941,8 @@ static void
 handle_reserve_sdr_repository(lmc_data_t    *mc,
 			      msg_t         *msg,
 			      unsigned char *rdata,
-			      unsigned int  *rdata_len)
+			      unsigned int  *rdata_len,
+			      void          *cb_data)
 {
     if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -962,7 +974,8 @@ static void
 handle_get_sdr(lmc_data_t    *mc,
 	       msg_t         *msg,
 	       unsigned char *rdata,
-	       unsigned int  *rdata_len)
+	       unsigned int  *rdata_len,
+	       void          *cb_data)
 {
     uint16_t     record_id;
     unsigned int offset;
@@ -1041,7 +1054,8 @@ static void
 handle_add_sdr(lmc_data_t    *mc,
 	       msg_t         *msg,
 	       unsigned char *rdata,
-	       unsigned int  *rdata_len)
+	       unsigned int  *rdata_len,
+	       void          *cb_data)
 {
     int            modal;
     sdr_t          *entry;
@@ -1088,7 +1102,8 @@ static void
 handle_partial_add_sdr(lmc_data_t    *mc,
 		       msg_t         *msg,
 		       unsigned char *rdata,
-		       unsigned int  *rdata_len)
+		       unsigned int  *rdata_len,
+		       void          *cb_data)
 {
     uint16_t     record_id;
     unsigned int offset;
@@ -1209,7 +1224,8 @@ static void
 handle_delete_sdr(lmc_data_t    *mc,
 		  msg_t         *msg,
 		  unsigned char *rdata,
-		  unsigned int  *rdata_len)
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
 {
     uint16_t       record_id;
     sdr_t          *entry, *p_entry;
@@ -1277,7 +1293,8 @@ static void
 handle_clear_sdr_repository(lmc_data_t    *mc,
 			    msg_t         *msg,
 			    unsigned char *rdata,
-			    unsigned int  *rdata_len)
+			    unsigned int  *rdata_len,
+			    void          *cb_data)
 {
     sdr_t          *entry, *n_entry;
     struct timeval t;
@@ -1340,7 +1357,8 @@ static void
 handle_get_sdr_repository_time(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     struct timeval t;
 
@@ -1359,7 +1377,8 @@ static void
 handle_set_sdr_repository_time(lmc_data_t    *mc,
 			       msg_t         *msg,
 			       unsigned char *rdata,
-			       unsigned int  *rdata_len)
+			       unsigned int  *rdata_len,
+			       void          *cb_data)
 {
     struct timeval t;
 
@@ -1382,7 +1401,8 @@ static void
 handle_enter_sdr_repository_update(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     int modal;
 
@@ -1409,7 +1429,8 @@ static void
 handle_exit_sdr_repository_update(lmc_data_t    *mc,
 				  msg_t         *msg,
 				  unsigned char *rdata,
-				  unsigned int  *rdata_len)
+				  unsigned int  *rdata_len,
+				  void          *cb_data)
 {
     int modal;
 
@@ -1470,7 +1491,8 @@ static void
 handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 				   msg_t         *msg,
 				   unsigned char *rdata,
-				   unsigned int  *rdata_len)
+				   unsigned int  *rdata_len,
+				   void          *cb_data)
 {
     unsigned char devid;
     fru_data_t *fru;
@@ -1573,7 +1595,8 @@ static void
 handle_read_fru_data(lmc_data_t    *mc,
 		     msg_t         *msg,
 		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
+		     unsigned int  *rdata_len,
+		     void          *cb_data)
 {
     unsigned char devid;
     unsigned int  offset;
@@ -1653,7 +1676,8 @@ static void
 handle_write_fru_data(lmc_data_t    *mc,
 		      msg_t         *msg,
 		      unsigned char *rdata,
-		      unsigned int  *rdata_len)
+		      unsigned int  *rdata_len,
+		      void          *cb_data)
 {
     unsigned char device_id;
     unsigned int  offset;
