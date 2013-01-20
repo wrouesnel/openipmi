@@ -1146,6 +1146,7 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 	} else if (strncmp(tok, "historyfru=", 11) == 0) {
 	    char *end;
 	    unsigned int history_fru;
+
 	    history_fru = strtoul(tok + 11, &end, 0);
 	    if (*end != '\0') {
 		*err = "Invalid history FRU value";
@@ -1155,6 +1156,12 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 		*err = "history FRU value must be < 0xff";
 		return -1;
 	    }
+	    rv = ipmi_mc_add_fru_data(sys->mc, history_fru, 0, NULL, NULL);
+	    if (rv) {
+		*err = "Cannot add frudata handler";
+		return -1;
+	    }
+
 	    rv = ipmi_mc_set_frudata_handler(sys->mc, history_fru,
 					     sol_set_frudata,
 					     sol_free_frudata);

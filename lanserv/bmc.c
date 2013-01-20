@@ -375,10 +375,13 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	netfn_handlers[msg->netfn >> 1].main_handler(mc, msg, rdata, rdata_len,
 			 netfn_handlers[msg->netfn >> 1].main_handler_cb_data);
     else if (netfn_handlers[msg->netfn >> 1].handlers &&
-	     netfn_handlers[msg->netfn >> 1].handlers[msg->cmd])
+	     netfn_handlers[msg->netfn >> 1].handlers[msg->cmd]) {
+	void *cb_data = NULL;
+	if (netfn_handlers[msg->netfn >> 1].cb_data)
+	    cb_data = netfn_handlers[msg->netfn >> 1].cb_data[msg->cmd];
 	netfn_handlers[msg->netfn >> 1].handlers[msg->cmd](mc, msg, rdata,
-		 rdata_len, netfn_handlers[msg->netfn >> 1].cb_data[msg->cmd]);
-    else
+		 rdata_len, cb_data);
+    } else
 	handle_invalid_cmd(mc, rdata, rdata_len);
 
     if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD) {

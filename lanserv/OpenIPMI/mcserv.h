@@ -172,6 +172,16 @@ int ipmi_mc_get_fru_data(lmc_data_t    *mc,
 			 unsigned int  length,
 			 unsigned char *data);
 
+/*
+ * FRUs have a semaphore that can be use to grant exclusive access.
+ * The semaphore is attempted to get before read and write operations,
+ * if it fails then an error is returned.  If something else reads or
+ * writes the FRU, then it should claim the semaphore before posting.
+ */
+int ipmi_mc_fru_sem_wait(lmc_data_t *mc, unsigned char device_id);
+int ipmi_mc_fru_sem_trywait(lmc_data_t *mc, unsigned char device_id);
+int ipmi_mc_fru_sem_post(lmc_data_t *mc, unsigned char device_id);
+
 int ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 			   unsigned char lun,
 			   unsigned char sens_num,

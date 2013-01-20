@@ -3,6 +3,10 @@
 	* lanserv/*: Change the command handler to take a cb_data
 	parameter.
 
+	* lanserv/OpenIPMI/mcserv.h, lanserv/bmc_storage.c: Modify the FRU
+	data to be more memory efficient.
+	* lanserv/bmc_picmg.c: Adjust for previous change.
+
 2012-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc.h, lanserv/OpenIPMI/mcserv.h, lanserv/bmc_sensor.h:

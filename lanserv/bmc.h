@@ -57,6 +57,7 @@
 #define __BMC_H_
 
 #include <stdint.h>
+#include <semaphore.h>
 #include <OpenIPMI/mcserv.h>
 #include "emu.h"
 
@@ -169,12 +170,15 @@ typedef struct fru_session_s
 
 struct fru_data_s
 {
-    fru_io_cb     fru_io_cb;
-    unsigned int  length;
-    unsigned char *data;
-    fru_session_t *sessions;
-    get_frudata_f get;
+    unsigned int   devid;
+    fru_io_cb      fru_io_cb;
+    unsigned int   length;
+    unsigned char  *data;
+    fru_session_t  *sessions;
+    get_frudata_f  get;
     free_frudata_f free;
+    sem_t          sem;
+    fru_data_t     *next;
 };
 
 typedef struct led_data_s
@@ -280,7 +284,7 @@ struct lmc_data_s
     sensor_t *(sensors[4][255]);
     uint32_t sensor_population_change_time;
 
-    fru_data_t frus[255];
+    fru_data_t *frulist;
 
     ipmi_sol_t sol;
 
@@ -379,6 +383,8 @@ struct emu_data_s
 #define IPMI_DEVID_SEL_DEVICE		(1 << 2)
 #define IPMI_DEVID_SDR_REPOSITORY_DEV	(1 << 1)
 #define IPMI_DEVID_SENSOR_DEV		(1 << 0)
+
+fru_data_t *find_fru(lmc_data_t *mc, unsigned int devid);
 
 int start_poweron_timer(lmc_data_t *mc);
 

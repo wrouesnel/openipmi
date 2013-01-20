@@ -1457,14 +1457,27 @@ handle_exit_sdr_repository_update(lmc_data_t    *mc,
  * FRU Inventory handling
  */
 
+fru_data_t *
+find_fru(lmc_data_t *mc, unsigned int devid)
+{
+    fru_data_t *fru = mc->frulist;
+
+    while (fru && fru->devid != devid)
+	fru = fru->next;
+
+    return fru;
+}
+
 int
-ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int fru,
+ipmi_mc_set_frudata_handler(lmc_data_t *mc, unsigned int devid,
 			    get_frudata_f handler, free_frudata_f freefunc)
 {
-    if (fru > 0xff)
+    fru_data_t *fru = find_fru(mc, devid);
+
+    if (!fru)
 	return EINVAL;
-    mc->frus[fru].get = handler;
-    mc->frus[fru].free = freefunc;
+    fru->get = handler;
+    fru->free = freefunc;
     return 0;
 }
 
@@ -1504,13 +1517,14 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
 	return;
 
     devid = msg->data[0];
-    if (devid >= 255) {
+
+    fru = find_fru(mc, devid);
+    if (!fru) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    fru = &mc->frus[devid];
     if (fru->get) {
 	channel_t *channel;
 	fru_session_t *ses;
@@ -1605,18 +1619,29 @@ handle_read_fru_data(lmc_data_t    *mc,
     unsigned int  size;
     fru_session_t *ses;
     fru_data_t *fru;
+    int           rv;
 
     if (check_msg_length(msg, 4, rdata, rdata_len))
 	return;
 
     devid = msg->data[0];
-    if (devid >= 255) {
+    fru = find_fru(mc, devid);
+    if (!fru) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    fru = &mc->frus[devid];
+    rv = sem_trywait(&fru->sem);
+    if (rv) {
+	if (rv == EAGAIN)
+	    rdata[0] = IPMI_NODE_BUSY_CC;
+	else
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	*rdata_len = 1;
+	return;
+    }
+
     offset = ipmi_get_uint16(msg->data+1);
     count = msg->data[3];
 
@@ -1635,13 +1660,13 @@ handle_read_fru_data(lmc_data_t    *mc,
 	if (!data) {
 	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	    *rdata_len = 1;
-	    return;
+	    goto out_unlock;
 	}
 
 	if (offset >= size) {
 	    rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 	    *rdata_len = 1;
-	    return;
+	    goto out_unlock;
 	}
     }
 
@@ -1651,7 +1676,7 @@ handle_read_fru_data(lmc_data_t    *mc,
 	/* Too much data to put into response. */
 	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
 	*rdata_len = 1;
-	return;
+	goto out_unlock;
     }
 
     if (fru->fru_io_cb) {
@@ -1661,7 +1686,7 @@ handle_read_fru_data(lmc_data_t    *mc,
 	if (rv) {
 	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	    *rdata_len = 1;
-	    return;
+	    goto out_unlock;
 	}
     } else {
 	memcpy(rdata + 2, data + offset, count);
@@ -1670,6 +1695,9 @@ handle_read_fru_data(lmc_data_t    *mc,
     rdata[0] = 0;
     rdata[1] = count;
     *rdata_len = 2 + count;
+
+  out_unlock:
+    sem_post(&fru->sem);
 }
 
 static void
@@ -1683,18 +1711,28 @@ handle_write_fru_data(lmc_data_t    *mc,
     unsigned int  offset;
     unsigned int  count;
     fru_data_t    *fru;
+    int           rv;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
 
     device_id = msg->data[0];
-    if ((device_id >= 255) || (!mc->frus[device_id].data)) {
+    fru = find_fru(mc, device_id);
+    if (!fru) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    fru = &mc->frus[device_id];
+    rv = sem_trywait(&fru->sem);
+    if (rv) {
+	if (rv == EAGAIN)
+	    rdata[0] = IPMI_NODE_BUSY_CC;
+	else
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	*rdata_len = 1;
+	return;
+    }
 
     offset = ipmi_get_uint16(msg->data+1);
     count = msg->len - 3;
@@ -1702,14 +1740,14 @@ handle_write_fru_data(lmc_data_t    *mc,
     if (offset >= fru->length) {
 	rdata[0] = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 	*rdata_len = 1;
-	return;
+	goto out_unlock;
     }
 
     if ((offset+count) > fru->length) {
 	/* Too much data to put into FRU. */
 	rdata[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
 	*rdata_len = 1;
-	return;
+	goto out_unlock;
     }
 
     if (fru->fru_io_cb) {
@@ -1720,7 +1758,7 @@ handle_write_fru_data(lmc_data_t    *mc,
 	if (rv) {
 	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
 	    *rdata_len = 1;
-	    return;
+	    goto out_unlock;
 	}
     } else {
 	memcpy(fru->data+offset, msg->data+3, count);
@@ -1728,6 +1766,9 @@ handle_write_fru_data(lmc_data_t    *mc,
     rdata[0] = 0;
     rdata[1] = count;
     *rdata_len = 2;
+
+  out_unlock:
+    sem_post(&fru->sem);
 }
 
 int
@@ -1743,9 +1784,8 @@ ipmi_mc_get_fru_data_len(lmc_data_t    *mc,
     if (device_id >= 255)
 	return EINVAL;
 
-    fru = &mc->frus[device_id];
-
-    if (!fru->data)
+    fru = find_fru(mc, device_id);
+    if (!fru || !fru->data)
 	return EINVAL;
 
     *length = fru->length;
@@ -1760,27 +1800,30 @@ ipmi_mc_get_fru_data(lmc_data_t    *mc,
 		     unsigned char *data)
 {
     fru_data_t *fru;
+    int        rv;
 
     if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
 	return ENOSYS;
 
-    if (device_id >= 255)
-	return EINVAL;
-
-    fru = &mc->frus[device_id];
-
-    if (!fru->data)
+    fru = find_fru(mc, device_id);
+    if (!fru)
 	return EINVAL;
 
     if (length > fru->length)
 	return EINVAL;
 
+    rv = sem_trywait(&fru->sem);
+    if (rv)
+	return errno;
+
     if (fru->fru_io_cb) {
-	return fru->fru_io_cb(fru->data, FRU_IO_READ, data, 0, length);
+	rv = fru->fru_io_cb(fru->data, FRU_IO_READ, data, 0, length);
     } else {
 	memcpy(data, fru->data, length);
-	return 0;
     }
+
+    sem_post(&fru->sem);
+    return rv;
 }
 
 int
@@ -1792,13 +1835,24 @@ ipmi_mc_add_fru_data(lmc_data_t    *mc,
 {
     fru_data_t *fru;
 
-    if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
-	return ENOSYS;
-
-    if (device_id >= 255)
+    if (device_id > 255)
 	return EINVAL;
 
-    fru = &mc->frus[device_id];
+    fru = find_fru(mc, device_id);
+    if (!fru) {
+	int rv;
+	fru = malloc(sizeof(*fru));
+	memset(fru, 0, sizeof(*fru));
+	rv = sem_init(&fru->sem, 0, 1);
+	if (rv) {
+	    rv = errno;
+	    free(fru);
+	    return rv;
+	}
+	fru->devid = device_id;
+	fru->next = mc->frulist;
+	mc->frulist = fru;
+    }
 
     if (fru->data) {
 	free(fru->data);
@@ -1808,15 +1862,55 @@ ipmi_mc_add_fru_data(lmc_data_t    *mc,
     if (fru_io_cb) {
 	fru->fru_io_cb = fru_io_cb;
 	fru->data = data;
-    } else {
+    } else if (length) {
 	fru->data = malloc(length);
 	if (!fru->data)
 	    return ENOMEM;
 	memcpy(fru->data, data, length);
-    }
+    } else
+	fru->data = NULL;
 
     fru->length = length;
 
+    return 0;
+}
+
+int
+ipmi_mc_fru_sem_wait(lmc_data_t *mc, unsigned char device_id)
+{
+    int rv;
+    fru_data_t *fru = find_fru(mc, device_id);
+    if (!fru)
+	return EINVAL;
+    rv = sem_wait(&fru->sem);
+    if (rv)
+	return errno;
+    return 0;
+}
+
+int
+ipmi_mc_fru_sem_trywait(lmc_data_t *mc, unsigned char device_id)
+{
+    int rv;
+    fru_data_t *fru = find_fru(mc, device_id);
+    if (!fru)
+	return EINVAL;
+    rv = sem_trywait(&fru->sem);
+    if (rv)
+	return errno;
+    return 0;
+}
+
+int
+ipmi_mc_fru_sem_post(lmc_data_t *mc, unsigned char device_id)
+{
+    int rv;
+    fru_data_t *fru = find_fru(mc, device_id);
+    if (!fru)
+	return EINVAL;
+    rv = sem_post(&fru->sem);
+    if (rv)
+	return errno;
     return 0;
 }
 

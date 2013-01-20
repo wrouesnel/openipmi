@@ -827,6 +827,7 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 {
     emu_data_t *emu = mc->emu;
     uint16_t   lock_id;
+    fru_data_t *fru;
 
     if (mc->ipmb != 0x20) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -859,19 +860,20 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 	    *rdata_len = 1;
 	    break;
 	}
-	if (mc->frus[254].length == 0) {
+	fru = find_fru(mc, 254);
+	if (!fru || fru->length == 0) {
 	    rdata[0] = IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC;
 	    *rdata_len = 1;
 	    break;
 	}
-	emu->temp_fru_inv_data = malloc(mc->frus[254].length);
+	emu->temp_fru_inv_data = malloc(fru->length);
 	if (!emu->temp_fru_inv_data) {
 	    rdata[0] = IPMI_OUT_OF_SPACE_CC;
 	    *rdata_len = 1;
 	    break;
 	}
-	emu->temp_fru_inv_data_len = mc->frus[254].length;
-	memcpy(emu->temp_fru_inv_data, mc->frus[254].data, 
+	emu->temp_fru_inv_data_len = fru->length;
+	memcpy(emu->temp_fru_inv_data, fru->data, 
 	       emu->temp_fru_inv_data_len);
 
 	emu->atca_fru_inv_locked = 1;
@@ -916,7 +918,13 @@ handle_picmg_cmd_fru_inventory_device_lock_control(lmc_data_t    *mc,
 	*rdata_len = 8;
 	emu->atca_fru_inv_curr_timestamp++;
 	/* FIXME - validate data. */
-	memcpy(mc->frus[254].data, emu->temp_fru_inv_data,
+	fru = find_fru(mc, 254);
+	if (!fru || fru->length == 0) {
+	    rdata[0] = IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC;
+	    *rdata_len = 1;
+	    break;
+	}
+	memcpy(fru->data, emu->temp_fru_inv_data,
 	       emu->temp_fru_inv_data_len);
 	free(emu->temp_fru_inv_data);
 	emu->temp_fru_inv_data = NULL;
