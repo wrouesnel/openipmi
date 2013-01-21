@@ -1,3 +1,11 @@
+2012-01-21 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Don't allow power to be
+	changed on a board that is not present.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Light the fan fail LED on a
+	fan failure.
+
 2012-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC

@@ -615,6 +615,8 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
 		     last_board_power_on.tv_sec, last_board_power_on.tv_sec,
 		     now.tv_sec, now.tv_sec);
 	}
+	if (!boards[num].present)
+	    return EAGAIN;
 	if (debug & 1 && board->waiting_power_off)
 	    sys->log(sys, DEBUG, NULL, "Canceling power off wait on"
 		     "board power request for board %d", board->num + 1);
@@ -1972,6 +1974,14 @@ scan_ps_sensors(sys_data_t *sys)
     }
 }
 
+static char *fan_fail_led[4]  =
+{
+    "/sys/class/astgpio/GPIOP0",
+    "/sys/class/astgpio/GPIOP1",
+    "/sys/class/astgpio/GPIOP2",
+    "/sys/class/astgpio/GPIOP3",
+};
+
 static void *
 scan_sensors(void *cb_data)
 {
@@ -1983,6 +1993,7 @@ scan_sensors(void *cb_data)
     char dummy = 0;
     struct timeval next, now, wait;
     unsigned int i;
+    char fan_fail[8];
 	    
     for (;;) {
 	gettimeofday(&next, NULL);
@@ -2021,12 +2032,24 @@ scan_sensors(void *cb_data)
 			 strerror(err));
 		/* Can't read fan, better safe than sorry. */
 		duty = 90;
+		fan_fail[i - 1] = 1;
 	    } else {
 		/* A fan is failing. */
-		if (val < 1000)
+		if (val < 1000) {
+		    fan_fail[i - 1] = 1;
 		    duty = 90;
+		} else
+		    fan_fail[i - 1] = 0;
 	    }
 	}
+
+	for (i = 0; i < 4; i++) {
+	    if (fan_fail[i * 2] || fan_fail[i * 2 + 1])
+		set_intval(fan_fail_led[i], 1);
+	    else
+		set_intval(fan_fail_led[i], 0);
+	}
+
 	if (duty > max_duty)
 	    max_duty = duty;
 
