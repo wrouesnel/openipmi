@@ -1,0 +1,49 @@
+# Fan
+# Range 0-10000
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		0x6f + $FAN
+	entity_id		fan_cooling_device
+	entity_instance		$FAN
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Fan
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		RPM
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			392
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-1
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	lnc_fthresh		1500
+	lc_fthresh		1000
+	id_string		"fan "$FAN
+endsdr

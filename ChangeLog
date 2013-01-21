@@ -1,3 +1,8 @@
+2012-01-20 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC
+	code ipmi_sim plugin.
+
 2012-01-18 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Change the command handler to take a cb_data

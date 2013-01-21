@@ -906,6 +906,7 @@ AC_OUTPUT(Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  lanserv/OpenIPMI/Makefile
+	  lanserv/marvell-bmc/Makefile
 	  sample/Makefile
 	  doc/Makefile
 	  man/Makefile

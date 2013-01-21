@@ -1,0 +1,833 @@
+#
+#
+#
+# chassis	23 1
+#   board 1-n	41 n
+#      CPU	3 n
+#      DIMM     8 n
+#   PSUs 1-n	10 n
+#   Fans 1-n	29 n
+#   Switch	42 1
+#      CPU	3 n+1
+
+sdr type 18
+	device_slave_address	0x20
+	device_channel_number	0
+	chassis			true
+	ipmb_event_gen		true
+	ipmb_event_recv		true
+	fru_inventory		true
+	sel			true
+	sdr			true
+	sensor			true
+	entity_id		connectivity_switch
+	entity_instance		1
+	id_string		"AXP switch"
+endsdr
+
+sdr type 8
+	container_entity_id	system_chassis
+	container_entity_inst	1
+	entity_1_id		power_supply
+	entity_1_inst		1
+	entity_2_id		power_supply
+	entity_2_inst		2
+	entity_3_id		connectivity_switch
+	entity_3_inst		1
+endsdr
+sdr type 8
+	container_entity_id	system_chassis
+	container_entity_inst	1
+	entity_1_id		fan_cooling_device
+	entity_1_inst		1
+	entity_2_id		fan_cooling_device
+	entity_2_inst		2
+	entity_3_id		fan_cooling_device
+	entity_3_inst		3
+	entity_4_id		fan_cooling_device
+	entity_4_inst		4
+endsdr
+sdr type 8
+	container_entity_id	system_chassis
+	container_entity_inst	1
+	entity_1_id		fan_cooling_device
+	entity_1_inst		5
+	entity_2_id		fan_cooling_device
+	entity_2_inst		6
+	entity_3_id		fan_cooling_device
+	entity_3_inst		7
+	entity_4_id		fan_cooling_device
+	entity_4_inst		8
+endsdr
+sdr type 8
+	container_entity_id	system_chassis
+	container_entity_inst	1
+	entity_1_id		processing_blade
+	entity_1_inst		1
+	entity_2_id		processing_blade
+	entity_2_inst		2
+	entity_3_id		processing_blade
+	entity_3_inst		3
+	entity_4_id		processing_blade
+	entity_4_inst		4
+endsdr
+sdr type 8
+	container_entity_id	system_chassis
+	container_entity_inst	1
+	entity_1_id		processing_blade
+	entity_1_inst		5
+	entity_2_id		processing_blade
+	entity_2_inst		6
+endsdr
+sdr type 8
+	container_entity_id	connectivity_switch
+	container_entity_inst	1
+	entity_1_id		processor
+	entity_1_inst		7
+endsdr
+
+# Switch temp sensor
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		1
+	entity_id		connectivity_switch
+	entity_instance		1
+	init_scanning		true
+	init_sensor_type	true
+	default_sensor_scan_on	true
+	sensor_type		Temperature
+	event_reading_type_code	1
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		degrees_C
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	id_string		"switch temp"
+endsdr
+
+# Switch CPU temp sensor
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		2
+	entity_id		processor
+	entity_instance		7
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Temperature
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	return_unr		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	assert_unrgh		true
+	assert_unrgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	unr_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		degrees_C
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	unr_thresh		115
+	uc_thresh		90
+	unc_thresh		75
+	lnc_thresh		5
+	lc_thresh		0
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"switch CPU temp"
+endsdr
+
+# Switch 12V sensor
+# Range from 10-14
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		3
+	entity_id		connectivity_switch
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Voltage
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Volts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			16
+	tolerance		0
+	b			10
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-3
+	b_exp			3
+	nominal_specified	true
+	nominal_freading	12.0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		12.6
+	unc_fthresh		12.36
+	lnc_fthresh		11.64
+	lc_fthresh		11.4
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"12V Switch"
+endsdr
+
+# Switch 3.3 sensor
+# Range 2.9 - 3.7
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		4
+	entity_id		connectivity_switch
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Voltage
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Volts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			313
+	tolerance		0
+	b			29
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-5
+	b_exp			4
+	nominal_specified	true
+	nominal_freading	3.3
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		3.465
+	unc_fthresh		3.399
+	lnc_fthresh		3.201
+	lc_fthresh		3.135
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"3.3V Switch"
+endsdr
+
+# Switch 1.8V sensor
+# Range 1.6-1.8
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		5
+	entity_id		connectivity_switch
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Voltage
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Volts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			156
+	tolerance		0
+	b			16
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-5
+	b_exp			4
+	nominal_specified	true
+	nominal_freading	1.8
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		1.89
+	unc_fthresh		1.854
+	lnc_fthresh		1.746
+	lc_fthresh		1.71
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"1.8V Switch"
+endsdr
+
+# PSU status sensors
+sdr type 2
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		8
+	entity_id		power_supply
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	false
+	sensor_type		Power_Supply
+	event_reading_type_code 0x6f
+	assert_event0		true
+	assert_event1		true
+	assert_event2		true
+	assert_event3		true
+	assert_event4		true
+	assert_event5		true
+	assert_event6		true
+	deassert_event0		true
+	deassert_event1		true
+	deassert_event2		true
+	deassert_event3		true
+	deassert_event4		true
+	deassert_event5		true
+	deassert_event6		true
+	event0_state_ret	true
+	event1_state_ret	true
+	event2_state_ret	true
+	event3_state_ret	true
+	event4_state_ret	true
+	event5_state_ret	true
+	event6_state_ret	true
+	id_string		"PSU1 status"
+endsdr
+sdr type 2
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		9
+	entity_id		power_supply
+	entity_instance		2
+	init_scanning		true
+	init_events		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	false
+	sensor_type		Power_Supply
+	event_reading_type_code 0x6f
+	assert_event0		true
+	assert_event1		true
+	assert_event2		true
+	assert_event3		true
+	assert_event4		true
+	assert_event5		true
+	assert_event6		true
+	deassert_event0		true
+	deassert_event1		true
+	deassert_event2		true
+	deassert_event3		true
+	deassert_event4		true
+	deassert_event5		true
+	deassert_event6		true
+	event0_state_ret	true
+	event1_state_ret	true
+	event2_state_ret	true
+	event3_state_ret	true
+	event4_state_ret	true
+	event5_state_ret	true
+	event6_state_ret	true
+	id_string		"PSU2 status"
+endsdr
+
+# PSU voltage sensors (12v)
+# Range 10-14
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		10
+	entity_id		power_supply
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Voltage
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Volts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			16
+	tolerance		0
+	b			10
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-3
+	b_exp			3
+	nominal_specified	true
+	nominal_freading	12.0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		12.6
+	unc_fthresh		12.36
+	lnc_fthresh		11.64
+	lc_fthresh		11.4
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU1 voltage"
+endsdr
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		11
+	entity_id		power_supply
+	entity_instance		2
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Voltage
+	event_reading_type_code	1
+	return_lnc		true
+	return_lc		true
+	return_unc		true
+	return_uc		true
+	assert_lncgh		true
+	assert_lncgl		true
+	assert_lcgh		true
+	assert_lcgl		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	lc_thrsh_settable	true
+	lnc_thrsh_settable	true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Volts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			16
+	tolerance		0
+	b			10
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			-3
+	b_exp			3
+	nominal_specified	true
+	nominal_freading	12.0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		12.6
+	unc_fthresh		12.36
+	lnc_fthresh		11.64
+	lc_fthresh		11.4
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU2 voltage"
+endsdr
+
+# PSU current sensors
+# Range 0-63
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		12
+	entity_id		power_supply
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Current
+	event_reading_type_code	1
+	return_unc		true
+	return_uc		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Amps
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		60
+	unc_fthresh		55
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU1 current"
+endsdr
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		13
+	entity_id		power_supply
+	entity_instance		2
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Current
+	event_reading_type_code	1
+	return_unc		true
+	return_uc		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Amps
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		60
+	unc_fthresh		55
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU2 current"
+endsdr
+
+# PSU power sensors
+# Range 0-2550
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		14
+	entity_id		power_supply
+	entity_instance		1
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Current
+	event_reading_type_code	1
+	return_unc		true
+	return_uc		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Watts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			10
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		480
+	unc_fthresh		440
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU1 power"
+endsdr
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		15
+	entity_id		power_supply
+	entity_instance		2
+	init_scanning		true
+	init_events		true
+	init_thresholds		true
+	init_hysteresis		true
+	init_sensor_type	true
+	default_event_gen_on	true
+	default_sensor_scan_on	true
+	sensor_auto_rearm	true
+	sensor_hysteresis	settable
+	sensor_threshold_access	settable
+	sensor_event_msg_ctrl	per_state
+	sensor_type		Current
+	event_reading_type_code	1
+	return_unc		true
+	return_uc		true
+	assert_uncgh		true
+	assert_uncgl		true
+	assert_ucgh		true
+	assert_ucgl		true
+	uc_thrsh_settable	true
+	unc_thrsh_settable	true
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		Watts
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			10
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	uc_fthresh		480
+	unc_fthresh		440
+	positive_hysteresis	2
+	negative_hysteresis	2
+	id_string		"PSU2 power"
+endsdr
+
+define FAN "1"
+include "fan.sdrs"
+define FAN "2"
+include "fan.sdrs"
+define FAN "3"
+include "fan.sdrs"
+define FAN "4"
+include "fan.sdrs"
+define FAN "5"
+include "fan.sdrs"
+define FAN "6"
+include "fan.sdrs"
+define FAN "7"
+include "fan.sdrs"
+define FAN "8"
+include "fan.sdrs"
+
+define OWNER_MC "1"
+include "board.sdrs"
+define OWNER_MC "2"
+include "board.sdrs"
+define OWNER_MC "3"
+include "board.sdrs"
+define OWNER_MC "4"
+include "board.sdrs"
+define OWNER_MC "5"
+include "board.sdrs"
+define OWNER_MC "6"
+include "board.sdrs"

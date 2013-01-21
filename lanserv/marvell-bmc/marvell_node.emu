@@ -1,0 +1,44 @@
+# Add target n
+mc_add $MCNUM 1     no-device-sdrs 00  00  00  0xc9  0x00500f 0x0002
+mc_enable $MCNUM
+
+# Now the FRU data
+mc_add_fru_data $MCNUM 0 2048 \
+  file 0 "/sys/class/i2c-adapter/i2c-"$MCNUM"/"$MCNUM"-0050/at24c64"
+
+# Board temp sensor
+sensor_add $MCNUM  0    1     1     1
+# Board CPU temp sensor
+sensor_add $MCNUM  0    2     1     1
+# DIMM temp sensor
+sensor_add $MCNUM  0    3     1     1
+# Front panel temp sensor
+sensor_add $MCNUM  0    4     1     1
+# V 1.0 Node X
+sensor_add $MCNUM  0    5     2     1
+# V 1.8 Node X
+sensor_add $MCNUM  0    6     2     1
+# V 2.5 Node X
+sensor_add $MCNUM  0    7     2     1
+# V 3.3 Node X
+sensor_add $MCNUM  0    8     2     1
+# V 1.05 Node X
+sensor_add $MCNUM  0    9     2     1
+# V DIMM Node X
+sensor_add $MCNUM  0    10    2     1
+# V DIMML Node X
+sensor_add $MCNUM  0    11    2     1
+# V 0.9 Node X
+sensor_add $MCNUM  0    12    2     1
+
+# CPU status
+sensor_add $MCNUM  0    20    7     0x6f
+# poll 1000 \
+#   file "/sys/class/i2c-adapter/i2c-"$MCNUM"/"$MCNUM"-0050/at24c64" \
+#   raw offset=9 length=1
+
+# DIMM status
+sensor_add $MCNUM  0    21   12     0x6f
+# poll 1000 \
+#   file "/sys/class/i2c-adapter/i2c-"$MCNUM"/"$MCNUM"-0050/at24c64" \
+#   raw offset=10 length=1
