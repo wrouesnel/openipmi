@@ -3,6 +3,9 @@
 	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC
 	code ipmi_sim plugin.
 
+	* lanserv/ipmi_sim.c, lanserv/lanserv.c: Add config.h include so
+	syslog testing will work.
+
 2012-01-18 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Change the command handler to take a cb_data

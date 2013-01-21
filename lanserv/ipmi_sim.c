@@ -75,6 +75,12 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#include <config.h>
+
+#if HAVE_SYSLOG
+#include <syslog.h>
+#endif
+
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>

@@ -69,11 +69,14 @@
 #include <stdarg.h>
 #include <popt.h> /* Option parsing made easy */
 #include <sys/ioctl.h>
+#include <signal.h>
+#include <sys/wait.h>
+
+#include <config.h>
+
 #if HAVE_SYSLOG
 #include <syslog.h>
 #endif
-#include <signal.h>
-#include <sys/wait.h>
 
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
