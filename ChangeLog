@@ -6,6 +6,9 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Light the fan fail LED on a
 	fan failure.
 
+	* lib/sensor.c, lib/entity.c: Allow software ids to be used as
+	normal addresses.
+
 2012-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC

@@ -3372,7 +3372,7 @@ decode_drear(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 
     if (sdr->data[1] >= 0x60) {
 	info->device_num.channel = sdr->data[3] >> 4;
-	info->device_num.address = sdr->data[2] & 0xfe;
+	info->device_num.address = sdr->data[2];
     }
 
     info->linked_ear_exists = (sdr->data[4] & 0x40) == 0x40;
@@ -3439,14 +3439,14 @@ decode_gdlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
     if (sdr->data[8] >= 0x60) {
 	info->device_num.channel = (sdr->data[2] >> 5) | ((sdr->data[1] << 3)
 							  & 0x08);
-	info->device_num.address = sdr->data[0] & 0xfe;
+	info->device_num.address = sdr->data[0];
     } else {
 	info->device_num.channel = 0;
         info->device_num.address = 0;
     }
 
-    info->access_address = sdr->data[0] & 0xfe;
-    info->slave_address = sdr->data[1] & 0xfe;
+    info->access_address = sdr->data[0];
+    info->slave_address = sdr->data[1];
     info->channel = ((sdr->data[2] >> 5)
 				 | ((sdr->data[1] << 3) & 0x08));
     info->lun = (sdr->data[2] >> 3) & 0x3;
@@ -3522,13 +3522,13 @@ decode_frudlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 
     if (sdr->data[8] >= 0x60) {
        info->device_num.channel = sdr->data[3] >> 4;
-       info->device_num.address = sdr->data[0] & 0xfe;
+       info->device_num.address = sdr->data[0];
     } else {
        info->device_num.channel = 0;
        info->device_num.address = 0;
     }
 
-    info->access_address = sdr->data[0] & 0xfe;
+    info->access_address = sdr->data[0];
     info->fru_device_id = sdr->data[1];
     info->channel = sdr->data[3] >> 4;
     info->is_logical_fru = ((sdr->data[2] & 0x80) == 0x80);
@@ -3616,14 +3616,14 @@ decode_mcdlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 
     if (sdr->data[8] >= 0x60) {
 	info->device_num.channel = sdr->data[1] & 0xf;
-	info->device_num.address = sdr->data[0] & 0xfe;
+	info->device_num.address = sdr->data[0];
     } else {
 	info->device_num.channel = 0;
 	info->device_num.address = 0;
     }
 
     data = sdr->data;
-    info->slave_address = *data & 0xfe;
+    info->slave_address = *data;
     data++;
     if (sdr->major_version == 1 && sdr->minor_version == 0) {
 	/* IPMI 1.0 SDR type 12 record, doesn't have the channel

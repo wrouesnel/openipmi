@@ -464,7 +464,8 @@ use OpenIPMI;
 		print "  Colors: ";
 		for $i (0 .. $OpenIPMI::CONTROL_NUM_COLORS) {
 		    if ($control->light_is_color_supported($i)) {
-			print " ", $OpenIPMI::color_string($i), "($i)";
+			print " ";
+			print $OpenIPMI::color_string($i), "($i)";
 		    }
 		}
 		print "\n";
@@ -493,7 +494,8 @@ use OpenIPMI;
 				my $v;
 				print "    Transition $k:";
 				$v = $control->get_light_color($i, $j, $k);
-				print " ", $OpenIPMI::color_string($v);
+				print " ";
+				print $OpenIPMI::color_string($v);
 				$v = $control->get_light_color_time
 				    ($i, $j, $k);
 				print " time(", $v, ")\n";

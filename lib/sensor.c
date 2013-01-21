@@ -109,8 +109,7 @@ struct ipmi_sensor_s
     unsigned char entity_id;
     unsigned char entity_instance;
 
-    /* Can the sensor be read?  Event-only sensors and sensors with
-       software ID owners cannot be read.  */
+    /* Can the sensor be read?  Event-only sensors cannot be read.  */
     unsigned int  readable : 1;
 
     unsigned int  entity_instance_logical : 1;
@@ -1315,9 +1314,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->entity_instance_logical = sdr.data[4] >> 7;
 	s[p]->entity_instance = sdr.data[4] & 0x7f;
 	if ((sdr.type == 1) || (sdr.type == 2)) {
-	    /* If the lower bit is set, the owner is a system software
-	       id and it cannot be read. */
-	    s[p]->readable = (sdr.data[0] & 1) != 1;
+	    s[p]->readable = 1;
 
 	    s[p]->sensor_init_scanning = (sdr.data[5] >> 6) & 1;
 	    s[p]->sensor_init_events = (sdr.data[5] >> 5) & 1;
