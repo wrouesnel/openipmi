@@ -400,7 +400,7 @@ struct ipmi_mc_s
     char name[IPMI_MC_NAME_LEN+1];
 };
 
-/* Cna the MC do normal operations like check SDRs, fetch the SEL,
+/* Can the MC do normal operations like check SDRs, fetch the SEL,
    etc?  Must be called with the MC lock held. */
 #define mc_op_ready(mc) \
     (((mc)->state == MC_ACTIVE_IN_STARTUP) \

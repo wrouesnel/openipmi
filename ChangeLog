@@ -9,6 +9,9 @@
 	* lib/sensor.c, lib/entity.c: Allow software ids to be used as
 	normal addresses.
 
+	* lanserv/marvell-bmc/marvell_mod.c: Fix an issue with setting
+	board presense in the wrong place.
+
 2012-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC

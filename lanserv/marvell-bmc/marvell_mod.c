@@ -71,7 +71,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.1"
+#define PVERSION "2.0.2"
 
 #define NUM_BOARDS 6
 
@@ -1100,7 +1100,7 @@ check_board(sys_data_t *sys, int num, unsigned int since_last,
     unsigned char val;
     struct board_info *board = &boards[num];
 
-    if (board_power_state(sys, num)) {
+    if (board->present && board_power_state(sys, num)) {
 	rv = get_uintval(pow_off_ready[num], &rval);
 	if (rv) {
 	    sys->log(sys, OS_ERROR, NULL,
@@ -2646,15 +2646,14 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 			 num, strerror(rv));
 		return rv;
 	    }
-	    board->present = rval == BOARD_PRESENT;
-	    if (!board->present) {
+	    if (rval != BOARD_PRESENT) {
 		unsigned char val = 0;
 		set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, board);
 	    } else if (board_power_state(sys, num)) {
 		/*
 		 * This looks a bit unusual, so I will explain.  The
 		 * board power request is only handled on a off-to-on
-		 * transision, the raw values is not used directly.
+		 * transition, the raw values is not used directly.
 		 * But this presents an issue at startup: what if the
 		 * board requested a power off while this code wasn't
 		 * running?  To solve that, if it is not a cold power
