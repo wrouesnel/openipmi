@@ -1,3 +1,14 @@
+2012-01-24 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc_sensor.c: Don't require a sensor to be enabled to
+	be polled.  The sensor enable is often set in the polling routine.
+
+	* lanserv/marvell-bmc/lan.conf: Fix the LAN configuration to better
+	match the hardware.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix the power supply sensor,
+	it was fairly broken with respect to presence.
+
 2012-01-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Don't allow power to be

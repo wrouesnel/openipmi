@@ -1452,7 +1452,7 @@ sensor_poll(void *cb_data)
 {
     sensor_t *sensor = cb_data;
 
-    if (sensor->poll && sensor->enabled && sensor->scanning_enabled) {
+    if (sensor->poll && sensor->scanning_enabled) {
 	lmc_data_t *mc = sensor->mc;
 	unsigned int val;
 	const char *errstr;

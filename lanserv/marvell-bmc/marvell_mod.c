@@ -481,7 +481,7 @@ get_uintval(const char *fname, unsigned int *val)
     if (!f)
        return errno;
     rv = fread(line, 1, sizeof(line), f);
-    if (rv == -1) {
+    if (rv <= 0) {
 	int retval = errno;
 	fclose(f);
 	return retval;
@@ -1954,9 +1954,7 @@ scan_ps_sensors(sys_data_t *sys)
 
     rv = get_uintval("/sys/class/wixpmbus/STATUS_1", &i);
     if (rv) {
-	sys->log(sys, OS_ERROR, NULL,
-		 "Can't read power supply 1 status: %s\n",
-		 strerror(rv));
+	/* Not present */
 	ps_status_good[0] = 0;
     } else {
 	ps_status_good[0] = 1;
@@ -1964,9 +1962,7 @@ scan_ps_sensors(sys_data_t *sys)
     }
     rv = get_uintval("/sys/class/wixpmbus/STATUS_2", &i);
     if (rv) {
-	sys->log(sys, OS_ERROR, NULL,
-		 "Can't read power supply 2 status: %s\n",
-		 strerror(rv));
+	/* Not present */
 	ps_status_good[1] = 0;
     } else {
 	ps_status_good[1] = 1;
@@ -2228,7 +2224,7 @@ handle_ps_status(int num)
 
     if (ps_status_good[num]) {
 	val = 1; /* Present */
-	for (i = 0; i < 7; i++)
+	for (i = 1; i < 7; i++)
 	    val |= (!!(ps_status_word[num] & pm_word_to_ipmi[i])) << i;
     } else {
 	val = 0; /* Not present */
