@@ -1,5 +1,16 @@
 2012-01-24 Corey Minyard <cminyard@mvista.com>
 
+	* swig/python/openipmigui/Makefile.am: Fix the localcopy command
+	to actually make a local copy.
+
+	* lanserv/marvell-bmc/marvell_mod.c, lanserv/marvell-bmc/board.sdrs:
+	Increase the range of the 0.9V sensor.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Minor cleanups and memory
+	usage inprovements.
+
+2012-01-23 Corey Minyard <cminyard@mvista.com>
+
 	* lanserv/bmc_sensor.c: Don't require a sensor to be enabled to
 	be polled.  The sensor enable is often set in the polling routine.
 
