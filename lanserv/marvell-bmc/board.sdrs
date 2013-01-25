@@ -646,7 +646,7 @@ sdr type 1
 endsdr
 
 # V 0.9 Node X
-# Range 0.7 - 1.1
+# Range 0.7 - 1.32
 sdr type 1
 	sensor_owner_id		$OWNER_MC
 	sensor_owner_lun	0
@@ -690,7 +690,7 @@ sdr type 1
 	base_unit		Volts
 	modifier_unit_code	unspecified
 	linearization		linear
-	m			156
+	m			243
 	tolerance		0
 	b			7
 	accuracy		1
@@ -702,8 +702,8 @@ sdr type 1
 	nominal_freading	0.9
 	sensor_maximum		255
 	sensor_minimum		0
-	uc_fthresh		0.99
-	unc_fthresh		0.945
+	uc_fthresh		1.20
+	unc_fthresh		1.10
 	lnc_fthresh		0.855
 	lc_fthresh		0.81
 	positive_hysteresis	2

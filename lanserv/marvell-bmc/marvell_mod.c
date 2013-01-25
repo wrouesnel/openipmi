@@ -275,22 +275,22 @@ static struct board_info {
     sys_data_t *sys;
 
     lmc_data_t *mc;
-    unsigned int num;
-    unsigned int present;
-    unsigned int fru_good;
+    unsigned char num;
+    char present;
+    char fru_good;
     unsigned char fru[BOARD_FRU_SIZE];
     struct timeval button_press_time;
-    int button_pressed;
-    int waiting_power_off;
     unsigned int power_off_countdown;
+    char button_pressed;
+    char waiting_power_off;
 
-    volatile int fru_data_ready_for_handling;
+    volatile char fru_data_ready_for_handling;
 
     /*
      * Tracks the state of the power request line, request happens
      * on a 1->0 transition.
      */
-    unsigned int last_power_request;
+    char last_power_request;
 } boards[NUM_BOARDS];
 
 struct timeval last_board_power_on;
@@ -1762,7 +1762,7 @@ static struct sensor_info board_sensors[] =
       .invalid_if_off = 1 },
     /* Board 0.9v */
     { "/sys/class/i2c-adapter/i2c-%d/%d-0049/in0_input", 12,
-      .mult=16, .div=25, .sub=700,
+      .mult=21, .div=50, .sub=700,
       .invalid_if_off = 1 },
     { NULL }
 };
@@ -2210,7 +2210,7 @@ static uint16_t pm_word_to_ipmi[7] =
     0, /* presence is handled separately */
     0xffff, /* If anything is set we declare a fault */
     PMBUS_TEMP_BIT | PMBUS_FANS_BIT, /* Predictive failure */
-    0, /* Input lost, nothing for this, only have "lost or out of range */
+    0, /* Input lost, nothing for this, only have "lost or out of range" */
     PMBUS_INPUT_BIT, /* Input lost or out of range */
     0, /* Out of range but present.  No bit for this, just previous. */
     0, /* Configuration error */

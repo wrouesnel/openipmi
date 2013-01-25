@@ -29,7 +29,7 @@ PYO_FILES = _control.pyo _domain.pyo _entity.pyo _mc.pyo _sensor.pyo \
 localcopy:
 	for i in $(EXTRA_DIST); do \
 		if ! cmp $(srcdir)/$$i $$i 2>/dev/null; then \
-			echo "Copying $$i" \
+			echo "Copying $$i"; \
 			cp $(srcdir)/$$i $$i; \
 		fi \
 	done
