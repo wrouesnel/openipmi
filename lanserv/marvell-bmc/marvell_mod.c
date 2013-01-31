@@ -71,7 +71,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.2"
+#define PVERSION "2.0.4"
 
 #define NUM_BOARDS 6
 
@@ -615,8 +615,6 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
 		     last_board_power_on.tv_sec, last_board_power_on.tv_sec,
 		     now.tv_sec, now.tv_sec);
 	}
-	if (!boards[num].present)
-	    return EAGAIN;
 	if (debug & 1 && board->waiting_power_off)
 	    sys->log(sys, DEBUG, NULL, "Canceling power off wait on"
 		     "board power request for board %d", board->num + 1);
@@ -626,8 +624,17 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
 	set_intval(pow_off_request[num], BOARD_OFF_REQUEST_OFF);
 
 	if (*val) {
+	    if (!board->present) {
+		if (debug & 1)
+		    sys->log(sys, DEBUG, NULL, "Power on request while board"
+			     " not present on %d", num + 1);
+		return EAGAIN;
+	    }
 	    if (!board_power_state(sys, num) && !board_waiting_power_on(num))
 		board_add_power_wait(sys, num);
+	    else if (debug & 1)
+		sys->log(sys, DEBUG, NULL, "Power on request, but board was"
+			 " alread on or waiting power up on board %d", num + 1);
 
 	    /* We always delay for a power on. */
 	    break;
@@ -638,16 +645,16 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
 	    /* Don't power on later. */
 	    if (debug & 1)
 		sys->log(sys, DEBUG, NULL, "Stopping board power timer"
-			 " on %d", board->num + 1);
+			 " on %d", num + 1);
 	    board_remove_power_wait(sys, num);
 	}
 	if (debug & 1)
 	    sys->log(sys, DEBUG, NULL, "Setting board power off on %d",
-		     board->num + 1);
+		     num + 1);
 	rv = set_intval(trg_power[num], BOARD_POWER_OFF);
 	if (rv) {
 	    sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on for"
-		     " board %d: %s", board->num, strerror(rv));
+		     " board %d: %s", num + 1, strerror(rv));
 	    return rv;
 	}
 
