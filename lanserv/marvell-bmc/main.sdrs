@@ -86,6 +86,19 @@ sdr type 8
 	entity_1_inst		7
 endsdr
 
+# Switch reset reason
+sdr type 3
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		20
+	entity_id		connectivity_switch
+	entity_instance		1
+	sensor_type		System_Boot_Initiated
+	event_reading_type_code	0x6f
+	id_string		"reset reason"
+endsdr
+
 # Switch temp sensor
 sdr type 1
 	sensor_owner_id		0x20

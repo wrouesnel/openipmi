@@ -4,9 +4,11 @@ LD_VERSION = 0:1:0
 
 PVERSION="1.0.7"
 
-SUBDIRS = OpenIPMI marvell-bmc
+BUILD_CC = @BUILD_CC@
+
+SUBDIRS = OpenIPMI sdrcomp marvell-bmc
 # $(MARVELL_BMC)
-DIST_SUBDIRS = OpenIPMI marvell-bmc
+DIST_SUBDIRS = OpenIPMI sdrcomp marvell-bmc
 
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \
 	$(OPENSSLINCS) -DPVERSION="\"$(PVERSION)\""
@@ -15,7 +17,7 @@ AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"' -DSTATEDIR='"$(localstatedir)"'
 
 lib_LTLIBRARIES = libIPMIlanserv.la
 
-bin_PROGRAMS = ipmi_sim ipmilan sdrcomp
+bin_PROGRAMS = ipmi_sim ipmilan
 
 noinst_PROGRAMS = ipmi_checksum
 
@@ -43,10 +45,6 @@ ipmi_sim_SOURCES = ipmi_sim.c bmc.c emu_cmd.c sol.c \
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
-
-sdrcomp_DEPENDENCIES = persist.c
-sdrcomp_SOURCES = sdrcomp.c
-sdrcomp_LDFLAGS = ../utils/libOpenIPMIutils.la -lm
 
 EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
 

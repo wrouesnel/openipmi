@@ -241,12 +241,11 @@ ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 	if (!netfn_handlers[ni].handlers)
 	    return ENOMEM;
 	memset(netfn_handlers[ni].handlers, 0, 256 * sizeof(cmd_handler_f));
+    }
+    if (!netfn_handlers[ni].cb_data) {
 	netfn_handlers[ni].cb_data = malloc(256 * sizeof(void *));
-	if (!netfn_handlers[ni].cb_data) {
-	    free(netfn_handlers[ni].handlers);
-	    netfn_handlers[ni].handlers = NULL;
+	if (!netfn_handlers[ni].cb_data)
 	    return ENOMEM;
-	}
 	memset(netfn_handlers[ni].cb_data, 0, 256 * sizeof(void *));
     }
 

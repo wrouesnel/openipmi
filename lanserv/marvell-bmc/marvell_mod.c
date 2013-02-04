@@ -1,5 +1,5 @@
 /*
- * marvel_mod.
+ * marvel_mod.c
  *
  * Marvell specific modules for handling BMC and MC functions.
  *
@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2013 MontaVista Software Inc.
+ * Copyright 2012,2013 MontaVista Software Inc.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -67,6 +67,8 @@
 #include <fcntl.h>
 #include <semaphore.h>
 
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/serv.h>
 
 #include "wiw.h"
@@ -88,6 +90,10 @@
 
 #define BOARD_FRU_FILE "/etc/ipmi/axp_board_fru"
 #define COLD_POWER_FILE "/var/lib/ipmi_sim_coldpower"
+#define RESET_REASON_FILE "/var/lib/reset_reason"
+#define RESET_REASON_UNKNOWN 0
+#define RESET_REASON_COLD_BOOT 1
+#define RESET_REASON_WARM_BOOT 2
 static int init_complete;
 
 #define GPIODIR "/sys/class/astgpio/GPIO"
@@ -317,6 +323,10 @@ ipmi_timer_t *power_timer;
 unsigned int boards_waiting_power_on[NUM_BOARDS];
 unsigned int num_boards_waiting_power_on;
 int power_timer_running;
+
+int wdt_fd;
+ipmi_timer_t *wdt_test_timer;
+volatile int wdt_test_timer_ran;
 
 static void
 add_to_timeval(struct timeval *tv, unsigned int usecs)
@@ -680,7 +690,7 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
     case CHASSIS_CONTROL_BOOT:
 	if (debug & 1)
 	    sys->log(sys, DEBUG, NULL, "Chassis control on %d present=%d, "
-		     "fru_good=%d, val=%d\n", 
+		     "fru_good=%d, val=%d", 
 		     board->num + 1, boards[num].present,
 		     boards[num].fru_good, *val);
 	if (!boards[num].present)
@@ -806,6 +816,46 @@ get_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
     return 0;
 }
 
+static int
+bmc_set_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
+			void *cb_data)
+{
+    sys_data_t *sys = cb_data;
+    unsigned int i;
+
+    switch (op) {
+    case CHASSIS_CONTROL_POWER:
+    case CHASSIS_CONTROL_RESET:
+    case CHASSIS_CONTROL_BOOT_INFO_ACK:
+    case CHASSIS_CONTROL_BOOT:
+    case CHASSIS_CONTROL_GRACEFUL_SHUTDOWN:
+	break;
+    default:
+	return EINVAL;
+    }
+
+    if (debug & 1) {
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	sys->log(sys, DEBUG, NULL, "Power request for all boards,"
+		 " val=%d, now=%ld.%ld",
+		 *val, now.tv_sec, now.tv_sec);
+    }
+
+    for (i = 0; i < NUM_BOARDS; i++)
+	set_chassis_control(NULL, op, val, &boards[i]);
+
+    return 0;
+}
+
+static int
+bmc_get_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
+			void *cb_data)
+{
+    /* This doesn't make sense. */
+    return EINVAL;
+}
+
 static void
 check_chassis_state(sys_data_t *sys)
 {
@@ -916,7 +966,7 @@ rearm_power_supply_sensor(void *cb_data,
 }
 
 static int
-handle_board_fru(sys_data_t *sys, int num, int clear_eesense)
+handle_board_fru(sys_data_t *sys, int num)
 {
     int rv;
     unsigned int iuse;
@@ -1099,7 +1149,7 @@ handle_board_fru(sys_data_t *sys, int num, int clear_eesense)
 
 static int
 check_board(sys_data_t *sys, int num, unsigned int since_last,
-	    int clear_eesense)
+	    int power_up_new_board)
 {
     int rv;
     unsigned int present;
@@ -1183,13 +1233,16 @@ check_board(sys_data_t *sys, int num, unsigned int since_last,
 	return 0;
     }
 
-    rv = handle_board_fru(sys, num, clear_eesense);
+    rv = handle_board_fru(sys, num);
     if (rv)
 	return rv;
 
-    /* If the board was not present and now it is, power it on. */
-    val = 1;
-    set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, board);
+    if (power_up_new_board) {
+	/* If the board was not present and now it is, power it on. */
+	val = 1;
+	set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, board);
+    }
+
     return 0;
 }
 
@@ -1635,6 +1688,7 @@ static struct sensor_info board_temp_sensors[] =
       .create_data = "axp 0x1e" },
     { NULL }
 };
+static char board_temp_sensor_last_oor[NUM_BOARDS];
 static char board_temp_sensor_valids[2][NUM_BOARDS];
 static int board_temp_sensor_last_values[2][NUM_BOARDS];
 static struct fan_duty_table main_fan_duty_table[] =
@@ -1834,7 +1888,7 @@ get_readings(sys_data_t *sys, struct sensor_handling *h, int *rmax)
 		sprintf(cfilename, h->board[i].create_file, j + 1);
 		f = fopen(cfilename, "w");
 		if (!f) {
-		    sys->log(sys, OS_ERROR, NULL, "Unable to create %s\n",
+		    sys->log(sys, OS_ERROR, NULL, "Unable to create %s",
 			     filename);
 		} else {
 		    fprintf(f, "%s\n", h->board[i].create_data);
@@ -2031,7 +2085,7 @@ scan_sensors(void *cb_data)
 	    err = get_intval(filename, &val);
 	    if (err) {
 		sys->log(sys, OS_ERROR, NULL,
-			 "Can't read fan speed for %s: %s\n", filename,
+			 "Can't read fan speed for %s: %s", filename,
 			 strerror(err));
 		/* Can't read fan, better safe than sorry. */
 		duty = 90;
@@ -2058,7 +2112,7 @@ scan_sensors(void *cb_data)
 
 	if (max_duty != last_duty) {
 	    if (debug & 8)
-		sys->log(sys, DEBUG, NULL, "Setting fan duty to %d\n",
+		sys->log(sys, DEBUG, NULL, "Setting fan duty to %d",
 			 max_duty);
 
 	    for (i = 1; i < 5; i++) {
@@ -2068,7 +2122,7 @@ scan_sensors(void *cb_data)
 		err = set_intval(filename, max_duty * 256 / 100);
 		if (err)
 		    sys->log(sys, OS_ERROR, NULL,
-			     "Can't set fan duty %s to %d: %s\n",
+			     "Can't set fan duty %s to %d: %s",
 			     filename, max_duty, strerror(err));
 	    }
 	}
@@ -2083,6 +2137,17 @@ scan_sensors(void *cb_data)
 	write(scan_pipe[1], &dummy, 1);
 	pthread_cond_wait(&scan_cond, &scan_mutex);
 	pthread_mutex_unlock(&scan_mutex);
+
+	if (wdt_test_timer_ran) {
+	    unsigned char data = 1;
+	    err = write(wdt_fd, &data, 1);
+	    if (err == -1) {
+		sys->log(sys, OS_ERROR, NULL,
+			 "Unable to write to watchdog timer: %s",
+			 strerror(err));
+	    }
+	    wdt_test_timer_ran = 0;
+	}
 
 	/* Wait until poll_time seconds after the last scan started */
 	gettimeofday(&now, NULL);
@@ -2252,6 +2317,14 @@ set_sensors_from_tables(int fd, void *cb_data)
 
     read(fd, &dummy, 1);
 
+    set_sensors_from_table(sys, &main_temp);
+    set_sensors_from_table(sys, &mb_temp);
+    set_sensors_from_table(sys, &front_temp);
+    set_sensors_from_table(sys, &system_sensors);
+    handle_eesense_data(sys);
+    handle_ps_status(0);
+    handle_ps_status(1);
+
     /* Check for shutdown thresholds */
     if (switch_temp_sensor_valids[0])
 	temp = switch_temp_sensor_last_values[0];
@@ -2260,7 +2333,7 @@ set_sensors_from_tables(int fd, void *cb_data)
 	temp = switch_temp_sensor_last_values[1];
     if (temp >= SWITCH_TEMP_SHUTDOWN * 1000) {
 	sys->log(sys, INFO, NULL, "CRITICAL: Switch has exceeded temperature"
-		 " threshold, powering down system\n");
+		 " threshold, powering down system");
 	power_down_system(sys);
     }
     temp = 0;
@@ -2271,7 +2344,8 @@ set_sensors_from_tables(int fd, void *cb_data)
     }
     if (temp >= FRONT_TEMP_SHUTDOWN * 1000) {
 	sys->log(sys, INFO, NULL, "CRITICAL: External environment exceeded"
-		 " temperature threshold, powering down system\n");
+		 " temperature threshold, raw value is %d, powering down"
+		 " system", temp);
 	power_down_system(sys);
     }
 
@@ -2284,14 +2358,26 @@ set_sensors_from_tables(int fd, void *cb_data)
 	    temp = board_temp_sensor_last_values[1][i];
 	if (temp >= BOARD_TEMP_SHUTDOWN * 1000) {
 	    unsigned char val = 0;
-	    sys->log(sys, INFO, NULL, "CRITICAL: Board %d has exceeded"
-		     " temperature threshold, powering down\n", i + 1);
-	    set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, &boards[i]);
-	}
+	    if (board_temp_sensor_last_oor[i]) {
+		sys->log(sys, INFO, NULL, "CRITICAL: Board %d has exceeded"
+			 " temperature threshold, raw value is %d,"
+			 " powering down",
+			 i + 1, temp);
+		set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val,
+				    &boards[i]);
+	    } else {
+		sys->log(sys, INFO, NULL, "WARNING: Board %d has exceeded"
+			 " temperature threshold, raw value is %d,"
+			 " will check again before shutdown",
+			 i + 1, temp);
+		board_temp_sensor_last_oor[i]++;
+	    }
+	} else
+	    board_temp_sensor_last_oor[i] = 0;
 
 	if (boards[i].fru_data_ready_for_handling) {
 	    boards[i].fru_data_ready_for_handling = 0;
-	    handle_board_fru(sys, i, 1);
+	    handle_board_fru(sys, i);
 	    rv = ipmi_mc_fru_sem_post(boards[i].mc, 0);
 	    if (rv)
 		sys->log(sys, OS_ERROR, NULL,
@@ -2299,14 +2385,6 @@ set_sensors_from_tables(int fd, void *cb_data)
 			 strerror(rv));
 	}
     }
-
-    set_sensors_from_table(sys, &main_temp);
-    set_sensors_from_table(sys, &mb_temp);
-    set_sensors_from_table(sys, &front_temp);
-    set_sensors_from_table(sys, &system_sensors);
-    handle_eesense_data(sys);
-    handle_ps_status(0);
-    handle_ps_status(1);
 
     pthread_mutex_lock(&scan_mutex);
     pthread_cond_signal(&scan_cond);
@@ -2459,12 +2537,69 @@ handle_marvell_cmd(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
+static void
+handle_cold_reset(lmc_data_t    *mc,
+		  msg_t         *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
+{
+    sys_data_t *sys = cb_data;
+    int rv;
+
+    rv = set_intval(RESET_REASON_FILE, RESET_REASON_COLD_BOOT);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "MVMOD: Unable to write cold reset reason: %s",
+		 strerror(rv));
+    }
+
+    system("reboot");
+}
+
+static void
+handle_warm_reset(lmc_data_t    *mc,
+		  msg_t         *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len,
+		  void          *cb_data)
+{
+    sys_data_t *sys = cb_data;
+    int rv;
+
+    rv = set_intval(RESET_REASON_FILE, RESET_REASON_WARM_BOOT);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "MVMOD: Unable to write warm reset reason: %s",
+		 strerror(rv));
+    }
+
+    exit(1);
+}
+
+static void
+wdt_test_timeout(void *cb_data)
+{
+    struct timeval tv;
+    sys_data_t *sys = cb_data;
+
+    if (wdt_test_timer_ran)
+	sys->log(sys, OS_ERROR, NULL, "MVMOD: WDT test timer not cleared");
+
+    wdt_test_timer_ran = 1;
+    tv.tv_sec = 4;
+    tv.tv_usec = 0;
+    sys->start_timer(wdt_test_timer, &tv);
+}
+
 int
 ipmi_sim_module_print_version(sys_data_t *sys, char *initstr)
 {
     printf("IPMI Simulator Marvell AXP module version %s\n", PVERSION);
     return 0;
 }
+
+static unsigned int cold_power_up = 1;
 
 int
 ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
@@ -2476,8 +2611,8 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
     int use_events = 1;
     struct timeval tv;
     int power_up_force = 0;
-    unsigned int cold_power_up = 1;
     char *initstr = strdup(initstr_i);
+    int val;
 
     printf("IPMI Simulator Marvell AXP module version %s\n", PVERSION);
 
@@ -2688,6 +2823,9 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 	}
     }
 
+    ipmi_mc_set_chassis_control_func(bmc_mc, bmc_set_chassis_control,
+				     bmc_get_chassis_control, sys);
+
 
     rv = ipmi_emu_register_iana_handler(MARVELL_SEMI_ISREAL_IANA,
 					handle_marvell_cmd, sys);
@@ -2695,6 +2833,37 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 	sys->log(sys, OS_ERROR, NULL,
 		 "Unable to register Marvell IANA handler: %s", strerror(rv));
     }
+
+    rv = ipmi_emu_register_cmd_handler(IPMI_APP_NETFN, IPMI_COLD_RESET_CMD,
+				       handle_cold_reset, sys);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "Unable to register cold reset handler: %s", strerror(rv));
+    }
+
+    rv = ipmi_emu_register_cmd_handler(IPMI_APP_NETFN, IPMI_WARM_RESET_CMD,
+				       handle_warm_reset, sys);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "Unable to register cold reset handler: %s", strerror(rv));
+    }
+
+    wdt_fd = open("/dev/watchdog", O_WRONLY);
+    if (wdt_fd == -1) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "Unable to open wdt: %s", strerror(errno));
+	return rv;
+    }
+
+    rv = sys->alloc_timer(sys, wdt_test_timeout, sys, &wdt_test_timer);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "Unable to allocate wdt test timer: %s", strerror(rv));
+	return rv;
+    }
+    tv.tv_sec = 4;
+    tv.tv_usec = 0;
+    sys->start_timer(wdt_test_timer, &tv);
 
     if (!cold_power_up)
 	init_complete = 1;
@@ -2710,6 +2879,7 @@ ipmi_sim_module_post_init(sys_data_t *sys)
     unsigned char lver[4];
     unsigned char omajor, ominor, orel;
     unsigned int i;
+    int val;
 
     sscanf(ver, "%hhu.%hhu.%hhu", lver + 0, lver + 1, lver + 2);
     lver[3] = 0;
@@ -2789,6 +2959,45 @@ ipmi_sim_module_post_init(sys_data_t *sys)
     if (rv) {
 	sys->log(sys, OS_ERROR, NULL,
 		 "MVMOD: Unable to start scan thread: %s", strerror(rv));
+    }
+
+    rv = get_intval(RESET_REASON_FILE, &val);
+    if (cold_power_up || rv || val == RESET_REASON_UNKNOWN) {
+	val = 0x00; /* Initiated by power up */
+    } else if (val == RESET_REASON_COLD_BOOT) {
+	val = 0x01; /* Initiated by hard reset */
+    } else if (val == RESET_REASON_WARM_BOOT) {
+	val = 0x02; /* Initiated by warm reset */
+    } else {
+	sys->log(sys, OS_ERROR, NULL, "MVMOD: known reset reason: %d", val);
+	val = 0x00; /* Assume power up */
+    }
+    {
+	/*
+	 * We don't have an actual sensor for this, since it is
+	 * event-only, just send the event.
+	 */
+	unsigned char data[13];
+	memset(data, 0, sizeof(data));
+	data[4] = ipmi_mc_get_ipmb(bmc_mc);
+	data[5] = 0; /* LUN */
+	data[6] = 0x04; /* Event message revision for IPMI 1.5. */
+	data[7] = 0x1d; /* System boot initiated. */
+	data[8] = 20; /* Sensor num */
+	data[9] = (IPMI_ASSERTION << 7) | 0x6f;
+	rv = mc_new_event(bmc_mc, 0x02, data);
+	if (rv)
+	    sys->log(sys, OS_ERROR, NULL,
+		     "MVMOD: Unable to add reboot cause event: %s",
+		     strerror(rv));
+
+    }
+
+    rv = set_intval(RESET_REASON_FILE, 0);
+    if (rv) {
+	sys->log(sys, OS_ERROR, NULL,
+		 "MVMOD: Unable to clear reset reason: %s",
+		 strerror(rv));
     }
 
     return rv;

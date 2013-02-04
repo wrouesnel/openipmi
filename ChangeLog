@@ -1,3 +1,40 @@
+2012-02-04 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Add support for BUILD_CC.
+
+	* configure.in, lanserv/sdrcomp: Move sdrcomp into its own
+	subdirectory so it can be ready before marvell-bmc, and add
+	a build version of sdrcomp.
+
+	* lanserv/sdrcomp/marvell-bmc/Makefile.am: Get all the extra stuff
+	to distribute properly and build the SDRs automatically.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix a cold power up bug,
+	don't change the board power state if it's not a cold power up.
+
+	* lanserv/marvell-bmc/marvell_mod.c: If the BMC sees a critical
+	temperature for a board, it waits until it sees it twice before
+	powering the board down.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Switch the handling of
+	critical temperatures and sensor settings so the sensor setting
+	goes first.  Before the sensor setting was after the board was
+	powered off and the sensor was disabled, so on an overtemp the
+	event wouldn't be logged.
+
+2012-02-03 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Add support for /dev/watchdog.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Add a sensor for reporting
+	the reboot reason of the BMC.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Clean up some stray \n's that
+	shouldn't be in sys->log() calls.
+
+	* lanserv/bmc.c: Fix handling of adding commands to existing
+	netfns, the cb_data may be NULL in that case.
+
 2012-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/Makefile.am: Fix the localcopy command

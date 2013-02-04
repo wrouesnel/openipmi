@@ -897,6 +897,13 @@ AC_SUBST(TERM_LIBS)
 
 # End of libedit inclusions
 
+if test "${build}" != "${host}" ; then
+	AC_CHECK_PROGS(BUILD_CC, [${build_alias}-gcc ${build}-gcc gcc])
+else
+	BUILD_CC="$CC"
+fi
+AC_SUBST([BUILD_CC])
+
 AC_OUTPUT(Makefile
 	  utils/Makefile
 	  lib/Makefile
@@ -906,6 +913,7 @@ AC_OUTPUT(Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  lanserv/OpenIPMI/Makefile
+	  lanserv/sdrcomp/Makefile
 	  lanserv/marvell-bmc/Makefile
 	  sample/Makefile
 	  doc/Makefile
