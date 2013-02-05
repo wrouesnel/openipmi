@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.4"
+#define PVERSION "2.0.5"
 
 #define NUM_BOARDS 6
 
@@ -1685,7 +1685,7 @@ static struct sensor_info board_temp_sensors[] =
     { "/sys/class/i2c-adapter/i2c-%d/%d-001e/temp1_input", 3, .div = 1000,
       .invalid_if_off = 1,
       .create_file = "/sys/class/i2c-adapter/i2c-%d/new_device",
-      .create_data = "axp 0x1e" },
+      .create_data = "dimm 0x1e" },
     { NULL }
 };
 static char board_temp_sensor_last_oor[NUM_BOARDS];
@@ -2060,13 +2060,13 @@ scan_sensors(void *cb_data)
 	if (!err) {
 	    max_duty = calc_duty(main_temp.fan_duty, max_temp,
 				 &last_main_v, &last_main_duty);
-	    get_readings(sys, &mb_temp, NULL);
-	} else {
-	    err = get_readings(sys, &mb_temp, &max_temp);
-	    if (!err) {
-		max_duty = calc_duty(mb_temp.fan_duty, max_temp,
-				     &last_mb_v, &last_mb_duty);
-	    }
+	}
+	err = get_readings(sys, &mb_temp, &max_temp);
+	if (!err) {
+	    duty = calc_duty(mb_temp.fan_duty, max_temp,
+			     &last_mb_v, &last_mb_duty);
+	    if (duty > max_duty)
+		max_duty = duty;
 	}
 	err = get_readings(sys, &front_temp, &max_temp);
 	if (!err) {

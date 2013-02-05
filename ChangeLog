@@ -22,6 +22,12 @@
 	powered off and the sensor was disabled, so on an overtemp the
 	event wouldn't be logged.
 
+	* lanserv/marvell-bmc/marvell_mod.c: Fix the name of the dimm
+	sensor.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Always use the motherboard
+	temperature sensor when calculating fan duty.
+
 2012-02-03 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Add support for /dev/watchdog.
