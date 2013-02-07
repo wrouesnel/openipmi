@@ -6,8 +6,7 @@ PVERSION="1.0.7"
 
 BUILD_CC = @BUILD_CC@
 
-SUBDIRS = OpenIPMI sdrcomp marvell-bmc
-# $(MARVELL_BMC)
+SUBDIRS = OpenIPMI sdrcomp @MARVELL_BMC_DIR@
 DIST_SUBDIRS = OpenIPMI sdrcomp marvell-bmc
 
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS \

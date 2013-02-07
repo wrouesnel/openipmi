@@ -1,3 +1,8 @@
+2012-02-07 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in, lanserv/Makefile.am: Add a --with-marvell-bmc
+	option.
+
 2012-02-04 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Add support for BUILD_CC.
