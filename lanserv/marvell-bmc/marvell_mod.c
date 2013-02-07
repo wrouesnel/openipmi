@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.5"
+#define PVERSION "2.0.7"
 
 #define NUM_BOARDS 6
 
@@ -324,6 +324,7 @@ unsigned int boards_waiting_power_on[NUM_BOARDS];
 unsigned int num_boards_waiting_power_on;
 int power_timer_running;
 
+int disable_wdt;
 int wdt_fd;
 ipmi_timer_t *wdt_test_timer;
 volatile int wdt_test_timer_ran;
@@ -2634,6 +2635,8 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 	} else if (strcmp(c, "forcewarm") == 0) {
 	    power_up_force = 1;
 	    cold_power_up = 0;
+	} else if (strcmp(c, "disablewdt") == 0) {
+	    disable_wdt = 1;
 	} else if (strncmp(c, "poll_time=", 10) == 0) {
 	    poll_time = strtoul(c + 10, NULL, 0);
 	} else {
@@ -2848,22 +2851,24 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 		 "Unable to register cold reset handler: %s", strerror(rv));
     }
 
-    wdt_fd = open("/dev/watchdog", O_WRONLY);
-    if (wdt_fd == -1) {
-	sys->log(sys, OS_ERROR, NULL,
-		 "Unable to open wdt: %s", strerror(errno));
-	return rv;
-    }
+    if (!disable_wdt) {
+	wdt_fd = open("/dev/watchdog", O_WRONLY);
+	if (wdt_fd == -1) {
+	    sys->log(sys, OS_ERROR, NULL,
+		     "Unable to open wdt: %s", strerror(errno));
+	    return rv;
+	}
 
-    rv = sys->alloc_timer(sys, wdt_test_timeout, sys, &wdt_test_timer);
-    if (rv) {
-	sys->log(sys, OS_ERROR, NULL,
-		 "Unable to allocate wdt test timer: %s", strerror(rv));
-	return rv;
+	rv = sys->alloc_timer(sys, wdt_test_timeout, sys, &wdt_test_timer);
+	if (rv) {
+	    sys->log(sys, OS_ERROR, NULL,
+		     "Unable to allocate wdt test timer: %s", strerror(rv));
+	    return rv;
+	}
+	tv.tv_sec = 4;
+	tv.tv_usec = 0;
+	sys->start_timer(wdt_test_timer, &tv);
     }
-    tv.tv_sec = 4;
-    tv.tv_usec = 0;
-    sys->start_timer(wdt_test_timer, &tv);
 
     if (!cold_power_up)
 	init_complete = 1;
@@ -2962,15 +2967,16 @@ ipmi_sim_module_post_init(sys_data_t *sys)
     }
 
     rv = get_intval(RESET_REASON_FILE, &val);
-    if (cold_power_up || rv || val == RESET_REASON_UNKNOWN) {
+    if (cold_power_up) {
 	val = 0x00; /* Initiated by power up */
-    } else if (val == RESET_REASON_COLD_BOOT) {
+    } else if (val == RESET_REASON_COLD_BOOT ||
+	       rv || val == RESET_REASON_UNKNOWN) {
 	val = 0x01; /* Initiated by hard reset */
     } else if (val == RESET_REASON_WARM_BOOT) {
 	val = 0x02; /* Initiated by warm reset */
     } else {
 	sys->log(sys, OS_ERROR, NULL, "MVMOD: known reset reason: %d", val);
-	val = 0x00; /* Assume power up */
+	val = 0x01; /* Assume power up */
     }
     {
 	/*

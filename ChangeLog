@@ -3,6 +3,14 @@
 	* configure.in, lanserv/Makefile.am: Add a --with-marvell-bmc
 	option.
 
+2012-02-06 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Add an option to disable the
+	watchdog timer.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix reset reason to be hard
+	reset unless coldboot or warmboot is set.
+
 2012-02-04 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Add support for BUILD_CC.
