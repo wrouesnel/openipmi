@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.7"
+#define PVERSION "2.0.8"
 
 #define NUM_BOARDS 6
 
@@ -311,6 +311,7 @@ static unsigned int chassis_brdinfo_len;
 
 /* Offset from beginning of chassis info area */
 static unsigned int sernum_offset;
+static unsigned int sernum_offset2;
 static unsigned int sernum_len;
 static unsigned int sysmac_offset;
 
@@ -977,8 +978,10 @@ handle_board_fru(sys_data_t *sys, int num)
     unsigned int brdinfo;
     unsigned int brdinfo_len;
     unsigned int mac_offset;
+    unsigned int brdchsernum_offset;
     unsigned int brdsernum_offset;
     int modified = 0;
+    int fruversion2 = 0;
     unsigned char *fru;
 
     if (debug & 1)
@@ -1014,6 +1017,7 @@ handle_board_fru(sys_data_t *sys, int num)
     chinfo_len = 256 - 80;
     brdinfo = fru[3] * 8;
     brdinfo_len = 2048 - 256;
+    brdchsernum_offset = 42;
     brdsernum_offset = 74;
     mac_offset = 95;
 
@@ -1050,14 +1054,18 @@ handle_board_fru(sys_data_t *sys, int num)
     boards[num].fru_good = 1;
 
     /* Set the chassis information if it is not correct. */
-    if ((fru[chinfo + sernum_offset] != 0xd4) || (sernum_len != 20)) {
-	sys->log(sys, SETUP_ERROR, NULL, "Warning: Board %d FRU chassis"
-		 " serial number data invalid", num + 1);
+    if (chassis_fru[chinfo + brdchsernum_offset] != 0xd4) {
+	/* Try the version 2.0 of the FRU data */
+	brdchsernum_offset = 17;
+    }
+    if (sernum_len == 0) {
+	sys->log(sys, SETUP_ERROR, NULL, "Warning: FRU chassis serial number"
+		 " invalid, not setting board %d data", num + 1);
     } else if (chassis_chinfo == 0) {
 	sys->log(sys, SETUP_ERROR, NULL, "Warning: Chassis chassis info FRU"
 		 "invalid, not checking board %d FRU chassis data", num + 1);
     } else {
-	if (memcmp(fru + chinfo + sernum_offset,
+	if (memcmp(fru + chinfo + brdchsernum_offset,
 		   chassis_fru + chassis_chinfo + sernum_offset,
 		   sernum_len) != 0) {
 	    /* The chassis serial number has changed. */
@@ -1077,6 +1085,11 @@ handle_board_fru(sys_data_t *sys, int num)
 
     /* Set the board system serial number if it is not correct. */
     if (fru[brdinfo + brdsernum_offset] != 0xd4) {
+	/* FRU version 2.0 */
+	brdsernum_offset = 34;
+	fruversion2 = 1;
+    }
+    if (fru[brdinfo + brdsernum_offset] != 0xd4) {
 	sys->log(sys, SETUP_ERROR, NULL, "Warning: Board %d FRU serial num"
 		 " data invalid", num + 1);
     } else if (!sernum[0]) {
@@ -1085,8 +1098,16 @@ handle_board_fru(sys_data_t *sys, int num)
     } else {
 	char mysernum[21];
 
-	memset(mysernum, 0, 21);
-	sprintf(mysernum, "System SN %s-%c", sernum, num + 'A');
+	if (fruversion2) {
+	    int len;
+	    len = sprintf(mysernum, "%s-%c", sernum, num + 'A');
+	    memset(mysernum + len, ' ', 20 - len);
+	    mysernum[20] = '\0';
+	} else {
+	    memset(mysernum, 0, 21);
+	    sprintf(mysernum, "System SN %s-%c", sernum, num + 'A');
+	}
+	
 	if (memcmp(mysernum, fru + brdinfo + brdsernum_offset + 1, 20) != 0) {
 	    sys->log(sys, INFO, NULL, "Info: Updating board %d"
 		     " serial number", num + 1);
@@ -1360,6 +1381,7 @@ init_chassis(sys_data_t *sys)
     chassis_brdinfo = chassis_fru[3] * 8;
     chassis_brdinfo_len = 1024 - 256;
     sernum_offset = 42;
+    sernum_offset2 = 11;
     sernum_len = 20;
     sysmac_offset = 74;
 
@@ -1389,10 +1411,18 @@ init_chassis(sys_data_t *sys)
     }
 
     if (chassis_fru[chassis_chinfo + sernum_offset] != 0xd4) {
-	sys->log(sys, SETUP_ERROR, NULL, "Warning: Chassis FRU system serial"
+	/* Try the version 2.0 of the FRU data */
+	sernum_offset = 17;
+	sernum_offset2 = 0;
+    }
+    if (chassis_fru[chassis_chinfo + sernum_offset] != 0xd4) {
+	sys->log(sys, SETUP_ERROR, NULL,
+		 "Warning: Chassis FRU system serial"
 		 " number data invalid");
+	sernum_len = 0;
     } else {
-	memcpy(sernum, chassis_fru + chassis_chinfo + sernum_offset + 11, 8);
+	memcpy(sernum, chassis_fru + chassis_chinfo + sernum_offset
+	       + sernum_offset2, 8);
 	sernum[9] = '\0';
     }
 
@@ -2994,7 +3024,8 @@ ipmi_sim_module_post_init(sys_data_t *sys)
 	rv = mc_new_event(bmc_mc, 0x02, data);
 	if (rv)
 	    sys->log(sys, OS_ERROR, NULL,
-		     "MVMOD: Unable to add reboot cause event: %s",
+		     "MVMOD: Unable to add reboot cause event: %s, "
+		     "event queue is probably full",
 		     strerror(rv));
 
     }

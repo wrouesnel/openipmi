@@ -3,6 +3,9 @@
 	* configure.in, lanserv/Makefile.am: Add a --with-marvell-bmc
 	option.
 
+	* lanserv/marvell-bmc/marvell_mod.c: Add support for the version
+	2.0 FRU.
+
 2012-02-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Add an option to disable the
