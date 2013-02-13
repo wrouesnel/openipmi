@@ -103,6 +103,7 @@ static char *command_file = NULL;
 static int debug = 0;
 static int nostdio = 0;
 
+static void shutdown_handler(int sig);
 
 typedef struct misc_data misc_data_t;
 
@@ -955,6 +956,8 @@ ipmi_emu_shutdown(emu_data_t *emu)
 	tcsetattr(0, TCSADRAIN, &old_termios);
     fcntl(0, F_SETFL, old_flags);
     tcdrain(0);
+
+    shutdown_handler(0);
     exit(0);
 }
 
@@ -1198,10 +1201,37 @@ sigchld_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	return;
 
     h = child_quit_handlers;
-    while(h) {
+    while (h) {
 	h->handler(h->info, rv);
 	h = h->next;
     }
+}
+
+static ipmi_shutdown_t *shutdown_handlers;
+
+void
+ipmi_register_shutdown_handler(ipmi_shutdown_t *handler)
+{
+    handler->next = shutdown_handlers;
+    shutdown_handlers = handler;
+}
+
+static int shutdown_sigs[] = {
+    SIGINT, SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGSEGV, SIGTERM, SIGBUS,
+    0
+};
+
+static void
+shutdown_handler(int sig)
+{
+    ipmi_shutdown_t *h = shutdown_handlers;
+
+    while (h) {
+	h->handler(h->info, sig);
+	h = h->next;
+    }
+    if (sig)
+	raise(sig);
 }
 
 void
@@ -1499,6 +1529,16 @@ main(int argc, const char *argv[])
 
     post_init_dynamic_libs(&sysinfo);
 
+    act.sa_handler = shutdown_handler;
+    act.sa_flags = SA_RESETHAND;
+    for (i = 0; shutdown_sigs[i]; i++) {
+	err = sigaction(shutdown_sigs[i], &act, NULL);
+	if (err) {
+	    fprintf(stderr, "Unable to register shutdown signal %d: %s\n",
+		    shutdown_sigs[i], strerror(errno));
+	}
+    }
+
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     err = data.os_hnd->start_timer(data.os_hnd, data.timer, &tv, tick, &data);
@@ -1510,6 +1550,6 @@ main(int argc, const char *argv[])
     data.os_hnd->operation_loop(data.os_hnd);
     rv = 0;
   out:
-    sol_shutdown(&sysinfo);
+    shutdown_handler(0);
     exit(rv);
 }

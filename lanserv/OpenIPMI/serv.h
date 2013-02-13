@@ -433,6 +433,14 @@ typedef struct ipmi_child_quit_s {
 
 void ipmi_register_child_quit_handler(ipmi_child_quit_t *handler);
 
+typedef struct ipmi_shutdown_s {
+    void (*handler)(void *info, int sig);
+    void *info;
+    struct ipmi_shutdown_s *next;
+} ipmi_shutdown_t;
+
+void ipmi_register_shutdown_handler(ipmi_shutdown_t *handler);
+
 /* A helper function to allow OEM code to send messages. */
 int ipmi_oem_send_msg(channel_t     *chan,
 		      unsigned char netfn,

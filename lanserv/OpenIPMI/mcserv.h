@@ -88,6 +88,9 @@ typedef struct ipmi_sol_s {
     int history_active;
     uint32_t history_session_id;
 
+    /* History is stored in this file is the program fails. */
+    char *backupfile;
+
     int use_rtscts;
     int readclear;
 
@@ -340,7 +343,6 @@ void ipmi_sol_deactivate(lmc_data_t    *mc,
 			 unsigned int  *rdata_len);
 
 int sol_init_mc(sys_data_t *sys, lmc_data_t *mc);
-void sol_shutdown(sys_data_t *sys);
 int sol_init(sys_data_t *sys);
 unsigned char *sol_set_frudata(lmc_data_t *mc, unsigned int *size);
 void sol_free_frudata(lmc_data_t *mc, unsigned char *data);

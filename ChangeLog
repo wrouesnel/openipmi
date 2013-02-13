@@ -1,3 +1,18 @@
+2012-02-12 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/ipmi_sim.c: Add a way to catch fatal signals, and add a
+	shutdown handler for when the program either shuts down normally
+	or catches a signal.
+
+	* lanserv/sol.c, lanserv/ipmi_sim.c: Add a method to save the sol
+	data to a backup file when the program shuts down, and restore the
+	backup data when the program comes back up.  Also remove the
+	sol_shutdown() function an move that handling over to the new
+	method.
+
+	* lanserv/marvell-bmc/lan.conf: Add sol shutdown/restore files for
+	all the sol sessions.
+
 2012-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, lanserv/Makefile.am: Add a --with-marvell-bmc

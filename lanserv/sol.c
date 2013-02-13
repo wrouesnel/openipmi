@@ -83,6 +83,11 @@ struct soldata_s {
     int history_end;
 
     /*
+     * Used to register history file handler on a shutdown.
+     */
+    ipmi_shutdown_t backupfilehandler;
+
+    /*
      * The amount of actual history to store when the copy request happens.
      * If zero, this is ignored.  This is guaranteed to be <= history_size.
      * If this is non-zero, this is the 
@@ -223,6 +228,8 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
     if (sd->history_start > sd->history_end)
 	/* Buffer is filled. */
 	size = sol->history_size;
+    else if (sd->history_start == sd->history_end)
+	size = 0; /* Nothing written yet. */
     else
 	/* Buffer is not yet filled, just runs from start to end */
 	size = sd->history_end - sd->history_start + 1;
@@ -250,7 +257,7 @@ copy_history_buffer(ipmi_sol_t *sol, unsigned int *rsize)
 
     if (sol->readclear) {
 	sd->history_start = 0;
-	sd->history_end = 0;
+	sd->history_end = -1;
     }
 
     return dest;
@@ -1054,6 +1061,12 @@ add_to_history(ipmi_sol_t *sol, unsigned char *buf, unsigned int len)
 	sd->history_start += len;
 	if (sd->history_start >= (int) sol->history_size)
 	    sd->history_start -= sol->history_size;
+    } else if (sd->history_start == sd->history_end) {
+	/*
+	 * First write to the buffer, it starts with start == end == 0,
+	 * so we need to fix things up on the first write.
+	 */
+	sd->history_start++;
     }
     sd->history_end += len;
 }
@@ -1137,8 +1150,25 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 
     while ((tok = mystrtok(NULL, " \t\n", tokptr))) {
 	if (strncmp(tok, "history=", 8) == 0) {
-	    char *end;
+	    char *end, next;
 	    sys->sol->history_size = strtoul(tok + 8, &end, 0);
+	    next = *end;
+	    while (next == ',') {
+		char *opt = end + 1;
+
+		end = strchr(opt, ',');
+		if (!end)
+		    end = opt + strlen(opt);
+		next = *end;
+		*end = '\0';
+
+		if (strncmp(opt, "backupfile=", 11) == 0) {
+		    sys->sol->backupfile = strdup(opt + 11);
+		} else {
+		    *err = "Unknown history option";
+		    return -1;
+		}
+	    }
 	    if (*end != '\0') {
 		*err = "Invalid history value";
 		return -1;
@@ -1270,6 +1300,42 @@ sol_init(sys_data_t *sys)
 				 handle_sol_payload);
 }
 
+static void
+handle_sol_shutdown(void *info, int sig)
+{
+    ipmi_sol_t *sol = info;
+    soldata_t *sd = sol->soldata;
+    FILE *f;
+
+    if (sol->configured < 2)
+	return;
+
+#ifdef USE_UUCP_LOCKING
+    uucp_rm_lock(sd->sys, sol->device);
+#endif /* USE_UUCP_LOCKING */
+
+    if (!sol->backupfile || (sd->history_start == sd->history_end))
+	return;
+
+    /*
+     * Write the current history to the backup file.
+     */
+    f = fopen(sol->backupfile, "w");
+    if (!f)
+	return;
+    if (sd->history_end >= sd->history_start) {
+	/* History is fully contained between start and end. */
+	fwrite(sd->history + sd->history_start, 1,
+	       sd->history_end - sd->history_start + 1, f);
+    } else {
+	/* History laps over end, need two writes. */
+	fwrite(sd->history + sd->history_start, 1,
+	       sol->history_size - sd->history_start, f);
+	fwrite(sd->history, 1, sd->history_end + 1, f);
+    }
+    fclose(f);
+}
+
 int
 sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 {
@@ -1302,7 +1368,22 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 	    sys->free(sys, sd);
 	    return ENOMEM;
 	}
+
+	if (sol->backupfile) {
+	    FILE *f = fopen(sol->backupfile, "r");
+	    if (f) {
+		/* Ignore errors, it doesn't really matter. */
+		fseek(f, -sol->history_size, SEEK_END);
+		sd->history_end = fread(sd->history, 1, sol->history_size, f);
+		sd->history_end--; /* end point to last, not one after. */
+		fclose(f);
+	    }
+	}
     }
+
+    sd->backupfilehandler.handler = handle_sol_shutdown;
+    sd->backupfilehandler.info = sol;
+    ipmi_register_shutdown_handler(&sd->backupfilehandler);
 
     sd->sys = sys;
     sol->soldata = sd;
@@ -1371,25 +1452,4 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     }
 
     return err;
-}
-
-void
-sol_shutdown(sys_data_t *sys)
-{
-    unsigned int i;
-
-    for (i = 0; i < IPMI_MAX_MCS; i++) {
-	lmc_data_t *mc = sys->ipmb_addrs[i];
-	ipmi_sol_t *sol;
-
-	if (!mc)
-	    continue;
-	sol = ipmi_mc_get_sol(mc);
-	if (sol->configured < 2)
-	    continue;
-
-#ifdef USE_UUCP_LOCKING
-	uucp_rm_lock(sys, sol->device);
-#endif /* USE_UUCP_LOCKING */
-    }
 }
