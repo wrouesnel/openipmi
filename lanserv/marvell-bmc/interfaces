@@ -1,0 +1,18 @@
+# /etc/network/interfaces for the BMC
+# Configure Loopback
+auto lo
+iface lo inet loopback
+
+auto eth0 eth1 eth1:1
+
+iface eth0 inet dhcp
+
+iface eth1 inet static
+	gateway 192.168.0.254
+	address 192.168.0.10
+	netmask 255.255.255.0
+	
+# Internal network
+iface eth1:1 inet static
+	address 192.168.1.7
+	netmask 255.255.255.0

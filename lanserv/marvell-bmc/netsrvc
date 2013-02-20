@@ -4,7 +4,7 @@
 # Access with:
 # ipmitool -I lanplus -U ipmiusr -P test -H 10.70.0.106 raw 0x2e 1 0x0f 0x50 0x00 0
 # to disable network services.  Change the last value to "1" to enable it.
-# The last value is passed to this script.
+# The last value is passed to this script as is.
 case $1 in
 0) /etc/init.d/S50dropbear stop
    ;;

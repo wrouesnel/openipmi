@@ -54,7 +54,7 @@ handle_get_device_id(lmc_data_t    *mc,
 		| (mc->device_revision & 0xf));
     rdata[3] = mc->major_fw_rev & 0x7f;
     rdata[4] = mc->minor_fw_rev;
-    rdata[5] = 0x51;
+    rdata[5] = 0x02;
     rdata[6] = mc->device_support;
     memcpy(rdata+7, mc->mfg_id, 3);
     memcpy(rdata+10, mc->product_id, 2);
