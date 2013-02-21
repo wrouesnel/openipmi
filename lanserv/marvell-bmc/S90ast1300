@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "Insert ast1300 module"
+insmod /root/ast1300.ko
+
