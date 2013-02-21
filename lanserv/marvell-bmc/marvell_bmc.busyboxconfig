@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Buildroot 2011.05 Configuration
-# Thu Feb 21 11:04:01 2013
+# Thu Feb 21 11:38:09 2013
 #
 BR2_HAVE_DOT_CONFIG=y
 BR2_arm=y
@@ -415,7 +415,7 @@ BR2_PACKAGE_MTD_UBIRSVOL=y
 BR2_PACKAGE_MTD_UBIUPDATEVOL=y
 # BR2_PACKAGE_NTFS_3G is not set
 # BR2_PACKAGE_NTFSPROGS is not set
-BR2_PACKAGE_PCIUTILS=y
+# BR2_PACKAGE_PCIUTILS is not set
 # BR2_PACKAGE_RNG_TOOLS is not set
 # BR2_PACKAGE_SDPARM is not set
 # BR2_PACKAGE_SETSERIAL is not set
@@ -558,7 +558,7 @@ BR2_PACKAGE_NCURSES=y
 # BR2_PACKAGE_NCURSES_TARGET_MENU is not set
 # BR2_PACKAGE_NEWT is not set
 # BR2_PACKAGE_PCRE is not set
-# BR2_PACKAGE_POPT is not set
+BR2_PACKAGE_POPT=y
 # BR2_PACKAGE_READLINE is not set
 # BR2_PACKAGE_SLANG is not set
 

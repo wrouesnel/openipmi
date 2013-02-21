@@ -27,7 +27,7 @@ libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	persist.c extcmd.c
 nodist_libIPMIlanserv_la_SOURCES = ../utils/ipmi_auth.c ../utils/md2.c \
 	../utils/md5.c
-libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS)
+libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS) -ldl
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
 
