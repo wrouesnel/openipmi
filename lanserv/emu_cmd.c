@@ -413,7 +413,14 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 
 	rv = ipmi_mc_add_polled_sensor(mc, lun, num, type, code,
 				       poll_rate, handler->poll, rcb_data);
-				       
+	
+	if (!rv && handler->postinit) {
+	    rv = handler->postinit(rcb_data, &errstr);
+	    if (rv) {
+		out->printf(out, "**Error in sensor handler postinit: %s\n", 
+			    errstr);
+	    }
+	}
     } else {
 	rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
     }

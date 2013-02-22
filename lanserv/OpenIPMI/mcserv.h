@@ -252,6 +252,7 @@ struct ipmi_sensor_handler_s
     int (*init)(lmc_data_t *mc, unsigned char lun, unsigned char sensor_num,
 		char **toks, void *cb_data, void **rcb_data,
 		const char **errstr);
+    int (*postinit)(void *cb_data, const char **errstr);
     void *cb_data;
 
     struct ipmi_sensor_handler_s *next;

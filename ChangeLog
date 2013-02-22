@@ -1,5 +1,18 @@
 2012-02-22 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv/OpenIPMI/mcserv.h, lanserv/emu_cmd.c: Add postinit
+	function to the polled sensor handler to call after the sensor is
+	created.
+
+	* lanserv/bmc_sensor: Add the ability to set the initial event
+	state for a polled file sensor.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Start out the power supply
+	sensor with the present bit set so that no log is issued for
+	normal startup.
+
+2012-02-21 Corey Minyard <cminyard@mvista.com>
+
 	* lanserv/bmc_storage.c: Fix an issue with writing FRU data to a
 	file, it was writing the wrong data.
 

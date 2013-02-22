@@ -2990,6 +2990,10 @@ ipmi_sim_module_post_init(sys_data_t *sys)
 		 2, strerror(rv));
     }
 
+    /* Initial state of the PSU sensor is with the present bit set */
+    ipmi_mc_sensor_set_bit(bmc_mc, 0, 8, 0, 1, 0);
+    ipmi_mc_sensor_set_bit(bmc_mc, 0, 9, 0, 1, 0);
+
     rv = pthread_create(&scan_thread, NULL, scan_sensors, sys);
     if (rv) {
 	sys->log(sys, OS_ERROR, NULL,

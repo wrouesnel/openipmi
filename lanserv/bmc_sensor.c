@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2003,2012 MontaVista Software Inc.
+ * Copyright 2003,2012,2013 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -1152,6 +1152,7 @@ struct file_data {
     unsigned int offset;
     unsigned int length;
     unsigned int mask;
+    unsigned int initstate;
     int is_raw;
     int mult;
     int div;
@@ -1181,10 +1182,6 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	lmc_data_t *mc = f->sensor_mc;
 	sensor_t *sensor, *dsensor;
 
-	if (f->sensor_lun >= 4) {
-	    *errstr = "Invalid sensor LUN";
-	    return EINVAL;
-	}
 	sensor = mc->sensors[f->sensor_lun][f->sensor_num];
 	if (!sensor) {
 	    *errstr = "Invalid sensor";
@@ -1288,6 +1285,11 @@ file_init(lmc_data_t *mc,
     int err;
     const char *tok;
 
+    if (lun >= 4) {
+	*errstr = "Invalid sensor LUN";
+	return EINVAL;
+    }
+
     err = get_delim_str(toks, &fname, errstr);
     if (err)
 	return err;
@@ -1329,6 +1331,12 @@ file_init(lmc_data_t *mc,
 	    f->mask = strtol(tok + 5, &end, 0);
 	    if (*end != '\0') {
 		*errstr = "Invalid mask value";
+		goto out_err;
+	    }
+	} else if (strncmp("initstate=", tok, 5) == 0) {
+	    f->initstate = strtol(tok + 5, &end, 0);
+	    if (*end != '\0') {
+		*errstr = "Invalid initstate value";
 		goto out_err;
 	    }
 	} else if (strcmp("raw", tok) == 0) {
@@ -1414,11 +1422,30 @@ file_init(lmc_data_t *mc,
     return -1;
 }
 
+static int
+file_post_init(void *cb_data, const char **errstr)
+{
+    struct file_data *f = cb_data;
+    lmc_data_t *mc = f->sensor_mc;
+    sensor_t *sensor;
+
+    sensor = mc->sensors[f->sensor_lun][f->sensor_num];
+    if (!sensor) {
+	*errstr = "Unable to find sensor"; 
+	return EINVAL;
+    }
+
+    sensor->event_status = f->initstate;
+
+    return 0;
+}
+
 static ipmi_sensor_handler_t file_sensor =
 {
     .name = "file",
     .poll = file_poll,
-    .init = file_init
+    .init = file_init,
+    .postinit = file_post_init
 };
 
 static ipmi_sensor_handler_t *sensor_handlers = &file_sensor;
