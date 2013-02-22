@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.8"
+#define PVERSION "2.0.9"
 
 #define NUM_BOARDS 6
 
@@ -2997,7 +2997,7 @@ ipmi_sim_module_post_init(sys_data_t *sys)
     }
 
     rv = get_intval(RESET_REASON_FILE, &val);
-    if (cold_power_up) {
+    if (rv || cold_power_up) {
 	val = 0x00; /* Initiated by power up */
     } else if (val == RESET_REASON_COLD_BOOT ||
 	       rv || val == RESET_REASON_UNKNOWN) {
@@ -3006,7 +3006,7 @@ ipmi_sim_module_post_init(sys_data_t *sys)
 	val = 0x02; /* Initiated by warm reset */
     } else {
 	sys->log(sys, OS_ERROR, NULL, "MVMOD: known reset reason: %d", val);
-	val = 0x01; /* Assume power up */
+	val = 0x01; /* Assume hard reset */
     }
     {
 	/*
@@ -3021,6 +3021,7 @@ ipmi_sim_module_post_init(sys_data_t *sys)
 	data[7] = 0x1d; /* System boot initiated. */
 	data[8] = 20; /* Sensor num */
 	data[9] = (IPMI_ASSERTION << 7) | 0x6f;
+	data[10] = val;
 	rv = mc_new_event(bmc_mc, 0x02, data);
 	if (rv)
 	    sys->log(sys, OS_ERROR, NULL,

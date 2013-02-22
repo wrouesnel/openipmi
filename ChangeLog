@@ -1,3 +1,20 @@
+2012-02-22 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc_storage.c: Fix an issue with writing FRU data to a
+	file, it was writing the wrong data.
+
+	* lanserv/bmc_sensor.c: Delay enabling the FRU and reading sensor
+	data a bit so that false events don't get put into the event log.
+
+	* lanserv/marvell-bmc/*.sdrs: Fix the events to be deassert events
+	for the various deassertions.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix the reset reason sensor,
+	it wasn't actually adding the proper value into the event to tell
+	what happened.
+
+	* lanserv/bmc_storage.c: Make the SEL overflow bit work.
+
 2012-02-12 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/ipmi_sim.c: Add a way to catch fatal signals, and add a

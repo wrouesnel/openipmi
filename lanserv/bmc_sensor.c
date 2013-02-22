@@ -1127,7 +1127,6 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     sensor->num = sens_num;
     sensor->sensor_type = type;
     sensor->event_reading_code = event_reading_code;
-    sensor->enabled = 1;
     mc->sensors[lun][sens_num] = sensor;
 
     if (mc->emu->atca_mode && (type == 0xf0)) {
@@ -1139,6 +1138,11 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     bmc = ipmi_emu_get_bmc_mc(mc->emu);
     if (bmc)
 	iterate_sdrs(mc, &bmc->main_sdrs, check_sensor_sdr, sensor);
+
+    /* Delay enable so the above process won't generate any events. */
+    sensor->enabled = 1;
+    /* Clear any status we might have just generated. */
+    sensor->event_status = 0;
 
     return 0;
 }
@@ -1518,7 +1522,6 @@ ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 	return err;
     }
 
-    sensor_poll(sensor);
     return 0;
 }
 

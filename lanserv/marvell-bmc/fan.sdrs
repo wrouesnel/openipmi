@@ -22,9 +22,9 @@ sdr type 1
 	event_reading_type_code	1
 	return_lnc		true
 	return_lc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	analog_data_format	unsigned
 	rate_unit		none

@@ -198,8 +198,10 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE))
 	return ENOTSUP;
 
-    if (mc->sel.count >= mc->sel.max_count)
+    if (mc->sel.count >= mc->sel.max_count) {
+	mc->sel.flags |= 0x80;
 	return EAGAIN;
+    }
 
     e = malloc(sizeof(*e));
     if (!e)
@@ -296,11 +298,6 @@ handle_get_sel_info(lmc_data_t    *mc,
     ipmi_set_uint32(rdata+6, mc->sel.last_add_time);
     ipmi_set_uint32(rdata+10, mc->sel.last_erase_time);
     rdata[14] = mc->sel.flags;
-
-    /* Clear the overflow flag. */
-    /* FIXME - is this the right way to clear this?  There doesn't
-       seem to be another way. */
-    mc->sel.flags &= ~0x80;
 
     *rdata_len = 15;
 }
@@ -521,6 +518,9 @@ handle_delete_sel_entry(lmc_data_t    *mc,
     else
 	mc->sel.entries = entry->next;
 
+    /* Clear the overflow flag. */
+    mc->sel.flags &= ~0x80;
+
     rdata[0] = 0;
     ipmi_set_uint16(rdata+1, entry->record_id);
     *rdata_len = 3;
@@ -594,6 +594,9 @@ handle_clear_sel(lmc_data_t    *mc,
 
     rdata[0] = 0;
     *rdata_len = 2;
+
+    /* Clear the overflow flag. */
+    mc->sel.flags &= ~0x80;
 
     rewrite_sels(mc);
 }
@@ -1753,7 +1756,7 @@ handle_write_fru_data(lmc_data_t    *mc,
     if (fru->fru_io_cb) {
 	int rv;
 
-	rv = fru->fru_io_cb(fru->data, FRU_IO_WRITE, fru->data + 3, offset,
+	rv = fru->fru_io_cb(fru->data, FRU_IO_WRITE, msg->data + 3, offset,
 			    count);
 	if (rv) {
 	    rdata[0] = IPMI_UNKNOWN_ERR_CC;

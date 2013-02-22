@@ -81,16 +81,16 @@ sdr type 1
 	return_unc		true
 	return_uc		true
 	return_unr		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	assert_unrgh		true
-	assert_unrgl		true
+	deassert_unrgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	unr_thrsh_settable	true
@@ -148,14 +148,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -211,14 +211,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -275,14 +275,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -341,14 +341,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -407,14 +407,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -473,14 +473,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -539,14 +539,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -605,14 +605,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
@@ -671,14 +671,14 @@ sdr type 1
 	return_lc		true
 	return_unc		true
 	return_uc		true
-	assert_lncgh		true
+	deassert_lncgl		true
 	assert_lncgl		true
-	assert_lcgh		true
+	deassert_lcgl		true
 	assert_lcgl		true
 	assert_uncgh		true
-	assert_uncgl		true
+	deassert_uncgh		true
 	assert_ucgh		true
-	assert_ucgl		true
+	deassert_ucgh		true
 	lc_thrsh_settable	true
 	lnc_thrsh_settable	true
 	uc_thrsh_settable	true
