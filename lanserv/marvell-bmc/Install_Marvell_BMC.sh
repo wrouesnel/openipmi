@@ -3,13 +3,25 @@
 # you ran Build_Marvell_BMC.sh in.
 #
 
-# These are the things you must configure for your setup:
 VERSION=1.0.0
+
+# These are the things you must configure for your setup.  In general,
+# you would set these in an override file 
 AST1300=${HOME}/hhl/marvell/ast1300.ko
 AXP_BOARD_FRU=${HOME}/hhl/marvell/axpfru-2.0.01.img
 NTPSERVER=pool.ntp.org
 MTIMEZONE=GMT
 #MTIMEZONE=US/Central
+
+if [ -e Install_Marvell_Overrides ]; then
+	echo "Reading override file"
+	source ./Install_Marvell_Overrides
+fi
+
+echo AST1300=$AST1300
+echo AXP_BOARD_FRU=$AXP_BOARD_FRU
+echo NTPSERVER=$NTPSERVER
+echo MTIMEZONE=$MTIMEZONE
 
 BUILDROOT=buildroot-2011.05-sdk5.1.2
 
