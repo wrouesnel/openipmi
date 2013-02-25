@@ -112,9 +112,9 @@ do_get() {
 		if [ "x$val" = "x" ]; then
 		    val="00:00:00:00:00:00"
 		else
-		    ping -c 1 $val >/dev/null 2>&1
-		    val=`arp -n $val | grep "($val)" | tr ' ' '\t' | tr -s '\t' '\t' | cut -f 4 | tr -d -c '0-9a-fA-F:'`
-		    if [ "x$val" = "x" ]; then
+		    ping -W 1 -c 1 $val >/dev/null 2>&1
+		    val=`arp -n $val | grep "($val)" | tr ' ' '\t' | tr -s '\t' '\t' | cut -f 4`
+		    if [ "x$val" = "x" -o "x$val" = 'x<incomplete>' ]; then
 			val="00:00:00:00:00:00"
 		    fi
 		fi

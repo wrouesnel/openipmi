@@ -4,6 +4,8 @@
 	from polled sensors turned off the timer for polled sensors, thus
 	nothing happened.  Start the timer.
 
+	* lanserv/marvell-bmc/lancontrol: Handle incomplete arp results.
+
 2012-02-22 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/mcserv.h, lanserv/emu_cmd.c: Add postinit

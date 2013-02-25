@@ -102,7 +102,7 @@ sudo tar czf - * >${MBASEDIR}/rootfs-$VERSION.tar.gz
 cd ..
 sudo rm -rf rootfs
 
-echo "Now you can install rootfs.tar.gz on the chassis."
+echo "Now you can install rootfs-$VERSION.tar.gz on the chassis."
 echo ""
 echo "You will need to edit etc/network/interfaces in the rootfs"
 echo "to set it properly for your network."
