@@ -1,10 +1,16 @@
+2012-02-25 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc_sensor.c: The previous change to avoid bogus events
+	from polled sensors turned off the timer for polled sensors, thus
+	nothing happened.  Start the timer.
+
 2012-02-22 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/mcserv.h, lanserv/emu_cmd.c: Add postinit
 	function to the polled sensor handler to call after the sensor is
 	created.
 
-	* lanserv/bmc_sensor: Add the ability to set the initial event
+	* lanserv/bmc_sensor.c: Add the ability to set the initial event
 	state for a polled file sensor.
 
 	* lanserv/marvell-bmc/marvell_mod.c: Start out the power supply

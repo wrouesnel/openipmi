@@ -1549,6 +1549,8 @@ ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 	return err;
     }
 
+    mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
+
     return 0;
 }
 
