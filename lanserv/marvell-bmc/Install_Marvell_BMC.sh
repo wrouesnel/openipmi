@@ -96,7 +96,9 @@ sudo ln -sf /usr/share/zoneinfo/${MTIMEZONE} etc/localtime
 # Create the event device for the AST1300
 sudo mknod dev/event c 10 10
 
-sudo tar czf - * >${MBASEDIR}/rootfs.tar.gz
+# The redirect for stdout is done so that the file is owned by the user,
+# not root.sudo
+sudo tar czf - * >${MBASEDIR}/rootfs-$VERSION.tar.gz
 cd ..
 sudo rm -rf rootfs
 
