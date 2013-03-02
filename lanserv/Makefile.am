@@ -45,7 +45,9 @@ ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
 
-EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu
+man_MANS = ipmilan.8 ipmi_lan.5 ipmi_sim.1 ipmi_sim_cmd.5
+
+EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu $(man_MANS)
 
 install-data-local:
 	$(INSTALL) -m 755 -d "$(DESTDIR)$(sysconfdir)/ipmi/"; \

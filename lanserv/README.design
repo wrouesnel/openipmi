@@ -48,29 +48,58 @@ lanserv_config.c - Specific code for reading in LAN configuration, used
 priv_table.c - Holds the tables used map IPMI commands to their required
 	privilege levels.
 
-emu.c - An emulator for an MC, including the full MC data structure.
-	This file is really too large and should be broken up.
+bmc.c - The basic code dealing MC command routing and configuration.
+
+bmc.h - Internal include file for communication between the various bmc_xxx
+	files.
+
+bmc_app.c - Handling for application commands (get device info, etc.)
+
+bmc_chassis.c - Handling for chassis-specific commands.
+
+bmc_picmg.c - Handling for PICMG (ATCA) specific commands.
+
+bmc_sensor.c - Handling for sensor specific commands.
+
+bmc_storage.c - Handling for FRU and SDR commands.
+
+bmc_transport.c - Handling for LAN control commands.
+
+config.c - Read the configuration file.
 
 emu_cmd.c - Implements a command language used for both configuration
 	and control of the MCs in ipmi_sim.  It is used by configuration
 	files (see the .emu files) to define the system, and it can be
 	used to generate real-time events by setting sensor values.
 
-emu.h - Defines the interface between emu.c and emu_cmd.c
+emu.h - Defines the interface between bmc_xxx.c and emu_cmd.c
+
+extcmd.c - Code for running the external command for dealing with LAN
+	configuration.
 
 ipmi_sim.c - The main file for the ipmi_sim program.
+
+lanserv_asf.c - Handles LAN ASF commands.
+
+lanserv_config.c- Handles reading LAN configuration, called from config.c
 
 lanserv_ipmi.c - An implementation of the IPMI LAN protocol.
 
 lanserv_oem_force.c - Some OEM handling for some older Force computer
 	systems.
 
+persist.c - Handling for writing and reading persistent information
+	for the MC.
+
+priv_table.c - Privilege lookups for commands, to know which privilege
+	levels are required for each command.
+
 serial_ipmi.c - An implementation of the IPMI serial protocols, and
 	also code to handle reading a serial configuration line.
 
-lanserv_asf.c - Handles LAN ASF commands.
-
 serv.c - General utilities used by a lot of the system.
+
+sol.c - An implementation of the serial over LAN protocol.
 
 
 And here's a few other miscellaneous things:
@@ -83,6 +112,11 @@ ipmisim1.emu - emu commands for creating a simple IPMI system.
 atca.emu - emu commands for creating a more complex ATCA system.
 
 lan.conf - A configuration file example.
+
+sdrcomp (directory) - A compiler for SDRs.
+
+marvell-bmc (directory) - Code for implementing a BMC for a Marvell
+	server.
 
 
 General Design (for ipmi_sim)
@@ -117,8 +151,13 @@ if a normal message comes in, it will send it to channel_smi_send()
 
 channel_smi_send() will call the channel-specific handling callback,
 which will generall result it in going back to ipmi_sim.c's smi_send()
-function.  smi_send() calls ipmi_emu_handle_msg() in emu.c to handle
-the message, then ipmi_handle_smi_rsp() (in serv.c) to send the response.
+function.  smi_send() calls ipmi_emu_handle_msg() in bmc.c to handle
+the message
+
+ipmi_emu_handle_msg() will route the command to the proper function to
+handle it.  It passes in a response message to the handler, which the
+handler must fill in.  Then it will call ipmi_handle_smi_rsp() (in
+serv.c) to send the response.
 
 ipmi_handle_smi_rsp() does a little bit of formatting then calls the
 channel-specific return_rsp() function.  In the LAN case, this results
@@ -129,3 +168,15 @@ lan_send() in ipmi_sim.c being called.  That transmits the message.
 
 The serial case is similar, substituting the serial code for the LAN
 code.
+
+Serial Over LAN (SOL)
+---------------------
+
+The sol.c code has three tie-ins to the rest of the code:
+
+It is called from config.c to handle sol-specific configuration.
+
+It installs a hook into lanserv_ipmi.c to receive the SOL payload and
+send the SOL payload.
+
+It ties into bmc.c to handle SOL-specific commands.

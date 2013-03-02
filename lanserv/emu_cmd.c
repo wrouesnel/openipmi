@@ -375,6 +375,10 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (rv)
 	return rv;
 
+    /*
+     * FIXME - the depends that is part of the polled file sensor should
+     * really be part of the main sensor structure.
+     */
     tok = mystrtok(NULL, " \t\n", toks);
     if (tok) {
 	ipmi_sensor_handler_t *handler;

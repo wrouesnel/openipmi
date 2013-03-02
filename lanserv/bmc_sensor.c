@@ -1258,10 +1258,10 @@ file_poll(void *cb_data, unsigned int *rval, const char **errstr)
 	}
     }
 
-    val -= f->sub;
-
     if (f->mask)
 	val &= f->mask;
+
+    val -= f->sub;
 
     if (f->mult)
 	val = val * f->mult;

@@ -40,7 +40,8 @@ The following commands are allowed the configuration file:
 .TP
 \fBname\fP \fI"name"\fP
 Set a name for the BMC.  This will control other things, like the
-default value of the ipmi_sim startup command file.
+default value of the ipmi_sim startup command file and the place where
+persistent data is stored.
 
 .TP
 \fBuser\fP \fIusernum\fP \fIenabled\fP \fIusername\fP \fIpassword\fP \fImax-priv\fP \fImax-session\fP [\fIauth\fP [\fIauth\fP [...]]]
@@ -152,6 +153,67 @@ digits in C style.
 specifies the IPMI address of the interface.  The default, 0x20, is
 usually correct, but when emulating ATCA systems this might be
 required.
+
+.TP
+\fBsol\fP \fIdevice\fP \fIdefault_baud\fP [\fIhistory=size[,backupfile=filename]\fP] [\fIhistoryfru=frunum\fP]
+
+Allow a Serial Over LAN (SOL) connection to the given device.  This
+will be over interface 1 for the MC.
+
+.I device
+is the full path to the device name.
+
+.I default_baud
+sets the initial default baud rate to use.  This is overriden by the
+persistent SOL settings.
+
+.I history
+creates a history device on SOL interface 2.  The size is the size of
+the buffer.  Data from the device is stored in the history buffer all
+the time.  Connecting to SOL interface 2 will cause the full history
+buffer to be dumped.  If
+.I backupfile
+is specified, then the history is made persistent.  However, it is
+only stored when a catchable signal or normal shutdown is done, so a
+poweroff or fatal signal will cause the data to be lost.
+
+.I historyfru
+makes the history available via the given FRU number on the MC.
+
+.TP
+\fBloadlib\fP \fI"module"\fP [\fI"options"\fP]
+
+Load the given shared object into the program.
+
+.I "module"
+is the full path to the module.  It must be in quotes.
+
+.I "options"
+is an optional string in quotes that passes options to the module.
+The contents of the string are not specified, the module defines that.
+
+The module may have a number of functions that are called:
+
+.I ipmi_sim_module_print_version(sys_data_t *sys, char *options)
+is called when ipmi_sim is started with the version print option.
+This way the versions of all loaded modules may be printed.  The
+module should print it's version.  You must provide this function.
+
+.I ipmi_sim_module_init(sys_data_t *sys, char *options)
+is called after the configuration file is read and before any other
+initialization is done.  The module should do most of its
+initialization here.  You must provide this function.
+
+.I ipmi_sim_module_post_init(sys_data_t *sys)
+is called after ipmi_sim has finished initializing.  This function is
+optional.
+
+.P The
+.I sys
+parameter is used for most functions interfacing to the main ipmi_sim
+code, like logging, timers, and a few of the MC calls.  The contents
+are opaque to the module.
+
 
 .TP
 \fBstartlan\fP \fIchannel\fP

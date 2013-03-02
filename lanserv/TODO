@@ -1,0 +1,3 @@
+
+* The depends= that is part of the polled file sensor really needs to be
+  part of the main sensor structure, or at least the polled structure.

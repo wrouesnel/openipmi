@@ -16,11 +16,34 @@ nature.
 
 .SH GENERAL COMMANDS
 
-Blank lines and lines starting with `#' are ignored.
+Blank lines and lines starting with `#' are ignored.  Long lines may be
+broken up by putting a '\' at the end of the line to be continued.
 
 .TP
 \fBquit\fP
 Exit the simulator
+
+.TP
+\fBinclude\fP \fI"file"\fP
+Include the given file.
+
+.TP
+\fBdefine\fP \fIname\fP \fI"value"\fP
+
+Define the given name as a variable with the given value.  This
+variable may be used later by doing \fI$name\fP.  This cannot be used
+in quotes, but quotes may be broken up and the variable put between
+them.  For instance, if you say:
+
+define MCNUM "40"
+
+you can use it later as in
+
+mc_add $MCNUM 1 no-device-sdrs 00  00  00  0xc9  0x009000 0x0002
+
+or
+
+sensor_add $MCNUM 0 21 12 0x6f poll 1000 file "/sys/dev/sens1-"$MCNUM"-1"
 
 .TP
 \fBsleep\fP \fItime\fP
@@ -58,8 +81,10 @@ work.
 You may use has-device-sdrs or no-device-sdrs in the HasDeviceSDRs field.
 
 .TP
-\fBmc_add_fru_data\fP \fImc-addr\fP \fIDeviceID\fP \fIFRUSize\fP [\fIbyte1\fP [\fIbyte2\fP [...]]]
-Set the FRU data for a given MC and device id.
+\fBmc_add_fru_data\fP \fImc-addr\fP \fIDeviceID\fP \fIFRUSize\fP [\fIbyte1\fP [\fIbyte2\fP [...]]] | [\fIfile\fP \fIoffset\fP \fIfilename\f{]
+Set the FRU data for a given MC and device id.  Data may be supplied
+directly here, or it may be given as a file.  The offset is the start
+from the beginning of the file where the data is kept.
 
 .TP
 \fBmc_dump_fru_data\fP \fImc-addr\fP \fIDeviceID\fP
@@ -107,9 +132,56 @@ Add an entry to the device SDR of the MC.
 .SH SENSOR COMMANDS
 
 .TP
-\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIsensor-type\fP \fIevent-reading-code\fP
+\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIsensor-type\fP \fIevent-reading-code\fP [\fIpoll\fP \fIpoll_rate\fP \fIpoll_type\fP \fIpoll_type_options\fP]
+
 Add a sensor to the given MC and LUN.  The type of sensor is set by the
 event reading code.
+
+If \fIpoll\fP is specified, then the sensor will be polled for data.
+Only the \fIfile\fP poll type is currently supported.  The value is a
+number read from a file.  It has the following options, all optional:
+
+.I div=val
+will divide the read value by the given number.  This is done after the
+multiply operation.
+
+.I mult=val
+will multiply the read value by the given number.  This is done after
+the subtraction.
+
+.I sub=val
+will subtract the value by the given number.  This is done after the mask.
+
+.I mask=val
+will mask (bitwise and) the value by the given number.
+
+.I base=value
+Specify the base of the value read from the file.  By default this is zero,
+meaning "C" conventions are used.
+
+.I initstate=value
+sets what the event state is initially set to.  This is useful
+for discrete sensors with bits that should normally be set to "1",
+like a presense bit, to keep the program from issuing an event every
+time the program starts.
+
+.I raw
+specifies that the data from the file is a raw value.  Only
+\fIlength\fP bytes are read from \fIoffset\fP.
+
+.I ascii
+specifies that the data from the file is in ASCII.  This is the default.
+The \fIoffset\fP value is used, but no the \fIlength\fP.
+
+.I length=val
+specifies the length of the data to read from the file.  The maximum
+value is 4,and this is only used for raw data.
+
+.I depends=<mc_addr>,<lun>,<sensor_number>,<bit>
+specifies a discrete sensor bit that must be set to 1 for the sensor
+to be active.  Generally, you use the presense bit of a sensor to mark
+whether other sensors on the device are actually present.  Each of the
+other sensors would have one of these pointing to the presense bit.
 
 .TP
 \fBsensor_set_bit\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIbit-to-set\fP \fIbit-value\fP \fIgenerate-event\fP
