@@ -153,6 +153,8 @@ static const char *trg_present[NUM_BOARDS] =
     GPIODIR "C5",
 };
 
+static int simulate_board_absent[NUM_BOARDS];
+
 /* Set this to zero to request that the board power off.  */
 #define BOARD_OFF_REQUEST_ON 0
 #define BOARD_OFF_REQUEST_OFF 1
@@ -1223,7 +1225,7 @@ check_board(sys_data_t *sys, int num, unsigned int since_last,
 		 num + 1, strerror(rv));
 	return rv;
     }
-    present = present == BOARD_PRESENT;
+    present = (present == BOARD_PRESENT) && !simulate_board_absent[num];
     if (board->present == present)
 	return 0;
 
@@ -2632,6 +2634,29 @@ ipmi_sim_module_print_version(sys_data_t *sys, char *initstr)
 
 static unsigned int cold_power_up = 1;
 
+static int simulate_board_presence(emu_out_t  *out,
+				   emu_data_t *emu,
+				   lmc_data_t *mc,
+				   char       **toks)
+{
+    int rv;
+    unsigned int board, present;
+    const char *err;
+
+    rv = get_uint(toks, &board, &err);
+    if (rv || (board == 0 || board > NUM_BOARDS)) {
+	out->printf(out, "Invalid board number: %s\n", err);
+	return EINVAL;
+    }
+    board--;
+    rv = get_bool(toks, &present, &err);
+    if (rv || (board == 0 || board > NUM_BOARDS)) {
+	out->printf(out, "Invalid board presence value: %s\n", err);
+	return EINVAL;
+    }
+    simulate_board_absent[board] = !present;
+}
+
 int
 ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 {
@@ -2902,6 +2927,8 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 
     if (!cold_power_up)
 	init_complete = 1;
+
+    ipmi_emu_add_cmd("simulate_board_presence", NOMC, simulate_board_presence);
 
     return 0;
 }

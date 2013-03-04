@@ -505,4 +505,24 @@ void ipmi_set_uint32(uint8_t *data, int val);
 
 uint8_t ipmb_checksum(uint8_t *data, int size, uint8_t start);
 
+/*
+ * Command handler interface.
+ */
+typedef struct emu_data_s emu_data_t;
+typedef struct emu_out_s
+{
+    void (*printf)(struct emu_out_s *out, char *format, ...);
+    void *data;
+} emu_out_t;
+
+#define MC	1
+#define NOMC	0
+typedef int (*ipmi_emu_cmd_handler)(emu_out_t  *out,
+				    emu_data_t *emu,
+				    lmc_data_t *mc,
+				    char       **toks);
+int ipmi_emu_add_cmd(const char *name, unsigned int flags,
+		     ipmi_emu_cmd_handler handler);
+
+
 #endif /* __SERV_H_ */

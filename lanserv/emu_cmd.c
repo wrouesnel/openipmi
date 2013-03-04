@@ -4,14 +4,10 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <OpenIPMI/serv.h>
 #include "emu.h"
 
 #define BASE_CONF_STR SYSCONFDIR "/ipmi"
-
-typedef int (*ipmi_emu_cmd_handler)(emu_out_t  *out,
-				    emu_data_t *emu,
-				    lmc_data_t *mc,
-				    char       **toks);
 
 static int
 emu_get_uchar(emu_out_t *out, char **toks, unsigned char *val, char *errstr,
@@ -1115,54 +1111,78 @@ do_define(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     return 0;
 }
 
-#define MC	1
-#define NOMC	0
-static struct {
-    char                 *name;
-    int                  flags;
+struct emu_cmd_info {
+    const char           *name;
+    unsigned int         flags;
     ipmi_emu_cmd_handler handler;
-} cmds[] =
+    struct emu_cmd_info  *next;
+};
+
+static struct emu_cmd_info cmds[] =
 {
-    { "quit",		NOMC,		quit },
-    { "define",		NOMC,		do_define },
-    { "sel_enable",	MC,		sel_enable },
-    { "sel_add",	MC,		sel_add },
-    { "main_sdr_add",	MC,		main_sdr_add },
-    { "device_sdr_add",	MC,		device_sdr_add },
-    { "sensor_add",     MC,             sensor_add },
-    { "sensor_set_bit", MC,             sensor_set_bit },
-    { "sensor_set_bit_clr_rest", MC,        sensor_set_bit_clr_rest },
-    { "sensor_set_value", MC,           sensor_set_value },
-    { "sensor_set_hysteresis", MC,      sensor_set_hysteresis },
-    { "sensor_set_threshold", MC,       sensor_set_threshold },
-    { "sensor_set_event_support", MC,   sensor_set_event_support },
-    { "mc_set_power",   MC,		mc_set_power },
-    { "mc_add_fru_data",MC,		mc_add_fru_data },
-    { "mc_dump_fru_data",MC,		mc_dump_fru_data },
-    { "mc_set_num_leds",MC,		mc_set_num_leds },
-    { "mc_add",		NOMC,		mc_add },
-    { "mc_delete",	MC,		mc_delete },
-    { "mc_disable",	MC,		mc_disable },
-    { "mc_enable",	MC,		mc_enable },
-    { "mc_setbmc",      NOMC,		mc_setbmc },
-    { "mc_set_guid",	MC,		mc_set_guid },
-    { "atca_enable",    NOMC,	        atca_enable },
-    { "atca_set_site",	NOMC,		atca_set_site },
-    { "read_cmds",	NOMC,		read_cmds },
-    { "include",	NOMC,		read_cmds },
-    { "sleep",		NOMC,		sleep_cmd },
-    { "debug",		NOMC,		debug_cmd },
+    { "quit",		NOMC,		quit,			 &cmds[1] },
+    { "define",		NOMC,		do_define,		 &cmds[2] },
+    { "sel_enable",	MC,		sel_enable,		 &cmds[3] },
+    { "sel_add",	MC,		sel_add,		 &cmds[4] },
+    { "main_sdr_add",	MC,		main_sdr_add,		 &cmds[5] },
+    { "device_sdr_add",	MC,		device_sdr_add,		 &cmds[6] },
+    { "sensor_add",     MC,		sensor_add,		 &cmds[7] },
+    { "sensor_set_bit", MC,		sensor_set_bit,		 &cmds[8] },
+    { "sensor_set_bit_clr_rest", MC,	sensor_set_bit_clr_rest, &cmds[9] },
+    { "sensor_set_value", MC,           sensor_set_value,	 &cmds[10] },
+    { "sensor_set_hysteresis", MC,      sensor_set_hysteresis,	 &cmds[11] },
+    { "sensor_set_threshold", MC,       sensor_set_threshold,	 &cmds[12] },
+    { "sensor_set_event_support", MC,   sensor_set_event_support,&cmds[13] },
+    { "mc_set_power",   MC,		mc_set_power,		 &cmds[14] },
+    { "mc_add_fru_data",MC,		mc_add_fru_data,	 &cmds[15] },
+    { "mc_dump_fru_data",MC,		mc_dump_fru_data,	 &cmds[16] },
+    { "mc_set_num_leds",MC,		mc_set_num_leds,	 &cmds[17] },
+    { "mc_add",		NOMC,		mc_add,			 &cmds[18] },
+    { "mc_delete",	MC,		mc_delete,		 &cmds[19] },
+    { "mc_disable",	MC,		mc_disable,		 &cmds[20] },
+    { "mc_enable",	MC,		mc_enable,		 &cmds[21] },
+    { "mc_setbmc",      NOMC,		mc_setbmc,		 &cmds[22] },
+    { "mc_set_guid",	MC,		mc_set_guid,		 &cmds[23] },
+    { "atca_enable",    NOMC,	        atca_enable,		 &cmds[24] },
+    { "atca_set_site",	NOMC,		atca_set_site,		 &cmds[25] },
+    { "read_cmds",	NOMC,		read_cmds,		 &cmds[26] },
+    { "include",	NOMC,		read_cmds,		 &cmds[27] },
+    { "sleep",		NOMC,		sleep_cmd,		 &cmds[28] },
+    { "debug",		NOMC,		debug_cmd,		 NULL },
     { NULL }
 };
+
+static struct emu_cmd_info *cmdlist = &cmds[0];
+
+int
+ipmi_emu_add_cmd(const char *name, unsigned int flags,
+		 ipmi_emu_cmd_handler handler)
+{
+    struct emu_cmd_info *mcmd;
+
+    mcmd = malloc(sizeof(*mcmd));
+    if (!mcmd)
+	return ENOMEM;
+    mcmd->name = strdup(name);
+    if (!mcmd->name) {
+	free(mcmd);
+	return ENOMEM;
+    }
+    mcmd->flags = flags;
+    mcmd->handler = handler;
+    mcmd->next = cmdlist;
+    cmdlist = mcmd;
+    return 0;
+}
 
 int
 ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str)
 {
     char       *toks;
     const char *cmd;
-    int        i;
     int        rv = EINVAL;
     lmc_data_t *mc = NULL;
+    struct emu_cmd_info *mcmd;
 
     cmd = mystrtok(cmd_str, " \t\n", &toks);
     if (!cmd)
@@ -1170,9 +1190,10 @@ ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str)
     if (cmd[0] == '#')
 	return 0;
 
-    for (i=0; cmds[i].name; i++) {
-	if (strcmp(cmd, cmds[i].name) == 0) {
-	    if (cmds[i].flags & MC) {
+    
+    for (mcmd = cmdlist; mcmd; mcmd = mcmd->next) {
+	if (strcmp(cmd, mcmd->name) == 0) {
+	    if (mcmd->flags & MC) {
 		unsigned char ipmb;
 		rv = emu_get_uchar(out, &toks, &ipmb, "MC address", 0);
 		if (rv)
@@ -1183,7 +1204,7 @@ ipmi_emu_cmd(emu_out_t *out, emu_data_t *emu, char *cmd_str)
 		    return rv;
 		}
 	    }
-	    rv = cmds[i].handler(out, emu, mc, &toks);
+	    rv = mcmd->handler(out, emu, mc, &toks);
 	    if (rv)
 		return rv;
 	    goto out;

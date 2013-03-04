@@ -1,3 +1,13 @@
+2012-03-04 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu_cmd.c, lanserv/OpenIPMI/serv.h: Add the ability to
+	dynamically add new emulator commands.  Useful for debugging.
+
+	* lanserv/emu.h: Removed things moved to serv.h.
+	
+	* lanserv/marvell-bmc/marvell_mod.c: Add the ability to simulate
+	a board being removed.
+
 2012-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_sensor.c: The previous change to avoid bogus events

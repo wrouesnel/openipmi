@@ -60,8 +60,6 @@
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/mcserv.h>
 
-typedef struct emu_data_s emu_data_t;
-
 void ipmi_emu_tick(emu_data_t *emu, unsigned int seconds);
 
 typedef void (*ipmi_emu_sleep_cb)(emu_data_t *emu, struct timeval *time);
@@ -113,12 +111,6 @@ int ipmi_emu_set_addr(emu_data_t *emu, unsigned int addr_num,
 		      unsigned char addr_type,
 		      void *addr_data, unsigned int addr_len);
 int ipmi_emu_clear_addr(emu_data_t *emu, unsigned int addr_num);
-
-typedef struct emu_out_s
-{
-    void (*printf)(struct emu_out_s *out, char *format, ...);
-    void *data;
-} emu_out_t;
 
 /* In emu_cmd.c */
 void ipmi_emu_shutdown(emu_data_t *emu);
