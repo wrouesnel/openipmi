@@ -4,9 +4,15 @@
 	dynamically add new emulator commands.  Useful for debugging.
 
 	* lanserv/emu.h: Removed things moved to serv.h.
-	
+
 	* lanserv/marvell-bmc/marvell_mod.c: Add the ability to simulate
 	a board being removed.
+
+	* lanserv/bmc_sensor.c: The hysteresis was being pulled from the
+	wrong bytes in the SDR.
+
+	* lanserv/marvell-bmc/marvell_mod.c: For the chassis power control,
+	if any board is on the report the power as on.
 
 2012-02-25 Corey Minyard <cminyard@mvista.com>
 

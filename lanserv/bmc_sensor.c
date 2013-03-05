@@ -1072,10 +1072,10 @@ init_sensor_from_sdr(lmc_data_t *mc, unsigned char *sdr)
     if (init_hyst) {
 	if (sdr[3] == 1) {
 	    err = ipmi_mc_sensor_set_hysteresis(mc, lun, num,
-						hyst_sup, sdr[25], sdr[26]);
+						hyst_sup, sdr[42], sdr[43]);
 	} else if (sdr[3] == 2) {
 	    err = ipmi_mc_sensor_set_hysteresis(mc, lun, num,
-						hyst_sup, sdr[42], sdr[43]);
+						hyst_sup, sdr[25], sdr[26]);
 	}
     }
 

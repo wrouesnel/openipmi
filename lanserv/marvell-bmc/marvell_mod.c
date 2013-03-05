@@ -856,7 +856,22 @@ static int
 bmc_get_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
 			void *cb_data)
 {
-    /* This doesn't make sense. */
+    unsigned int i;
+
+    if (op == CHASSIS_CONTROL_POWER) {
+	unsigned char rval = 0, tval;
+
+	/* If any board is on, report power as on. */
+	for (i = 0; i < NUM_BOARDS; i++) {
+	    get_chassis_control(NULL, op, &tval, &boards[i]);
+	    if (tval)
+		rval = 1;
+	}
+	*val = rval;
+	return 0;
+    }
+
+    /* This doesn't make sense for anything else. */
     return EINVAL;
 }
 
