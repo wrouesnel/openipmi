@@ -14,6 +14,10 @@
 	* lanserv/marvell-bmc/marvell_mod.c: For the chassis power control,
 	if any board is on the report the power as on.
 
+	* lanserv/marvell-bmc/marvell_mod.c: Add a bunch of internal
+	documentation and reorganize things a bit to make sure that
+	related functions are grouped together.
+
 2012-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_sensor.c: The previous change to avoid bogus events

@@ -99,6 +99,7 @@ static int init_complete;
 #define GPIODIR "/sys/class/astgpio/GPIO"
 
 #define COLD_POWER_UP_IO "/sys/class/astgpio/ColdBoot"
+static unsigned int cold_power_up = 1;
 
 /*
  * Set debugging with bits:
@@ -321,16 +322,12 @@ static unsigned int sysmac_offset;
 static unsigned char sernum[10];
 static unsigned char sysmac[17];
 
-const unsigned char board_ipmb[NUM_BOARDS] = { 1, 2, 3, 4, 5, 6 };
-ipmi_timer_t *power_timer;
-unsigned int boards_waiting_power_on[NUM_BOARDS];
-unsigned int num_boards_waiting_power_on;
-int power_timer_running;
+static const unsigned char board_ipmb[NUM_BOARDS] = { 1, 2, 3, 4, 5, 6 };
 
-int disable_wdt;
-int wdt_fd;
-ipmi_timer_t *wdt_test_timer;
-volatile int wdt_test_timer_ran;
+static int disable_wdt;
+static int wdt_fd;
+static ipmi_timer_t *wdt_test_timer;
+static volatile int wdt_test_timer_ran;
 
 static void
 add_to_timeval(struct timeval *tv, unsigned int usecs)
@@ -370,6 +367,11 @@ diff_timeval_ms(struct timeval *tv1, struct timeval *tv2)
     return (tv.tv_sec * 1000) + ((tv.tv_usec + 500) / 1000);
 }
 
+
+/**************************************************************************
+ * EEPROM handling
+ *************************************************************************/
+
 static unsigned char
 checksum(unsigned char *data, int size)
 {
@@ -381,6 +383,9 @@ checksum(unsigned char *data, int size)
 	return csum;
 }
 
+/*
+ * Validate that the eeprom device exists and can be opened.
+ */
 static int
 check_eeprom(sys_data_t *sys, const struct eeprom *e)
 {
@@ -393,6 +398,10 @@ check_eeprom(sys_data_t *sys, const struct eeprom *e)
     return 0;
 }
 
+/*
+ * Write to the sysfs file to create the eeprom device.  Sometimes it
+ * doesn't get automatically created, so create it here.
+ */
 static int
 create_eeprom(sys_data_t *sys, const char *add_dev, const struct eeprom *e)
 {
@@ -471,6 +480,15 @@ write_eeprom(const struct eeprom *e, unsigned char *data,
     return err;
 }
 
+
+/**************************************************************************
+ * General file handling.  These are functions that read and write
+ * sysfs files, generally.
+ *************************************************************************/
+
+/*
+ * Convert an integer value to a string and write it to the device.
+ */
 static int
 set_intval(const char *fname, unsigned int val)
 {
@@ -484,6 +502,9 @@ set_intval(const char *fname, unsigned int val)
     return 0;
 }
 
+/*
+ * Fetch an unsigned integer ASCII value from a file an convert it.
+ */
 static int
 get_uintval(const char *fname, unsigned int *val)
 {
@@ -505,6 +526,9 @@ get_uintval(const char *fname, unsigned int *val)
     return 0;
 }
 
+/*
+ * Fetch a signed integer ASCII value from a file an convert it.
+ */
 static int
 get_intval(const char *fname, int *val)
 {
@@ -526,6 +550,23 @@ get_intval(const char *fname, int *val)
     return 0;
 }
 
+
+/**************************************************************************
+ * Board power handling.
+ *
+ * This is kept as a list of boards waiting to power on.  Only one
+ * board may be waiting at a time, and the first thing in
+ * boards_waiting_power_on will be the next thing to power on.
+ *************************************************************************/
+
+static ipmi_timer_t *power_timer;
+static unsigned int boards_waiting_power_on[NUM_BOARDS];
+static unsigned int num_boards_waiting_power_on;
+static int power_timer_running;
+
+/*
+ * Return true if the board is on, false if not.
+ */
 static int
 board_power_state(sys_data_t *sys, unsigned int num)
 {
@@ -542,6 +583,9 @@ board_power_state(sys_data_t *sys, unsigned int num)
     return rval == BOARD_POWER_ON;
 }
 
+/*
+ * Return true if the given board number is waiting to power on.
+ */
 static int
 board_waiting_power_on(unsigned int num)
 {
@@ -554,6 +598,10 @@ board_waiting_power_on(unsigned int num)
     return 0;
 }
 
+/*
+ * Start the timer to power on the board.  The time will be
+ * mintime + rand[1-6].
+ */
 static void
 start_power_timer(sys_data_t *sys, unsigned int mintime)
 {
@@ -574,6 +622,9 @@ start_power_timer(sys_data_t *sys, unsigned int mintime)
     power_timer_running = 1;
 }
 
+/*
+ * Set the given board number waiting to power up.
+ */
 static void
 board_add_power_wait(sys_data_t *sys, unsigned int num)
 {
@@ -583,6 +634,10 @@ board_add_power_wait(sys_data_t *sys, unsigned int num)
 	start_power_timer(sys, 0);
 }
 
+/*
+ * Remove the board from the power up wait list and start the next
+ * board, if there is one.
+ */
 static void
 board_remove_power_wait(sys_data_t *sys, unsigned int num)
 {
@@ -820,6 +875,10 @@ get_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
     return 0;
 }
 
+/*
+ * Chassis control for the chassis.  This will perform the operation on
+ * all boards.
+ */
 static int
 bmc_set_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
 			void *cb_data)
@@ -852,6 +911,11 @@ bmc_set_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
     return 0;
 }
 
+/*
+ * Chassis control get for the chassis.  This only works for the power
+ * control, and will return on if any board in the chassis is on, and
+ * off otherwise.
+ */
 static int
 bmc_get_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
 			void *cb_data)
@@ -876,6 +940,47 @@ bmc_get_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
 }
 
 static void
+board_power_timeout(void *cb_data)
+{
+    sys_data_t *sys = cb_data;
+    unsigned int num = boards_waiting_power_on[0];
+    struct board_info *board = &boards[num];
+    int rv;
+
+    power_timer_running = 0;
+
+    if (num_boards_waiting_power_on == 0) {
+	sys->log(sys, SETUP_ERROR, NULL, "Warning: power timer went off"
+		 " but no board waiting");
+	return;
+    }
+
+    if (debug & 1)
+	sys->log(sys, DEBUG, NULL, "Powering on board %d", board->num + 1);
+
+    /* Starts the next one if something is waiting. */
+    board_remove_power_wait(sys, num);
+
+    rv = set_intval(trg_power[board->num], BOARD_POWER_ON);
+    if (rv)
+	sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on"
+		 " for board %d: %s", num, strerror(rv));
+}
+
+static void
+power_down_system(sys_data_t *sys)
+{
+    unsigned int i;
+    unsigned char val = 0;
+
+    for (i = 0; i < NUM_BOARDS; i++)
+	set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, &boards[i]);
+}
+
+/*
+ * Called at init time to make sure the board state is sane.
+ */
+static void
 check_chassis_state(sys_data_t *sys)
 {
     unsigned int i;
@@ -888,6 +993,14 @@ check_chassis_state(sys_data_t *sys)
 	set_intval(trg_reset[i], BOARD_RESET_OFF);
 }
 
+/**************************************************************************
+ * Sensor handling
+ *************************************************************************/
+
+/*
+ * The DIMM and CPU error sensors will remain set until rearmed.  This
+ * is the rearm handling to clear those bits.
+ */
 struct eesense_rearm
 {
     unsigned int num;
@@ -961,6 +1074,10 @@ rearm_eesense_sensor(void *cb_data,
     return rv;
 }
 
+/*
+ * The rearm for the power supply sensor will set the clear fault flag
+ * for the power supply, just to be sure it is clear.
+ */
 static int
 rearm_power_supply_sensor(void *cb_data,
 			  uint16_t assert,
@@ -984,6 +1101,15 @@ rearm_power_supply_sensor(void *cb_data,
     return 0;
 }
 
+
+/**************************************************************************
+ * Board handling
+ *************************************************************************/
+
+/*
+ * Read the board's FRU and update anything that needs to be updated,
+ * like the chassis information, the board's external MAC address, etc.
+ */
 static int
 handle_board_fru(sys_data_t *sys, int num)
 {
@@ -1186,6 +1312,11 @@ handle_board_fru(sys_data_t *sys, int num)
     return 0;
 }
 
+/*
+ * Check that the board has not changed states, and if it has then
+ * handle the change.  Called on insertion/removal events and
+ * periodically by a timer.
+ */
 static int
 check_board(sys_data_t *sys, int num, unsigned int since_last,
 	    int power_up_new_board)
@@ -1285,6 +1416,10 @@ check_board(sys_data_t *sys, int num, unsigned int since_last,
     return 0;
 }
 
+/*
+ * If the board front-panel button is pressed, record the time, the
+ * button will be handled on release.
+ */
 static void
 handle_button_press(sys_data_t *sys, unsigned int brdnum)
 {
@@ -1297,6 +1432,9 @@ handle_button_press(sys_data_t *sys, unsigned int brdnum)
     gettimeofday(&board->button_press_time, NULL);
 }
 
+/*
+ * Handle the board's front-panel button.
+ */
 static void
 handle_button_release(sys_data_t *sys, unsigned int num)
 {
@@ -1351,6 +1489,9 @@ handle_button_release(sys_data_t *sys, unsigned int num)
     }
 }
 
+/*
+ * Read data from the chassis FRU.
+ */
 static int
 init_chassis(sys_data_t *sys)
 {
@@ -1454,6 +1595,10 @@ init_chassis(sys_data_t *sys)
 	
     return 0;
 }
+
+/**************************************************************************
+ * Event/timer handling
+ *************************************************************************/
 
 static int ast_fd;
 static ipmi_io_t *ast_fd_id;
@@ -1592,6 +1737,10 @@ ast_evt(int fd, void *cb_data)
     }
 }
 
+
+/*
+ * This timer is called periodically to check the boards.
+ */
 static ipmi_timer_t *mv_timer;
 
 static void
@@ -1609,35 +1758,6 @@ mv_timeout(void *cb_data)
     sys->start_timer(mv_timer, &tv);
 }
 
-
-static void
-board_power_timeout(void *cb_data)
-{
-    sys_data_t *sys = cb_data;
-    unsigned int num = boards_waiting_power_on[0];
-    struct board_info *board = &boards[num];
-    int rv;
-
-    power_timer_running = 0;
-
-    if (num_boards_waiting_power_on == 0) {
-	sys->log(sys, SETUP_ERROR, NULL, "Warning: power timer went off"
-		 " but no board waiting");
-	return;
-    }
-
-    if (debug & 1)
-	sys->log(sys, DEBUG, NULL, "Powering on board %d", board->num + 1);
-
-    /* Starts the next one if something is waiting. */
-    board_remove_power_wait(sys, num);
-
-    rv = set_intval(trg_power[board->num], BOARD_POWER_ON);
-    if (rv)
-	sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on"
-		 " for board %d: %s", num, strerror(rv));
-}
-
 static void
 shim_sig(int signr)
 {
@@ -1645,9 +1765,10 @@ shim_sig(int signr)
 }
 
 /*
- * The ast1300 device doesn't support select().  So add a small
- * program that will wait for it blocking and then feed it to the
- * program through a pipe, which will work as a select() device.
+ * The ast1300 device doesn't support select() in older
+ * implementations.  So add a small program that will wait for it
+ * blocking and then feed it to the program through a pipe, which will
+ * work as a select() device.
  */
 static void
 ast1300_shim(sys_data_t *sys, int ast_fd, int writefd, int pid)
@@ -1684,6 +1805,10 @@ ast1300_shim(sys_data_t *sys, int ast_fd, int writefd, int pid)
 	}
     }
 }
+
+/**************************************************************************
+ * General sensor handling
+ *************************************************************************/
 
 struct sensor_info {
     char *filename;
@@ -2271,16 +2396,6 @@ set_sensors_from_table(sys_data_t *sys, struct sensor_handling *h)
 }
 
 static void
-power_down_system(sys_data_t *sys)
-{
-    unsigned int i;
-    unsigned char val = 0;
-
-    for (i = 0; i < NUM_BOARDS; i++)
-	set_chassis_control(NULL, CHASSIS_CONTROL_POWER, &val, &boards[i]);
-}
-
-static void
 handle_eesense_data(sys_data_t *sys)
 {
     unsigned int i, j;
@@ -2439,11 +2554,19 @@ set_sensors_from_tables(int fd, void *cb_data)
     pthread_mutex_unlock(&scan_mutex);
 }
 
+/**************************************************************************
+ * Marvell OEM commands.
+ *************************************************************************/
+
 struct fru_write_data {
     sys_data_t *sys;
     unsigned int num;
 };
 
+/*
+ * Writing FRU data is too slow to do in the main thread, so do it in
+ * another thread.
+ */
 static void *
 fru_write_thread(void *cb_data)
 {
@@ -2585,6 +2708,44 @@ handle_marvell_cmd(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
+int
+ipmi_sim_module_print_version(sys_data_t *sys, char *initstr)
+{
+    printf("IPMI Simulator Marvell AXP module version %s\n", PVERSION);
+    return 0;
+}
+
+/*
+ * An emulator command for simulating a change in the board's presense.
+ */
+static int simulate_board_presence(emu_out_t  *out,
+				   emu_data_t *emu,
+				   lmc_data_t *mc,
+				   char       **toks)
+{
+    int rv;
+    unsigned int board, present;
+    const char *err;
+
+    rv = get_uint(toks, &board, &err);
+    if (rv || (board == 0 || board > NUM_BOARDS)) {
+	out->printf(out, "Invalid board number: %s\n", err);
+	return EINVAL;
+    }
+    board--;
+    rv = get_bool(toks, &present, &err);
+    if (rv || (board == 0 || board > NUM_BOARDS)) {
+	out->printf(out, "Invalid board presence value: %s\n", err);
+	return EINVAL;
+    }
+    simulate_board_absent[board] = !present;
+}
+
+
+/**************************************************************************
+ * BMC reset handling
+ *************************************************************************/
+
 static void
 handle_cold_reset(lmc_data_t    *mc,
 		  msg_t         *msg,
@@ -2625,6 +2786,10 @@ handle_warm_reset(lmc_data_t    *mc,
     exit(1);
 }
 
+/*
+ * This is a timer that is periodically called from the main thread,
+ * it is basically used to tell if the main thread is running.
+ */
 static void
 wdt_test_timeout(void *cb_data)
 {
@@ -2640,37 +2805,10 @@ wdt_test_timeout(void *cb_data)
     sys->start_timer(wdt_test_timer, &tv);
 }
 
-int
-ipmi_sim_module_print_version(sys_data_t *sys, char *initstr)
-{
-    printf("IPMI Simulator Marvell AXP module version %s\n", PVERSION);
-    return 0;
-}
 
-static unsigned int cold_power_up = 1;
-
-static int simulate_board_presence(emu_out_t  *out,
-				   emu_data_t *emu,
-				   lmc_data_t *mc,
-				   char       **toks)
-{
-    int rv;
-    unsigned int board, present;
-    const char *err;
-
-    rv = get_uint(toks, &board, &err);
-    if (rv || (board == 0 || board > NUM_BOARDS)) {
-	out->printf(out, "Invalid board number: %s\n", err);
-	return EINVAL;
-    }
-    board--;
-    rv = get_bool(toks, &present, &err);
-    if (rv || (board == 0 || board > NUM_BOARDS)) {
-	out->printf(out, "Invalid board presence value: %s\n", err);
-	return EINVAL;
-    }
-    simulate_board_absent[board] = !present;
-}
+/**************************************************************************
+ * Module initialization
+ *************************************************************************/
 
 int
 ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
