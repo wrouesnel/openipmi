@@ -2728,13 +2728,17 @@ static int simulate_board_presence(emu_out_t  *out,
     const char *err;
 
     rv = get_uint(toks, &board, &err);
-    if (rv || (board == 0 || board > NUM_BOARDS)) {
+    if (!rv && ((board == 0 || board > NUM_BOARDS))) {
+	err = "board number out of range";
+	rv = EINVAL;
+    }
+    if (rv) {
 	out->printf(out, "Invalid board number: %s\n", err);
 	return EINVAL;
     }
     board--;
     rv = get_bool(toks, &present, &err);
-    if (rv || (board == 0 || board > NUM_BOARDS)) {
+    if (rv) {
 	out->printf(out, "Invalid board presence value: %s\n", err);
 	return EINVAL;
     }

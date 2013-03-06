@@ -1,3 +1,8 @@
+2012-03-05 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix a bug in the board
+	removal simulation.
+
 2012-03-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu_cmd.c, lanserv/OpenIPMI/serv.h: Add the ability to
