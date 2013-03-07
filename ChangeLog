@@ -1,3 +1,9 @@
+2012-03-07 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: The system serial number for
+	the board was being set wrong, the data was off by 1 in the fru
+	version 2 case.
+
 2012-03-05 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix a bug in the board

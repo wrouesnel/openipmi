@@ -1571,7 +1571,7 @@ init_chassis(sys_data_t *sys)
     if (chassis_fru[chassis_chinfo + sernum_offset] != 0xd4) {
 	/* Try the version 2.0 of the FRU data */
 	sernum_offset = 17;
-	sernum_offset2 = 0;
+	sernum_offset2 = 1;
     }
     if (chassis_fru[chassis_chinfo + sernum_offset] != 0xd4) {
 	sys->log(sys, SETUP_ERROR, NULL,
