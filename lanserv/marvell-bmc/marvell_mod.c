@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.9"
+#define PVERSION "2.0.10"
 
 #define NUM_BOARDS 6
 
@@ -1208,7 +1208,12 @@ handle_board_fru(sys_data_t *sys, int num)
 	sys->log(sys, SETUP_ERROR, NULL, "Warning: Chassis chassis info FRU"
 		 "invalid, not checking board %d FRU chassis data", num + 1);
     } else {
-	if (memcmp(fru + chinfo + brdchsernum_offset,
+	/*
+	 * If we have a different FRU version, or if the serial
+	 * numbers don't match, then update the chassis info area.
+	 */
+	if ((brdchsernum_offset != sernum_offset) ||
+	    memcmp(fru + chinfo + brdchsernum_offset,
 		   chassis_fru + chassis_chinfo + sernum_offset,
 		   sernum_len) != 0) {
 	    /* The chassis serial number has changed. */
