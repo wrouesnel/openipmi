@@ -1318,6 +1318,7 @@ main(int argc, char *argv[])
     struct addrinfo hints, *res0;
     struct sockaddr_storage saddr;
     struct sockaddr *addr = (struct sockaddr *) &saddr;
+    size_t addrlen;
     struct msg_info *mi = &main_mi;
     int rv;
     char *s, *e;
@@ -1418,6 +1419,7 @@ main(int argc, char *argv[])
     }
     /* Only get the first choices */
     memcpy(addr, res0->ai_addr, res0->ai_addrlen);
+    addrlen = res0->ai_addrlen;
     freeaddrinfo(res0);
 
     mi->sock = socket(addr->sa_family, SOCK_STREAM, 0);
@@ -1426,7 +1428,7 @@ main(int argc, char *argv[])
 	usage();
     }
 
-    rv = connect(mi->sock, (struct sockaddr *) &addr, sizeof(addr));
+    rv = connect(mi->sock, (struct sockaddr *) addr, addrlen);
     if (rv < 0) {
 	perror("connect");
 	usage();
