@@ -722,8 +722,8 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
 		     num + 1);
 	rv = set_intval(trg_power[num], BOARD_POWER_OFF);
 	if (rv) {
-	    sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on for"
-		     " board %d: %s", num + 1, strerror(rv));
+	    sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power off"
+		     " for board %d: %s", board->num, strerror(rv));
 	    return rv;
 	}
 
