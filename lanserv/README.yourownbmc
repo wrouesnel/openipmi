@@ -1,0 +1,213 @@
+            Using ipmi_sim For A Real BMC
+            -----------------------------
+
+So you want to create a real BMC.  This is now possible with the
+simulator.  So it's really not a simulator in this case, but that's
+its heritage, so the name is still stuck.  Maybe I'll change it later.
+
+Anyway, It can do most of the work without even writing any C code,
+just with configuration.  It probably won't do everything you want out
+of the box, though, so it has plugin capability to let you add your
+own code to handle special conditions.
+
+This documentation assumes a good working knowledge of IPMI.
+
+
+How It Works
+------------
+
+The simulator has the two standard configuration files as defined in
+the ipmi_sim_cmd.5 and ipmi_lan.5 man pages.  The LAN configuration
+file defines the lan interfaces and a few other things, like SOL
+configuration.
+
+The emulator command file has commands to define the IPMI structure of
+the system, like management controllers, sensors, FRU data, SDRs, etc.
+
+So to create a BMC, you define the LAN interfaces, the management
+controllers, the sensors, etc. in your system.  You can tie the FRU
+data to physical files on the system (like EEPROMS in sysfs, or real
+files).  You can tie the sensors to files, like sensors in sysfs.  You
+can also write custom code and tie it in to set the sensor values.
+
+
+Management Controllers
+----------------------
+
+To have a management controller handled by ipmi_sim, you have to add
+it via the mc_add command, then you have to enable it with mc_enable.
+This is a virtual management controller.  You have to add the BMC at
+0x20, of course, but you can add others, too, if that makes sense.
+For instance, if you have multiple boards in the system, it may make
+sense to define a virtual MC for each board.  This is pretty simple.
+Note that the capabilities you set with the mc_add command affect what
+the MC can do.  You can't add SDRs, for instance, if the MC doesn't
+have SDR capability.
+
+
+LAN Configuration
+-----------------
+
+The LAN configuration file mostly defines the LAN interfaces.  It also
+has a lot of simulator configuration, like how to start virtual
+machine sessions tied to the management controllers and how the VMs
+interface to the simulator.  These aren't terribly useful for a real
+BMC (though the serial interface might one day with some
+modifications).
+
+The name of the BMC is set here.  This is used for a few things, like
+to tell where to store persistent information (in
+/var/ipmi_sim/<name>) and in logging.
+
+A few other things in the file are SOL configuration, chassis control
+handling, and loading custom code.  These are discussed later.
+
+
+Sensors
+-------
+
+Sensors are added with the emulator command file with the sensor_add
+command.  This command also lets you poll a file for data and has a
+lot of options for massaging the data from the file into the 256 byte
+value returned by an IPMI sensor.  It also lets you tie a dependency
+to a discrete sensor, so that the enabling of the sensor can be done
+based on a bit in the other discrete sensor.  For instance, a power
+supply sensor has a presense bit in it, the power supply voltage and
+current sensors can depend on that bit to be enabled or disabled.
+
+If you are writing custom code to handle a sensor, you still have to
+add it with sensor_add, then you can use the sensor number to
+manipulate the sensor's value.  You have three main functions to do
+this:
+
+ipmi_mc_sensor_set_enabled() will let you enable or disable a sensor
+directly.  Generally you would modify the sensor enable based upon the
+presense of the entity the sensor measures.
+
+ipmi_mc_sensor_set_value() sets a threshold sensor's value.
+
+ipmi_mc_sensor_set_bit() sets/clears a discrete sensor bit.
+
+
+SDRs
+----
+
+If you have sensors, you need SDRs to describe them.  You can directly
+add these via the emulator command main_sdr_add (or device_sdr_add),
+but that only deals with raw data and is a fairly inconvenient way to
+do this.
+
+The main SDRs for an MC are persistent and stored in
+/var/ipmi_sim/<system-name/sdr.<ipmb-addr>.main.  For instance, the
+main SDRs for a BMC at 0x20 are in /var/ipmi_sim/<name>/sdr.20.main.
+If the user makes changes, they are stored there.  But, you can store
+your SDRs here, too.
+
+The easier way is to use the SDR compiler in the sdrcomp directory,
+which can output data in the persistence format.  Then you can write
+your SDRs in a more human-readable (or perhaps ipmi-engineer-readable)
+format rather than just a bunch of bits.  Then generate the file and
+copy it into the right place.
+
+
+Serial Over LAN
+---------------
+
+As mentioned earlier, you can define SOL port in the lan configuration
+file.  You can assign a physical serial port to a SOL port.  This is
+described in the docs and is pretty straightforward.
+
+There are a couple of unusual things about this, though.
+
+One is that you can create a SOL interface on an MC besides the BMC.
+But the standard SOL protocol will still work with it.  This means you
+can use "ipmitool -t <mc>" to address a specific SOL instance, which
+is convenient if you want to tie SOL interfaces to specific MCs.  Yes,
+it's kind of an abuse of the spec, but it works and is convenient.
+
+The other unusual thing about the SOL implementation is that it can
+have a history buffer.  So say you want to keep around the last 64K or
+so of data without having to be constantly connected to the BMC.  You
+can define a 64K history buffer and connect to the BMC later to fetch
+it.
+
+You have two ways to fetch it.  The first is that the history buffer
+appears as a second SOL instance at instance 2.  So you can connect to
+SOL instance 2 and it will dump all the history.  The disadvantage of
+this approach is that ipmitool cannot connect to SOL instances besides
+1 without a special patch.
+
+The other way to fetch it is to define a FRU data buffer that holds
+the history.  You can define which FRU device does this.  Then you can
+use the FRU data fetching commands to get the data.  The disadvantage
+of this is that FRU data is limited to 64K.
+
+
+FRU Data
+--------
+
+FRU data has already been mentioned with respect to SOL, but you can
+create FRU data for an MC with the mc_add_fru_data emulator command.
+You can either directly define the FRU data there (not ideal for a
+real BMC) or tie it to a file.  Reading and writing all work.
+
+
+Chassis Control
+---------------
+
+You can define an external command to handle chassis control commands.
+The ipmi_sim_chassiscontrol file gives a framework for writing your
+own script for handling this, and defines the various things that can
+be done.  This is how reset, power, and boot control are done.
+
+
+Custom Code
+-----------
+
+As mentioned before, you can load your own custom modules to do
+whatever you like.  
+
+Any module must define the following function:
+
+int ipmi_sim_module_init(sys_data_t *sys, const char *initstr);
+
+This is used to initialize the module.  It is called after the
+configuration has been read from the LAN configuration file, but
+before the emulator commands are run.  The module must also define the
+following function:
+
+int ipmi_sim_module_print_version(sys_data_t *sys, char *initstr);
+
+This should print out an identifier and version number to standard out.
+
+The module may optionally define the following function:
+
+int ipmi_sim_module_post_init(sys_data_t *sys);
+
+This is called after the emulator command file is run.  This can be
+used to finish up configuration of things, add functions to sensors,
+do any sensor initialization, or anything else that needs to be done
+after the emulator commands are run.
+
+The include files in lanserv/OpenIPMI define the interface function
+that a module may use.  Primarily, serv.h and mcserv.c.
+
+
+Threading
+---------
+
+The ipmi_sim code itself is not multi-threaded.  You cannot have
+concurrent calls into any of the code.  You can, however, define your
+own threads using pthreads as long as none of them call into the
+ipmi_sim code.
+
+
+What's Still Missing
+--------------------
+
+ipmi_sim currently does not have any provisions for direct IPMI
+support or the handling of any I2C commands.  This should be fairly
+easy to add, but has not yet been needed.
+
+Lots of other things are probably missing, too, of course, but it's
+hard to know what you don't know...
