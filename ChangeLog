@@ -1,3 +1,8 @@
+2012-03-27 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc_storage.c: Added EINTR and partial read/write
+	handling for FRU data.
+
 2012-03-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix a typo in an error string.
