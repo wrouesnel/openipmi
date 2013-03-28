@@ -1608,6 +1608,29 @@ handle_get_fru_inventory_area_info(lmc_data_t    *mc,
     *rdata_len = 4;
 }
 
+static int
+fru_sem_trywait(fru_data_t *fru)
+{
+    struct timespec ts;
+    int rv;
+
+    /* Wait 250ms for the semaphore. */
+  restart:
+    ts.tv_sec = 0;
+    ts.tv_nsec = 250000000;
+    rv = sem_timedwait(&fru->sem, &ts);
+    if (rv) {
+	if (rv == EINTR)
+	    goto restart;
+	if (rv == ETIMEDOUT)
+	    rv = EAGAIN;
+	else
+	    rv = errno;
+	return rv;
+    }
+    return 0;
+}
+
 static void
 handle_read_fru_data(lmc_data_t    *mc,
 		     msg_t         *msg,
@@ -1635,7 +1658,7 @@ handle_read_fru_data(lmc_data_t    *mc,
 	return;
     }
 
-    rv = sem_trywait(&fru->sem);
+    rv = fru_sem_trywait(fru);
     if (rv) {
 	if (rv == EAGAIN)
 	    rdata[0] = IPMI_NODE_BUSY_CC;
@@ -1727,7 +1750,7 @@ handle_write_fru_data(lmc_data_t    *mc,
 	return;
     }
 
-    rv = sem_trywait(&fru->sem);
+    rv = fru_sem_trywait(fru);
     if (rv) {
 	if (rv == EAGAIN)
 	    rdata[0] = IPMI_NODE_BUSY_CC;
@@ -1815,7 +1838,7 @@ ipmi_mc_get_fru_data(lmc_data_t    *mc,
     if (length > fru->length)
 	return EINVAL;
 
-    rv = sem_trywait(&fru->sem);
+    rv = fru_sem_trywait(fru);
     if (rv)
 	return errno;
 
@@ -1898,7 +1921,7 @@ ipmi_mc_fru_sem_trywait(lmc_data_t *mc, unsigned char device_id)
     fru_data_t *fru = find_fru(mc, device_id);
     if (!fru)
 	return EINVAL;
-    rv = sem_trywait(&fru->sem);
+    rv = fru_sem_trywait(fru);
     if (rv)
 	return errno;
     return 0;

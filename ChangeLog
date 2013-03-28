@@ -1,3 +1,10 @@
+2012-03-28 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/bmc_storage.c: Modified the fru_trywait to be
+	fru_timedwait when waiting for the FRU semaphore, and added a
+	250ms timeout on it.  That should be enough time for any
+	asynchronous operation to complete, but avoids an error return.
+
 2012-03-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_storage.c: Added EINTR and partial read/write
