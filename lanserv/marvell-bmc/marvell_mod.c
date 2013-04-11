@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.10"
+#define PVERSION "2.0.11"
 
 #define NUM_BOARDS 6
 
@@ -1840,6 +1840,9 @@ struct sensor_handling {
     char (*board_valids)[NUM_BOARDS];
     int (*board_last_values)[NUM_BOARDS];
     struct fan_duty_table *fan_duty;
+
+    /* Modify the duty tables by this much. */
+    int duty_offset;
 };
 
 static struct sensor_info switch_temp_sensors[] =
@@ -1891,7 +1894,8 @@ static struct sensor_handling main_temp =
     .board = board_temp_sensors,
     .board_valids = board_temp_sensor_valids,
     .board_last_values = board_temp_sensor_last_values,
-    .fan_duty = main_fan_duty_table
+    .fan_duty = main_fan_duty_table,
+    .duty_offset = 10
 };
 
 static struct sensor_info board_mb_sensors[] =
@@ -1919,7 +1923,8 @@ static struct sensor_handling mb_temp =
     .board = board_mb_sensors,
     .board_valids = board_mb_sensor_valids,
     .board_last_values = board_mb_sensor_last_values,
-    .fan_duty = mb_fan_duty_table
+    .fan_duty = mb_fan_duty_table,
+    .duty_offset = 0
 };
 
 static struct sensor_info board_front_sensors[] =
@@ -1946,7 +1951,8 @@ static struct sensor_handling front_temp =
     .board = board_front_sensors,
     .board_valids = board_front_sensor_valids,
     .board_last_values = board_front_sensor_last_values,
-    .fan_duty = front_fan_duty_table
+    .fan_duty = front_fan_duty_table,
+    .duty_offset = 0
 };
 
 static struct sensor_info switch_sensors[] =
@@ -1993,7 +1999,7 @@ static struct sensor_info board_sensors[] =
       .invalid_if_off = 1 },
     /* Board 1.05v */
     { "/sys/class/i2c-adapter/i2c-%d/%d-0049/in2_input", 9,
-      .mult=16, .div=25, .sub=900,
+      .mult=16, .div=25, .sub=800,
       .invalid_if_off = 1 },
     /* Board DIMMv */
     { "/sys/class/i2c-adapter/i2c-%d/%d-0049/in1_input", 11,
@@ -2014,7 +2020,7 @@ static struct sensor_handling system_sensors =
     .switch_last_values = switch_sensor_last_values,
     .board = board_sensors,
     .board_valids = board_sensor_valids,
-    .board_last_values = board_sensor_last_values
+    .board_last_values = board_sensor_last_values,
 };
 
 
@@ -2098,7 +2104,8 @@ get_readings(sys_data_t *sys, struct sensor_handling *h, int *rmax)
 }
 
 static int
-calc_duty(struct fan_duty_table *t, int v, int *last_v, int *last_duty)
+calc_duty(struct fan_duty_table *t, int duty_offset,
+	  int v, int *last_v, int *last_duty)
 {
     unsigned int i;
     int duty = 0;
@@ -2114,7 +2121,11 @@ calc_duty(struct fan_duty_table *t, int v, int *last_v, int *last_duty)
 	if (v < t[i].reading)
 	    break;
     }
-    duty = t[i - 1].setting;
+    duty = t[i - 1].setting + duty_offset;
+    if (duty > 100)
+	duty = 100;
+    if (duty < 42)
+	duty = 42;
     if (duty != *last_duty) {
 	*last_duty = duty;
 	*last_v = v;
@@ -2236,20 +2247,20 @@ scan_sensors(void *cb_data)
 
 	err = get_readings(sys, &main_temp, &max_temp);
 	if (!err) {
-	    max_duty = calc_duty(main_temp.fan_duty, max_temp,
-				 &last_main_v, &last_main_duty);
+	    max_duty = calc_duty(main_temp.fan_duty, main_temp.duty_offset,
+				 max_temp, &last_main_v, &last_main_duty);
 	}
 	err = get_readings(sys, &mb_temp, &max_temp);
 	if (!err) {
-	    duty = calc_duty(mb_temp.fan_duty, max_temp,
+	    duty = calc_duty(mb_temp.fan_duty, mb_temp.duty_offset, max_temp,
 			     &last_mb_v, &last_mb_duty);
 	    if (duty > max_duty)
 		max_duty = duty;
 	}
 	err = get_readings(sys, &front_temp, &max_temp);
 	if (!err) {
-	    duty = calc_duty(front_temp.fan_duty, max_temp,
-			     &last_front_v, &last_front_duty);
+	    duty = calc_duty(front_temp.fan_duty, front_temp.duty_offset,
+			     max_temp, &last_front_v, &last_front_duty);
 	    if (duty > max_duty)
 		max_duty = duty;
 	}

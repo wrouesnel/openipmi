@@ -1,3 +1,11 @@
+2012-04-11 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Fix the calculations for the
+	1.05V sensor.
+
+	* lanserv/marvell-bmc/marvell_mod.c: Add a duty cycle modify field
+	to let you adjust the duty cycle of the fans.
+
 2012-03-28 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_storage.c: Modified the fru_trywait to be
