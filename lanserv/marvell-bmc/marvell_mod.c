@@ -73,7 +73,7 @@
 
 #include "wiw.h"
 
-#define PVERSION "2.0.11"
+#define PVERSION "2.0.12"
 
 #define NUM_BOARDS 6
 
@@ -562,7 +562,11 @@ get_intval(const char *fname, int *val)
 static ipmi_timer_t *power_timer;
 static unsigned int boards_waiting_power_on[NUM_BOARDS];
 static unsigned int num_boards_waiting_power_on;
-static int power_timer_running;
+static enum {
+    PT_NOT_RUNNING,
+    PT_RUNNING,
+    PT_WAITING_RESET
+} power_timer_running;
 
 /*
  * Return true if the board is on, false if not.
@@ -619,7 +623,7 @@ start_power_timer(sys_data_t *sys, unsigned int mintime)
 		 " %u seconds",
 		 boards_waiting_power_on[0] + 1, to_add);
     sys->start_timer(power_timer, &tv);
-    power_timer_running = 1;
+    power_timer_running = PT_RUNNING;
 }
 
 /*
@@ -660,7 +664,7 @@ board_remove_power_wait(sys_data_t *sys, unsigned int num)
 	    set_intval(COLD_POWER_FILE, 0);
 	    init_complete = 1;
 	}
-    } else if (!power_timer_running)
+    } else if (power_timer_running == PT_NOT_RUNNING)
 	start_power_timer(sys, 5);
 }
 
@@ -947,24 +951,43 @@ board_power_timeout(void *cb_data)
     struct board_info *board = &boards[num];
     int rv;
 
-    power_timer_running = 0;
-
     if (num_boards_waiting_power_on == 0) {
 	sys->log(sys, SETUP_ERROR, NULL, "Warning: power timer went off"
 		 " but no board waiting");
 	return;
     }
 
-    if (debug & 1)
-	sys->log(sys, DEBUG, NULL, "Powering on board %d", board->num + 1);
+    if (power_timer_running == PT_RUNNING) {
+	struct timeval tv;
 
-    /* Starts the next one if something is waiting. */
-    board_remove_power_wait(sys, num);
+	if (debug & 1)
+	    sys->log(sys, DEBUG, NULL, "Powering on board %d", num + 1);
 
-    rv = set_intval(trg_power[board->num], BOARD_POWER_ON);
-    if (rv)
-	sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on"
-		 " for board %d: %s", num, strerror(rv));
+	/* Hold the reset on the board for 100ms while it powers on. */
+	set_intval(trg_reset[num], BOARD_RESET_ON);
+
+	rv = set_intval(trg_power[num], BOARD_POWER_ON);
+	if (rv)
+	    sys->log(sys, OS_ERROR, NULL, "Warning: Unable to set power on"
+		     " for board %d: %s", num, strerror(rv));
+
+	/* Start the 100ms reset timer */
+	if (debug & 1)
+	    sys->log(sys, DEBUG, NULL, "Starting reset timer on board %u",
+		     num + 1);
+	power_timer_running = PT_WAITING_RESET;
+	tv.tv_sec = 0;
+	tv.tv_usec = 100000;
+	sys->start_timer(power_timer, &tv);
+    } else {
+	/* Take the board out of reset. */
+	set_intval(trg_reset[num], BOARD_RESET_OFF);
+
+	power_timer_running = PT_NOT_RUNNING;
+
+	/* Starts the next one if something is waiting. */
+	board_remove_power_wait(sys, num);
+    }
 }
 
 static void

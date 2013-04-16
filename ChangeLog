@@ -1,3 +1,8 @@
+2012-04-15 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell_mod.c: Modify the power on sequence
+	to hold the reset for 100ms after power on.
+
 2012-04-11 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix the calculations for the
