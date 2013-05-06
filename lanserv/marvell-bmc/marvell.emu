@@ -10,7 +10,7 @@ mc_setbmc 0x20
 #                                      FW    FW    Sup   ID       Id
 #                                      Rev   Rev
 mc_add 0x20 0     no-device-sdrs 0x00  0x00  0x00  0x9f  0x00500f 0x0001 persist_sdr
-sel_enable 0x20 50 0x0a
+sel_enable 0x20 1000 0x0a
 
 mc_add_fru_data 0x20 0 2048 \
   file 0 "/sys/class/i2c-adapter/i2c-0/0-0051/at24c128"

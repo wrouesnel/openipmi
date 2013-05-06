@@ -1,3 +1,7 @@
+2012-05-06 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/marvell-bmc/marvell.emu: Change the SEL size to 1000 entries.
+
 2012-04-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Modify the power on sequence
