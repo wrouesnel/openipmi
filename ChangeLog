@@ -2,6 +2,9 @@
 
 	* lanserv/marvell-bmc/marvell.emu: Change the SEL size to 1000 entries.
 
+	* lanserv/sol.c: Fix an error shutdown issue that can result in a
+	SIGSEGV.
+
 2012-04-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Modify the power on sequence

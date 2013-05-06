@@ -1307,7 +1307,7 @@ handle_sol_shutdown(void *info, int sig)
     soldata_t *sd = sol->soldata;
     FILE *f;
 
-    if (sol->configured < 2)
+    if (sol->configured < 2 || !sd)
 	return;
 
 #ifdef USE_UUCP_LOCKING

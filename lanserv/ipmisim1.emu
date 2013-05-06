@@ -7,7 +7,7 @@ mc_setbmc 0x20
 
 # Now add the BMC
 mc_add 0x20 0 no-device-sdrs 0x23 9 8 0x9f 0x1291 0xf02 persist_sdr
-sel_enable 0x20 50 0x0a
+sel_enable 0x20 1000 0x0a
 
 # Add a temperature sensor and its SDR.  Note that sensor 0 is already
 # taken as the watchdog sensor.
@@ -30,7 +30,7 @@ sensor_set_event_support 0x20 0 1 enable scanning per-state \
 # Add a satellite MC
 mc_add 0x30 2 no-device-sdrs 0x98 0x10 1 0x80 0x1291 0xf03
 
-sensor_add 0x30 0 1 0x01 0x01 poll file 1000 "/tmp/file1.ipm"
+sensor_add 0x30 0 1 0x01 0x01 poll 1000 file "/tmp/file1.ipm"
 #main_sdr_add 20 \
 #	     00 00 51 01 31 \
 #	     30 00 01 03 02 67 88 01 01 c0 0f c0 7f 38 38 00 \
