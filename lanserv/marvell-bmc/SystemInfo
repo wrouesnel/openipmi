@@ -1,0 +1,94 @@
+
+The BMC uses the following devices in the kernel:
+
+Serial ports:
+ 1: /dev/ttyAS0
+ 2: /dev/ttyAS1
+ 3: /dev/ttyAS2
+ 4: /dev/ttyAS3
+ 5: /dev/ttyAS4
+ 6: /dev/ttyS1
+
+
+Fan fail LEDs:
+    /sys/class/astgpio/GPIOP0
+    /sys/class/astgpio/GPIOP1
+    /sys/class/astgpio/GPIOP2
+    /sys/class/astgpio/GPIOP3
+
+Power supply status:
+    /sys/class/wixpmbus/STATUS_1
+    /sys/class/wixpmbus/STATUS_2
+
+Board reset:
+    /sys/class/astgpio/GPIOH[0-5]
+
+Board power:
+    /sys/class/astgpio/GPIOD[6-7]
+    /sys/class/astgpio/GPIOB[0-3]
+
+Board present:
+    /sys/class/astgpio/GPIOC[0-5]
+
+Power off request:
+    /sys/class/astgpio/GPIOA[6-7]
+    /sys/class/astgpio/GPIOI[4-7]
+
+Power off ready:
+    /sys/class/astgpio/GPIOA[0-3]
+    /sys/class/astgpio/GPIOG[4-5]
+
+System FRU data:
+    /sys/class/i2c-adapter/i2c-0/0-0051/at24c128
+
+Switch sensors:
+ switch temp:
+    /sys/class/i2c-adapter/i2c-0/0-0058/temp2_input
+ switch cpu temp:
+    /sys/class/i2c-adapter/i2c-0/0-0058/temp3_input
+ 12V
+    /sys/class/i2c-adapter/i2c-0/0-0058/in11_input
+ 3.3V
+    /sys/class/i2c-adapter/i2c-0/0-0058/in10_input
+ 1.8V
+    /sys/class/i2c-adapter/i2c-0/0-0058/in2_input
+ Fan 1-8
+    /sys/class/astfan/fan[1-8]_input
+
+Power supply
+ Voltage:
+    /sys/class/wixpmbus/VOUT_[1-2]
+ Current:
+    /sys/class/wixpmbus/IOUT_[1-2]
+  Power
+    /sys/class/wixpmbus/POUT_[1-2]
+
+
+For the rest of these "n" is the board number.
+
+ Board FRU data
+    /sys/class/i2c-adapter/i2c-n/n-0050/at24c64
+ Board CPU temp
+    /sys/class/i2c-adapter/i2c-n/n-0064/temp1_input
+ Board DIMM temp
+    /sys/class/i2c-adapter/i2c-n/n-001e/temp1_input
+ Board motherboard temp
+    /sys/class/i2c-adapter/i2c-n/n-004a/temp1_input
+ Board front temp
+    /sys/class/i2c-adapter/i2c-n/n-004c/temp1_input
+ 1V
+    /sys/class/i2c-adapter/i2c-n/n-0048/in3_input
+ 1.8V
+    /sys/class/i2c-adapter/i2c-n/n-0048/in2_input
+ 2.5V
+    /sys/class/i2c-adapter/i2c-n/n-0048/in1_input
+ 3.3V
+    /sys/class/i2c-adapter/i2c-n/n-0048/in0_input
+ 1.05V
+    /sys/class/i2c-adapter/i2c-n/n-0049/in2_input
+ DIMM V
+    /sys/class/i2c-adapter/i2c-n/n-0049/in1_input
+ .9V
+    /sys/class/i2c-adapter/i2c-n/n-0049/in0_input
+
+
