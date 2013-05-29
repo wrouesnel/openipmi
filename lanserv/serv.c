@@ -304,5 +304,5 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 	for (; size > 0; size--, data++)
 		csum += *data;
 
-	return -csum;
+	return csum;
 }

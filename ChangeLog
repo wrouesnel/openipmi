@@ -1,3 +1,13 @@
+2012-05-29 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/serv.c: Don't return negative of the checksum, let the
+	calling routine do that so it can do running checksums.
+
+	* lanserv/bmc.c, lanserv/lanserv.c: Negate the checksum.
+
+	* lanserv/serial_ipmi.c, lanserv/lanserv_ipmi.c: Fix some style issues
+	around the checksum code.
+
 2012-05-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell.emu: Change the SEL size to 1000 entries.

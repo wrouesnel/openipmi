@@ -469,13 +469,13 @@ return_rsp(lanserv_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 
     pos[0] = msg->rq_addr;
     pos[1] = (rsp->netfn << 2) | msg->rq_lun;
-    pos[2] = - ipmb_checksum(pos, 2, 0);
+    pos[2] = -ipmb_checksum(pos, 2, 0);
     pos[3] = msg->rs_addr;
     pos[4] = (msg->rq_seq << 2) | msg->rs_lun;
     pos[5] = rsp->cmd;
 
     csum = ipmb_checksum(pos+3, 3, 0);
-    csum = - ipmb_checksum(rsp->data, rsp->data_len, csum);
+    csum = -ipmb_checksum(rsp->data, rsp->data_len, csum);
 
     vec[0].iov_base = data;
 

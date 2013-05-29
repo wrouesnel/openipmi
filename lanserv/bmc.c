@@ -338,7 +338,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	rdata_len = &rmsg->len;
 	rmsg->data[0] = emu->sysinfo->bmc_ipmb;
 	rmsg->data[1] = ((data[1] & 0xfc) | 0x4) | (data[4] & 0x3);
-	rmsg->data[2] = ipmb_checksum(rdata+1, 2, 0);
+	rmsg->data[2] = -ipmb_checksum(rdata+1, 2, 0);
 	rmsg->data[3] = data[0];
 	rmsg->data[4] = (data[4] & 0xfc) | (data[1] & 0x03);
 	rmsg->data[5] = data[5];
@@ -400,7 +400,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 			      "Response message:");
 
 	rmsg->len += 6;
-	rmsg->data[rmsg->len] = ipmb_checksum(rmsg->data, rmsg->len, 0);
+	rmsg->data[rmsg->len] = -ipmb_checksum(rmsg->data, rmsg->len, 0);
 	rmsg->len += 1;
 	if (srcmc->recv_q_tail) {
 	    rmsg->next = srcmc->recv_q_tail;

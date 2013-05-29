@@ -900,13 +900,17 @@ vm_send(msg_t *imsg, serserv_data_t *si)
     ch = imsg->rq_seq;
     vm_add_char(ch, c, &len);
     csum = ipmb_checksum(&ch, 1, 0);
+
     ch = (imsg->netfn << 2) | imsg->rs_lun;
     vm_add_char(ch, c, &len);
     csum = ipmb_checksum(&ch, 1, csum);
+
     vm_add_char(imsg->cmd, c, &len);
     csum = ipmb_checksum(&imsg->cmd, 1, csum);
+
     for (i = 0; i < imsg->len; i++)
 	vm_add_char(imsg->data[i], c, &len);
+
     vm_add_char(-ipmb_checksum(imsg->data, imsg->len, csum), c, &len);
     c[len++] = VM_MSG_CHAR;
 

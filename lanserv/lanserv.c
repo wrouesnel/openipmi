@@ -308,14 +308,15 @@ handle_msg_ipmi_dev(int smi_fd, void *cb_data, os_hnd_fd_id_t *id)
 	data[0] = 0; /* return code. */
 	data[1] = info->bmc_ipmb;
 	data[2] = (rsp.msg.netfn << 2) | 2;
-	data[3] = ipmb_checksum(data+1, 2, 0);
+	data[3] = -ipmb_checksum(data+1, 2, 0);
 	data[4] = ipmb->slave_addr;
 	data[5] = (msg->data[4] & 0xfc) | ipmb->lun;
 	data[6] = rsp.msg.cmd;
 	memcpy(data+7, rsp.msg.data, rsp.msg.data_len);
 	rsp.msg.data = data;
 	rsp.msg.data_len += 8;
-	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
+	data[rsp.msg.data_len-1] = -ipmb_checksum(data+1, rsp.msg.data_len-2,
+						  0);
     } else {
 	lanserv_log(NULL, DEBUG, NULL, "Error!\n");
 	return;
