@@ -1,3 +1,11 @@
+2012-06-13 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
+
+	* lib/ipmi_lan.c: Fix misbehaviour of code in
+	check_session_seq_num() when incoming sequence number contains
+	garbage.  Also, it fixes type of 'bit' variable same as type of
+	(*map) it operates on... but still not enough for lt_allowed=16.
+
+
 2012-05-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/serv.c: Don't return negative of the checksum, let the

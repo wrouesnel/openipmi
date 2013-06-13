@@ -2854,15 +2854,15 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 		      int gt_allowed, int lt_allowed)
 {
     /* Check the sequence number. */
-    if ((int) (seq - *in_seq) <= gt_allowed) {
-	/* It's after the current sequence number, but within 8.  We
-           move the sequence number forward. */
+    if ((int) (seq - *in_seq) >= 0 && (int) (seq - *in_seq) <= gt_allowed) {
+	/* It's after the current sequence number, but within gt_allowed.
+	   We move the sequence number forward. */
 	*map <<= seq - *in_seq;
 	*map |= 1;
 	*in_seq = seq;
-    } else if ((int) (*in_seq - seq) <= lt_allowed) {
-	/* It's before the current sequence number, but within 8. */
-	uint8_t bit = 1 << (*in_seq - seq);
+    } else if ((int) (*in_seq - seq) >= 0 && (int) (*in_seq - seq) <= lt_allowed) {
+	/* It's before the current sequence number, but within lt_allowed. */
+	uint16_t bit = 1 << (*in_seq - seq);
 	if (*map & bit) {
 	    /* We've already received the message, so discard it. */
 	    add_stat(lan->ipmi, STAT_DUPLICATES, 1);
