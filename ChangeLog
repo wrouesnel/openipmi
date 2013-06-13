@@ -1,12 +1,14 @@
-2012-06-13 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
+2013-06-13 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* lib/ipmi_lan.c: Fix misbehaviour of code in
 	check_session_seq_num() when incoming sequence number contains
 	garbage.  Also, it fixes type of 'bit' variable same as type of
 	(*map) it operates on... but still not enough for lt_allowed=16.
 
+	* lib/ipmi_lan.c: Change the message map size to 32 bits so it can
+	handle a full 16-message window.
 
-2012-05-29 Corey Minyard <cminyard@mvista.com>
+2013-05-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/serv.c: Don't return negative of the checksum, let the
 	calling routine do that so it can do running checksums.
@@ -16,19 +18,19 @@
 	* lanserv/serial_ipmi.c, lanserv/lanserv_ipmi.c: Fix some style issues
 	around the checksum code.
 
-2012-05-06 Corey Minyard <cminyard@mvista.com>
+2013-05-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell.emu: Change the SEL size to 1000 entries.
 
 	* lanserv/sol.c: Fix an error shutdown issue that can result in a
 	SIGSEGV.
 
-2012-04-15 Corey Minyard <cminyard@mvista.com>
+2013-04-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Modify the power on sequence
 	to hold the reset for 100ms after power on.
 
-2012-04-11 Corey Minyard <cminyard@mvista.com>
+2013-04-11 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix the calculations for the
 	1.05V sensor.
@@ -36,26 +38,26 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Add a duty cycle modify field
 	to let you adjust the duty cycle of the fans.
 
-2012-03-28 Corey Minyard <cminyard@mvista.com>
+2013-03-28 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_storage.c: Modified the fru_trywait to be
 	fru_timedwait when waiting for the FRU semaphore, and added a
 	250ms timeout on it.  That should be enough time for any
 	asynchronous operation to complete, but avoids an error return.
 
-2012-03-27 Corey Minyard <cminyard@mvista.com>
+2013-03-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_storage.c: Added EINTR and partial read/write
 	handling for FRU data.
 
-2012-03-08 Corey Minyard <cminyard@mvista.com>
+2013-03-08 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix a typo in an error string.
 
 	* sample/ipmi_serial_bmc_emu.c: Fix the IP address configuration
 	so it actually works.
 
-2012-03-07 Corey Minyard <cminyard@mvista.com>
+2013-03-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: The system serial number for
 	the board was being set wrong, the data was off by 1 in the fru
@@ -65,12 +67,12 @@
 	a board if the version of the main chassis info is different than the
 	version for the board.
 
-2012-03-05 Corey Minyard <cminyard@mvista.com>
+2013-03-05 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix a bug in the board
 	removal simulation.
 
-2012-03-04 Corey Minyard <cminyard@mvista.com>
+2013-03-04 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu_cmd.c, lanserv/OpenIPMI/serv.h: Add the ability to
 	dynamically add new emulator commands.  Useful for debugging.
@@ -90,7 +92,7 @@
 	documentation and reorganize things a bit to make sure that
 	related functions are grouped together.
 
-2012-02-25 Corey Minyard <cminyard@mvista.com>
+2013-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_sensor.c: The previous change to avoid bogus events
 	from polled sensors turned off the timer for polled sensors, thus
@@ -98,7 +100,7 @@
 
 	* lanserv/marvell-bmc/lancontrol: Handle incomplete arp results.
 
-2012-02-22 Corey Minyard <cminyard@mvista.com>
+2013-02-22 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/mcserv.h, lanserv/emu_cmd.c: Add postinit
 	function to the polled sensor handler to call after the sensor is
@@ -111,7 +113,7 @@
 	sensor with the present bit set so that no log is issued for
 	normal startup.
 
-2012-02-21 Corey Minyard <cminyard@mvista.com>
+2013-02-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_storage.c: Fix an issue with writing FRU data to a
 	file, it was writing the wrong data.
@@ -128,7 +130,7 @@
 
 	* lanserv/bmc_storage.c: Make the SEL overflow bit work.
 
-2012-02-12 Corey Minyard <cminyard@mvista.com>
+2013-02-12 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/ipmi_sim.c: Add a way to catch fatal signals, and add a
 	shutdown handler for when the program either shuts down normally
@@ -143,7 +145,7 @@
 	* lanserv/marvell-bmc/lan.conf: Add sol shutdown/restore files for
 	all the sol sessions.
 
-2012-02-07 Corey Minyard <cminyard@mvista.com>
+2013-02-07 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in, lanserv/Makefile.am: Add a --with-marvell-bmc
 	option.
@@ -151,7 +153,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Add support for the version
 	2.0 FRU.
 
-2012-02-06 Corey Minyard <cminyard@mvista.com>
+2013-02-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Add an option to disable the
 	watchdog timer.
@@ -159,7 +161,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Fix reset reason to be hard
 	reset unless coldboot or warmboot is set.
 
-2012-02-04 Corey Minyard <cminyard@mvista.com>
+2013-02-04 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Add support for BUILD_CC.
 
@@ -189,7 +191,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Always use the motherboard
 	temperature sensor when calculating fan duty.
 
-2012-02-03 Corey Minyard <cminyard@mvista.com>
+2013-02-03 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Add support for /dev/watchdog.
 
@@ -202,7 +204,7 @@
 	* lanserv/bmc.c: Fix handling of adding commands to existing
 	netfns, the cb_data may be NULL in that case.
 
-2012-01-24 Corey Minyard <cminyard@mvista.com>
+2013-01-24 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/openipmigui/Makefile.am: Fix the localcopy command
 	to actually make a local copy.
@@ -213,7 +215,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Minor cleanups and memory
 	usage inprovements.
 
-2012-01-23 Corey Minyard <cminyard@mvista.com>
+2013-01-23 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc_sensor.c: Don't require a sensor to be enabled to
 	be polled.  The sensor enable is often set in the polling routine.
@@ -224,7 +226,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Fix the power supply sensor,
 	it was fairly broken with respect to presence.
 
-2012-01-21 Corey Minyard <cminyard@mvista.com>
+2013-01-21 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc/marvell_mod.c: Don't allow power to be
 	changed on a board that is not present.
@@ -238,7 +240,7 @@
 	* lanserv/marvell-bmc/marvell_mod.c: Fix an issue with setting
 	board presense in the wrong place.
 
-2012-01-20 Corey Minyard <cminyard@mvista.com>
+2013-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/marvell-bmc, lanserv/Makefile.am: Add the Marvell BMC
 	code ipmi_sim plugin.
@@ -246,7 +248,7 @@
 	* lanserv/ipmi_sim.c, lanserv/lanserv.c: Add config.h include so
 	syslog testing will work.
 
-2012-01-18 Corey Minyard <cminyard@mvista.com>
+2013-01-18 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Change the command handler to take a cb_data
 	parameter.
@@ -255,7 +257,7 @@
 	data to be more memory efficient.
 	* lanserv/bmc_picmg.c: Adjust for previous change.
 
-2012-01-14 Corey Minyard <cminyard@mvista.com>
+2013-01-14 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/bmc.h, lanserv/OpenIPMI/mcserv.h, lanserv/bmc_sensor.h:
 	Modify the sensor bit settings to use bitmasks of a uint16_t
@@ -269,7 +271,7 @@
 	sensor rearm and add a way to register to get called if a sensor
 	is rearmed.
 
-2012-01-11 Corey Minyard <cminyard@mvista.com>
+2013-01-11 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sol.c: Fix a bug where a sol connection can hang on an
 	overflow of data.  The handling of sol reading was reworked quite
@@ -294,7 +296,7 @@
 	expects to be able to re-read parameters and get the value it
 	wrote.
 
-2012-01-10 Corey Minyard <cminyard@mvista.com>
+2013-01-10 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/extcmd.c: Fix issues with IP addresses on ARM.
 
@@ -316,11 +318,11 @@
 	* lanserv/bmc_storace.c: Convert reading/writing EEPROM data to
 	use raw I/O, not buffered I/O.
 
-2012-01-09 Corey Minyard <cminyard@mvista.com>
+2013-01-09 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp.c: Add type 18 SDR.
 
-2012-01-07 Corey Minyard <cminyard@mvista.com>
+2013-01-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/ipmi_sim.c: Fix the IO exception callback.
 
@@ -334,7 +336,7 @@
 
 	* lanserv/sdrcomp.c: Add timestamps and entity names to SDRs.
 
-2012-01-06 Corey Minyard <cminyard@mvista.com>
+2013-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/mcserv.h, lanserv/bmc_sensor.c: Add flags to the threshold
 	and event support settings to allow values to be passed in to control
@@ -363,14 +365,14 @@
 	* lanserv/bmc_sensor.c: Don't process polled sensor data if it's
 	not valid.
 
-2012-01-03 Corey Minyard <cminyard@mvista.com>
+2013-01-03 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/*: Fix const correctness issues.
 
 	* lanserv/emu_cmd.c, lanserv/config.c: Add variable definition and
 	include commands.
 
-2012-01-02 Corey Minyard <cminyard@mvista.com>
+2013-01-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp.c: Lots of enhancements, names for fields,
 	and general things to make this easier to use.

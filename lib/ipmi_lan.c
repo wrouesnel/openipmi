@@ -260,12 +260,12 @@ typedef struct lan_ip_data_s
     uint32_t                   session_id;
     uint32_t                   outbound_seq_num;
     uint32_t                   inbound_seq_num;
-    uint16_t                   recv_msg_map;
+    uint32_t                   recv_msg_map;
 
     /* RMCP+ specific info */
     uint32_t                   unauth_out_seq_num;
     uint32_t                   unauth_in_seq_num;
-    uint16_t                   unauth_recv_msg_map;
+    uint32_t                   unauth_recv_msg_map;
     unsigned char              working_integ;
     unsigned char              working_conf;
     uint32_t                   mgsys_session_id;
@@ -2850,7 +2850,7 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
    ranges, so adjust for this. */
 static int
 check_session_seq_num(lan_data_t *lan, uint32_t seq,
-		      uint32_t *in_seq, uint16_t *map,
+		      uint32_t *in_seq, uint32_t *map,
 		      int gt_allowed, int lt_allowed)
 {
     /* Check the sequence number. */
@@ -2862,7 +2862,7 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 	*in_seq = seq;
     } else if ((int) (*in_seq - seq) >= 0 && (int) (*in_seq - seq) <= lt_allowed) {
 	/* It's before the current sequence number, but within lt_allowed. */
-	uint16_t bit = 1 << (*in_seq - seq);
+	uint32_t bit = 1 << (*in_seq - seq);
 	if (*map & bit) {
 	    /* We've already received the message, so discard it. */
 	    add_stat(lan->ipmi, STAT_DUPLICATES, 1);
@@ -2888,14 +2888,14 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
 
 static int
 check_15_session_seq_num(lan_data_t *lan, uint32_t seq,
-			 uint32_t *in_seq, uint16_t *map)
+			 uint32_t *in_seq, uint32_t *map)
 {
     return check_session_seq_num(lan, seq, in_seq, map, 8, 8);
 }
 
 static int
 check_20_session_seq_num(lan_data_t *lan, uint32_t seq,
-			 uint32_t *in_seq, uint16_t *map)
+			 uint32_t *in_seq, uint32_t *map)
 {
     return check_session_seq_num(lan, seq, in_seq, map, 15, 16);
 }
