@@ -1,3 +1,12 @@
+2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
+
+	* unix/posix_thread_os_hnd.c: This patch makes behaviour of
+	posix_thread_os_hnd's stop_timer() same as behaviour of
+	posix_os_hnd's stop_timer() currently is.
+
+	* swig/perl/.gitignore, swig/python/.gitignore, tcl/.gitignore:
+	More .gitignore.
+
 2013-08-27 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* lib/ipmi_lan.c: This change is needed to allow software using

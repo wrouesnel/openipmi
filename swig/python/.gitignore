@@ -1,0 +1,4 @@
+*.pyc
+*.pyo
+OpenIPMI.py
+OpenIPMI_wrap.c
