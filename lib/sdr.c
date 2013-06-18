@@ -1559,9 +1559,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	sdrs->supports_reserve_sdr = 1;
 
 	(sdrs->lun_has_sensors)[0] = (rsp->data[2] & 0x01) == 0x01;
-	(sdrs->lun_has_sensors)[1] = (rsp->data[2] & 0x01) == 0x02;
-	(sdrs->lun_has_sensors)[2] = (rsp->data[2] & 0x01) == 0x04;
-	(sdrs->lun_has_sensors)[3] = (rsp->data[2] & 0x01) == 0x08;
+	(sdrs->lun_has_sensors)[1] = (rsp->data[2] & 0x02) == 0x02;
+	(sdrs->lun_has_sensors)[2] = (rsp->data[2] & 0x04) == 0x04;
+	(sdrs->lun_has_sensors)[3] = (rsp->data[2] & 0x08) == 0x08;
 
 	if (sdrs->dynamic_population) {
 	    if (rsp->data_len < 7) {
