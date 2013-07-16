@@ -1,7 +1,10 @@
 #
 # Script to build the Marvell BMC.
 #
-# First you must get the software in the current directory:
+# Copy this script and the Install_Marvell_BMC.sh to the place where you
+# want to do the build and cd to there.
+#
+# Then you must get the software in the current directory:
 # 
 # armv5-marvell-linux-gnueabi-soft_i686.tar.bz2
 # buildroot-2011.05-sdk5.1.2.tar.bz2
@@ -20,7 +23,7 @@ BRDIR=${MBASEDIR}/${BUILDROOT}
 # Untar the toolchain and build system and get openipmi
 tar xjf ${TOOLCHAIN}.tar.bz2
 tar xjf ${BUILDROOT}.tar.bz2
-git clone git://openipmi.git.sourceforge.net/gitroot/openipmi/openipmi
+git clone git://git.code.sf.net/p/openipmi/code openipmi
 
 # Install the busybox config and set the toolchain path
 cp openipmi/lanserv/marvell-bmc/marvell_bmc.config ${BRDIR}/.config
