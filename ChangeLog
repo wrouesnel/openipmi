@@ -1,3 +1,9 @@
+2013-08-27 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
+
+	* lib/ipmi_lan.c: This change is needed to allow software using
+	library to see "connection timeout" error, that happens when BMC
+	indeed does not respond.
+
 2013-06-13 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* lib/ipmi_lan.c: Fix misbehaviour of code in

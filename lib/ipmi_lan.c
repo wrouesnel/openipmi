@@ -4950,7 +4950,12 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     lan = (lan_data_t *) ipmi->con_data;
 
-    if ((msg->data[0] != 0) || (msg->data_len < 9)) {
+    if (msg->data[0] != 0) {
+        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]), addr_num);
+	goto out;
+    }
+
+    if (msg->data_len < 9) {
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
