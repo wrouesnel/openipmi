@@ -3,6 +3,22 @@
 	* unix/posix_thread_os_hnd.c: Add a lock to the timer to avoid
 	races starting and stopping the timer.
 
+	* cmdlang/cmd_lanparm.c: Cleanups for warnings.
+	* cmdlang/cmd_solparm.c: ditto
+	* lanserv/ipmi_sim.c: ditto
+	* lib/entity.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/mc.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/sensor.c: ditto
+	* sample/ipmicmd.c: ditto
+	* sample/sample2.c: ditto
+	* ui/basic_ui.c: ditto
+	* ui/ui.c: ditto
+	* utils/ipmi_malloc.c: ditto
+	* utils/string.c: ditto
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of

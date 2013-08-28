@@ -3033,15 +3033,12 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 {
     sdr_fetch_info_t   *info;
     int                rv = 0;
-    ipmi_sensor_info_t *sensors;
 
     CHECK_MC_LOCK(mc);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
-
-    sensors = _ipmi_mc_get_sensors(mc);
 
     info->source_mc = ipmi_mc_convert_to_id(mc);
     info->domain = ipmi_mc_get_domain(mc);

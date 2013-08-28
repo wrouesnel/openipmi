@@ -4292,14 +4292,11 @@ int
 ipmi_sdr_entity_destroy(void *info)
 {
     entity_sdr_info_t   *infos = info;
-    entity_found_t      *found;
     unsigned int        i, j;
     int                 rv;
     ipmi_entity_t       *ent, *child;
 
     for (i=0; i<infos->next; i++) {
-	found = infos->found+i;
-
 	_ipmi_domain_entity_lock(infos->ents->domain);
 	rv = entity_find(infos->ents, infos->dlrs[i]->device_num,
 			 infos->dlrs[i]->entity_id,

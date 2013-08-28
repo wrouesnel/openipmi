@@ -103,6 +103,9 @@ lanparm_info(ipmi_lanparm_t *lanparm, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "Name", lanparm_name);
     rv = ipmi_mc_pointer_cb(ipmi_lanparm_get_mc_id(lanparm), get_mc_name,
 			    cmd_info);
+    if (rv) {
+	ipmi_cmdlang_out_int(cmd_info, "Error getting MC", rv);
+    }
     ipmi_cmdlang_out_int(cmd_info, "Channel",
 			 ipmi_lanparm_get_channel(lanparm));
     ipmi_cmdlang_up(cmd_info);
@@ -424,10 +427,8 @@ set_port(ipmi_cmd_info_t *cmd_info, char *val,
     int            (*f)(ipmi_lan_config_t *l, unsigned char *v,
 			unsigned int dl) = func;
     int            v;
-    short          sv;
 
     ipmi_cmdlang_get_int(val, &v, cmd_info);
-    sv = htons(v);
     if (!cmdlang->err) {
 	cmdlang->err = f(lanc, (unsigned char *) &v, sizeof(v));
 	if (cmdlang->err) {

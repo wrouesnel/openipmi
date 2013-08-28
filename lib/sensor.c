@@ -1198,7 +1198,6 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     p = 0;
     for (i=0; i<count; i++) {
 	int incr;
-	int lun;
 
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
 	if (rv) {
@@ -1210,7 +1209,6 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    goto out_err;
 	}
 
-	lun = sdr.data[1] & 0x03;
 	if (sdr.type == 1) {
 	    incr = 1;
 	} else if (sdr.type == 2) {
@@ -1562,9 +1560,6 @@ handle_new_sensor(ipmi_domain_t *domain,
 		  ipmi_sensor_t *sensor,
 		  void          *link)
 {
-    ipmi_entity_info_t *ents;
-
-
     /* Call this before the OEM call so the OEM call can replace it. */
     sensor->cbs = ipmi_standard_sensor_cb;
     sensor->sensor_type_string
@@ -1577,8 +1572,6 @@ handle_new_sensor(ipmi_domain_t *domain,
 	= ipmi_get_unit_type_string(sensor->base_unit);
     sensor->modifier_unit_string
 	= ipmi_get_unit_type_string(sensor->modifier_unit);
-
-    ents = ipmi_domain_get_entities(domain);
 
     sensor_set_name(sensor);
 

@@ -43,6 +43,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/ipmiif.h>
 
 #include <OpenIPMI/internal/ipmi_malloc.h>
 

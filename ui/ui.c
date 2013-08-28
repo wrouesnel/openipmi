@@ -997,7 +997,6 @@ entity_finder(char *cmd, char **toks,
     struct ent_rec info;
     char           *ent_name;
     char           *id_name, *instance_name, *toks2, *estr;
-    int            rv;
 
     ent_name = strtok_r(NULL, " \t\n", toks);
     if (!ent_name) {
@@ -1053,7 +1052,7 @@ entity_finder(char *cmd, char **toks,
     info.toks = toks;
     info.toks2 = &toks2;
 
-    rv = ipmi_domain_pointer_cb(domain_id, entity_finder_d, &info);
+    ipmi_domain_pointer_cb(domain_id, entity_finder_d, &info);
     if (!info.found) {
 	if (ent_name[0] == 'r')
 	    cmd_win_out("Entity r%d.%d.%d.%d not found\n",

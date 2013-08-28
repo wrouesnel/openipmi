@@ -79,7 +79,6 @@ ipmi_get_bcd_plus(unsigned int len,
 	'0', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', ' ', '-', '.', ':', ',', '_'
     };
-    unsigned int pos;
     unsigned int bo;
     unsigned int val = 0;
     unsigned int i;
@@ -93,7 +92,6 @@ ipmi_get_bcd_plus(unsigned int len,
 	return -1;
 
     bo = 0;
-    pos = 0;
     for (i=0; i<len; i++) {
 	switch (bo) {
 	case 0:
@@ -131,7 +129,6 @@ ipmi_get_6_bit_ascii(unsigned int len,
 	'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
 	'X', 'Y', 'Z', '[', '\\', ']', '^', '_' 
     };
-    unsigned int pos;
     unsigned int bo;
     unsigned int val = 0;
     unsigned int i;
@@ -145,7 +142,6 @@ ipmi_get_6_bit_ascii(unsigned int len,
 	return -1;
 
     bo = 0;
-    pos = 0;
     for (i=0; i<len; i++) {
 	switch (bo) {
 	case 0:

@@ -359,7 +359,6 @@ void
 ipmi_debug_malloc_cleanup(void)
 {
     struct dbg_malloc_trailer *trlr;
-    void                      *to_free;
 
     if (DEBUG_MALLOC) {
 	/* Check the free queue for any problems. */
@@ -372,7 +371,6 @@ ipmi_debug_malloc_cleanup(void)
 	    trlr = trlr_from_hdr(alloced);
 	    mem_debug_log(((char *) alloced) + sizeof(*alloced),
 			  alloced, NULL, NULL, "Never freed");
-	    to_free = alloced;
 	    alloced = trlr->next;
 	}
     }

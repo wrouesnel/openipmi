@@ -659,7 +659,6 @@ int
 main(int argc, char *argv[])
 {
     int         rv;
-    int         pos;
     int         curr_arg;
     ipmi_args_t *args;
     int         i;
@@ -759,7 +758,6 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    pos = 0;
     if (interactive)
 	printf("=> ");
     fflush(stdout);

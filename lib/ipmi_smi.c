@@ -605,7 +605,6 @@ audit_timeout_handler(void              *cb_data,
 {
     audit_timer_info_t           *info = cb_data;
     ipmi_con_t                   *ipmi = info->ipmi;
-    smi_data_t                   *smi;
     struct timeval               timeout;
     ipmi_msg_t                   msg;
     ipmi_system_interface_addr_t si;
@@ -619,8 +618,6 @@ audit_timeout_handler(void              *cb_data,
     if (!smi_valid_ipmi(ipmi)) {
 	goto out_done;
     }
-
-    smi = ipmi->con_data;
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;

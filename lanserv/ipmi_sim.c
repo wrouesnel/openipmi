@@ -555,9 +555,9 @@ isim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
     }
 #if HAVE_SYSLOG
     if (logtype == DEBUG)
-	syslog(LOG_DEBUG, str);
+	syslog(LOG_DEBUG, "%s", str);
     else
-	syslog(LOG_NOTICE, str);
+	syslog(LOG_NOTICE, "%s", str);
 #endif
     free(str);
 }

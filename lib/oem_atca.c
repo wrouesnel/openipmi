@@ -1772,12 +1772,11 @@ set_fru_control_start(ipmi_control_t *control, int err, void *cb_data)
     rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
 				   &msg, set_fru_control_done,
 				   &info->sdata, info);
-    if (err) {
+    if (rv) {
 	if (info->handler)
 	    info->handler(control, err, info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(info);
-	return;
     }
 }
 
@@ -3950,7 +3949,6 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 {
     atca_shelf_t *info = cb_data;
     int          count;
-    int          found;
     int          i;
     int          rv = 0;
 
@@ -4004,7 +4002,6 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 
     /* We got the shelf FRU info, now hunt through it for the address
        table. */
-    found = 0;
     count = ipmi_fru_get_num_multi_records(fru);
     for (i=0; i<count; i++) {
 	unsigned char type;

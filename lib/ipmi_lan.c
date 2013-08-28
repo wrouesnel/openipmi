@@ -3033,7 +3033,10 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 		  unsigned int  len)
 {
     unsigned char oem_iana[3] = { 0, 0, 0 };
+#if 0
+    /* FIXME - add handling of OEM payloads. */
     unsigned int  oem_payload_id = 0;
+#endif
     unsigned char *tmsg;
     int           encrypted;
     int           authenticated;
@@ -3067,7 +3070,10 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	}
 	memcpy(oem_iana, tmsg, 3);
 	tmsg += 4;
+#if 0
+	/* FIXME - add handling of OEM payloads. */
 	oem_payload_id = ipmi_get_uint16(tmsg);
+#endif
 	tmsg += 2;
     }
 

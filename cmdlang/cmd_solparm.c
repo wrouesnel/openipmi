@@ -103,6 +103,9 @@ solparm_info(ipmi_solparm_t *solparm, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "Name", solparm_name);
     rv = ipmi_mc_pointer_cb(ipmi_solparm_get_mc_id(solparm), get_mc_name,
 			    cmd_info);
+    if (rv) {
+	ipmi_cmdlang_out_int(cmd_info, "Error getting MC", rv);
+    }
     ipmi_cmdlang_out_int(cmd_info, "Channel",
 			 ipmi_solparm_get_channel(solparm));
     ipmi_cmdlang_up(cmd_info);

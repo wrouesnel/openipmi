@@ -223,10 +223,7 @@ entity_change(enum ipmi_update_e op,
 	      void               *cb_data)
 {
     int rv;
-    int id, instance;
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     if (op == IPMI_ADDED) {
 	    /* Register callback so that when the status of a
 	       control changes, control_change is called */
