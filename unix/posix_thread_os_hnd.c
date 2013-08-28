@@ -165,6 +165,7 @@ struct os_hnd_timer_id_s
     sel_timer_t    *timer;
     int            running;
     os_handler_t   *handler;
+    pthread_mutex_t lock;
 };
 
 static void
@@ -178,9 +179,12 @@ timer_handler(selector_t  *sel,
     void              *cb_data;
     os_timed_out_t    timed_out;
 
+    /* Lock will create a memory barrier, which we really need here. */
+    pthread_mutex_lock(&timer_data->lock);
     timed_out = timer_data->timed_out;
     cb_data = timer_data->cb_data;
     timer_data->running = 0;
+    pthread_mutex_unlock(&timer_data->lock);
     timed_out(cb_data, timer_data);
 }
 
@@ -191,10 +195,14 @@ start_timer(os_handler_t      *handler,
 	    os_timed_out_t    timed_out,
 	    void              *cb_data)
 {
-    struct timeval    now;
+    struct timeval now;
+    int rv;
 
-    if (id->running)
-	return EBUSY;
+    pthread_mutex_lock(&id->lock);
+    if (id->running) {
+	rv = EBUSY;
+	goto out;
+    }
 
     id->running = 1;
     id->cb_data = cb_data;
@@ -208,15 +216,24 @@ start_timer(os_handler_t      *handler,
 	now.tv_sec += 1;
     }
 
-    return sel_start_timer(id->timer, &now);
+    rv = sel_start_timer(id->timer, &now);
+    if (rv != 0)
+	id->running = 0;
+  out:
+    pthread_mutex_unlock(&id->lock);
+    return rv;
 }
 
 static int
 stop_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
-    int rv = sel_stop_timer(timer_data->timer);
+    int rv;
+
+    pthread_mutex_lock(&timer_data->lock);
+    rv = sel_stop_timer(timer_data->timer);
     if (rv == 0)
 	timer_data->running = 0;
+    pthread_mutex_unlock(&timer_data->lock);
     return rv;
 }
 
@@ -233,6 +250,12 @@ alloc_timer(os_handler_t      *handler,
     if (!timer_data)
 	return ENOMEM;
 
+    rv = pthread_mutex_init(&timer_data->lock, NULL);
+    if (rv) {
+	free(timer_data);
+	return rv;
+    }
+
     timer_data->running = 0;
     timer_data->timed_out = NULL;
     timer_data->handler = handler;
@@ -240,6 +263,7 @@ alloc_timer(os_handler_t      *handler,
     rv = sel_alloc_timer(posix_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
     if (rv) {
+	pthread_mutex_destroy(&timer_data->lock);
 	free(timer_data);
 	return rv;
     }
@@ -251,6 +275,7 @@ alloc_timer(os_handler_t      *handler,
 static int
 free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
+    pthread_mutex_destroy(&timer_data->lock);
     sel_free_timer(timer_data->timer);
     free(timer_data);
     return 0;

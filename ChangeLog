@@ -1,3 +1,8 @@
+2013-08-28 Corey Minyard <cminyard@mvista.com>
+
+	* unix/posix_thread_os_hnd.c: Add a lock to the timer to avoid
+	races starting and stopping the timer.
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of
@@ -23,7 +28,7 @@
 	* lib/ipmi_lan.c: Change the message map size to 32 bits so it can
 	handle a full 16-message window.
 
-2013-05-29 Corey Minyard <cminyard@mvista.com>
+2013-05-29 `Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/serv.c: Don't return negative of the checksum, let the
 	calling routine do that so it can do running checksums.
