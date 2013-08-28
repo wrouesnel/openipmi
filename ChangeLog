@@ -22,6 +22,8 @@
 	* tcl/test_handlers.c:  Call Tcl_CreateInterp() to initialize
 	the Tcl code before using.
 
+	* include/OpenIPMI/ipmi_cmdlang.h: Add some missing includes.
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of

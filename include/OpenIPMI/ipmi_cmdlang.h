@@ -35,6 +35,9 @@
 #define __IPMI_CMDLANG_H
 
 #include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_addr.h>
 
 #ifdef __cplusplus
 extern "C" {
