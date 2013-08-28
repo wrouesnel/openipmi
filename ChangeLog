@@ -19,6 +19,9 @@
 	* utils/ipmi_malloc.c: ditto
 	* utils/string.c: ditto
 
+	* tcl/test_handlers.c:  Call Tcl_CreateInterp() to initialize
+	the Tcl code before using.
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of

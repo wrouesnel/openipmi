@@ -59,6 +59,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <OpenIPMI/ipmi_tcl.h>
+#include <tcl/tcl.h>
 
 os_handler_t *test_os_hnd;
 
@@ -150,6 +151,8 @@ timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
 	*then = now;
 	rv = test_os_hnd->start_timer(test_os_hnd, id, &diff,
 				      timeout_handler, then);
+	if (rv)
+	    err_leave(rv, "Unable to start timer\n");
     } else if (expect_timeout == 1) {
 	expect_timeout++;
 	if (diff.tv_sec != 0)
@@ -223,6 +226,8 @@ main(int argc, char *argv[])
     os_handler_waiter_factory_t *factory;
     os_handler_t *os_hnd;
     int          rv;
+
+    Tcl_CreateInterp();
 
     printf("*** Testing TCL OS handler\n");
     reset_tests();
