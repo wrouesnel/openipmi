@@ -30,6 +30,10 @@
 	* lanserv/ipmi_sim.c: Still write '> ' if echo is off, so the test
 	code can tell when a command is done.
 
+	* lanserv/lanserv_ipmi.c: Fix the response length on set_channel
+	access, fix the lan parameter command and rollback so it works
+	multiple times.
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of

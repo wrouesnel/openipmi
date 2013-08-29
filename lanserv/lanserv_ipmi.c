@@ -1305,7 +1305,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	if (newv) {
 	    /* Don't support per-msg authentication */
 	    rdata[0] = 0x83;
-	    *rdata_len = 0;
+	    *rdata_len = 1;
 	    return;
 	}
 
@@ -1313,7 +1313,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	if (newv) {
 	    /* Don't support unauthenticated user-level access */
 	    rdata[0] = 0x83;
-	    *rdata_len = 0;
+	    *rdata_len = 1;
 	    return;
 	}
 
@@ -1321,7 +1321,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	if (newv != 0x2) {
 	    /* Only support "always available" channel */
 	    rdata[0] = 0x83;
-	    *rdata_len = 0;
+	    *rdata_len = 1;
 	    return;
 	}
 
@@ -1337,7 +1337,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 #endif
     } else if (upd1 != 0) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
@@ -1346,7 +1346,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	newv = (msg->data[2] >> 0) & 0xf;
 	if ((newv == 0) || (newv > 4)) {
 	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	    *rdata_len = 0;
+	    *rdata_len = 1;
 	    return;
 	}
 
@@ -1359,7 +1359,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	}
     } else if (upd2 != 0) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
@@ -1369,7 +1369,7 @@ set_channel_access(channel_t *chan, msg_t *msg, unsigned char *rdata,
     }
 
     rdata[0] = 0;
-    *rdata_len = 0;
+    *rdata_len = 1;
 }
 
 static void
@@ -1397,6 +1397,7 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 		/* rollback */
 		memcpy(&lan->lanparm, &lan->lanparm_rollback,
 		       sizeof(lan->lanparm));
+		lan->lanparm.set_in_progress = 0;
 	    }
 	    /* No effect otherwise */
 	    break;
@@ -1413,10 +1414,14 @@ set_lan_config_parms(channel_t *chan, msg_t *msg, unsigned char *rdata,
 	    break;
 
 	case 2:
-	    /* Re-save rollback data */
-	    memcpy(&lan->lanparm_rollback, &lan->lanparm,
-		   sizeof(lan->lanparm));
-	    write_lan_config(lan);
+	    if (!lan->lanparm.set_in_progress) {
+		err = 0x81; /* Not in proper state. */
+	    } else {
+		/* Re-save rollback data */
+		memcpy(&lan->lanparm_rollback, &lan->lanparm,
+		       sizeof(lan->lanparm));
+		write_lan_config(lan);
+	    }
 	    break;
 
 	case 3:
