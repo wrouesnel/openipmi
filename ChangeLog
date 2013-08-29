@@ -24,6 +24,9 @@
 
 	* include/OpenIPMI/ipmi_cmdlang.h: Add some missing includes.
 
+	* lanserv/OpenIPMI/persist.h, lanserv/persist.c, lanserv/emu_cmd.c:
+	Add a emu command to disable persistence, mostly for testing.
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of
