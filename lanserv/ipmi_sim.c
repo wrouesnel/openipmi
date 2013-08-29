@@ -801,8 +801,7 @@ handle_user_char(console_info_t *info, unsigned char c)
 	} else {
 	    ipmi_emu_cmd(&info->out, info->data->emu, info->buffer);
 	}
-	if (info->echo)
-	    rv = write(info->outfd, "> ", 2);
+	rv = write(info->outfd, "> ", 2);
 	info->pos = 0;
 	break;
 
