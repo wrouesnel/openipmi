@@ -94,4 +94,7 @@ int iterate_persist(persist_t *p,
 void free_persist_data(void *data);
 void free_persist_str(char *str);
 
+/* Can be set to zero to disable persistence. */
+extern int persist_enable;
+
 #endif /* __PERSIST_H__ */

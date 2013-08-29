@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <OpenIPMI/serv.h>
 #include "emu.h"
+#include <OpenIPMI/persist.h>
 
 #define BASE_CONF_STR SYSCONFDIR "/ipmi"
 
@@ -886,6 +887,9 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	rv = ipmi_mc_add_fru_data(mc, devid, length, NULL, data);
 	if (rv)
 	    out->printf(out, "**Unable to add FRU data, error 0x%x\n", rv);
+    } else {
+	out->printf(out, "**FRU type not given, need file or data\n");
+	rv = EINVAL;
     }
     return rv;
 }
@@ -1079,6 +1083,25 @@ debug_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+persist_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    const char *tok;
+
+    while ((tok = mystrtok(NULL, " \t\n", toks))) {
+	if (strcmp(tok, "on") == 0) {
+	    persist_enable = 1;
+	} else if (strcmp(tok, "off") == 0) {
+	    persist_enable = 0;
+	} else {
+	    out->printf(out, "Invalid persist vale '%s', options are 'on' and 'off'\n",
+		   tok);
+	    return EINVAL;
+	}
+    }
+    return 0;
+}
+
+static int
 quit(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     fflush(stdout);
@@ -1148,7 +1171,8 @@ static struct emu_cmd_info cmds[] =
     { "read_cmds",	NOMC,		read_cmds,		 &cmds[26] },
     { "include",	NOMC,		read_cmds,		 &cmds[27] },
     { "sleep",		NOMC,		sleep_cmd,		 &cmds[28] },
-    { "debug",		NOMC,		debug_cmd,		 NULL },
+    { "debug",		NOMC,		debug_cmd,		 &cmds[29] },
+    { "persist",	NOMC,		persist_cmd,		 NULL },
     { NULL }
 };
 

@@ -83,6 +83,8 @@ struct persist_s {
     struct pitem *items;
 };
 
+int persist_enable = 1;
+
 static char *app = NULL;
 static const char *statedir = STATEDIR;
 
@@ -265,6 +267,9 @@ read_persist(const char *name, ...)
     char *end;
     size_t n;
 
+    if (!persist_enable)
+	return NULL;
+
     va_start(ap, name);
     p = alloc_vpersist(name, ap);
     if (!p)
@@ -368,6 +373,9 @@ write_persist(persist_t *p)
     char *fname, *fname2;
     int rv = 0;
     FILE *f;
+
+    if (!persist_enable)
+	return 0;
 
     fname = get_fname(p, ".tmp");
     if (!fname) {
