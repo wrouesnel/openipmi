@@ -17,8 +17,7 @@ if (defined $srcdir) {
 }
 my $this_srcdir = $top_srcdir . "/swig/perl";
 my $lanserv_conf = $this_srcdir . "/lan.conf";
-my $lanserv_emu = $top_builddir . "/lanserv/lanserv_emu -c " . $lanserv_conf;
-
+my $lanserv_emu = $top_builddir . "/lanserv/ipmi_sim -c " . $lanserv_conf . " -x 'mc_setbmc 0x20'";
 
 sub reader {
     my $self = shift;
@@ -204,6 +203,7 @@ sub close {
     my $controlwrite = $self->{controlwrite};
     my $responseread = $self->{responseread};
 
+    #$self->cmd("debug");
     $self->cmd("quit");
     close $writefile;
     close $readfile;
@@ -222,7 +222,6 @@ sub new {
     local *WRITEFILE;
     my $a;
     my $child;
-
 
     pipe(CONTROLREAD, CONTROLWRITE) || return;
     pipe(RESPONSEREAD, RESPONSEWRITE) || return;
@@ -266,6 +265,8 @@ sub new {
     }
 
     $self->cmd("noecho");
+    $self->cmd("persist off");
+    #$self->cmd("debug msg");
     $self->waitnextline();
 
     return $self;

@@ -150,35 +150,35 @@ sub get_errcount {
 	if ($$self->{accmode} == 2) {
 	    $val = $user->get_name();
 	    if ($val ne "") {
-		main::reg_err("user name not empty");
+		main::reg_err("user name not empty: $val");
 	    }
 
 	    $rv = $user->get_link_auth_enabled(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting link_auth_enabled");
 	    } elsif ($val != 0) {
-		main::reg_err("link_auth_enabled not 0");
+		main::reg_err("link_auth_enabled not 0: $val");
 	    }
 
 	    $rv = $user->get_msg_auth_enabled(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting msg_auth_enabled");
 	    } elsif ($val != 0) {
-		main::reg_err("msg_auth_enabled not 0");
+		main::reg_err("msg_auth_enabled not 0: $val");
 	    }
 
 	    $rv = $user->get_access_cb_only(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting access_cb_only");
 	    } elsif ($val != 0) {
-		main::reg_err("access_cb_only not 0");
+		main::reg_err("access_cb_only not 0: $val");
 	    }
 
 	    $rv = $user->get_privilege_limit(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting privilege_limit");
 	    } elsif ($val != 0) {
-		main::reg_err("privilege_limit not 0");
+		main::reg_err("privilege_limit not 0: $val");
 	    }
 
 	    $rv = $user->set_name("asdfasdf");
@@ -233,7 +233,7 @@ sub get_errcount {
 	} elsif ($$self->{accmode} == 3) {
 	    $val = $user->get_name();
 	    if ($val ne "asdfasdf") {
-		main::reg_err("user name not empty");
+		main::reg_err("user name not asdfasdf");
 	    }
 
 	    $rv = $user->get_link_auth_enabled(\$val);
@@ -344,8 +344,8 @@ sub get_errcount {
 	    $rv = $acc->get_privilege_limit(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting privilege_limit");
-	    } elsif ($val != 0) {
-		main::reg_err("privilege_limit not 0");
+	    } elsif ($val != 4) {
+		main::reg_err("privilege_limit(2) not 4: $val");
 	    }
 
 	    # Sort of test these, but the simulator doesn't support
@@ -439,7 +439,7 @@ sub get_errcount {
 	my $aux_info;
 
 	if ($err) {
-	    main::reg_err("Error getting channel info");
+	    main::reg_err("Error getting channel info: $err");
 	    $self->close();
 	    return;
 	}
@@ -563,9 +563,8 @@ if (! $lanserv) {
 }
 
 # Add a BMC
-$lanserv->cmd("mc_add 20 0 1 23 9 8 1f 1291 f02");
-$lanserv->cmd("mc_setbmc 20");
-$lanserv->cmd("mc_enable 20");
+$lanserv->cmd("mc_add 0x20 0 has-device-sdrs 0x23 9 8 0x1f 0x1291 0xf02");
+$lanserv->cmd("mc_enable 0x20");
 
 sleep 1;
 

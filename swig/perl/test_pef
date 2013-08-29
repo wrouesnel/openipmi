@@ -1432,9 +1432,8 @@ if (! $lanserv) {
 }
 
 # Add a BMC
-$lanserv->cmd("mc_add 20 0 1 23 9 8 1f 1291 f02");
-$lanserv->cmd("mc_setbmc 20");
-$lanserv->cmd("mc_enable 20");
+$lanserv->cmd("mc_add 0x20 0 has-device-sdrs 0x23 9 8 0x1f 0x1291 0xf02");
+$lanserv->cmd("mc_enable 0x20");
 
 sleep 1;
 

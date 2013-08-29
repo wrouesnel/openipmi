@@ -482,7 +482,7 @@ sub dup_fru {
 	my $str;
 
 	if ($err) {
-	    main::reg_err("Error reading the FRU: $err");
+	    main::reg_err("Error reading the second FRU: $err");
 	    $h->close();
 	    return;
 	}
@@ -1047,31 +1047,30 @@ if (! $lanserv) {
 }
 
 # Add a BMC
-$lanserv->cmd("mc_add 20 0 1 23 9 8 1f 1291 f02");
-$lanserv->cmd("mc_setbmc 20");
-$lanserv->cmd("main_sdr_add 20 00 00 51 12 0f 20 00 00 1f 00 00 00 07 01 00 c4 'T 'e 's 't");
+$lanserv->cmd("mc_add 0x20 0 has-device-sdrs 0x23 9 8 0x1f 0x1291 0xf02");
+$lanserv->cmd("main_sdr_add 0x20 0x00 0x00 0x51 0x12 0x0f 0x20 0x00 0x00 0x1f 0x00 0x00 0x00 0x07 0x01 0x00 0xc4 'T 'e 's 't");
 
 # Create some FRU information
 $lanserv->cmd
-    ("mc_add_fru_data 20 0 400 " .
-     " 01 01 02 06 0b 18 00 d3" .
+    ("mc_add_fru_data 0x20 0x0 0x400 data " .
+     " 0x01 0x01 0x02 0x06 0x0b 0x18 0x00 0xd3" .
 # Internal Use
-     " 01 02 03 04 05 06 07 08" .
+     " 0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08" .
 # Chassis info
-     " 01 03 01 c4 'A 'T 'C 'A" .
-     " c4 'T 'e 's '0 c0 c3 'x" .
-     " 'y 'z c1 00 00 00 00 4f" .
+     " 0x01 0x03 0x01 0xc4 'A 'T 'C 'A" .
+     " 0xc4 'T 'e 's '0 0xc0 0xc3 'x" .
+     " 'y 'z 0xc1 0x00 0x00 0x00 0x00 0x4f" .
 # Expansion space
-     " 00 00 00 00 00 00 00 00" .
+     " 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00" .
 # Board info
-     " 01 05 00 00 00 00 c4 'T" .
-     " 'e 's '1 c6 'a 'm '4 '0" .
-     " '0 '1 c4 'T 'e 's '3 c4" .
-     " 'T 'e 's '4 c4 'T 'e 's" .
-     " '5 c1 00 00 00 00 00 53" .
+     " 0x01 0x05 0x00 0x00 0x00 0x00 0xc4 'T" .
+     " 'e 's '1 0xc6 'a 'm '4 '0" .
+     " '0 '1 0xc4 'T 'e 's '3 0xc4" .
+     " 'T 'e 's '4 0xc4 'T 'e 's" .
+     " '5 0xc1 0x00 0x00 0x00 0x00 0x00 0x53" .
 #Product Info
-     " 01 0d 00 c0 c3 'T 'e '6" .
-     " ff 'a 'b 'c 'd 'e 'f 'g" .
+     " 0x01 0x0d 0x00 0xc0 0xc3 'T 'e '6" .
+     " 0xff 'a 'b 'c 'd 'e 'f 'g" .
      " 'h 'i 'j 'k 'l 'm 'n 'o" .
      " 'p 'q 'r 's 't 'u 'v 'w" .
      " 'x 'y 'z '0 '1 '2 '3 '4" .
@@ -1079,21 +1078,21 @@ $lanserv->cmd
      " 'h 'i 'j 'k 'l 'm 'n 'o" .
      " 'p 'q 'r 's 't 'u 'v 'w" .
      " 'x 'y 'z '0 '1 '2 '3 '4" .
-     " 07 01 02 03 04 05 06 07" .
-     " c0 48 21 43 65 87 88 53" .
-     " 87 99 28 01 88 c4 'a 'b" .
-     " 'c 'd c1 00 00 00 00 e4" .
+     " 0x07 0x01 0x02 0x03 0x04 0x05 0x06 0x07" .
+     " 0xc0 0x48 0x21 0x43 0x65 0x87 0x88 0x53" .
+     " 0x87 0x99 0x28 0x01 0x88 0xc4 'a 'b" .
+     " 'c 'd 0xc1 0x00 0x00 0x00 0x00 0xe4" .
 # Multi-records
-     " c0 02 10 78 b6 01 02 03" .
-     " 04 05 06 07 08 09 0a 0b" .
-     " 0c 0d 0e 0f 10 c1 82 00" .
-     " 00 bd"
+     " 0xc0 0x02 0x10 0x78 0xb6 0x01 0x02 0x03" .
+     " 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b" .
+     " 0x0c 0x0d 0x0e 0x0f 0x10 0xc1 0x82 0x00" .
+     " 0x00 0xbd"
 );
 
 # Create a dummy FRU that has an error
-$lanserv->cmd("mc_add_fru_data 20 1 400 01");
+$lanserv->cmd("mc_add_fru_data 0x20 1 0x400 data 0x01");
 
-$lanserv->cmd("mc_enable 20");
+$lanserv->cmd("mc_enable 0x20");
 
 sleep 1;
 

@@ -34,6 +34,16 @@
 	access, fix the lan parameter command and rollback so it works
 	multiple times.
 
+	* swig/perl/Lanserv.pm: Big rework of the tests so they work with
+	recent simulator changes.
+	* swig/perl/Makefile.am: ditto
+	* swig/perl/lan.conf: ditto
+	* swig/perl/test_chan: ditto
+	* swig/perl/test_fru: ditto
+	* swig/perl/test_lanparm: ditto
+	* swig/perl/test_pef: ditto
+	* swig/perl/test_pet: ditto
+
 2013-08-28 Nikita Yushchenko <nyushchenko@dev.rtsoft.ru>
 
 	* unix/posix_thread_os_hnd.c: This patch makes behaviour of
