@@ -1,3 +1,10 @@
+2012-08-30 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/Makefile.am: Add ipmi_string.h to the
+	distributed includes.
+
+	* configure.in: Move to version 2.0.20-rc3.
+
 2012-08-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp/Makefile.am, lanserv/marvell-bmc/Makefile.am:
