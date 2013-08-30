@@ -1,3 +1,7 @@
+2012-08-29 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 2.0.20-rc2.
+
 2013-08-28 Corey Minyard <cminyard@mvista.com>
 
 	* unix/posix_thread_os_hnd.c: Add a lock to the timer to avoid
