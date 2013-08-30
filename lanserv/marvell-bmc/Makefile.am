@@ -6,8 +6,8 @@ marvell_mod_la_SOURCES = marvell_mod.c
 marvell_mod_la_LDFLAGS = -module
 
 sdrs.bin: main.sdrs board.sdrs fan.sdrs \
-		$(top_builddir)/lanserv/sdrcomp/sdrcomp_build
-	$(top_builddir)/lanserv/sdrcomp/sdrcomp_build main.sdrs >sdrs.bin
+		$(top_builddir)/lanserv/sdrcomp/sdrcomp
+	$(top_builddir)/lanserv/sdrcomp/sdrcomp main.sdrs >sdrs.bin
 
 noinst_DATA = sdrs.bin
 

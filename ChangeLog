@@ -1,5 +1,11 @@
 2012-08-29 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv/sdrcomp/Makefile.am, lanserv/marvell-bmc/Makefile.am:
+	Remove the sdrcomp_build program, it wasn't necessary.
+
+	* configure.in: The dia program changed the --version output
+	from stdout to stderr.  Account for that.
+
 	* configure.in: Move to version 2.0.20-rc2.
 
 2013-08-28 Corey Minyard <cminyard@mvista.com>
