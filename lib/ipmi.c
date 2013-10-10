@@ -1191,7 +1191,7 @@ ipmi_alloc_msg_item(void)
     rv = ipmi_mem_alloc(sizeof(ipmi_msgi_t));
     if (!rv)
 	return NULL;
-    memset(rv, 0, sizeof(rv));
+    memset(rv, 0, sizeof(*rv));
     rv->msg.data = rv->data;
     return rv;
 }

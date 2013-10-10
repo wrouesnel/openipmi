@@ -59,7 +59,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <OpenIPMI/ipmi_tcl.h>
-#include <tcl/tcl.h>
+#include <tcl.h>
 
 os_handler_t *test_os_hnd;
 
