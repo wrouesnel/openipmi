@@ -463,7 +463,7 @@ ipmi_emu_set_addr(emu_data_t *emu, unsigned int addr_num,
     if (addr_len > sizeof(addr->addr_data))
 	return EINVAL;
 
-    gettimeofday(&emu->last_addr_change_time, NULL);
+    emu->sysinfo->get_monotonic_time(emu->sysinfo, &emu->last_addr_change_time);
     addr->addr_type = addr_type;
     memcpy(addr->addr_data, addr_data, addr_len);
     addr->addr_len = addr_len;
@@ -837,7 +837,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     mc->global_enables = 1 << IPMI_MC_EVENT_LOG_BIT;
 
     /* Start the time at zero. */
-    gettimeofday(&t, NULL);
+    emu->sysinfo->get_monotonic_time(emu->sysinfo, &t);
     mc->sel.time_offset = 0;
     mc->main_sdrs.time_offset = 0;
     mc->main_sdrs.next_entry = 1;

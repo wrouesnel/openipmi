@@ -220,7 +220,7 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 	mc->sel.next_entry++;
     }
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
 
     ipmi_set_uint16(e->data, e->record_id);
     e->data[2] = record_type;
@@ -589,7 +589,7 @@ handle_clear_sel(lmc_data_t    *mc,
 	}
     }
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->sel.last_erase_time = t.tv_sec + mc->sel.time_offset;
 
     rdata[0] = 0;
@@ -615,7 +615,7 @@ handle_get_sel_time(lmc_data_t    *mc,
 	return;
     }
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     rdata[0] = 0;
     ipmi_set_uint32(rdata+1, t.tv_sec + mc->sel.time_offset);
     *rdata_len = 5;
@@ -638,7 +638,7 @@ handle_set_sel_time(lmc_data_t    *mc,
     if (check_msg_length(msg, 4, rdata, rdata_len))
 	return;
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->sel.time_offset = ipmi_get_uint32(msg->data) - t.tv_sec;
 
     rdata[0] = 0;
@@ -768,7 +768,7 @@ add_sdr_entry(lmc_data_t *mc, sdrs_t *sdrs, sdr_t *entry)
 	p->next = entry;
     }
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     sdrs->last_add_time = t.tv_sec + mc->main_sdrs.time_offset;
     sdrs->sdr_count++;
 
@@ -880,7 +880,7 @@ ipmi_mc_add_device_sdr(lmc_data_t    *mc,
 
     memcpy(entry->data+2, data+2, data_len-2);
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->sensor_population_change_time = t.tv_sec + mc->main_sdrs.time_offset;
     mc->lun_has_sensors[lun] = 1;
     mc->num_sensors_per_lun[lun]++;
@@ -1286,7 +1286,7 @@ handle_delete_sdr(lmc_data_t    *mc,
 
     free_sdr(entry);
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
     mc->main_sdrs.sdr_count--;
     rewrite_sdrs(mc, &mc->main_sdrs);
@@ -1351,7 +1351,7 @@ handle_clear_sdr_repository(lmc_data_t    *mc,
     rdata[0] = 0;
     *rdata_len = 2;
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
     rewrite_sdrs(mc, &mc->main_sdrs);
 }
@@ -1370,7 +1370,7 @@ handle_get_sdr_repository_time(lmc_data_t    *mc,
 	return;
     }
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     rdata[0] = 0;
     ipmi_set_uint32(rdata+1, t.tv_sec + mc->main_sdrs.time_offset);
     *rdata_len = 5;
@@ -1393,7 +1393,7 @@ handle_set_sdr_repository_time(lmc_data_t    *mc,
     if (check_msg_length(msg, 4, rdata, rdata_len))
 	return;
 
-    gettimeofday(&t, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &t);
     mc->main_sdrs.time_offset = ipmi_get_uint32(msg->data) - t.tv_sec;
 
     rdata[0] = 0;

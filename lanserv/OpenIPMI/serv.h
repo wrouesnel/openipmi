@@ -367,6 +367,9 @@ struct sys_data_s {
     void *(*alloc)(sys_data_t *sys, int size);
     void (*free)(sys_data_t *sys, void *data);
 
+    int (*get_monotonic_time)(sys_data_t *sys, struct timeval *tv);
+    int (*get_real_time)(sys_data_t *sys, struct timeval *tv);
+
     int (*alloc_timer)(sys_data_t *sys, void (*cb)(void *cb_data),
 		       void *cb_data, ipmi_timer_t **timer);
     int (*start_timer)(ipmi_timer_t *timer, struct timeval *timeout);

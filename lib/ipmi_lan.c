@@ -2414,7 +2414,8 @@ rsp_timeout_handler(void              *cb_data,
 	    if (lan->ip[ip_num].consecutive_failures == 0) {
 		/* Set the time when the connection will be considered
                    failed. */
-		gettimeofday(&(lan->ip[ip_num].failure_time), NULL);
+		ipmi->os_hnd->get_monotonic_time(ipmi->os_hnd,
+					       &(lan->ip[ip_num].failure_time));
 		lan->ip[ip_num].failure_time.tv_sec += IP_FAIL_TIME / 1000000;
 		lan->ip[ip_num].failure_time.tv_usec += IP_FAIL_TIME % 1000000;
 		if (lan->ip[ip_num].failure_time.tv_usec > 1000000) {
@@ -2436,7 +2437,7 @@ rsp_timeout_handler(void              *cb_data,
 
 	if (call_lost_con) {
 	    struct timeval now;
-	    gettimeofday(&now, NULL);
+	    ipmi->os_hnd->get_monotonic_time(ipmi->os_hnd, &now);
 	    if (cmp_timeval(&now, &lan->ip[ip_num].failure_time) <= 0) {
 		/* Not a failure yet. */
 		call_lost_con = 0;

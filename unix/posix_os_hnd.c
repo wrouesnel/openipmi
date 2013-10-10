@@ -43,6 +43,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #ifdef HAVE_GDBM
 #include <gdbm.h>
 #endif
@@ -229,7 +230,8 @@ start_timer(os_handler_t      *handler,
 	    os_timed_out_t    timed_out,
 	    void              *cb_data)
 {
-    struct timeval    now;
+    struct timeval now;
+    int rv;
 
     if (id->running)
 	return EBUSY;
@@ -238,7 +240,10 @@ start_timer(os_handler_t      *handler,
     id->cb_data = cb_data;
     id->timed_out = timed_out;
 
-    gettimeofday(&now, NULL);
+    rv = handler->get_monotonic_time(handler, &now);
+    if (rv)
+	return rv;
+
     now.tv_sec += timeout->tv_sec;
     now.tv_usec += timeout->tv_usec;
     while (now.tv_usec >= 1000000) {
@@ -554,6 +559,32 @@ static void sset_log_handler(os_handler_t *handler,
     info->log_handler = log_handler;
 }
 
+static int get_posix_time(clockid_t clock,
+			  struct timeval *tv)
+{
+    struct timespec ts;
+    int rv;
+
+    rv = clock_gettime(clock, &ts);
+    if (rv)
+	return rv;
+    tv->tv_sec = ts.tv_sec;
+    tv->tv_usec = (ts.tv_nsec + 500) / 1000;
+    return 0;
+}
+
+static int get_monotonic_time(os_handler_t *handler,
+			      struct timeval *tv)
+{
+    return get_posix_time(CLOCK_MONOTONIC, tv);
+}
+
+static int get_real_time(os_handler_t *handler,
+			 struct timeval *tv)
+{
+    return get_posix_time(CLOCK_REALTIME, tv);
+}
+
 static os_handler_t ipmi_posix_os_handler =
 {
     .mem_alloc = posix_malloc,
@@ -579,6 +610,8 @@ static os_handler_t ipmi_posix_os_handler =
     .database_set_filename = set_gdbm_filename,
 #endif
     .set_log_handler = sset_log_handler,
+    .get_monotonic_time = get_monotonic_time,
+    .get_real_time = get_real_time
 };
 
 os_handler_t *

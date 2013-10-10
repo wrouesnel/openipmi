@@ -1,3 +1,23 @@
+2012-10-10 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/os_handler.h: Add a real and monotonic time
+	fetcher.
+	* cmdlang/os_debug: Add the new time fetchers.
+	* tcl/tcl_os_hnd.c, unix/unix_os_hnd.c, ui/ui_os.c: ditto
+	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.c: ditto
+	* unix/selector.c: Switch to using monotonic time.
+	* lib/ipmi_lan.c: Change gettimeofday() to the proper time handlers.
+	* lib/mc.c, lib/oem_atca_conn.c, lib/sdr.c: ditto
+	* lib/sensor.s, sample/ipmicmd.c, tcl/test_handlers.c: ditto
+	* ui/basic_ui.c, ui/ui.c, unix/test_handlers.c: ditto
+	* lanserv/OpenIPMI/serv.h: Add a real and monotonic time
+	fetcher.
+	* lanserv/ipmi_sim.c, lanserv/lanserv.c: Supply time fetchers
+	using the os handler.
+	* lanserv/bmc.c: Use the time fetchers instead of gettimeofday().
+	* lanserv/bmc_app.c, lanserv/bmc_storage.c: ditto
+	* lanserv/marvell-bmc/marvell_mod.c: ditto
+
 2012-08-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/Makefile.am: Add ipmi_string.h to the

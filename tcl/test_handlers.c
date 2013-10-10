@@ -139,7 +139,7 @@ timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     int            rv;
 
     printf("Timeout!\n");
-    gettimeofday(&now, NULL);
+    test_os_hnd->get_monotonic_time(test_os_hnd, &now);
     diff_timeval(&diff, &now, then);
     if (expect_timeout == 0) {
 	expect_timeout++;
@@ -190,7 +190,7 @@ test_os_handler(os_handler_t *os_hnd, os_handler_waiter_factory_t *factory)
     if (rv)
 	err_leave(rv, "Unable to allocate timer");
 
-    gettimeofday(&now, NULL);
+    os_hnd->get_monotonic_time(os_hnd, &now);
     tv.tv_sec = 1;
     tv.tv_usec = 500000;
     rv = os_hnd->start_timer(os_hnd, timer, &tv, timeout_handler, &now);

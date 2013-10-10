@@ -1270,6 +1270,20 @@ ipmi_do_kill(startcmd_t *startcmd, int noblock)
 	kill(startcmd->vmpid, SIGTERM);
 }
 
+static int ipmi_get_monotonic_time(sys_data_t *sys, struct timeval *tv)
+{
+    misc_data_t *data = sys->info;
+    os_handler_t *os_hnd = data->os_hnd;
+    return os_hnd->get_monotonic_time(os_hnd, tv);
+}
+
+static int ipmi_get_real_time(sys_data_t *sys, struct timeval *tv)
+{
+    misc_data_t *data = sys->info;
+    os_handler_t *os_hnd = data->os_hnd;
+    return os_hnd->get_real_time(os_hnd, tv);
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -1326,6 +1340,8 @@ main(int argc, const char *argv[])
     sysinfo.info = &data;
     sysinfo.alloc = balloc;
     sysinfo.free = bfree;
+    sysinfo.get_monotonic_time = ipmi_get_monotonic_time;
+    sysinfo.get_real_time = ipmi_get_real_time;
     sysinfo.alloc_timer = ipmi_alloc_timer;
     sysinfo.start_timer = ipmi_start_timer;
     sysinfo.stop_timer = ipmi_stop_timer;

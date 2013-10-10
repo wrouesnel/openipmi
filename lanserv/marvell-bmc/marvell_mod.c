@@ -681,7 +681,7 @@ set_chassis_control(lmc_data_t *mc, int op, unsigned char *val, void *cb_data)
     case CHASSIS_CONTROL_POWER:
 	if (debug & 1) {
 	    struct timeval now;
-	    gettimeofday(&now, NULL);
+	    board->sys->get_real_time(board->sys, &now);
 	    sys->log(sys, DEBUG, NULL, "Power request for board %d,"
 		     " val=%d, wait=%d last=%ld.%ld, now=%ld.%ld",
 		     board->num + 1, *val, board->waiting_power_off,
@@ -903,7 +903,7 @@ bmc_set_chassis_control(lmc_data_t *mc, int op, unsigned char *val,
 
     if (debug & 1) {
 	struct timeval now;
-	gettimeofday(&now, NULL);
+	sys->get_real_time(sys, &now);
 	sys->log(sys, DEBUG, NULL, "Power request for all boards,"
 		 " val=%d, now=%ld.%ld",
 		 *val, now.tv_sec, now.tv_sec);
@@ -1457,7 +1457,7 @@ handle_button_press(sys_data_t *sys, unsigned int brdnum)
 	sys->log(sys, DEBUG, NULL, "Button press on %d", board->num + 1);
 
     board->button_pressed = 1;
-    gettimeofday(&board->button_press_time, NULL);
+    board->sys->get_monotonic_time(board->sys, &board->button_press_time);
 }
 
 /*
@@ -1479,7 +1479,7 @@ handle_button_release(sys_data_t *sys, unsigned int num)
 
     board->button_pressed = 0;
 
-    gettimeofday(&now, NULL);
+    board->sys->get_monotonic_time(board->sys, &now);
 
     /*
      * If the button is pressed more than 4 seconds, start a graceful
@@ -2265,7 +2265,7 @@ scan_sensors(void *cb_data)
     char fan_fail[8];
 	    
     for (;;) {
-	gettimeofday(&next, NULL);
+	sys->get_monotonic_time(sys, &next);
 	add_to_timeval(&next, poll_time);
 
 	err = get_readings(sys, &main_temp, &max_temp);
@@ -2362,7 +2362,7 @@ scan_sensors(void *cb_data)
 	}
 
 	/* Wait until poll_time seconds after the last scan started */
-	gettimeofday(&now, NULL);
+	sys->get_monotonic_time(sys, &now);
 	diff_timeval(&wait, &next, &now);
 	select(0, NULL, NULL, NULL, &wait);
     }
@@ -2539,7 +2539,7 @@ set_sensors_from_tables(int fd, void *cb_data)
 	power_down_system(sys);
     }
     temp = 0;
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < NUM_BOARDS; i++) {
 	if (board_front_sensor_valids[0][i] &&
 	    board_front_sensor_last_values[0][i] > temp)
 	    temp = board_front_sensor_last_values[0][i];

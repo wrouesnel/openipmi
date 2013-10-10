@@ -344,6 +344,9 @@ struct os_handler_s
 			    os_data_ready_t except_ready);
     int (*set_fd_enables)(os_handler_t *handler, os_hnd_fd_id_t *id,
 			  int read, int write, int except);
+
+    int (*get_monotonic_time)(os_handler_t *handler, struct timeval *tv);
+    int (*get_real_time)(os_handler_t *handler, struct timeval *tv);
 };
 
 /* Only use these to allocate/free OS handlers. */

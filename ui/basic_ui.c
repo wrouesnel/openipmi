@@ -280,7 +280,7 @@ main(int argc, char *argv[])
 #endif
 
  next_con:
-    rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[last_con]);
+    rv = ipmi_parse_args2(&curr_arg, argc, argv, &con_parms[last_con]);
     if (rv) {
 	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
 		curr_arg, strerror(rv));

@@ -685,6 +685,17 @@ void sset_log_handler(os_handler_t *handler,
     info->log_handler = log_handler;
 }
 
+static int get_tcl_time(os_handler_t *handler,
+			struct timeval *tv)
+{
+    Tcl_Time now;
+    Tcl_GetTime(&now);
+    tv->tv_sec = now.sec;
+    tv->tv_usec = now.usec;
+    return 0;
+}
+
+
 static os_handler_t ipmi_tcl_os_handler =
 {
     .mem_alloc = tcl_malloc,
@@ -731,6 +742,8 @@ static os_handler_t ipmi_tcl_os_handler =
     .database_set_filename = set_gdbm_filename,
 #endif
     .set_log_handler = sset_log_handler,
+    .get_monotonic_time = get_tcl_time,
+    .get_real_time = get_tcl_time
 };
 
 

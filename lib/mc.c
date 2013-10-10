@@ -1949,7 +1949,7 @@ do_sel_time_set(ipmi_mc_t *mc, mc_reread_sel_t *info)
     msg.cmd = IPMI_SET_SEL_TIME_CMD;
     msg.data = data;
     msg.data_len = 4;
-    gettimeofday(&now, NULL);
+    info->os_hnd->get_monotonic_time(info->os_hnd, &now);
     ipmi_set_uint32(data, now.tv_sec);
     mc->startup_SEL_time = ipmi_seconds_to_time(now.tv_sec);
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, info);
@@ -2048,7 +2048,7 @@ startup_got_sel_time(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    gettimeofday(&now, NULL);
+    info->os_hnd->get_monotonic_time(info->os_hnd, &now);
     time = ipmi_get_uint32(rsp->data+1);
 
     if ((time < (uint32_t)now.tv_sec) && ipmi_option_set_sel_time(mc->domain)) {

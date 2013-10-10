@@ -283,7 +283,7 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 	unsigned long  diff;
 	struct timeval end_time;
 
-	gettimeofday(&end_time, NULL);
+	os_hnd->get_monotonic_time(os_hnd, &end_time);
 	diff = (((end_time.tv_sec - data->start_time.tv_sec) * 1000000)
 		+ (end_time.tv_usec - data->start_time.tv_usec));
 	printf("Time was %fus per msg, %ldus total\n",
@@ -333,7 +333,7 @@ time_msgs(ipmi_con_t    *con,
     }
 
     data->con = con;
-    gettimeofday(&data->start_time, NULL);
+    os_hnd->get_monotonic_time(os_hnd, &data->start_time);
     memcpy(&data->msg, msg, sizeof(data->msg));
     memcpy(data->data, msg->data, msg->data_len);
     data->msg.data = data->data;

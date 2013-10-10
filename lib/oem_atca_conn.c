@@ -205,12 +205,13 @@ fd_sock_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	_ipmi_lan_con_change_lock(tinfo->ipmi);
 	for (i=1; i<tinfo->num_ip_addr; i++) {
 	    atca_ip_addr_info_t *ainfo = &(tinfo->ip_addrs[i]);
+	    os_handler_t        *os_hnd = ipmi_get_global_os_handler();
 	    if (lan_addr_same(&ainfo->addr, &ipaddrd)) {
 		if (!ainfo->connected) {
 		    ainfo->connected = 1;
 		    ainfo->changed = 1;
 		}
-		gettimeofday(&ainfo->last_pong_time, NULL);
+		os_hnd->get_monotonic_time(os_hnd, &ainfo->last_pong_time);
 		ainfo->dropped_pings = 0;
 	    }
 	}
@@ -325,7 +326,7 @@ atca_check_and_ping(ipmi_con_t *ipmi, atca_conn_info_t *info)
 	/* No support for this for some reason. */
 	return;
 
-    gettimeofday(&now, NULL);
+    ipmi->os_hnd->get_monotonic_time(ipmi->os_hnd, &now);
 
     data[0] = 0x06; /* RMCP version 1.0 */
     data[1] = 0x00; /* reserved */

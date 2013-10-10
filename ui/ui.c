@@ -427,7 +427,7 @@ ui_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
     int do_nl = 1;
     struct timeval now;
 
-    gettimeofday(&now, NULL);
+    ipmi_ui_cb_handlers.get_real_time(&ipmi_ui_cb_handlers, &now);
 
     if (full_screen) {
 	int x = 0, y = 0, old_x = 0, old_y = 0;
@@ -557,7 +557,7 @@ ui_log(char *format, ...)
     struct timeval now;
     va_list ap;
 
-    gettimeofday(&now, NULL);
+    ipmi_ui_cb_handlers.get_real_time(&ipmi_ui_cb_handlers, &now);
 
     va_start(ap, format);
 
@@ -5566,7 +5566,7 @@ addevent_cmd(char *cmd, char **toks, void *cb_data)
 	    return 0;
     }
 
-    gettimeofday(&time, NULL);
+    ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &time);
     info.timestamp = time.tv_sec * 1000000000;
 
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, addevent_cmder, &info);
@@ -6989,7 +6989,7 @@ redisplay_timeout(selector_t  *sel,
 		   rv);
     }
 
-    gettimeofday(&now, NULL);
+    ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &now);
     now.tv_sec += 1;
     rv = sel_start_timer(timer, &now);
     if (rv)
@@ -7131,7 +7131,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 			     &redisplay_timer);
 	if (rv)
 	    leave_err(rv, "sel_alloc_timer");
-	gettimeofday(&now, NULL);
+	ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &now);
 	now.tv_sec += 1;
 	rv = sel_start_timer(redisplay_timer, &now);
 	if (rv)

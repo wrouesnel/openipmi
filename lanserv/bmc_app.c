@@ -145,7 +145,7 @@ handle_get_watchdog_timer(lmc_data_t    *mc,
 
     if (mc->watchdog_running) {
 	struct timeval now;
-	gettimeofday(&now, NULL);
+	mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &now);
 	v = diff_timeval_dc(&mc->watchdog_expiry, &now);
 	if (v < 0)
 	    v = 0;
@@ -194,7 +194,7 @@ watchdog_timeout(void *cb_data)
 
 	mc->watchdog_preaction_ran = 1;
 	/* Issued the pretimeout, do the rest of the timeout now. */
-	gettimeofday(&now, NULL);
+	mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo, &now);
 	tv = mc->watchdog_expiry;
 	sub_timeval(&tv, &now);
 	if (tv.tv_sec == 0) {
@@ -247,7 +247,8 @@ do_watchdog_reset(lmc_data_t *mc)
     mc->watchdog_preaction_ran = 0;
 
     /* Timeout is in tenths of a second, offset is in seconds */
-    gettimeofday(&mc->watchdog_expiry, NULL);
+    mc->emu->sysinfo->get_monotonic_time(mc->emu->sysinfo,
+					 &mc->watchdog_expiry);
     add_timeval(&mc->watchdog_expiry, &mc->watchdog_time);
     tv = mc->watchdog_time;
     if (IPMI_MC_WATCHDOG_GET_PRE_ACTION(mc) != IPMI_MC_WATCHDOG_PRE_NONE) {
