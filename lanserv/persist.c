@@ -86,10 +86,10 @@ struct persist_s {
 int persist_enable = 1;
 
 static char *app = NULL;
-static const char *statedir = STATEDIR;
+static const char *basedir;
 
 int
-persist_init(const char *papp, const char *instance)
+persist_init(const char *papp, const char *instance, const char *ibasedir)
 {
     unsigned int len;
     char *dname;
@@ -98,6 +98,9 @@ persist_init(const char *papp, const char *instance)
 
     if (app)
 	return EBUSY;
+    
+    basedir = ibasedir;
+
     len = strlen(papp) + strlen(instance) + 2;
     app = malloc(len);
     if (!app)
@@ -106,11 +109,11 @@ persist_init(const char *papp, const char *instance)
     strcat(app, "/");
     strcat(app, instance);
 
-    len = strlen(statedir) + strlen(app) + 3;
+    len = strlen(basedir) + strlen(app) + 3;
     dname = malloc(len);
     if (!dname)
 	return ENOMEM;
-    strcpy(dname, statedir);
+    strcpy(dname, basedir);
     strcat(dname, "/");
     strcat(dname, app);
     strcat(dname, "/");
@@ -180,13 +183,13 @@ alloc_persist(const char *name, ...)
 static char *
 get_fname(persist_t *p, char *sfx)
 {
-    int len = (strlen(statedir) + strlen(app) + strlen(p->name)
+    int len = (strlen(basedir) + strlen(app) + strlen(p->name)
 	       + strlen(sfx) + 3);
     char *fname = malloc(len);
 
     if (!fname)
 	return NULL;
-    strcpy(fname, statedir);
+    strcpy(fname, basedir);
     strcat(fname, "/");
     strcat(fname, app);
     strcat(fname, "/");

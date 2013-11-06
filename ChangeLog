@@ -1,4 +1,11 @@
-2012-10-10 Corey Minyard <cminyard@mvista.com>
+2013-11-06 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/OpenIPMI/persist.h, lanserv/persist.c, lanserv/ipmi_sim.c:
+	Add a way to pass in the state directory on the command line so
+	the persist location can be specified then instead of just at
+	compile time.
+
+2013-10-10 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/os_handler.h: Add a real and monotonic time
 	fetcher.
@@ -18,14 +25,14 @@
 	* lanserv/bmc_app.c, lanserv/bmc_storage.c: ditto
 	* lanserv/marvell-bmc/marvell_mod.c: ditto
 
-2012-08-30 Corey Minyard <cminyard@mvista.com>
+2013-08-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/Makefile.am: Add ipmi_string.h to the
 	distributed includes.
 
 	* configure.in: Move to version 2.0.20-rc3.
 
-2012-08-29 Corey Minyard <cminyard@mvista.com>
+2013-08-29 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/sdrcomp/Makefile.am, lanserv/marvell-bmc/Makefile.am:
 	Remove the sdrcomp_build program, it wasn't necessary.

@@ -98,6 +98,7 @@
 
 #define BASE_CONF_STR SYSCONFDIR "/ipmi"
 static char *config_file = BASE_CONF_STR "/lan.conf";
+static const char *statedir = STATEDIR;
 static char *command_string = NULL;
 static char *command_file = NULL;
 static int debug = 0;
@@ -619,6 +620,15 @@ static struct poptOption poptOpts[]=
 	&command_file,
 	'f',
 	"command file",
+	""
+    },
+    {
+	"state-dir",
+	's',
+	POPT_ARG_STRING,
+	&statedir,
+	's',
+	"state directory",
 	""
     },
     {
@@ -1430,7 +1440,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    err = persist_init("ipmi_sim", sysinfo.name);
+    err = persist_init("ipmi_sim", sysinfo.name, statedir);
     if (err) {
 	fprintf(stderr, "Unable to initialize persistence: %s\n",
 		strerror(err));

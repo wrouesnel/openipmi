@@ -58,7 +58,7 @@
 
 typedef struct persist_s persist_t;
 
-int persist_init(const char *app, const char *instance);
+int persist_init(const char *app, const char *instance, const char *basedir);
 
 persist_t *alloc_persist(const char *name, ...);
 persist_t *read_persist(const char *name, ...);
