@@ -279,10 +279,19 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
     int fd;
     int rv;
+    int opt;
 
     fd = socket(addr->sa_family, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
 	perror("Unable to create socket");
+	exit(1);
+    }
+
+    opt = 1;
+    rv = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    if (rv == -1) {
+	fprintf(stderr, "Unable to set SO_REUSEADDR: %s\n",
+		strerror(errno));
 	exit(1);
     }
 
@@ -434,6 +443,7 @@ ser_channel_init(void *info, channel_t *chan)
     serserv_data_t *ser = chan->chan_info;
     int err;
     int fd;
+    int opt;
     struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
     os_hnd_fd_id_t *fd_id;
     int val;
@@ -472,6 +482,15 @@ ser_channel_init(void *info, channel_t *chan)
 	    exit(1);
 	}
     } else {
+        int opt = 1;
+
+	err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	if (err == -1) {
+	    fprintf(stderr, "Unable to set SO_REUSEADDR on serial TCP: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
+
 	err = bind(fd, addr, ser->addr.addr_len);
 	if (err == -1) {
 	    fprintf(stderr, "Unable to bind to serial TCP port: %s\n",

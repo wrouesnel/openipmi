@@ -1,3 +1,9 @@
+2013-11-07 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/ipmi_sim.c: Set SO_REUSEADDR on the serial TCP and IPMI
+	LAN sockets to avoid "address in use" errors when quitting and
+	restarting.
+
 2013-11-06 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/OpenIPMI/persist.h, lanserv/persist.c, lanserv/ipmi_sim.c:
