@@ -142,6 +142,12 @@ static void sol_set_history_return_size(lmc_data_t    *mc,
 	return;
     }
 
+    if (!sd) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
     size = msg->data[0] * 1024;
     if (size >= sol->history_size || size == 0)
 	sd->history_return_size = 0;
@@ -160,6 +166,12 @@ static void sol_get_history_return_size(lmc_data_t    *mc,
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd = sol->soldata;
+
+    if (!sd) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
 
     rdata[0] = 0;
     rdata[1] = sd->history_return_size / 1024;
