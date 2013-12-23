@@ -2667,11 +2667,21 @@ handle_marvell_cmd(lmc_data_t    *mc,
     char cmd[100];
     int rv;
 
+    /*
+     * Note that the calling function remove the IANA from the message
+     * and inserts the IANA in the return message, we handle this like
+     * a normal command.
+     *
+     * Start assuming success.
+     */
+    rdata[0] = 0;
+    *rdata_len = 1;
+
     switch (msg->cmd) {
     case DISABLE_NETWORK_SRVC_CMD:
-	if (check_msg_length(msg, 4, rdata, rdata_len))
-	    return;
-	snprintf(cmd, sizeof(cmd), "/etc/ipmi/netsrvc %d\n", msg->data[3]);
+	if (check_msg_length(msg, 1, rdata, rdata_len))
+	    break;
+	snprintf(cmd, sizeof(cmd), "/etc/ipmi/netsrvc %d\n", msg->data[0]);
 	rv = system(cmd);
 	if (rv == -1) {
 	    rdata[0] = 0xff;
@@ -2683,8 +2693,7 @@ handle_marvell_cmd(lmc_data_t    *mc,
 	    rdata[1] = 0;
 	    rdata[2] = rv;
 	    *rdata_len = 3;
-	} else
-	    goto out_good;
+	}
 	break;
 
     case RELOAD_BOARD_FRU_CMD:
@@ -2693,10 +2702,10 @@ handle_marvell_cmd(lmc_data_t    *mc,
 	pthread_t tid;
 	unsigned int num;
 
-	if (check_msg_length(msg, 4, rdata, rdata_len))
+	if (check_msg_length(msg, 1, rdata, rdata_len))
 	    return;
 
-	num = msg->data[3] - 1;
+	num = msg->data[0] - 1;
 	if (num >= NUM_BOARDS)
 	    goto out_err;
 
@@ -2738,13 +2747,10 @@ handle_marvell_cmd(lmc_data_t    *mc,
     }
 
   out_good:
-    rdata[0] = 0;
-    *rdata_len = 1;
     return;
 
   out_err:
-    *rdata = 0xff;
-    *rdata_len = 1;
+    rdata[0] = 0xff;
 }
 
 int

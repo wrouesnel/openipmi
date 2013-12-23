@@ -126,19 +126,30 @@ handle_iana_netfn(lmc_data_t    *mc,
 		  void          *cb_data)
 {
     struct iana_handler_elem *p;
-    uint32_t iana;
 
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
 
-    iana = msg->data[0] | (msg->data[1] << 8) | (msg->data[2] << 16);
-    p = find_iana(iana);
+    msg->iana = msg->data[0] | (msg->data[1] << 8) | (msg->data[2] << 16);
+    p = find_iana(msg->iana);
     if (!p) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
-	return;
+	goto out;
     }
 
+    /* Remove the IANA */
+    memcpy(msg->data, msg->data + 3, msg->len - 3);
+    msg->len -= 3;
+
     p->handler(mc, msg, rdata, rdata_len, p->cb_data);
+
+ out:
+    /* Insert the IANA back in. */
+    memcpy(rdata + 4, rdata + 1, *rdata_len);
+    rdata[1] = msg->iana & 0xff;
+    rdata[2] = (msg->iana >> 8) & 0xff;
+    rdata[3] = (msg->iana >> 16) & 0xff;
+    *rdata_len += 3;
 }
 
 static struct oi_iana_cmd_elem {

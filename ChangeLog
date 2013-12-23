@@ -1,3 +1,14 @@
+2013-12-23 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI/mcserv.h, OpenIPMI/msg.h, bmc.c, sol.c:
+	The IANA numbers are supposed to be in bytes 2-4 off responses to IANA
+	commands, but they were not being put there.  Fix this in the main IANA
+	handling to do this automatically, and modify the command handling to
+	strip the IANA from the command and add it to a message field.  This
+	makes handling of IANA commands more natural and allows standard message
+	response generation to work.
+	* marvell-bmc/marvell_mod.c: ditto
+
 2013-11-07 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/ipmi_sim.c: Set SO_REUSEADDR on the serial TCP and IPMI

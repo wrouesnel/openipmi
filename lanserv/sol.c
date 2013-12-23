@@ -136,13 +136,13 @@ static void sol_set_history_return_size(lmc_data_t    *mc,
     soldata_t *sd = sol->soldata;
     unsigned int size;
 
-    if (msg->len < 4) {
+    if (msg->len < 1) {
 	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    size = msg->data[3] * 1024;
+    size = msg->data[0] * 1024;
     if (size >= sol->history_size || size == 0)
 	sd->history_return_size = 0;
     else

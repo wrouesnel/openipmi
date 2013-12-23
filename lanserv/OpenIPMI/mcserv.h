@@ -319,6 +319,15 @@ typedef void (*cmd_handler_f)(lmc_data_t    *mc,
 			      void          *cb_data);
 int ipmi_emu_register_cmd_handler(unsigned char netfn, unsigned char cmd,
 				  cmd_handler_f handler, void *cb_data);
+
+/*
+ * Note that for IANA command handlers the IANA is stripped (and put into
+ * msg->iana) before being passed to the handler, and inserted into the
+ * response message automatically.  So the handler should handle this
+ * like a normal message, setting the data and length as if the IANA was
+ * not there.  This way standard handling functions will work properly,
+ * and it simplifies the handling of IANA messages.
+ */
 int ipmi_emu_register_iana_handler(uint32_t iana, cmd_handler_f handler,
 				   void *cb_data);
 int ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler,

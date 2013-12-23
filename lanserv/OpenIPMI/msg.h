@@ -106,6 +106,8 @@ typedef struct msg_s
     unsigned char *data;
     unsigned int  len;
 
+    uint32_t iana; /* Set for IANA commands */
+
     struct msg_s *next;
 } msg_t;
 
