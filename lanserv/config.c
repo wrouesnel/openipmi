@@ -816,8 +816,6 @@ read_config(sys_data_t *sys,
 	    }
 	    if (!err) {
 		err = lanserv_read_config(sys, f, &line, val);
-		if (err)
-		    return err;
 	    }
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, sys, &errstr);
@@ -874,7 +872,7 @@ read_config(sys_data_t *sys,
       next:
 	if (err) {
 	    fprintf(stderr, "Error on line %d: %s\n", line, errstr);
-	    return err;
+	    break;
 	}
     }
 
@@ -883,5 +881,5 @@ read_config(sys_data_t *sys,
     if (print_version)
 	load_dynamic_libs(sys, print_version);
 
-    return 0;
+    return err;
 }

@@ -235,7 +235,7 @@ read_command_file(emu_out_t *out, emu_data_t *emu, const char *command_file)
 	    
 	    rv = ipmi_emu_cmd(out, emu, buffer);
 	    if (rv)
-		return rv;
+		break;
 	    pos = 0;
 	}
  out:
