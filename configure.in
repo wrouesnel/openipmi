@@ -297,7 +297,7 @@ if test "x$FOUND_POPT_HEADER" != "xyes"; then
 fi
 
 if test "x$POPTLIBS" = "x"; then
-   AC_CHECK_LIB(popt, poptHelpOptions, POPTLIBS=-lpopt)
+   AC_CHECK_LIB(popt, poptGetContext, POPTLIBS=-lpopt)
    if test "x$POPTLIBS" = ""; then
       echo "Could not find the popt library"
       exit 1
