@@ -124,7 +124,7 @@ typedef struct ipmi_args_s ipmi_args_t;
 
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 
-#define IPMI_MAX_MSG_LENGTH	80
+#define IPMI_MAX_MSG_LENGTH	256
 
 /* A raw IPMI message without any addressing.  This covers both
    commands and responses.  The completion code is always the first
