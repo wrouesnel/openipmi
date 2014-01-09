@@ -1842,12 +1842,12 @@ lan_send_addr(lan_data_t              *lan,
     if ((payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
 	|| ((payload_type >= 0x20) && (payload_type <= 0x27)))
     {
-	ipmi_rmcpp_addr_t *addr = (ipmi_rmcpp_addr_t *) addr;
+	ipmi_rmcpp_addr_t *rmcpp_addr = (ipmi_rmcpp_addr_t *) addr;
 	payload_entry_t *e;
 
 	if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT) {
-	    memcpy(oem_iana, addr->oem_iana, 3);
-	    oem_payload_id = addr->oem_payload_id;
+	    memcpy(oem_iana, rmcpp_addr->oem_iana, 3);
+	    oem_payload_id = rmcpp_addr->oem_payload_id;
 	} else {
 	    memcpy(oem_iana, lan->oem_iana, 3);
 	    oem_payload_id = 0;
