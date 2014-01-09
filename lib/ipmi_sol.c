@@ -3532,7 +3532,8 @@ sol_handle_recv_async(ipmi_con_t    *ipmi_conn,
     dump_hex(packet, data_len);
 #endif
 
-    if (conn->state == ipmi_sol_state_closed) {
+    if ((conn->state != ipmi_sol_state_connected)
+	&& (conn->state != ipmi_sol_state_connected_ctu)) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_sol.c(sol_handle_recv_async): "
 		 "Dropped incoming SoL packet: connection closed.");
