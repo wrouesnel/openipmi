@@ -87,6 +87,8 @@
 #define MARVELL_SEMI_ISREAL_IANA	20495
 #define DISABLE_NETWORK_SRVC_CMD	1
 #define RELOAD_BOARD_FRU_CMD		2
+#define SET_ALL_FANS_DUTY_CMD		3
+#define GET_ALL_FANS_DUTY_CMD		4
 
 #define BOARD_FRU_FILE "/etc/ipmi/axp_board_fru"
 #define COLD_POWER_FILE "/var/lib/ipmi_sim_coldpower"
@@ -1850,6 +1852,8 @@ struct sensor_info {
 };
 static struct sensor_info empty_sensors[] = { { NULL } };
 
+static int all_fans_duty = 0;
+
 struct fan_duty_table {
     int reading;
     int setting;
@@ -2322,6 +2326,9 @@ scan_sensors(void *cb_data)
 	if (duty > max_duty)
 	    max_duty = duty;
 
+	if (all_fans_duty)
+	    max_duty = all_fans_duty;
+
 	if (max_duty != last_duty) {
 	    if (debug & 8)
 		sys->log(sys, DEBUG, NULL, "Setting fan duty to %d",
@@ -2740,6 +2747,29 @@ handle_marvell_cmd(lmc_data_t    *mc,
 	}
     }
     break;
+
+    case SET_ALL_FANS_DUTY_CMD:
+    {
+	int duty;
+
+	if (check_msg_length(msg, 1, rdata, rdata_len))
+	    break;
+
+	duty = msg->data[0];
+	if (duty == 0)
+	    ; /* Disable the duty by setting to zero */
+	else if (duty < 30)
+	    duty = 30; /* Minimum allowed fan duty */
+	else if (duty > 100)
+	    duty = 100;
+	all_fans_duty = duty;
+    }
+    break;
+
+    case GET_ALL_FANS_DUTY_CMD:
+	rdata[1] = all_fans_duty;
+	*rdata_len = 2;
+	break;
 
     default:
 	handle_invalid_cmd(mc, rdata, rdata_len);
