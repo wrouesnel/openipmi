@@ -2912,7 +2912,7 @@ cmp_int(const void *v1, const void *v2)
     const int *i2 = v2;
     if (*i1 < *i2)
 	return -1;
-    else if (*i2 > *i2)
+    else if (*i1 > *i2)
 	return 1;
     else
 	return 0;
