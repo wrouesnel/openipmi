@@ -3695,9 +3695,9 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 	raw_value = data[11];
 	value = 0.0;
 
-	if ((data[10] >> 6) == 2) {
+	if ((data[10] >> 6) == 1) {
 	    rv = ipmi_sensor_convert_from_raw(sensor, raw_value, &value);
-	    if (!rv)
+	    if (rv)
 		value_present = IPMI_RAW_VALUE_PRESENT;
 	    else
 		value_present = IPMI_BOTH_VALUES_PRESENT;
