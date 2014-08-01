@@ -334,7 +334,7 @@ get_uint(char **toks, unsigned int *val, char *errstr)
 static int
 get_ip_addr(char **toks, struct in_addr *ip_addr, char *errstr)
 {
-    u_int32_t     addr;
+    uint32_t      addr;
     unsigned char val;
     char          *str, *tmpstr, *istr;
     char          *ntok;
