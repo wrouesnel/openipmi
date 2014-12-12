@@ -104,6 +104,40 @@ static char *command_file = NULL;
 static int debug = 0;
 static int nostdio = 0;
 
+/*
+ * Keep track of open sockets so we can close them on exec().
+ */
+typedef struct isim_fd {
+    int fd;
+    struct isim_fd *next;
+} isim_fd_t;
+
+static isim_fd_t *isim_fds = NULL;
+
+static void isim_add_fd(int fd)
+{
+    isim_fd_t *n = malloc(sizeof(*n));
+
+    if (!n) {
+	fprintf(stderr, "Unable to add fd to list, out of memory\n");
+	exit(1);
+    }
+
+    n->fd = fd;
+    n->next = isim_fds;
+    isim_fds = n;
+}
+
+static void isim_close_fds(void)
+{
+    isim_fd_t *n = isim_fds;
+
+    while(n) {
+	close(n->fd);
+	n = n->next;
+    }
+}
+
 static void shutdown_handler(int sig);
 
 typedef struct misc_data misc_data_t;
@@ -301,6 +335,8 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 		strerror(errno));
 	exit(1);
     }
+
+    isim_add_fd(fd);
 
     return fd;
 }
@@ -525,6 +561,9 @@ ser_channel_init(void *info, channel_t *chan)
 	    exit(1);
 	}
     }
+
+    if (!err)
+	isim_add_fd(fd);
 
     return err;
 }
@@ -1283,6 +1322,7 @@ ipmi_do_start_cmd(startcmd_t *startcmd)
     if (pid == 0) {
 	char *args[4] = { "/bin/sh", "-c", cmd, NULL };
 
+	isim_close_fds();
 	execvp(args[0], args);
 	exit(1);
     }
@@ -1555,6 +1595,8 @@ main(int argc, const char *argv[])
 	if (err) {
 	    fprintf(stderr, "Unable to add console wait: 0x%x\n", err);
 	    goto out;
+	} else {
+	    isim_add_fd(nfd);
 	}
     }
 
