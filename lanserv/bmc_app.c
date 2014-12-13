@@ -928,7 +928,7 @@ handle_get_msg(lmc_data_t    *mc,
     qmsg = mc->recv_q_head;
     if (!qmsg) {
 	rdata[0] = 0x80;
-	*rdata_len = 0;
+	*rdata_len = 1;
 	return;
     }
 
