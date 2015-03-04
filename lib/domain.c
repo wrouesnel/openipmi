@@ -474,6 +474,12 @@ _ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name)
     ipmi_unlock(domain->domain_lock);
 }
 
+int
+ipmi_domain_is_fully_up(ipmi_domain_t *domain)
+{
+    return domain->fully_up_count == 0;
+}
+
 /***********************************************************************
  *
  * Domain data structure creation and destruction

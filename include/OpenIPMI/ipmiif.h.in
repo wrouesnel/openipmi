@@ -480,6 +480,11 @@ int ipmi_domain_store_entities(ipmi_domain_t  *domain,
 /* Returns if the domain thinks it has a connection up. */
 int ipmi_domain_con_up(ipmi_domain_t *domain);
 
+/*
+ * Returns true if the domain has finished coming up, false if not.
+ */
+int ipmi_domain_is_fully_up(ipmi_domain_t *domain);
+
 /* Iterate through the connections on a domain. */
 typedef void (*ipmi_connection_ptr_cb)(ipmi_domain_t *domain, int conn,
 				       void *cb_data);
