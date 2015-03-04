@@ -2,7 +2,7 @@
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
 	-I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-bin_PROGRAMS = openipmicmd solterm rmcp_ping
+bin_PROGRAMS = openipmicmd solterm rmcp_ping openipmi_eventd
 
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3 ipmi_serial_bmc_emu \
 		  ipmi_dump_sensors waiter_sample
@@ -27,6 +27,12 @@ ipmisample3_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 
 waiter_sample_SOURCES = waiter_sample.c
 waiter_sample_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
+		$(top_builddir)/lib/libOpenIPMI.la \
+		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(OPENSSLLIBS)
+
+openipmi_eventd_SOURCES = eventd.c
+openipmi_eventd_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)
