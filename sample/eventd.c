@@ -52,14 +52,15 @@
     do {								\
 	char errstr[128];						\
 	ipmi_get_error_string(err, errstr, sizeof(errstr));		\
-	fprintf(stderr, "%s: " format ": %s", domainname, ##__VA_ARGS__, errstr); \
+	fprintf(stderr, "%s: " format ": %s\n", domainname, ##__VA_ARGS__, \
+		errstr);						\
     } while(0)
 
 #define SYSLOG_IPMIERR(level, err, format, ...) \
     do {								\
 	char errstr[128];						\
 	ipmi_get_error_string(err, errstr, sizeof(errstr));		\
-	syslog(level, "%s: " format ": %s", domainname, ##__VA_ARGS__, errstr); \
+	syslog(level, "%s: " format ": %s", domainname, ##__VA_ARGS__, errstr);\
     } while(0)
 
 #define debug_printf(format, ...) \
@@ -79,17 +80,59 @@ static bool delete_events;
 static int debug;
 static int childpid = -1;
 
+static char *indent_str(const char *instr, const char *indent)
+{
+    int p, o;
+    int ilen = strlen(indent);
+    size_t extra = 0;
+    char *s;
+
+    for (p = 0; instr[p]; p++) {
+	if (instr[p] == '\n')
+	    extra += ilen;
+    }
+    if (extra == 0)
+	return (char *) instr;
+    s = malloc(strlen(instr) + extra + 1);
+    if (!s)
+	return NULL;
+    for (p = 0, o = 0; instr[p]; p++) {
+	s[o++] = instr[p];
+	if (instr[p] == '\n') {
+	    memcpy(s + o, indent, ilen);
+	    o += ilen;
+	}
+    }
+    s[o] = '\0';
+    return s;
+}
+
 static void con_usage(const char *name, const char *help, void *cb_data)
 {
-    printf("\n%s%s", name, help);
+    char *newhelp = indent_str(help, "     ");
+    printf("\n %s%s", name, newhelp);
+    if (newhelp != help)
+	free(newhelp);
 }
 
 static void
 usage(void)
 {
     printf("Usage:\n");
-    printf(" %s <con_parms>\n", progname);
-    printf(" Where <con_parms> is one of:");
+    printf(" %s <domain> <con_parms> [-k] [-i] [-e] [-d] [-b] [-f <filename>] <program> [<parm1> [<parm2> [...]]]\n",
+	   progname);
+    printf("<domain> is a name given to locally identify the connection.\n");
+    printf("Options are:\n");
+    printf(" -k, --exec-now - Execute the program at startup and feed it\n");
+    printf("    events through stdin.\n");
+    printf(" -i, --event-stdin - Execute the program for each event, but\n");
+    printf("    feed it input through stdin.\n");
+    printf(" -e, --delete-events - Delete each event after processing.\n");
+    printf(" -d, --debug - Enable debugging\n");
+    printf(" -b, --dont-daemonize - Run the program in foreground.\n");
+    printf(" -f, --outfile - Send the output to the given file instead of\n");;
+    printf("    spawning another program.\n");
+    printf("<con_parms> is:");
     ipmi_parse_args_iter_help(con_usage, NULL);
 }
 
@@ -575,12 +618,6 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    if (signal(SIGCHLD, sigchld_handler) == SIG_ERR) {
-	fprintf(stderr, "Unable to install sigchld handler: %s\n",
-		strerror(errno));
-	exit(1);
-    }
-
     progname = argv[0];
     domainname = argv[1];
 
@@ -596,13 +633,13 @@ main(int argc, char *argv[])
 
     rv = ipmi_init(os_hnd);
     if (rv) {
-	STDERR_IPMIERR(rv, "Error in ipmi initialization\n");
+	STDERR_IPMIERR(rv, "Error in ipmi initialization");
 	exit(1);
     }
 
     rv = ipmi_parse_args2(&curr_arg, argc, argv, &args);
     if (rv) {
-	STDERR_IPMIERR(rv, "Error parsing command arguments, argument %d\n",
+	STDERR_IPMIERR(rv, "Error parsing command arguments, argument %d",
 		       curr_arg);
 	usage();
 	exit(1);
@@ -613,18 +650,24 @@ main(int argc, char *argv[])
 	curr_arg++;
 	if (strcmp(argv[a], "--") == 0)
 	    break;
-	if (strcmp(argv[a], "-i") == 0)
+	if ((strcmp(argv[a], "-i") == 0) ||
+	    (strcmp(argv[a], "--event-stdin") == 0))
 	    progstdio = true;
-	else if (strcmp(argv[a], "-k") == 0)
+	else if ((strcmp(argv[a], "-k") == 0) ||
+		 (strcmp(argv[a], "--exec-now") == 0))
 	    execnow = true;
-	else if (strcmp(argv[a], "-e") == 0)
+	else if ((strcmp(argv[a], "-e") == 0) ||
+		 (strcmp(argv[a], "--delete-events") == 0))
 	    delete_events = true;
-	else if (strcmp(argv[a], "-d") == 0) {
+	else if ((strcmp(argv[a], "-d") == 0) ||
+		 (strcmp(argv[a], "--debug") == 0)) {
 	    debug++;
 	    daemonize = false;
-	} else if (strcmp(argv[a], "-b") == 0)
+	} else if ((strcmp(argv[a], "-b") == 0) ||
+		   (strcmp(argv[a], "--dont-daemonize") == 0))
 	    daemonize = false;
-	else if (strcmp(argv[a], "-f") == 0) {
+	else if ((strcmp(argv[a], "-f") == 0) ||
+		 (strcmp(argv[a], "--outfile") == 0)) {
 	    if (curr_arg == argc) {
 		fprintf(stderr, "-f given, but no filename given\n");
 		exit(1);
@@ -674,6 +717,15 @@ main(int argc, char *argv[])
     } else if (curr_arg == argc) {
 	fprintf(stderr, "No program given to execute on an IPMI event\n");
 	exit(1);
+    }
+
+    if (execnow) {
+	/* Only watch for child processes if we keep it around. */
+	if (signal(SIGCHLD, sigchld_handler) == SIG_ERR) {
+	    fprintf(stderr, "Unable to install sigchld handler: %s\n",
+		    strerror(errno));
+	    exit(1);
+	}
     }
 
     /*

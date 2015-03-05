@@ -7,13 +7,7 @@ openipmi_eventd \- An IPMI event handler
 .B openipmi_eventd
 .BI "<domain\ name>"
 .BI "<connection\ parms>"
-.RB [ \-f
-.IR "filename" ]
-.RB [ \-k ]
-.RB [ \-i ]
-.RB [ \-e ]
-.RB [ \-b ]
-.RB [ \-d ]
+.BI "<options>"
 .BI "<program> [<parm1> [<parm2> [...]]]"
 .SH DESCRIPTION
 The
@@ -21,7 +15,7 @@ The
 program listens for IPMI events for the given connection and sends them
 to another program to process, or to a file.
 
-.SH OPTIONS
+.SH PARAMETERS
 .TP
 .BI <domain\ name>
 The name to use for the OpenIPMI domain.  This will appear in logs and
@@ -33,39 +27,45 @@ The parameters for the connection depend on the connection type.
 These are all described in openipmi_conparms (7)
 
 .TP
-.BI \-f\ filename
+.BI <options>
+Zero or more of the options defined in OPTIONS below.
+
+.TP
+.BI <program>\ [<parm1>\ [<parm2>\ [...]]]
+The program to run.  This must be the full path to the program.  Any
+given parameters are passed to the program before any IPMI parameters.
+
+.SH OPTIONS
+.TP
+\fB\-f\fR filename, \fB\-\-outfile\fR filename
 Send all events to the given file
 
 .TP
-.BI \-k
+\fB\-k\fR, \fB\-\-exec\-now\fR
 Immediately spawn the given program and send the event information to that
 program's standard input.  The program should not quit, if it does then
 this program will exit with an error.
 
 .TP
-.BI \-i
+\fB\-i\fR, \fB\-\-event\-stdin\fR
 Send the event information to the program's standard input instead of
 the commandline.
 
 .TP
-.BI \-e
-Delete events once they have been processed.  Note that the program has
-to have handled the event without error for the event to be deleted.
-Otherwise the events are not deleted from the SEL.
+\fB\-e\fR, \fB\-\-delete\-events\fR
+Delete events from the SEL (System Event Log) once they have been
+processed.  Note that the program has to have handled the event
+without error for the event to be deleted.  Otherwise the events are
+not deleted from the SEL.
 
 .TP
-.BI \-b
+\fB\-b\fR, \fB\-\-dont\-daemonize\fR
 Do not daemonize the program, run it as a foreground process.
 
 .TP
-.BI \-d
+\fB\-d\fR, \fB\-\-debug\fR
 Debug the program, turn on output, send all logs to stderr, and do not
 run the process as a daemon.
-
-.TP
-.BI <program>
-The program to run.  This must be the full path to the program.  The
-given parameters are passed to the program before any IPMI parameters.
 
 .SH "USAGE"
 When started, this program will connect to the given IPMI domain,
