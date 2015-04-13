@@ -43,6 +43,8 @@ static extcmd_map_t boot_map[] = {
     { 0, "none" },
     { 1, "pxe" },
     { 2, "default" },
+    { 5, "cdrom" },
+    { 6, "bios" },
     { 0, NULL }
 };
 
@@ -326,7 +328,15 @@ set_system_boot_options(lmc_data_t    *mc,
 	    rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_BOOT_INFO_ACK,
 					      msg->data + 1,
 					      mc->chassis_control_cb_data);
+
 	    if (rv) {
+		rdata[0] = IPMI_UNKNOWN_ERR_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	} else if (mc->chassis_control_prog) {
+	    if (extcmd_getvals(mc->sysinfo, &val, mc->chassis_control_prog,
+			       &chassis_prog[CHASSIS_CONTROL_BOOT], 1)) {
 		rdata[0] = IPMI_UNKNOWN_ERR_CC;
 		*rdata_len = 1;
 		return;
