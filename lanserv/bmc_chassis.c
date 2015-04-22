@@ -53,7 +53,9 @@ static extcmd_info_t chassis_prog[] = {
     { "power", extcmd_int, NULL, 0 },
     { "reset", extcmd_int, NULL, 0 },
     { "boot", extcmd_uchar, boot_map, 0 },
+    { "boot", extcmd_uchar, boot_map, 0 }, // dup'd for boot info ack
     { "shutdown", extcmd_int, NULL, 0 },
+    { "identify", extcmd_ident, NULL, 0 },
 };
 
 static int
@@ -279,6 +281,48 @@ handle_chassis_control(lmc_data_t    *mc,
 }
 
 static void
+handle_chassis_identify(lmc_data_t    *mc,
+			  msg_t         *msg,
+			  unsigned char *rdata,
+			  unsigned int  *rdata_len,
+			  void          *cb_data)
+{
+    unsigned char val[2];
+
+    rdata[0] = 0;
+    memset(val, 0, sizeof(val));
+
+    if (msg->len == 0)
+        val[0] = 0xf; /* default 15 seconds */
+    else
+        val[0] = msg->data[0]; /* interval */
+
+    if (msg->len > 1) /* force flag is set */
+        val[1] = msg->data[1] & 0x1;
+
+    if (mc->chassis_control_set_func) {
+	int rv;
+	rv = mc->chassis_control_set_func(mc, CHASSIS_CONTROL_IDENTIFY,
+					  val, mc->chassis_control_cb_data);
+	if (rv) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    } else if (mc->chassis_control_prog) {
+	if (extcmd_setvals(mc->sysinfo, val, mc->chassis_control_prog,
+			   &chassis_prog[CHASSIS_CONTROL_IDENTIFY], NULL, 1)) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    } else {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+    }
+}
+
+static void
 set_system_boot_options(lmc_data_t    *mc,
 			msg_t         *msg,
 			unsigned char *rdata,
@@ -336,7 +380,7 @@ set_system_boot_options(lmc_data_t    *mc,
 	    }
 	} else if (mc->chassis_control_prog) {
 	    if (extcmd_getvals(mc->sysinfo, &val, mc->chassis_control_prog,
-			       &chassis_prog[CHASSIS_CONTROL_BOOT], 1)) {
+			    &chassis_prog[CHASSIS_CONTROL_BOOT_INFO_ACK], 1)) {
 		rdata[0] = IPMI_UNKNOWN_ERR_CC;
 		*rdata_len = 1;
 		return;
@@ -469,6 +513,7 @@ cmd_handler_f chassis_netfn_handlers[256] = {
     [IPMI_GET_CHASSIS_STATUS_CMD] = handle_get_chassis_status,
     [IPMI_CHASSIS_CONTROL_CMD] = handle_chassis_control,
     [IPMI_SET_SYSTEM_BOOT_OPTIONS_CMD] = set_system_boot_options,
-    [IPMI_GET_SYSTEM_BOOT_OPTIONS_CMD] = get_system_boot_options
+    [IPMI_GET_SYSTEM_BOOT_OPTIONS_CMD] = get_system_boot_options,
+    [IPMI_CHASSIS_IDENTIFY_CMD] = handle_chassis_identify
 };
 

@@ -86,13 +86,23 @@ do_set() {
 			;;
 		    pxe)
 			;;
-		    default)
+	            cdrom)
 			;;
+		    bios)
+		        ;;
+		    default)
+	               ;;
 		    *)
 			echo "Invalid boot value: $1"
 			exit 1
 			;;
 		esac
+		;;
+
+            identify)
+		interval=$val
+		force=$1
+		shift
 		;;
 
 	    *)

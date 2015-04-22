@@ -64,6 +64,7 @@ enum extcmd_info_type_e {
     extcmd_mac,
     extcmd_uchar,
     extcmd_int,
+    extcmd_ident,
 };
 
 typedef struct extcmd_map_s {

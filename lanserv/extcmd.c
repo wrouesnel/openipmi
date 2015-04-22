@@ -167,6 +167,10 @@ extcmd_setval(void *baseloc, extcmd_info_t *t)
 	    return NULL;
 	break;
 
+    case extcmd_ident:
+	sprintf(buf, "%u %u", (unsigned char)loc[0], (unsigned char)loc[1]);
+	break;
+
     case extcmd_mac:
 	if (!ether_ntoa_r((struct ether_addr *) loc, buf))
 	    return NULL;
@@ -364,7 +368,8 @@ extcmd_setvals(sys_data_t *sys,
 	rv = add_cmd(&cmd, ts[i].name, extcmd_setval(baseloc, ts + i), 1);
 	if (rv) {
 	    sys->log(sys, OS_ERROR, NULL,
-		     "Out of memory in extcmd write command\n");
+		     "Out of memory in extcmd write command (%d) %s\n",
+		     rv, strerror(rv));
 	    goto out;
 	}
     }
