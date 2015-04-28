@@ -886,6 +886,7 @@ struct ipmi_lan_config_s
     unsigned char  max_priv_for_cipher_suite_supported;
     unsigned char  max_priv_for_cipher_suite[16];
 
+    /* See the note in the gnd function foro weirdness about this field. */
     unsigned char num_alert_destinations;
     unsigned char  vlan_tag_supported;
     alert_dest_type_t *alert_dest_type;
@@ -1095,6 +1096,12 @@ static int gnd(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
     if (num == 0)
 	return 0;
 
+    /*
+     * This is important!  The number in this field is the number of
+     * non-volatile destinations.  There is a volatile destination
+     * at zero that is always present, and at least on non-volatile
+     * field is required if this paramter is non-zero.
+     */
     num++;
 
     lanc->alert_dest_type = ipmi_mem_alloc(sizeof(alert_dest_type_t) * num);
@@ -1554,7 +1561,7 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	    if (lanc->num_alert_destinations == 0)
 		goto done;
 	    lanc->curr_parm = IPMI_LANPARM_DEST_VLAN_TAG;
-	    lanc->curr_sel = 1;
+	    lanc->curr_sel = 0;
 	}
 	break;
 
