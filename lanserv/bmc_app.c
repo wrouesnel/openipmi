@@ -171,6 +171,12 @@ watchdog_timeout(void *cb_data)
     if (!mc->watchdog_running)
 	goto out;
 
+    if( !sens ) {
+	// NOTE(noelbk): The watchdog sensor should have been defined
+	// earlier, but don't SEGFAULT if it isn't
+	goto out;
+    }
+
     if (! mc->watchdog_preaction_ran) {
 	struct timeval tv, now;
 
