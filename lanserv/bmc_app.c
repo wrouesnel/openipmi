@@ -374,6 +374,8 @@ handle_reset_watchdog_timer(lmc_data_t    *mc,
     }
 
     do_watchdog_reset(mc);
+    rdata[0] = 0x00;
+    *rdata_len = 1;
 }
 
 static void
