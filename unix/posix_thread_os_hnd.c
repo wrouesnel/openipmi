@@ -392,11 +392,6 @@ sposix_log(os_handler_t         *handler,
 struct os_hnd_lock_s
 {
     pthread_mutex_t mutex;
-    int             lock_count;
-
-    /* This is volatile and we always set the owner before we set the count.
-       That avoids race conditions checking the count and owner. */
-    volatile pthread_t owner;
 };
 
 static int
@@ -404,19 +399,30 @@ create_lock(os_handler_t  *handler,
 	    os_hnd_lock_t **id)
 {
     os_hnd_lock_t *lock;
+    pthread_mutexattr_t attr;
     int           rv;
 
     lock = malloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
-    rv = pthread_mutex_init(&lock->mutex, NULL);
-    if (rv) {
-	free(lock);
-	return rv;
-    }
-    lock->lock_count = 0;
+    rv = pthread_mutexattr_init(&attr);
+    if (rv)
+	goto out_err;
+    rv = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    if (rv)
+	goto out_err_destroy;
+    rv = pthread_mutex_init(&lock->mutex, &attr);
+    if (rv)
+	goto out_err_destroy;
+    pthread_mutexattr_destroy(&attr);
     *id = lock;
     return 0;
+
+ out_err_destroy:
+    pthread_mutexattr_destroy(&attr);
+ out_err:
+    free(lock);
+    return rv;
 }
 
 static int
@@ -425,9 +431,6 @@ destroy_lock(os_handler_t  *handler,
 {
     int rv;
 
-    if (id->lock_count != 0)
-	handler->log(handler, IPMI_LOG_FATAL,
-		     "Destroy of lock when count is not zero");
     rv = pthread_mutex_destroy(&id->mutex);
     if (rv)
 	return rv;
@@ -441,13 +444,9 @@ lock(os_handler_t  *handler,
 {
     int rv;
 
-    if ((id->lock_count == 0) || (pthread_self() != id->owner)) {
-	rv = pthread_mutex_lock(&id->mutex);
-	if (rv)
-	    return rv;
-    }
-    id->owner = pthread_self();
-    id->lock_count++;
+    rv = pthread_mutex_lock(&id->mutex);
+    if (rv)
+	return rv;
     return 0;
 }
 
@@ -457,18 +456,9 @@ unlock(os_handler_t  *handler,
 {
     int rv;
 
-    if (id->lock_count == 0)
-	handler->log(handler, IPMI_LOG_FATAL, "lock count went negative");
-    if (pthread_self() != id->owner)
-	handler->log(handler, IPMI_LOG_FATAL, "lock release by non-owner");
-    id->lock_count--;
-    if (id->lock_count == 0) {
-	rv = pthread_mutex_unlock(&id->mutex);
-	if (rv) {
-	    id->lock_count++;
-	    return rv;
-	}
-    }
+    rv = pthread_mutex_unlock(&id->mutex);
+    if (rv)
+	return rv;
     return 0;
 }
 
@@ -531,15 +521,8 @@ cond_wait(os_handler_t  *handler,
 	  os_hnd_lock_t *lock)
 {
     int       rv;
-    int       old_lock_count;
-    pthread_t old_owner;
 
-    old_lock_count = lock->lock_count; 
-    old_owner = lock->owner;
-    lock->lock_count = 0;
     rv = pthread_cond_wait(&cond->cond, &lock->mutex);
-    lock->lock_count = old_lock_count;
-    lock->owner = old_owner;
     return rv;
 }
 
@@ -552,8 +535,6 @@ cond_timedwait(os_handler_t   *handler,
     struct timespec spec;
     struct timeval  now;
     int             rv;
-    int             old_lock_count;
-    pthread_t       old_owner;
 
     rv = handler->get_monotonic_time(handler, &now);
     if (rv)
@@ -565,12 +546,7 @@ cond_timedwait(os_handler_t   *handler,
 	spec.tv_sec += 1;
 	spec.tv_nsec -= 1000000000;
     }
-    old_lock_count = lock->lock_count; 
-    old_owner = lock->owner;
-    lock->lock_count = 0;
     rv = pthread_cond_timedwait(&cond->cond, &lock->mutex, &spec);
-    lock->lock_count = old_lock_count;
-    lock->owner = old_owner;
     return rv;
 }
 
