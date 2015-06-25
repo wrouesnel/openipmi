@@ -772,6 +772,31 @@ static void sset_log_handler(os_handler_t *handler,
     info->log_handler = log_handler;
 }
 
+static int get_glib_monotonic_time(os_handler_t *handler,
+				   struct timeval *tv)
+{
+    gint64 now;
+    
+    now = g_get_monotonic_time();
+    tv->tv_sec = now / G_TIME_SPAN_SECOND;
+    tv->tv_usec = now % G_TIME_SPAN_SECOND;
+    return 0;
+}
+
+static int get_glib_time(os_handler_t *handler,
+			 struct timeval *tv)
+{
+    GDateTime *now;
+    GTimeVal gtv;
+    
+    now = g_date_time_new_now_utc();
+    g_date_time_to_timeval(now, &gtv);
+    g_date_time_unref(now);
+    tv->tv_sec = gtv.tv_sec;
+    tv->tv_usec = gtv.tv_usec;
+    return 0;
+}
+
 static os_handler_t ipmi_glib_os_handler =
 {
     .mem_alloc = glib_malloc,
@@ -818,6 +843,8 @@ static os_handler_t ipmi_glib_os_handler =
     .database_set_filename = set_gdbm_filename,
 #endif
     .set_log_handler = sset_log_handler,
+    .get_monotonic_time = get_glib_monotonic_time,
+    .get_real_time = get_glib_time
 };
 
 
