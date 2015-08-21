@@ -135,6 +135,8 @@ struct sensor_s
     uint16_t threshold_supported; /* Bitmask */
     unsigned char thresholds[6];
 
+    int event_only;
+
     unsigned char event_support;
 
     /* 0 for assertion, 1 for deassertion. */

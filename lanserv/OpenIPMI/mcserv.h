@@ -266,7 +266,8 @@ int ipmi_mc_add_sensor(lmc_data_t    *mc,
 		       unsigned char lun,
 		       unsigned char sens_num,
 		       unsigned char type,
-		       unsigned char event_reading_code);
+		       unsigned char event_reading_code,
+		       int           event_only);
 
 int ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
 			      unsigned char lun,

@@ -132,7 +132,7 @@ Add an entry to the device SDR of the MC.
 .SH SENSOR COMMANDS
 
 .TP
-\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIsensor-type\fP \fIevent-reading-code\fP [\fIpoll\fP \fIpoll_rate\fP \fIpoll_type\fP \fIpoll_type_options\fP]
+\fBsensor_add\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIsensor-type\fP \fIevent-reading-code\fP [\fIpoll\fP \fIpoll_rate\fP \fIpoll_type\fP \fIpoll_type_options\fP] [event-only]
 
 Add a sensor to the given MC and LUN.  The type of sensor is set by the
 event reading code.
@@ -182,6 +182,10 @@ specifies a discrete sensor bit that must be set to 1 for the sensor
 to be active.  Generally, you use the presense bit of a sensor to mark
 whether other sensors on the device are actually present.  Each of the
 other sensors would have one of these pointing to the presense bit.
+
+.I event-only
+specifies that the sensor will not be readable, it will only generate
+events (specified with a type 3 SDR).
 
 .TP
 \fBsensor_set_bit\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIbit-to-set\fP \fIbit-value\fP \fIgenerate-event\fP

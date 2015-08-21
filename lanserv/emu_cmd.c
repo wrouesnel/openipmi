@@ -354,7 +354,12 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char num;
     unsigned char type;
     unsigned char code;
+    int           event_only = 0;
     const char *tok;
+    ipmi_sensor_handler_t *handler = NULL;
+    unsigned int poll_rate = 0;
+    void *rcb_data = NULL;
+    const char *errstr;
 
     rv = emu_get_uchar(out, toks, &lun, "LUN", 0);
     if (rv)
@@ -377,41 +382,52 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
      * really be part of the main sensor structure.
      */
     tok = mystrtok(NULL, " \t\n", toks);
-    if (tok) {
-	ipmi_sensor_handler_t *handler;
-	unsigned int poll_rate;
-	void *rcb_data;
-	const char *errstr;
+    while (tok) {
+	if (strcmp(tok, "poll") == 0) {
+	    if (handler) {
+		out->printf(out, "**poll given twice in sensor\n", tok);
+		return -1;
+	    }
 
-	if (strcmp(tok, "poll") != 0) {
-	    out->printf(out, "**Only polled sensors supported\n", tok);
+	    rv = emu_get_uint(out, toks, &poll_rate, "poll rate");
+	    if (rv)
+		return rv;
+
+	    tok = mystrtok(NULL, " \t\n", toks);
+	    if (!tok) {
+		out->printf(out, "**No polled sensor handler given\n", tok);
+		return -1;
+	    }
+
+	    handler = ipmi_sensor_find_handler(tok);
+	    if (!handler) {
+		out->printf(out, "**Invalid sensor handler: %s\n", tok);
+		return -1;
+	    }
+
+	    rv = handler->init(mc, lun, num, toks, handler->cb_data, &rcb_data,
+			       &errstr);
+	    if (rv) {
+		out->printf(out, "**Error initializing sensor handler: %s\n", 
+			    errstr);
+		return rv;
+	    }
+	} else if (strcmp(tok, "event-only") == 0) {
+	    event_only = 1;
+	} else {
+	    out->printf(out, "**Unknown sensor option: %s\n", tok);
 	    return -1;
 	}
-
-	rv = emu_get_uint(out, toks, &poll_rate, "poll rate");
-	if (rv)
-	    return rv;
 
 	tok = mystrtok(NULL, " \t\n", toks);
-	if (!tok) {
-	    out->printf(out, "**No polled sensor handler given\n", tok);
-	    return -1;
-	}
+    }
 
-	handler = ipmi_sensor_find_handler(tok);
-	if (!handler) {
-	    out->printf(out, "**Invalid sensor handler: %s\n", tok);
-	    return -1;
-	}
+    if (handler && event_only) {
+	out->printf(out, "**An event-only sensor cannot be polled\n");
+	return -1;
+    }
 
-	rv = handler->init(mc, lun, num, toks, handler->cb_data, &rcb_data,
-			   &errstr);
-	if (rv) {
-	    out->printf(out, "**Error initializing sensor handler: %s\n", 
-			errstr);
-	    return rv;
-	}
-
+    if (handler) {
 	rv = ipmi_mc_add_polled_sensor(mc, lun, num, type, code,
 				       poll_rate, handler->poll, rcb_data);
 	
@@ -423,7 +439,7 @@ sensor_add(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    }
 	}
     } else {
-	rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
+	rv = ipmi_mc_add_sensor(mc, lun, num, type, code, event_only);
     }
     if (rv)
 	out->printf(out, "**Unable to add to sensor, error 0x%x\n", rv);

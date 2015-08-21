@@ -342,7 +342,14 @@ set_sensor_bit(lmc_data_t *mc, sensor_t *sensor, unsigned char bit,
 	       unsigned char evd1, unsigned char evd2, unsigned char evd3,
 	       int gen_event)
 {
-    if (value != bit_set(sensor->event_status, bit)) {
+    if (sensor->event_only) {
+	if (value)
+	    do_event(mc, sensor, gen_event, IPMI_ASSERTION,
+		     evd1 | bit, evd2, evd3);
+	else
+	    do_event(mc, sensor, gen_event, IPMI_DEASSERTION,
+		     evd1 | bit, evd2, evd3);
+    } else if (value != bit_set(sensor->event_status, bit)) {
 	/* The bit value has changed. */
 	set_bit(sensor->event_status, bit, value);
 	if (value && bit_set(sensor->event_enabled[0], bit)) {
@@ -709,6 +716,12 @@ handle_get_sensor_reading(lmc_data_t    *mc,
     }
 
     sensor = mc->sensors[msg->rs_lun][sens_num];
+
+    if (sensor->event_only) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
 
     rdata[0] = 0;
     rdata[1] = sensor->value;
@@ -1109,7 +1122,8 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
 		   unsigned char lun,
 		   unsigned char sens_num,
 		   unsigned char type,
-		   unsigned char event_reading_code)
+		   unsigned char event_reading_code,
+		   int           event_only)
 {
     sensor_t *sensor;
     lmc_data_t *bmc;
@@ -1127,6 +1141,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     sensor->num = sens_num;
     sensor->sensor_type = type;
     sensor->event_reading_code = event_reading_code;
+    sensor->event_only = event_only;
     mc->sensors[lun][sens_num] = sensor;
 
     if (mc->emu->atca_mode && (type == 0xf0)) {
@@ -1531,7 +1546,7 @@ ipmi_mc_add_polled_sensor(lmc_data_t    *mc,
     sensor_t *sensor;
     int err;
 
-    err = ipmi_mc_add_sensor(mc, lun, sens_num, type, event_reading_code);
+    err = ipmi_mc_add_sensor(mc, lun, sens_num, type, event_reading_code, 0);
     if (err)
 	return err;
 

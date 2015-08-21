@@ -230,7 +230,7 @@ watchdog_timeout(void *cb_data)
 	break;
 
     case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
-	set_sensor_bit(mc, sens, 2, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
+	set_sensor_bit(mc, sens, 3, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
 	start_poweron_timer(mc);
 	break;
