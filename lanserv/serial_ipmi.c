@@ -745,6 +745,7 @@ tm_setup(serserv_data_t *si)
 #define   VM_CAPABILITIES_IRQ	0x04
 #define   VM_CAPABILITIES_NMI	0x08
 #define   VM_CAPABILITIES_ATTN	0x10
+#define VM_CMD_FORCEOFF		0x09
 
 struct vm_data {
     unsigned char recv_msg[IPMI_SIM_MAX_MSG_LENGTH + 4];
@@ -936,7 +937,7 @@ vm_set_attn(channel_t *chan, int val, int irq)
     raw_send(si, c, len);
 }
 
-static void
+static int
 vm_hw_op(channel_t *chan, unsigned int op)
 {
     serserv_data_t *si = chan->chan_info;
@@ -951,13 +952,18 @@ vm_hw_op(channel_t *chan, unsigned int op)
     case HW_OP_POWERON:
 	if (chan->start_cmd)
 	    chan->start_cmd(chan);
-	return;
+	return 0;
 
     case HW_OP_POWEROFF:
 	if (si->connected)
 	    vm_add_char(VM_CMD_POWEROFF, c, &len);
 	if (chan->stop_cmd)
 	    chan->stop_cmd(chan, !si->connected);
+	break;
+	
+    case HW_OP_FORCEOFF:
+	if (si->connected)
+	    vm_add_char(VM_CMD_FORCEOFF, c, &len);
 	break;
 	
     case HW_OP_SEND_NMI:
@@ -972,13 +978,18 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	vm_add_char(VM_CMD_DISABLE_IRQ, c, &len);
 	break;
 
+    case HW_OP_CHECK_POWER:
+	return si->connected;
+	break;
+
     default:
-	return;
+	return 0;
     }	
 
     c[len++] = VM_CMD_CHAR;
 
     raw_send(si, c, len);
+    return 0;
 }
 
 static void

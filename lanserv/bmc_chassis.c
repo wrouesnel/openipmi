@@ -153,8 +153,11 @@ handle_get_chassis_status(lmc_data_t    *mc,
 	    return;
 	}
 	rdata[1] = val;
-    } else {
-	rdata[1] = mc->startcmd.vmpid != 0;
+    } else if (mc->startcmd.vmpid) {
+	rdata[1] = 1;
+    } else if (HW_OP_CAN_POWER(mc->channels[15])) {
+	int rv = mc->channels[15]->hw_op(mc->channels[15], HW_OP_CHECK_POWER);
+	rdata[1] = rv > 0;
     }
     rdata[2] = 0;
     rdata[3] = 0;
