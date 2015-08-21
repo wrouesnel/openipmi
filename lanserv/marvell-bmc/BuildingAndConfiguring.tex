@@ -1,0 +1,38 @@
+
+The build script
+
+build procedure
+  special files (NTP, ast1300...)
+
+How to modify the build config
+How to modify the busybox config
+
+The configuration file
+  LAN channels
+  MCs
+  users
+
+emu files
+MCs
+  sensors
+  FRU data
+
+SDRs
+
+Custom commands
+  Disable network services:
+    raw 2e 01 0f 50 00 [0|1]
+  Enables (1) or disables(0) ssh access to the BMC
+
+  Reload board FRU
+    raw 2e 02 0f 50 00 <board num>
+  Reload the board FRU information for the given board number.
+
+  Set force all fans duty cycle
+    raw 2e 03 0f 50 00 [0|<duty cycle>]
+  Set all fans to the given duty cycle.  Allowed values are 30-100.
+  Setting it to zero will disable this feature
+
+  Get force all fans duty cycle
+    raw 2e 04 0f 50 00
+  Returns the current fan forced duty cycle setting.

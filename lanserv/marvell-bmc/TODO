@@ -1,0 +1,27 @@
+  * I really need to find a way to set the time and date on the system. 
+    Is there some hardware clock on this system?  I didn't find one on
+    schematics, but perhaps it is buried in some chip someplace. 
+    Otherwise, we need to define a way to get the time from outside the
+    system using NTP.
+  * I need to write documentation for the full system.  I have a few
+    more hours left than I thought, so I should be able to do a pretty
+    good job of this.
+  * I need to define the procedures for building the entire system.  Include
+    busybox mods for arp to work.
+  * I need to find the memory usage for ipmi_sim.
+  * Automatically clear the IERR and DIMM errors from the board.
+  * Save SOL history data on receiving a shutdown signal.
+  * Power/reset all boards on a chassis operation.
+
+Done:
+  * I need to do some more testing on board, fan and power supply
+    removal, to make sure that the sensors all change states properly
+    and the fans behave properly under different circumstances.  I've
+    done some testing by dummy-ing things out, but I need to drive over
+    to the lab and test it for real.
+  * Check that board power cannot be enabled if board is not present.
+  * Fix syslog
+  * I need to integrate the Marvell-specific code into a subdirectory of
+    lanserv so it can be built along with the standard OpenIPMI code. 
+  * Fan fail LEDS.
+  * This all needs to go up to the public OpenIPMI repository.
