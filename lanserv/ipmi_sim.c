@@ -479,7 +479,6 @@ ser_channel_init(void *info, channel_t *chan)
     serserv_data_t *ser = chan->chan_info;
     int err;
     int fd;
-    int opt;
     struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
     os_hnd_fd_id_t *fd_id;
     int val;
@@ -731,7 +730,6 @@ emu_printf(emu_out_t *out, char *format, ...)
 {
     console_info_t *info = out->data;
     va_list ap;
-    int rv;
     char buffer[500];
     int start = 0;
     int pos;
@@ -741,13 +739,13 @@ emu_printf(emu_out_t *out, char *format, ...)
     va_end(ap);
     for (pos = 0; buffer[pos]; pos++) {
 	if (buffer[pos] == '\n') {
-	    rv = write(info->outfd, buffer + start, pos - start + 1);
-	    rv = write(info->outfd, "\r", 1);
+	    (void) write(info->outfd, buffer + start, pos - start + 1);
+	    (void) write(info->outfd, "\r", 1);
 	    start = pos + 1;
 	}
     }
     if (pos != start)
-	rv = write(info->outfd, buffer + start, pos - start);
+	(void) write(info->outfd, buffer + start, pos - start);
 }
 
 static void
@@ -766,8 +764,6 @@ dummy_printf(emu_out_t *out, char *format, ...)
 static unsigned char
 handle_telnet(console_info_t *info, unsigned char c)
 {
-    int err;
-
     info->tn_buf[info->tn_pos++] = c;
     if ((info->tn_pos == 2) && (info->tn_buf[1] == TN_IAC))
 	/* Double IAC, just send it on. */
@@ -806,12 +802,12 @@ handle_telnet(console_info_t *info, unsigned char c)
 
  send_wont:
     info->tn_buf[1] = TN_WONT;
-    err = write(info->outfd, info->tn_buf, 3);
+    (void) write(info->outfd, info->tn_buf, 3);
     goto cmd_done;
 
  send_dont:
     info->tn_buf[1] = TN_DONT;
-    err = write(info->outfd, info->tn_buf, 3);
+    (void) write(info->outfd, info->tn_buf, 3);
     goto cmd_done;
 
  cmd_done:
@@ -822,8 +818,6 @@ handle_telnet(console_info_t *info, unsigned char c)
 static int
 handle_user_char(console_info_t *info, unsigned char c)
 {
-    int rv;
-
     if (info->tn_pos)
 	c = handle_telnet(info, c);
 
@@ -844,14 +838,14 @@ handle_user_char(console_info_t *info, unsigned char c)
 	if (info->pos > 0) {
 	    info->pos--;
 	    if (info->echo)
-		rv = write(info->outfd, "\b \b", 3);
+		(void) write(info->outfd, "\b \b", 3);
 	}
 	break;
 
     case 4:
 	if (info->pos == 0) {
 	    if (info->echo)
-		rv = write(info->outfd, "\n", 1);
+		(void) write(info->outfd, "\n", 1);
 	    return 1;
 	}
 	break;
@@ -859,9 +853,9 @@ handle_user_char(console_info_t *info, unsigned char c)
     case 10:
     case 13:
 	if (info->echo) {
-	    rv = write(info->outfd, "\n", 1);
+	    (void) write(info->outfd, "\n", 1);
 	    if (info->telnet)
-		rv = write(info->outfd, "\r", 1);
+		(void) write(info->outfd, "\r", 1);
 	}
 	info->buffer[info->pos] = '\0';
 	if (strcmp(info->buffer, "noecho") == 0) {
@@ -869,7 +863,7 @@ handle_user_char(console_info_t *info, unsigned char c)
 	} else {
 	    ipmi_emu_cmd(&info->out, info->data->emu, info->buffer);
 	}
-	rv = write(info->outfd, "> ", 2);
+	(void) write(info->outfd, "> ", 2);
 	info->pos = 0;
 	break;
 
@@ -877,12 +871,12 @@ handle_user_char(console_info_t *info, unsigned char c)
     default:
 	if (info->pos >= sizeof(info->buffer)-1) {
 	    char *msg = "\nCommand is too long, max of %d characters\n";
-	    rv = write(info->outfd, msg, strlen(msg));
+	    (void) write(info->outfd, msg, strlen(msg));
 	} else {
 	    info->buffer[info->pos] = c;
 	    info->pos++;
 	    if (info->echo)
-		rv = write(info->outfd, &c, 1);
+		(void) write(info->outfd, &c, 1);
 	}
     }
 
@@ -1240,9 +1234,8 @@ static void
 handle_sigchld(int sig)
 {
     unsigned char c = 1;
-    int rv;
 
-    rv = write(sigpipeh[1], &c, 1);
+    (void) write(sigpipeh[1], &c, 1);
 }
 
 static ipmi_child_quit_t *child_quit_handlers;
