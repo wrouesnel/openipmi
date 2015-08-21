@@ -1,0 +1,94 @@
+
+sdr type 18
+	device_slave_address	0x20
+	device_channel_number	0
+	chassis			true
+	ipmb_event_gen		false
+	ipmb_event_recv		false
+	fru_inventory		true
+	sel			true
+	sdr			true
+	sensor			true
+	entity_id		system_board
+	entity_instance		1
+	id_string		"IPMI sim1"
+endsdr
+
+# Watchdog timer
+sdr type 3
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		0
+	entity_id		system_board
+	entity_instance		1
+	sensor_type		Watchdog_2
+	event_reading_type_code	0x6f
+	id_string		"watchdog"
+endsdr
+
+# Temperature sensor on the main board
+sdr type 1
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		1
+	entity_id		system_board
+	entity_instance		1
+	sensor_type		Temperature
+	init_scanning		true
+	init_sensor_type	true
+	default_sensor_scan_on	true
+	event_reading_type_code	1
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		degrees_C
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	id_string		"MBTemp"
+endsdr
+
+# Temperature sensor on the sub board
+sdr type 1
+	sensor_owner_id		0x30
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		1
+	entity_id		system_board
+	entity_instance		1
+	sensor_type		Temperature
+	init_scanning		true
+	init_sensor_type	true
+	default_sensor_scan_on	true
+	event_reading_type_code	1
+	analog_data_format	unsigned
+	rate_unit		none
+	modifier_unit		none
+	percentage		false
+	base_unit		degrees_C
+	modifier_unit_code	unspecified
+	linearization		linear
+	m			1
+	tolerance		0
+	b			0
+	accuracy		1
+	accuracy_exp		0
+	sensor_direction	input
+	r_exp			0
+	b_exp			0
+	sensor_maximum		255
+	sensor_minimum		0
+	id_string		"SubTemp"
+endsdr
