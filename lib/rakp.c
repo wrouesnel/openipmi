@@ -482,7 +482,7 @@ rakp_hmac_c2(rakp_info_t   *info,
 	return EINVAL;
     HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 58+idata[57], integ_data, &ilen);
     if (memcmp(data+40, integ_data, rinfo->key_len) != 0)
-	return EKEYREJECTED;
+	return EINVAL;
 
     /* Now generate the SIK */
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
