@@ -4801,11 +4801,10 @@ process_fru_info(ipmi_fru_t *fru)
 	        goto check_done;
 	}
 	if (foff[i].offset >= foff[j].offset) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
+	    ipmi_log(IPMI_LOG_WARNING,
 		     "%snormal_fru.c(process_fru_info):"
 		     " FRU fields did not occur in the correct order",
 		     _ipmi_fru_get_iname(fru));
-	    return EBADF;
 	}
     }
  check_done:
