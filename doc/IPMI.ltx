@@ -5896,7 +5896,7 @@ iterator function with a callback function:
 
 \begin{verbatim}
 static void
-handle_entity(ipmi_domain_t *domain, ipmi_entity_t *entity, void *cb_data)
+handle_entity(ipmi_entity_t *entity, void *cb_data)
 {
   my_data_t *my_data = cb_data;
   /* Process the entity here */
