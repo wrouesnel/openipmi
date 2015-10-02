@@ -831,14 +831,18 @@ read_config(sys_data_t *sys,
 	} else if (strcmp(tok, "name") == 0) {
 	    err = get_delim_str(&tokptr, &sys->name, &errstr);
 	} else if (strcmp(tok, "startcmd") == 0) {
-	    err = get_delim_str(&tokptr, &sys->startcmd->startcmd, &errstr);
+	    if (sys->startcmd)
+		err = get_delim_str(&tokptr, &sys->startcmd->startcmd, &errstr);
 	} else if (strcmp(tok, "startnow") == 0) {
-	    err = get_bool(&tokptr, &sys->startcmd->startnow, &errstr);
+	    if (sys->startcmd)
+		err = get_bool(&tokptr, &sys->startcmd->startnow, &errstr);
 	} else if (strcmp(tok, "poweroff_wait") == 0) {
-	    err = get_uint(&tokptr, &sys->startcmd->poweroff_wait_time,
+	    if (sys->startcmd)
+		err = get_uint(&tokptr, &sys->startcmd->poweroff_wait_time,
 			   &errstr);
 	} else if (strcmp(tok, "kill_wait") == 0) {
-	    err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
+	    if (sys->startcmd)
+		err = get_uint(&tokptr, &sys->startcmd->kill_wait_time, &errstr);
 	} else if (strcmp(tok, "set_working_mc") == 0) {
 	    unsigned char ipmb;
 	    err = get_uchar(&tokptr, &ipmb, &errstr);
