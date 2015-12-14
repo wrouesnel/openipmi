@@ -81,7 +81,7 @@ do_set() {
 		;;
 
 	    boot)
-		case $1 in
+		case $val in
 		    none)
 			;;
 		    pxe)
@@ -93,7 +93,7 @@ do_set() {
 		    default)
 	               ;;
 		    *)
-			echo "Invalid boot value: $1"
+			echo "Invalid boot value: $val"
 			exit 1
 			;;
 		esac
@@ -106,7 +106,7 @@ do_set() {
 		;;
 
 	    *)
-		echo "Invalid parameter: $1"
+		echo "Invalid parameter: $parm"
 		exit 1
 		;;
 	esac
