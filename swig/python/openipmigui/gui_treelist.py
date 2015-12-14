@@ -32,7 +32,7 @@
 
 import Tix
 import gui_errstr
-import gui
+import gui_winsys
 
 class TreeList(Tix.Toplevel):
     def __init__(self, name, root, columns):
@@ -84,7 +84,7 @@ class TreeList(Tix.Toplevel):
         self.bind("<Destroy>", self.OnDestroy)
         
         self.bind("<MouseWheel>", self.Wheel)
-        if (gui.winsys == "x11"):
+        if (gui_winsys.winsys == "x11"):
             self.bind("<Button-4>", self.ButtonUp)
             self.bind("<Button-5>", self.ButtonDown)
             pass

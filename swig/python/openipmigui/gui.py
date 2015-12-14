@@ -38,6 +38,7 @@ import gui_errstr
 import gui_cmdwin
 import gui_list
 import gui_popup
+import gui_winsys
 
 init_treenamewidth = 150
 init_sashposition = 400
@@ -48,14 +49,6 @@ init_windowheight = 700
 init_logevents = False
 init_fullevents = False
 init_impt_objs = [ ]
-
-try:
-    winsys = self.tk.eval("return [ tk windowingsystem ]")
-    pass
-except:
-    # Assume x11
-    winsys = "x11"
-    pass
 
 refresh_timer_time = 10000
 
@@ -218,7 +211,7 @@ class IPMIGUI(Tix.Frame):
         self.tree.hlist.bind("<Button-3>", self.TreeMenu)
         
         self.tree.hlist.bind("<MouseWheel>", self.Wheel)
-        if (winsys == "x11"):
+        if (gui_winsys.winsys == "x11"):
             self.tree.hlist.bind("<Button-4>", self.ButtonUp)
             self.tree.hlist.bind("<Button-5>", self.ButtonDown)
             pass
