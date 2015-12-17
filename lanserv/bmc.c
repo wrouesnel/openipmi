@@ -625,9 +625,14 @@ ipmi_mc_start_cmd(lmc_data_t *mc)
 	return;
     }
 
-    if (mc->startcmd.vmpid)
+    if (mc->startcmd.vmpid) {
 	/* Already running */
+
+	/* If we are waiting for a poweroff, disable that. */
+	if (mc->startcmd.wait_poweroff)
+	    mc->startcmd.wait_poweroff = 0;
 	return;
+    }
 
     ipmi_do_start_cmd(&mc->startcmd);
 }
