@@ -54,7 +54,7 @@
  */
 
 #include <config.h>
-
+#include <lwipv6.h>
 #include <string.h>
 #include <stdlib.h>
 

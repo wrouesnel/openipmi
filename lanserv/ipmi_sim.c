@@ -54,6 +54,7 @@
  *      written permission.
  */
 
+#include <lwipv6.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -101,8 +102,13 @@ static char *config_file = BASE_CONF_STR "/lan.conf";
 static const char *statedir = STATEDIR;
 static char *command_string = NULL;
 static char *command_file = NULL;
+static char *vde_network = "/var/run/vde.ctl";
 static int debug = 0;
 static int nostdio = 0;
+
+/* LWIPv6 user-space network management */
+static struct stack *stack;
+static struct netif *nif;
 
 /*
  * Keep track of open sockets so we can close them on exec().
@@ -308,6 +314,10 @@ lan_data_ready(int lan_fd, void *cb_data, os_hnd_fd_id_t *id)
     return;
 }
 
+// First hit: replace the sockets
+// Since the virtual interface ignores everything else, and we don't
+// want to implement a DHCP client just now, whatever the LAN config
+// we take that as being exactly what we want.
 static int
 open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
@@ -315,21 +325,41 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     int rv;
     int opt;
 
-    fd = socket(addr->sa_family, SOCK_DGRAM, IPPROTO_UDP);
+    /* add an interface to the lwip stack for VDE only */
+    if (!nif) {
+		if((nif=lwip_vdeif_add(stack,vde_network))==NULL){
+			perror("Interface not loaded");
+			exit(-1);
+		}
+    }
+
+    /* the new interface is going to have the exact ip we configured */
+    struct ip_addr lw_addr;
+    struct ip_addr lw_mask;
+
+    // FIXME: we probably need to step up to config time and change how we setup
+    // there.
+    IP64_ADDR(&lw_addr,192,168,123,20);
+    IP64_MASKADDR(&lw_mask,255,255,255,0);
+    lwip_add_addr(nif,&lw_addr,&lw_mask);
+
+    lwip_ifup(nif);
+
+    fd = lwip_socket(addr->sa_family, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
 	perror("Unable to create socket");
 	exit(1);
     }
 
     opt = 1;
-    rv = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    rv = lwip_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (rv == -1) {
 	fprintf(stderr, "Unable to set SO_REUSEADDR: %s\n",
 		strerror(errno));
 	exit(1);
     }
 
-    rv = bind(fd, addr, addr_len);
+    rv = lwip_bind(fd, addr, addr_len);
     if (rv == -1) {
 	fprintf(stderr, "Unable to bind to LAN port: %s\n",
 		strerror(errno));
@@ -688,6 +718,15 @@ static struct poptOption poptOpts[]=
 	"state directory",
 	""
     },
+	{
+	"vde-socket",
+	'i',
+	POPT_ARG_STRING,
+	&vde_network,
+	'i',
+	"VDE socket",
+	""
+	},
     {
 	"debug",
 	'd',
@@ -1376,6 +1415,21 @@ main(int argc, const char *argv[])
 	}
     }
     poptFreeContext(poptCtx);
+
+    // Initialize the VDE network stack here
+#ifdef LWIPV6DL
+	/* Run-time load the library (if requested) */
+	if ((handle=loadlwipv6dl()) == NULL) {
+		perror("LWIP lib not loaded");
+		exit(-1);
+	}
+#endif
+	/* define a new stack */
+	if((stack=lwip_stack_new())==NULL){
+		perror("Lwipstack not created");
+		exit(-1);
+	}
+	lwip_stack_set(stack); /* set default stack */
 
     printf("IPMI Simulator version %s\n", PVERSION);
 

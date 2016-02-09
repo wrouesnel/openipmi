@@ -41,7 +41,7 @@ ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 ipmi_sim_SOURCES = ipmi_sim.c bmc.c emu_cmd.c sol.c \
 	bmc_storage.c bmc_app.c bmc_chassis.c bmc_transport.c \
 	bmc_sensor.c bmc_picmg.c
-ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread
+ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread -llwipv6
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
 
