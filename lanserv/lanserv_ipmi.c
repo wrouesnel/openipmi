@@ -3070,7 +3070,7 @@ ipmi_lan_tick(void *info, unsigned int time_since_last)
     for (i=1; i<=MAX_SESSIONS; i++) {
 	if (lan->sessions[i].active) {
 	    if (lan->sessions[i].time_left <= time_since_last) {
-		msg_t msg; /* A fake message to hold the address. */
+		msg_t msg = { 0 }; /* A fake message to hold the address. */
 
 		msg.src_addr = lan->sessions[i].src_addr;
 		msg.src_len = lan->sessions[i].src_len;
