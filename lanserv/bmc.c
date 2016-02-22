@@ -646,8 +646,8 @@ chan_start_cmd(channel_t *chan)
 static void
 ipmi_mc_stop_cmd(lmc_data_t *mc, int do_it_now)
 {
-    if (mc->startcmd.wait_poweroff)
-	/* Already powering off. */
+    if (mc->startcmd.wait_poweroff || !mc->startcmd.vmpid)
+	/* Already powering/powered off. */
 	return;
     if (!do_it_now)
 	mc->startcmd.wait_poweroff = mc->startcmd.poweroff_wait_time;
