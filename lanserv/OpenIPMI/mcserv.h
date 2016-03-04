@@ -75,6 +75,10 @@ typedef struct ipmi_sol_s {
 
     const char *device;
 
+    /* TCP-specific information. */
+    const char *tcpdest;
+    const char *tcpport;
+
     int set_in_progress;
     solparm_t solparm;
     solparm_t solparm_rollback;

@@ -41,6 +41,9 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include <OpenIPMI/serv.h>
 #include <OpenIPMI/mcserv.h>
@@ -328,7 +331,8 @@ devinit(ipmi_sol_t *sol, struct termios *termctl)
     sol_serial_reset_modemstate(sol);
 }
 
-static void sol_serial_update_bitrate(ipmi_sol_t *sol)
+static void
+sol_serial_update_bitrate(ipmi_sol_t *sol)
 {
     int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
 
@@ -337,15 +341,16 @@ static void sol_serial_update_bitrate(ipmi_sol_t *sol)
     tcsetattr(sol->soldata->fd, TCSANOW, &sol->soldata->termctl);
 }
 
-static void sol_serial_send_break(ipmi_sol_t *sol)
+static void
+sol_serial_send_break(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
 
     tcsendbreak(sd->fd, 0);
 }
 
-static void sol_serial_update_modemstate(ipmi_sol_t *sol, int ctspause,
-					 int deassert_dcd)
+static void
+sol_serial_update_modemstate(ipmi_sol_t *sol, int ctspause, int deassert_dcd)
 {
     soldata_t *sd = sol->soldata;
 
@@ -370,7 +375,8 @@ static void sol_serial_update_modemstate(ipmi_sol_t *sol, int ctspause,
     }
 }
 
-static int sol_serial_activate(ipmi_sol_t *sol, msg_t *msg)
+static int
+sol_serial_activate(ipmi_sol_t *sol, msg_t *msg)
 {
     soldata_t *sd = sol->soldata;
 
@@ -392,11 +398,13 @@ static int sol_serial_activate(ipmi_sol_t *sol, msg_t *msg)
     return 0;
 }
 
-static void sol_serial_deactivate(ipmi_sol_t *sol)
+static void
+sol_serial_deactivate(ipmi_sol_t *sol)
 {
 }
 
-static void sol_serial_shutdown(ipmi_sol_t *sol)
+static void
+sol_serial_shutdown(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
 
@@ -408,7 +416,8 @@ static void sol_serial_shutdown(ipmi_sol_t *sol)
 	close(sd->fd);
 }
 
-static int sol_serial_initialize(ipmi_sol_t *sol)
+static int
+sol_serial_initialize(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
     int err;
@@ -450,7 +459,8 @@ static int sol_serial_initialize(ipmi_sol_t *sol)
     return err;
 }
 
-static void sol_serial_setup(ipmi_sol_t *sol)
+static void
+sol_serial_setup(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
 
@@ -462,6 +472,137 @@ static void sol_serial_setup(ipmi_sol_t *sol)
     sd->deactivate = sol_serial_deactivate;
     sd->shutdown = sol_serial_shutdown;
     sd->initialize = sol_serial_initialize;
+}
+
+static void
+sol_tcp_reset_modemstate(ipmi_sol_t *sol)
+{
+}
+
+static void
+sol_tcp_update_bitrate(ipmi_sol_t *sol)
+{
+}
+
+static void
+sol_tcp_send_break(ipmi_sol_t *sol)
+{
+}
+
+static void
+sol_tcp_update_modemstate(ipmi_sol_t *sol, int ctspause, int deassert_dcd)
+{
+}
+
+static int
+sol_tcp_activate(ipmi_sol_t *sol, msg_t *msg)
+{
+    return 0;
+}
+
+static void
+sol_tcp_deactivate(ipmi_sol_t *sol)
+{
+}
+
+static void
+sol_tcp_shutdown(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+
+    if (sd->fd >= 0)
+	close(sd->fd);
+    sd->fd = -1;
+}
+
+static int
+sol_tcp_initialize(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    struct addrinfo hints, *addr;
+    int rv;
+    int options;
+
+    if (sd->fd != -1) {
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error sol activate on active port %s:%s",
+			 sol->tcpdest, sol->tcpport);
+	return -1;
+    }
+	
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    rv = getaddrinfo(sol->tcpdest, sol->tcpport, &hints, &addr);
+    if (rv != 0) {
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error getting tcp sol port address for %s:%s: %s",
+			 sol->tcpdest, sol->tcpport, gai_strerror(rv));
+	return -1;
+    }
+
+    sd->fd = socket(addr->ai_family, SOCK_STREAM, 0);
+    if (sd->fd == -1) {
+	rv = -1;
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error creating tcp sol port socket for %s:%s: %s",
+			 sol->tcpdest, sol->tcpport, strerror(errno));
+	goto out;
+    }
+
+    rv = connect(sd->fd, addr->ai_addr, addr->ai_addrlen);
+    if (rv == -1) {
+	close(sd->fd);
+	sd->fd = -1;
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error connecting tcp sol port socket for %s:%s: %s",
+			 sol->tcpdest, sol->tcpport, strerror(errno));
+	goto out;
+    }
+
+    options = 1;
+    rv = setsockopt(sd->fd, IPPROTO_TCP, TCP_NODELAY,
+		    (char *) &options, sizeof(options));
+    if (rv == -1) {
+	close(sd->fd);
+	sd->fd = -1;
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error setting nodelay on tcp sol port socket"
+			 " for %s:%s: %s",
+			 sol->tcpdest, sol->tcpport, strerror(errno));
+	goto out;
+    }
+
+    rv = fcntl(sd->fd, F_SETFL, O_NONBLOCK);
+    if (rv == -1) {
+	close(sd->fd);
+	sd->fd = -1;
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			 "Error setting nonblock on tcp sol port socket"
+			 " for %s:%s: %s",
+			 sol->tcpdest, sol->tcpport, strerror(errno));
+	goto out;
+    }
+
+
+ out:	    
+    freeaddrinfo(addr);
+    return rv;
+}
+
+static void
+sol_tcp_setup(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+
+    sd->reset_modemstate = sol_tcp_reset_modemstate;
+    sd->update_bitrate = sol_tcp_update_bitrate;
+    sd->send_break = sol_tcp_send_break;
+    sd->update_modemstate = sol_tcp_update_modemstate;
+    sd->activate = sol_tcp_activate;
+    sd->deactivate = sol_tcp_deactivate;
+    sd->shutdown = sol_tcp_shutdown;
+    sd->initialize = sol_tcp_initialize;
 }
 
 static char *end_history_msg = "\r\n<End Of History>\r\n";
@@ -1271,6 +1412,22 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
     if (rv)
 	return rv;
 
+    if (strncmp(sol->device, "tcp:", 4) == 0) {
+	sol->tcpdest = sol->device + 4;
+    }
+
+    if (sol->tcpdest) {
+	char *colon = strchr(sol->tcpdest, ':');
+
+	if (!colon) {
+	    *err = "No port specified in sol tcp connection";
+	    return -1;
+	}
+
+	sol->tcpport = colon + 1;
+	*colon = '\0';
+    }
+    
     rv = get_uint(tokptr, &val, err);
     if (rv)
 	return rv;
@@ -1487,13 +1644,16 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     sd->sys = sys;
     sol->soldata = sd;
 
+    if (sol->tcpdest)
+	sol_tcp_setup(sol);
+    else
+	sol_serial_setup(sol);
+    
     if (sys->alloc_timer(sys, sol_timeout, sol, &sd->timer)) {
 	sys->free(sys, sd);
 	return ENOMEM;
     }
 
-    sol_serial_setup(sol);
-    
     if (sol->history_size) {
 	if (sys->alloc_timer(sys, sol_history_timeout, sol,
 			     &sd->history_timer)) {
