@@ -117,6 +117,15 @@ struct soldata_s {
     int curr_packet_seq;
     ipmi_timer_t *timer;
     unsigned int num_sends;
+
+    void (*reset_modemstate)(ipmi_sol_t *sol);
+    void (*update_bitrate)(ipmi_sol_t *sol);
+    void (*send_break)(ipmi_sol_t *sol);
+    void (*update_modemstate)(ipmi_sol_t *sol, int ctspaus, int deassertdcd);
+    int (*activate)(ipmi_sol_t *sol, msg_t *msg);
+    void (*deactivate)(ipmi_sol_t *sol);
+    void (*shutdown)(ipmi_sol_t *sol);
+    int (*initialize)(ipmi_sol_t *sol);
 };
 
 #ifdef USE_UUCP_LOCKING
@@ -277,7 +286,7 @@ sol_to_termios_bitrate(ipmi_sol_t *sol, int solbps)
 }
 
 static void
-sol_port_reset_modem_state(ipmi_sol_t *sol)
+sol_serial_reset_modemstate(ipmi_sol_t *sol)
 {
     int modemstate;
 
@@ -315,10 +324,10 @@ devinit(ipmi_sol_t *sol, struct termios *termctl)
     termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
     termctl->c_iflag |= IGNBRK;
 
-    sol_port_reset_modem_state(sol);
+    sol_serial_reset_modemstate(sol);
 }
 
-static void sol_port_update_bitrate(ipmi_sol_t *sol)
+static void sol_serial_update_bitrate(ipmi_sol_t *sol)
 {
     int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
 
@@ -327,15 +336,15 @@ static void sol_port_update_bitrate(ipmi_sol_t *sol)
     tcsetattr(sol->soldata->fd, TCSANOW, &sol->soldata->termctl);
 }
 
-static void sol_port_send_break(ipmi_sol_t *sol)
+static void sol_serial_send_break(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
 
     tcsendbreak(sd->fd, 0);
 }
 
-static void sol_port_update_modemstate(ipmi_sol_t *sol, int ctspause,
-				       int deassert_dcd)
+static void sol_serial_update_modemstate(ipmi_sol_t *sol, int ctspause,
+					 int deassert_dcd)
 {
     soldata_t *sd = sol->soldata;
 
@@ -360,7 +369,7 @@ static void sol_port_update_modemstate(ipmi_sol_t *sol, int ctspause,
     }
 }
 
-static int sol_port_activate(ipmi_sol_t *sol, msg_t *msg)
+static int sol_serial_activate(ipmi_sol_t *sol, msg_t *msg)
 {
     soldata_t *sd = sol->soldata;
 
@@ -382,15 +391,15 @@ static int sol_port_activate(ipmi_sol_t *sol, msg_t *msg)
     return 0;
 }
 
-static void sol_port_deactivate(ipmi_sol_t *sol)
+static void sol_serial_deactivate(ipmi_sol_t *sol)
 {
 }
 
-static void sol_port_shutdown(ipmi_sol_t *sol)
+static void sol_serial_shutdown(ipmi_sol_t *sol)
 {
-#ifdef USE_UUCP_LOCKING
     soldata_t *sd = sol->soldata;
 
+#ifdef USE_UUCP_LOCKING
     uucp_rm_lock(sd->sys, sol->device);
 #endif /* USE_UUCP_LOCKING */
 
@@ -398,7 +407,7 @@ static void sol_port_shutdown(ipmi_sol_t *sol)
 	close(sd->fd);
 }
 
-static int sol_port_initialize(ipmi_sol_t *sol)
+static int sol_serial_initialize(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
     int err;
@@ -438,6 +447,20 @@ static int sol_port_initialize(ipmi_sol_t *sol)
 
  out:
     return err;
+}
+
+static void sol_serial_setup(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+
+    sd->reset_modemstate = sol_serial_reset_modemstate;
+    sd->update_bitrate = sol_serial_update_bitrate;
+    sd->send_break = sol_serial_send_break;
+    sd->update_modemstate = sol_serial_update_modemstate;
+    sd->activate = sol_serial_activate;
+    sd->deactivate = sol_serial_deactivate;
+    sd->shutdown = sol_serial_shutdown;
+    sd->initialize = sol_serial_initialize;
 }
 
 static char *end_history_msg = "\r\n<End Of History>\r\n";
@@ -512,7 +535,7 @@ sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 	}
 	sol->active = 0;
 	sol->session_id = 0;
-	sol_port_reset_modem_state(sol);
+	sd->reset_modemstate(sol);
     } else if (session_id == sol->history_session_id) {
 	if (sol->soldata->history_dummy_send_msg.src_addr) {
 	    sd->sys->free(sd->sys,
@@ -672,7 +695,7 @@ ipmi_sol_activate(lmc_data_t    *mc,
     dmsg->sid = msg->sid;
 
     if (instance == 1) {
-	rv = sol_port_activate(sol, msg);
+	rv = sd->activate(sol, msg);
 	if (rv) {
 	    sd->sys->free(sd->sys, dmsg->src_addr);
 	    dmsg->src_addr = NULL;
@@ -723,6 +746,7 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 		    unsigned int  *rdata_len)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
     unsigned int instance;
     uint32_t session_id;
 
@@ -747,7 +771,7 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 	return;
     }
 
-    sol_port_deactivate(sol);
+    sd->deactivate(sol);
 
     sol_session_closed(mc, session_id, sol);
     channel->set_associated_mc(channel, session_id, msg->data[0] & 0xf, NULL,
@@ -760,7 +784,10 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 static void
 sol_update_bitrate(lmc_data_t *mc)
 {
-    sol_port_update_bitrate(ipmi_mc_get_sol(mc));
+    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
+    soldata_t *sd = sol->soldata;
+
+    sd->update_bitrate(ipmi_mc_get_sol(mc));
 }
 
 static void
@@ -953,9 +980,9 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 	sd->inlen = 0;
 
     if (isbreak)
-	sol_port_send_break(sol);
+	sd->send_break(sol);
 
-    sol_port_update_modemstate(sol, ctspause, deassert_dcd);
+    sd->update_modemstate(sol, ctspause, deassert_dcd);
 }
 
 static int
@@ -1231,13 +1258,14 @@ sol_data_ready(int fd, void *cb_data)
 int
 sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 {
+    ipmi_sol_t *sol = sys->sol;
     unsigned int val;
     int          rv;
     const char   *tok;
 
     sys->sol->use_rtscts = 1;
 
-    rv = get_delim_str(tokptr, &sys->sol->device, err);
+    rv = get_delim_str(tokptr, &sol->device, err);
     if (rv)
 	return rv;
 
@@ -1258,7 +1286,7 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
     while ((tok = mystrtok(NULL, " \t\n", tokptr))) {
 	if (strncmp(tok, "history=", 8) == 0) {
 	    char *end, next;
-	    sys->sol->history_size = strtoul(tok + 8, &end, 0);
+	    sol->history_size = strtoul(tok + 8, &end, 0);
 	    next = *end;
 	    while (next == ',') {
 		char *opt = end + 1;
@@ -1270,7 +1298,7 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 		*end = '\0';
 
 		if (strncmp(opt, "backupfile=", 11) == 0) {
-		    sys->sol->backupfile = strdup(opt + 11);
+		    sol->backupfile = strdup(opt + 11);
 		} else {
 		    *err = "Unknown history option";
 		    return -1;
@@ -1307,17 +1335,17 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 		return -1;
 	    }
 	} else if (strncmp(tok, "nortscts", 8) == 0) {
-	    sys->sol->use_rtscts = 0;
+	    sol->use_rtscts = 0;
 	} else if (strncmp(tok, "readclear", 8) == 0) {
-	    sys->sol->readclear = 1;
+	    sol->readclear = 1;
 	} else {
 	    *err = "Invalid item";
 	    return -1;
 	}
     }
 
-    sys->sol->solparm.default_bitrate = val;
-    sys->sol->configured = 1;
+    sol->solparm.default_bitrate = val;
+    sol->configured = 1;
     return 0;
 }
 
@@ -1418,7 +1446,7 @@ handle_sol_shutdown(void *info, int sig)
 	return;
 
     sol->configured--;
-    sol_port_shutdown(sol);
+    sd->shutdown(sol);
 
     if (!sol->backupfile || (sd->history_start == sd->history_end))
 	return;
@@ -1454,12 +1482,16 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     if (!sd)
 	return ENOMEM;
     memset(sd, 0, sizeof(*sd));
+    sd->sys = sys;
+    sol->soldata = sd;
 
     if (sys->alloc_timer(sys, sol_timeout, sol, &sd->timer)) {
 	sys->free(sys, sd);
 	return ENOMEM;
     }
 
+    sol_serial_setup(sol);
+    
     if (sol->history_size) {
 	if (sys->alloc_timer(sys, sol_history_timeout, sol,
 			     &sd->history_timer)) {
@@ -1492,13 +1524,11 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     sd->backupfilehandler.info = sol;
     ipmi_register_shutdown_handler(&sd->backupfilehandler);
 
-    sd->sys = sys;
-    sol->soldata = sd;
     sd->fd = -1;
     sd->curr_packet_seq = 1;
     sd->history_curr_packet_seq = 1;
 
-    err = sol_port_initialize(sol);
+    err = sd->initialize(sol);
     if (err)
 	goto out;
 
@@ -1523,7 +1553,7 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 	    sys->free_timer(sd->history_timer);
 	if (configured) {
 	    sol->configured--;
-	    sol_port_shutdown(sol);
+	    sd->shutdown(sol);
 	}
 	if (sd->history)
 	    sys->free(sys, sd->history);
