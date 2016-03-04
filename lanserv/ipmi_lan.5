@@ -161,7 +161,10 @@ Allow a Serial Over LAN (SOL) connection to the given device.  This
 will be over interface 1 for the MC.
 
 .I device
-is the full path to the device name.
+is the full path to the device name.  It can also be in the form
+"tcp:address:port" or "telnet:address:port" to do connections
+over tcp (without or with telnet processing).  This is useful
+for providing SOL access to qemu ports.
 
 .I default_baud
 sets the initial default baud rate to use.  This is overriden by the
@@ -179,6 +182,10 @@ poweroff or fatal signal will cause the data to be lost.
 
 .I historyfru
 makes the history available via the given FRU number on the MC.
+
+Note that if the connection fails to come up, the simulator will
+continue to try to connect.  This way you can fix UDP serial ports or
+qemu sessions and it will automatically reconnect.
 
 .TP
 \fBloadlib\fP \fI"module"\fP [\fI"options"\fP]

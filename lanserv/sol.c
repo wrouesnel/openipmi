@@ -414,6 +414,7 @@ sol_serial_shutdown(ipmi_sol_t *sol)
 
     if (sd->fd >= 0)
 	close(sd->fd);
+    sd->fd = -1;
 }
 
 static int
@@ -584,7 +585,6 @@ sol_tcp_initialize(ipmi_sol_t *sol)
 	goto out;
     }
 
-
  out:	    
     freeaddrinfo(addr);
     return rv;
@@ -611,6 +611,8 @@ static char *end_history_msg = "\r\n<End Of History>\r\n";
 #define MAX_SOL_RESENDS 4
 static void sol_timeout(void *cb_data);
 static void sol_history_timeout(void *cb_data);
+static void sol_data_ready(int fd, void *cb_data);
+static void sol_write_ready(int fd, void *cb_data);
 
 static void sol_set_history_return_size(lmc_data_t    *mc,
 					msg_t         *msg,
@@ -1017,6 +1019,35 @@ next_seq(soldata_t *sd)
 	sd->curr_packet_seq = 1;
 }
 
+static int
+sol_port_init(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    int err;
+
+    err = sd->initialize(sol);
+    if (err)
+	goto out_err;
+
+    sol->configured++; /* Marked that we locked the device. */
+    sol->update_bitrate = sol_update_bitrate;
+
+    sd->read_enabled = 1;
+    sd->write_enabled = 0;
+    err = sd->sys->add_io_hnd(sd->sys, sd->fd, sol_data_ready, sol, &sd->fd_id);
+    if (err) {
+	sol->configured--;
+	sd->shutdown(sol);
+	goto out_err;
+    }
+
+    sd->sys->io_set_hnds(sd->fd_id, sol_write_ready, NULL);
+    set_write_enable(sd);
+
+ out_err:
+    return err;
+}
+
 static void
 sol_timeout(void *cb_data)
 {
@@ -1024,16 +1055,25 @@ sol_timeout(void *cb_data)
     soldata_t *sd = sol->soldata;
     struct timeval tv;
 
-    if (sd->num_sends > MAX_SOL_RESENDS) {
-	sd->waiting_ack = 0;
-	next_seq(sd);
-	sd->outlen = 0;
-	return;
+    if (sd->fd == -1) {
+	sol_port_init(sol);
+    } else if (sol->active) {
+	if (sd->num_sends > MAX_SOL_RESENDS) {
+	    sd->waiting_ack = 0;
+	    next_seq(sd);
+	    sd->outlen = 0;
+	    return;
+	}
+
+	sd->num_sends++;
+	send_data(sol, 0);
     }
 
-    sd->num_sends++;
-    send_data(sol, 0);
-    tv.tv_sec = 1;
+    if (sd->fd == -1)
+	/* Attempt to reconnect every 10 seconds. */
+	tv.tv_sec = 10;
+    else
+	tv.tv_sec = 1;
     tv.tv_usec = 0;
     sd->sys->start_timer(sd->timer, &tv);
 }
@@ -1069,6 +1109,13 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
     if (seq != 0) {
 	if (seq == sd->last_acked_packet) {
 	    need_send_ack = 1;
+	} else if (sd->fd == -1) {
+	    /* Ignore the data. */
+	    if  (len) {
+		sd->last_acked_packet = seq;
+		need_send_ack = 1;
+		sd->last_acked_packet_len = len;
+	    }
 	} else if (len) {
 	    sd->last_acked_packet = seq;
 	    if (len > (sizeof(sd->inbuf) - sd->inlen))
@@ -1273,6 +1320,24 @@ handle_sol_payload(lanserv_data_t *lan, msg_t *msg)
 }
 
 static void
+sol_port_error(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    struct timeval tv;
+
+    sd->sys->remove_io_hnd(sd->fd_id);
+    sd->shutdown(sol);
+
+    /* Clear any data to send to the serial port. */
+    sd->inlen = 0;
+
+    /* Retry in 10 seconds. */
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+    sd->sys->start_timer(sd->timer, &tv);
+}
+
+static void
 sol_write_ready(int fd, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
@@ -1284,9 +1349,7 @@ sol_write_ready(int fd, void *cb_data)
 	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
-	sd->sys->remove_io_hnd(sd->fd_id);
-	close(sd->fd);
-	sd->fd = -1;
+	sol_port_error(sol);
 	return;
     }
 
@@ -1366,9 +1429,11 @@ sol_data_ready(int fd, void *cb_data)
 	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
-	sd->sys->remove_io_hnd(sd->fd_id);
-	close(sd->fd);
-	sd->fd = -1;
+	sol_port_error(sol);
+	return;
+    } else if (rv == 0) {
+	/* End of input, socket probably closed. */
+	sol_port_error(sol);
 	return;
     }
 
@@ -1634,8 +1699,6 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd;
-    int err;
-    int configured = 0;
 
     sd = sys->alloc(sys, sizeof(*sd));
     if (!sd)
@@ -1691,38 +1754,14 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     sd->history_curr_packet_seq = 1;
     sd->logchan = ipmi_mc_get_channelset(mc)[0];
 
-    err = sd->initialize(sol);
-    if (err)
-	goto out;
+    if (sol_port_init(sol)) {
+	/* Retry in 10 seconds. */
+	struct timeval tv;
 
-    sol->configured++; /* Marked that we locked the device. */
-    configured = 1;
-    sol->update_bitrate = sol_update_bitrate;
-
-    sd->read_enabled = 1;
-    sd->write_enabled = 0;
-    err = sys->add_io_hnd(sys, sd->fd, sol_data_ready, sol, &sd->fd_id);
-    if (err)
-	goto out;
-
-    sd->sys->io_set_hnds(sd->fd_id, sol_write_ready, NULL);
-    set_write_enable(sd);
-
-  out:
-    if (err) {
-	if (sd->timer)
-	    sys->free_timer(sd->timer);
-	if (sd->history_timer)
-	    sys->free_timer(sd->history_timer);
-	if (configured) {
-	    sol->configured--;
-	    sd->shutdown(sol);
-	}
-	if (sd->history)
-	    sys->free(sys, sd->history);
-	sys->free(sys, sd);
-	sol->soldata = NULL;
+	tv.tv_sec = 10;
+	tv.tv_usec = 0;
+	sd->sys->start_timer(sd->timer, &tv);
     }
 
-    return err;
+    return 0;
 }
