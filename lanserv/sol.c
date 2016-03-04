@@ -119,6 +119,327 @@ struct soldata_s {
     unsigned int num_sends;
 };
 
+#ifdef USE_UUCP_LOCKING
+static char *uucp_lck_dir = "/var/lock";
+static char *progname = "ipmisim";
+
+static int
+uucp_fname_lock_size(const char *devname)
+{
+    const char *ptr;
+
+    (ptr = strrchr(devname, '/'));
+    if (ptr == NULL) {
+	ptr = devname;
+    } else {
+	ptr = ptr + 1;
+    }
+
+    return 7 + strlen(uucp_lck_dir) + strlen(ptr);
+}
+
+static void
+uucp_fname_lock(char *buf, const char *devname)
+{
+    const char *ptr;
+
+    (ptr = strrchr(devname, '/'));
+    if (ptr == NULL) {
+	ptr = devname;
+    } else {
+	ptr = ptr + 1;
+    }
+    sprintf(buf, "%s/LCK..%s", uucp_lck_dir, ptr);
+}
+
+static int
+write_full(int fd, char *data, size_t count)
+{
+    size_t written;
+
+ restart:
+    while ((written = write(fd, data, count)) > 0) {
+	data += written;
+	count -= written;
+    }
+    if (written < 0) {
+	if (errno == EAGAIN)
+	    goto restart;
+	return -1;
+    }
+    return 0;
+}
+
+static void
+uucp_rm_lock(sys_data_t *sys, const char *devname)
+{
+    char *lck_file;
+
+    lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
+    if (lck_file == NULL) {
+	return;
+    }
+    uucp_fname_lock(lck_file, devname);
+    unlink(lck_file);
+    sys->free(sys, lck_file);
+}
+
+/* return 0=OK, -1=error, 1=locked by other proces */
+static int
+uucp_mk_lock(sys_data_t *sys, const char *devname)
+{
+    struct stat stt;
+    int pid = -1;
+
+    if (stat(uucp_lck_dir, &stt) == 0) { /* is lock file directory present? */
+	char *lck_file;
+	union {
+	    uint32_t ival;
+	    char     str[64];
+	} buf;
+	int fd;
+
+	lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
+	if (lck_file == NULL)
+	    return -1;
+
+	uucp_fname_lock(lck_file, devname);
+
+	pid = 0;
+	if ((fd = open(lck_file, O_RDONLY)) >= 0) {
+	    int n;
+
+	    n = read(fd, &buf, sizeof(buf));
+	    close(fd);
+	    if( n == 4 ) 		/* Kermit-style lockfile. */
+		pid = buf.ival;
+	    else if (n > 0) {		/* Ascii lockfile. */
+		buf.str[n] = 0;
+		sscanf(buf.str, "%d", &pid);
+	    }
+
+	    if (pid > 0 && kill((pid_t)pid, 0) < 0 && errno == ESRCH) {
+		/* death lockfile - remove it */
+		unlink(lck_file);
+		sleep(1);
+		pid = 0;
+	    }
+	}
+
+	if (pid == 0) {
+	    int mask;
+	    size_t rv;
+
+	    mask = umask(022);
+	    fd = open(lck_file, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	    umask(mask);
+	    if (fd >= 0) {
+		snprintf(buf.str, sizeof(buf), "%10ld\t%s\n",
+			 (long)getpid(), progname );
+		rv = write_full(fd, buf.str, strlen(buf.str));
+		close(fd);
+		if (rv < 0) {
+		    pid = -errno;
+		    unlink(lck_file);
+		}
+	    } else {
+		pid = -errno;
+	    }
+	}
+
+	sys->free(sys, lck_file);
+    }
+
+    return pid;
+}
+#endif /* USE_UUCP_LOCKING */
+
+static int
+sol_to_termios_bitrate(ipmi_sol_t *sol, int solbps)
+{
+    int retried = 0;
+
+  retry:
+    switch(solbps) {
+    case 6: return B9600;
+    case 7: return B19200;
+    case 8: return B38400;
+    case 9: return B57600;
+    case 10: return B115200;
+
+    case 0:
+    default:
+	if (retried)
+	    return B9600;
+	solbps = sol->solparm.default_bitrate;
+	goto retry;
+    }
+}
+
+static void
+sol_port_reset_modem_state(ipmi_sol_t *sol)
+{
+    int modemstate;
+
+    /* Turn on CTS and DCD if we have history, off if not */
+    /* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
+    ioctl(sol->soldata->fd, TIOCMGET, &modemstate);
+    if (sol->history_size)
+	modemstate |= TIOCM_DTR | TIOCM_RTS;
+    else
+	modemstate &= ~(TIOCM_DTR | TIOCM_RTS);
+    sol->soldata->modemstate = modemstate & (TIOCM_DTR | TIOCM_RTS);
+    ioctl(sol->soldata->fd, TIOCMSET, &modemstate);
+}
+
+/* Initialize a serial port control structure for the first time. */
+static void
+devinit(ipmi_sol_t *sol, struct termios *termctl)
+{
+    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
+
+    cfmakeraw(termctl);
+    cfsetospeed(termctl, bitrate);
+    cfsetispeed(termctl, bitrate);
+    termctl->c_cflag &= ~(CSTOPB);
+    termctl->c_cflag &= ~(CSIZE);
+    termctl->c_cflag |= CS8;
+    termctl->c_cflag &= ~(PARENB);
+    termctl->c_cflag |= CLOCAL;
+    termctl->c_cflag &= ~(HUPCL);
+    termctl->c_cflag |= CREAD;
+    if (sol->use_rtscts)
+	termctl->c_cflag |= CRTSCTS;
+    else
+	termctl->c_cflag &= ~(CRTSCTS);
+    termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
+    termctl->c_iflag |= IGNBRK;
+
+    sol_port_reset_modem_state(sol);
+}
+
+static void sol_port_update_bitrate(ipmi_sol_t *sol)
+{
+    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
+
+    cfsetospeed(&sol->soldata->termctl, bitrate);
+    cfsetispeed(&sol->soldata->termctl, bitrate);
+    tcsetattr(sol->soldata->fd, TCSANOW, &sol->soldata->termctl);
+}
+
+static void sol_port_send_break(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+
+    tcsendbreak(sd->fd, 0);
+}
+
+static void sol_port_update_modemstate(ipmi_sol_t *sol, int ctspause,
+				       int deassert_dcd)
+{
+    soldata_t *sd = sol->soldata;
+
+    /*
+     * If history is enabled, we don't allow DCD/CTS fiddling, just leave
+     * them on all the time.
+     */
+    if (!sol->history_size) {
+	int modemstate = 0;
+	if (!ctspause)
+	    modemstate |= TIOCM_RTS;
+	if (!deassert_dcd)
+	    modemstate |= TIOCM_DTR;
+
+	if (modemstate != sd->modemstate) {
+	    int val;
+	    ioctl(sol->soldata->fd, TIOCMGET, &val);
+	    val &= ~(TIOCM_DTR | TIOCM_RTS);
+	    val |= modemstate;
+	    ioctl(sol->soldata->fd, TIOCMSET, &val);
+	}
+    }
+}
+
+static int sol_port_activate(ipmi_sol_t *sol, msg_t *msg)
+{
+    soldata_t *sd = sol->soldata;
+
+    /*
+     * Note that we enable CTS and DCD if history is set, because we
+     * always monitor the history.
+     */
+    if (!sol->history_size) {
+	if ((msg->data[2] & 1) == 0) {
+	    /* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
+	    int modemstate;
+	    ioctl(sd->fd, TIOCMGET, &modemstate);
+	    modemstate |= TIOCM_DTR | TIOCM_RTS;
+	    sd->modemstate = TIOCM_DTR | TIOCM_RTS;
+	    ioctl(sd->fd, TIOCMSET, &modemstate);
+	}
+    }
+
+    return 0;
+}
+
+static void sol_port_deactivate(ipmi_sol_t *sol)
+{
+}
+
+static void sol_port_shutdown(ipmi_sol_t *sol)
+{
+#ifdef USE_UUCP_LOCKING
+    soldata_t *sd = sol->soldata;
+
+    uucp_rm_lock(sd->sys, sol->device);
+#endif /* USE_UUCP_LOCKING */
+
+    if (sd->fd >= 0)
+	close(sd->fd);
+}
+
+static int sol_port_initialize(ipmi_sol_t *sol)
+{
+    soldata_t *sd = sol->soldata;
+    int err;
+
+#ifdef USE_UUCP_LOCKING
+    err = uucp_mk_lock(sd->sys, sol->device);
+    if (err > 0) {
+	fprintf(stderr, "SOL device %s is already owned by process %d\n",
+		sol->device, err);
+	err = EBUSY;
+	goto out;
+    }
+    if (err < 0) {
+	fprintf(stderr, "Error locking SOL device %s\n", sol->device);
+	err = -err;
+	goto out;
+    }
+#endif /* USE_UUCP_LOCKING */
+    devinit(sol, &sd->termctl);
+
+    sd->fd = open(sol->device, O_NONBLOCK | O_NOCTTY | O_RDWR);
+    if (sd->fd == -1) {
+	err = errno;
+	fprintf(stderr, "Error opening SOL device %s\n", sol->device);
+	goto out;
+    }
+
+    err = tcsetattr(sd->fd, TCSANOW, &sd->termctl);
+    if (err == -1) {
+	err = errno;
+	fprintf(stderr, "Error configuring SOL device %s\n", sol->device);
+	goto out;
+    }
+
+    /* Turn off BREAK. */
+    ioctl(sd->fd, TIOCCBRK);
+
+ out:
+    return err;
+}
+
 static char *end_history_msg = "\r\n<End Of History>\r\n";
 
 #define MAX_HISTORY_SEND 64
@@ -179,22 +500,6 @@ static void sol_get_history_return_size(lmc_data_t    *mc,
 }
 
 static void
-reset_modem_state(ipmi_sol_t *sol)
-{
-    int modemstate;
-
-    /* Turn on CTS and DCD if we have history, off if not */
-    /* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
-    ioctl(sol->soldata->fd, TIOCMGET, &modemstate);
-    if (sol->history_size)
-	modemstate |= TIOCM_DTR | TIOCM_RTS;
-    else
-	modemstate &= ~(TIOCM_DTR | TIOCM_RTS);
-    sol->soldata->modemstate = modemstate & (TIOCM_DTR | TIOCM_RTS);
-    ioctl(sol->soldata->fd, TIOCMSET, &modemstate);
-}
-
-static void
 sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 {
     ipmi_sol_t *sol = cb_data;
@@ -207,7 +512,7 @@ sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 	}
 	sol->active = 0;
 	sol->session_id = 0;
-	reset_modem_state(sol);
+	sol_port_reset_modem_state(sol);
     } else if (session_id == sol->history_session_id) {
 	if (sol->soldata->history_dummy_send_msg.src_addr) {
 	    sd->sys->free(sd->sys,
@@ -367,19 +672,13 @@ ipmi_sol_activate(lmc_data_t    *mc,
     dmsg->sid = msg->sid;
 
     if (instance == 1) {
-	/*
-	 * Note that we enable CTS and DCD if history is set, because we
-	 * always monitor the history.
-	 */
-	if (!sol->history_size) {
-	    if ((msg->data[2] & 1) == 0) {
-		/* Assuming standard NULL modem, RTS->CTS, DTR->DSR/DCD */
-		int modemstate;
-		ioctl(sd->fd, TIOCMGET, &modemstate);
-		modemstate |= TIOCM_DTR | TIOCM_RTS;
-		sd->modemstate = TIOCM_DTR | TIOCM_RTS;
-		ioctl(sd->fd, TIOCMSET, &modemstate);
-	    }
+	rv = sol_port_activate(sol, msg);
+	if (rv) {
+	    sd->sys->free(sd->sys, dmsg->src_addr);
+	    dmsg->src_addr = NULL;
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
 	}
 
 	sol->active = 1;
@@ -448,6 +747,8 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 	return;
     }
 
+    sol_port_deactivate(sol);
+
     sol_session_closed(mc, session_id, sol);
     channel->set_associated_mc(channel, session_id, msg->data[0] & 0xf, NULL,
 			       NULL, NULL, NULL);
@@ -456,198 +757,10 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
     *rdata_len = 1;
 }
 
-#ifdef USE_UUCP_LOCKING
-static char *uucp_lck_dir = "/var/lock";
-static char *progname = "ipmisim";
-
-static int
-uucp_fname_lock_size(const char *devname)
-{
-    const char *ptr;
-
-    (ptr = strrchr(devname, '/'));
-    if (ptr == NULL) {
-	ptr = devname;
-    } else {
-	ptr = ptr + 1;
-    }
-
-    return 7 + strlen(uucp_lck_dir) + strlen(ptr);
-}
-
-static void
-uucp_fname_lock(char *buf, const char *devname)
-{
-    const char *ptr;
-
-    (ptr = strrchr(devname, '/'));
-    if (ptr == NULL) {
-	ptr = devname;
-    } else {
-	ptr = ptr + 1;
-    }
-    sprintf(buf, "%s/LCK..%s", uucp_lck_dir, ptr);
-}
-
-static int
-write_full(int fd, char *data, size_t count)
-{
-    size_t written;
-
- restart:
-    while ((written = write(fd, data, count)) > 0) {
-	data += written;
-	count -= written;
-    }
-    if (written < 0) {
-	if (errno == EAGAIN)
-	    goto restart;
-	return -1;
-    }
-    return 0;
-}
-
-static void
-uucp_rm_lock(sys_data_t *sys, const char *devname)
-{
-    char *lck_file;
-
-    lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
-    if (lck_file == NULL) {
-	return;
-    }
-    uucp_fname_lock(lck_file, devname);
-    unlink(lck_file);
-    sys->free(sys, lck_file);
-}
-
-/* return 0=OK, -1=error, 1=locked by other proces */
-static int
-uucp_mk_lock(sys_data_t *sys, const char *devname)
-{
-    struct stat stt;
-    int pid = -1;
-
-    if (stat(uucp_lck_dir, &stt) == 0) { /* is lock file directory present? */
-	char *lck_file;
-	union {
-	    uint32_t ival;
-	    char     str[64];
-	} buf;
-	int fd;
-
-	lck_file = sys->alloc(sys, uucp_fname_lock_size(devname));
-	if (lck_file == NULL)
-	    return -1;
-
-	uucp_fname_lock(lck_file, devname);
-
-	pid = 0;
-	if ((fd = open(lck_file, O_RDONLY)) >= 0) {
-	    int n;
-
-    	    n = read(fd, &buf, sizeof(buf));
-	    close(fd);
-	    if( n == 4 ) 		/* Kermit-style lockfile. */
-		pid = buf.ival;
-	    else if (n > 0) {		/* Ascii lockfile. */
-		buf.str[n] = 0;
-		sscanf(buf.str, "%d", &pid);
-	    }
-
-	    if (pid > 0 && kill((pid_t)pid, 0) < 0 && errno == ESRCH) {
-		/* death lockfile - remove it */
-		unlink(lck_file);
-		sleep(1);
-		pid = 0;
-	    }
-	}
-
-	if (pid == 0) {
-	    int mask;
-	    size_t rv;
-
-	    mask = umask(022);
-	    fd = open(lck_file, O_WRONLY | O_CREAT | O_EXCL, 0666);
-	    umask(mask);
-	    if (fd >= 0) {
-		snprintf(buf.str, sizeof(buf), "%10ld\t%s\n",
-			 (long)getpid(), progname );
-		rv = write_full(fd, buf.str, strlen(buf.str));
-		close(fd);
-		if (rv < 0) {
-		    pid = -errno;
-		    unlink(lck_file);
-		}
-	    } else {
-		pid = -errno;
-	    }
-	}
-
-	sys->free(sys, lck_file);
-    }
-
-    return pid;
-}
-#endif /* USE_UUCP_LOCKING */
-
-static int
-sol_to_termios_bitrate(ipmi_sol_t *sol, int solbps)
-{
-    int retried = 0;
-
-  retry:
-    switch(solbps) {
-    case 6: return B9600;
-    case 7: return B19200;
-    case 8: return B38400;
-    case 9: return B57600;
-    case 10: return B115200;
-
-    case 0:
-    default:
-	if (retried)
-	    return B9600;
-	solbps = sol->solparm.default_bitrate;
-	goto retry;
-    }
-}
-
-/* Initialize a serial port control structure for the first time. */
-static void
-devinit(ipmi_sol_t *sol, struct termios *termctl)
-{
-    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
-
-    cfmakeraw(termctl);
-    cfsetospeed(termctl, bitrate);
-    cfsetispeed(termctl, bitrate);
-    termctl->c_cflag &= ~(CSTOPB);
-    termctl->c_cflag &= ~(CSIZE);
-    termctl->c_cflag |= CS8;
-    termctl->c_cflag &= ~(PARENB);
-    termctl->c_cflag |= CLOCAL;
-    termctl->c_cflag &= ~(HUPCL);
-    termctl->c_cflag |= CREAD;
-    if (sol->use_rtscts)
-	termctl->c_cflag |= CRTSCTS;
-    else
-	termctl->c_cflag &= ~(CRTSCTS);
-    termctl->c_iflag &= ~(IXON | IXOFF | IXANY);
-    termctl->c_iflag |= IGNBRK;
-
-    reset_modem_state(sol);
-}
-
 static void
 sol_update_bitrate(lmc_data_t *mc)
 {
-    ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
-    int bitrate = sol_to_termios_bitrate(sol, sol->solparm.bitrate);
-
-    cfsetospeed(&sol->soldata->termctl, bitrate);
-    cfsetispeed(&sol->soldata->termctl, bitrate);
-    tcsetattr(sol->soldata->fd, TCSANOW, &sol->soldata->termctl);
+    sol_port_update_bitrate(ipmi_mc_get_sol(mc));
 }
 
 static void
@@ -840,27 +953,9 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 	sd->inlen = 0;
 
     if (isbreak)
-	tcsendbreak(sd->fd, 0);
+	sol_port_send_break(sol);
 
-    /*
-     * If history is enabled, we don't allow DCD/CTS fiddling, just leave
-     * them on all the time.
-     */
-    if (!sol->history_size) {
-	int modemstate = 0;
-	if (!ctspause)
-	    modemstate |= TIOCM_RTS;
-	if (!deassert_dcd)
-	    modemstate |= TIOCM_DTR;
-
-	if (modemstate != sd->modemstate) {
-	    int val;
-	    ioctl(sol->soldata->fd, TIOCMGET, &val);
-	    val &= ~(TIOCM_DTR | TIOCM_RTS);
-	    val |= modemstate;
-	    ioctl(sol->soldata->fd, TIOCMSET, &val);
-	}
-    }
+    sol_port_update_modemstate(sol, ctspause, deassert_dcd);
 }
 
 static int
@@ -1322,9 +1417,8 @@ handle_sol_shutdown(void *info, int sig)
     if (sol->configured < 2 || !sd)
 	return;
 
-#ifdef USE_UUCP_LOCKING
-    uucp_rm_lock(sd->sys, sol->device);
-#endif /* USE_UUCP_LOCKING */
+    sol->configured--;
+    sol_port_shutdown(sol);
 
     if (!sol->backupfile || (sd->history_start == sd->history_end))
 	return;
@@ -1354,6 +1448,7 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
     soldata_t *sd;
     int err;
+    int configured = 0;
 
     sd = sys->alloc(sys, sizeof(*sd));
     if (!sd)
@@ -1403,42 +1498,13 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     sd->curr_packet_seq = 1;
     sd->history_curr_packet_seq = 1;
 
-#ifdef USE_UUCP_LOCKING
-    err = uucp_mk_lock(sys, sol->device);
-    if (err > 0) {
-	fprintf(stderr, "SOL device %s is already owned by process %d\n",
-		sol->device, err);
-	err = EBUSY;
+    err = sol_port_initialize(sol);
+    if (err)
 	goto out;
-    }
-    if (err < 0) {
-	fprintf(stderr, "Error locking SOL device %s\n", sol->device);
-	err = -err;
-	goto out;
-    }
-#endif /* USE_UUCP_LOCKING */
+
     sol->configured++; /* Marked that we locked the device. */
-
-    devinit(sol, &sd->termctl);
-
-    sd->fd = open(sol->device, O_NONBLOCK | O_NOCTTY | O_RDWR);
-    if (sd->fd == -1) {
-	err = errno;
-	fprintf(stderr, "Error opening SOL device %s\n", sol->device);
-	goto out;
-    }
-
-    err = tcsetattr(sd->fd, TCSANOW, &sd->termctl);
-    if (err == -1) {
-	err = errno;
-	fprintf(stderr, "Error configuring SOL device %s\n", sol->device);
-	goto out;
-    }
-   
+    configured = 1;
     sol->update_bitrate = sol_update_bitrate;
-
-    /* Turn off BREAK. */
-    ioctl(sd->fd, TIOCCBRK);
 
     sd->read_enabled = 1;
     sd->write_enabled = 0;
@@ -1455,8 +1521,10 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
 	    sys->free_timer(sd->timer);
 	if (sd->history_timer)
 	    sys->free_timer(sd->history_timer);
-	if (sd->fd >= 0)
-	    close(sd->fd);
+	if (configured) {
+	    sol->configured--;
+	    sol_port_shutdown(sol);
+	}
 	if (sd->history)
 	    sys->free(sys, sd->history);
 	sys->free(sys, sd);
