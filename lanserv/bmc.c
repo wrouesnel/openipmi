@@ -750,6 +750,14 @@ ipmi_mc_alloc_unconfigured(sys_data_t *sys, unsigned char ipmb,
 	mc->pef.alert_string_keys[i][0] = i;
     }
 
+    mc->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
+    mc->ipmb_channel.channel_num = 0;
+    mc->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
+    mc->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
+    mc->ipmb_channel.active_sessions = 0;
+    mc->channels[0] = &mc->ipmb_channel;
+    mc->channels[0]->log = sys->clog;
+
  out:
     *rmc = mc;
     return 0;
@@ -889,13 +897,6 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	    mc->leds[i].color = 0x2;
 	}
     }
-
-    mc->ipmb_channel.medium_type = IPMI_CHANNEL_MEDIUM_IPMB;
-    mc->ipmb_channel.channel_num = 0;
-    mc->ipmb_channel.protocol_type = IPMI_CHANNEL_PROTOCOL_IPMB;
-    mc->ipmb_channel.session_support = IPMI_CHANNEL_SESSION_LESS;
-    mc->ipmb_channel.active_sessions = 0;
-    mc->channels[0] = &mc->ipmb_channel;
 
     if (ipmb == emu->sysinfo->bmc_ipmb) {
 	if (!mc->channels[15]) {

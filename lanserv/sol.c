@@ -62,7 +62,8 @@ struct soldata_s {
     struct termios termctl;
     int modemstate;
 
-    channel_t *channel;
+    channel_t *channel; /* Channel for I/O */
+    channel_t *logchan; /* Channel for logging errors. */
     msg_t dummy_send_msg;
 
     /* Data from the remote to the serial port */
@@ -534,6 +535,7 @@ sol_session_closed(lmc_data_t *mc, uint32_t session_id, void *cb_data)
 	    sol->soldata->dummy_send_msg.src_addr = NULL;
 	}
 	sol->active = 0;
+	sd->channel = NULL;
 	sol->session_id = 0;
 	sd->reset_modemstate(sol);
     } else if (session_id == sol->history_session_id) {
@@ -1138,7 +1140,7 @@ sol_write_ready(int fd, void *cb_data)
 
     rv = write(fd, sd->inbuf, sd->inlen);
     if (rv < 0) {
-	sd->channel->log(sd->channel, OS_ERROR, NULL,
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
 	sd->sys->remove_io_hnd(sd->fd_id);
@@ -1220,7 +1222,7 @@ sol_data_ready(int fd, void *cb_data)
 
     rv = read(fd, buf, readsize);
     if (rv < 0) {
-	sd->channel->log(sd->channel, OS_ERROR, NULL,
+	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
 			 "Error reading from serial port: %d, disabling\n",
 			 errno);
 	sd->sys->remove_io_hnd(sd->fd_id);
@@ -1527,6 +1529,7 @@ sol_init_mc(sys_data_t *sys, lmc_data_t *mc)
     sd->fd = -1;
     sd->curr_packet_seq = 1;
     sd->history_curr_packet_seq = 1;
+    sd->logchan = ipmi_mc_get_channelset(mc)[0];
 
     err = sd->initialize(sol);
     if (err)
