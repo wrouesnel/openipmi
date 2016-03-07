@@ -58,6 +58,26 @@
 #define SOL_INBUF_SIZE 32
 #define SOL_OUTBUF_SIZE 16384
 
+#define SOL_TELNET_IAC		255
+#define SOL_TELNET_DONT		254
+#define SOL_TELNET_DO		253
+#define SOL_TELNET_WONT		252
+#define SOL_TELNET_WILL		251
+#define SOL_TELNET_SB		250
+#define SOL_TELNET_SE		240
+#define SOL_TELNET_BREAK	243
+
+#define SOL_TELNETCODE_BINARY	0
+#define SOL_TELNETCODE_ECHO	1
+
+enum sol_telnet_state {
+    SOL_TELNETST_NORMAL = 0,
+    SOL_TELNETST_IAC,
+    SOL_TELNETST_TWOBYTE,
+    SOL_TELNETST_SUBNEG,
+    SOL_TELNETST_SUBNEG_IAC
+};
+
 struct soldata_s {
     int fd;
     sys_data_t *sys;
@@ -122,12 +142,14 @@ struct soldata_s {
     ipmi_timer_t *timer;
     unsigned int num_sends;
 
+    enum sol_telnet_state telnet_state;
+    unsigned char telnet_twobyte;
+
     void (*reset_modemstate)(ipmi_sol_t *sol);
     void (*update_bitrate)(ipmi_sol_t *sol);
     void (*send_break)(ipmi_sol_t *sol);
     void (*update_modemstate)(ipmi_sol_t *sol, int ctspaus, int deassertdcd);
     int (*activate)(ipmi_sol_t *sol, msg_t *msg);
-    void (*deactivate)(ipmi_sol_t *sol);
     void (*shutdown)(ipmi_sol_t *sol);
     int (*initialize)(ipmi_sol_t *sol);
 };
@@ -399,11 +421,6 @@ sol_serial_activate(ipmi_sol_t *sol, msg_t *msg)
 }
 
 static void
-sol_serial_deactivate(ipmi_sol_t *sol)
-{
-}
-
-static void
 sol_serial_shutdown(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
@@ -470,7 +487,6 @@ sol_serial_setup(ipmi_sol_t *sol)
     sd->send_break = sol_serial_send_break;
     sd->update_modemstate = sol_serial_update_modemstate;
     sd->activate = sol_serial_activate;
-    sd->deactivate = sol_serial_deactivate;
     sd->shutdown = sol_serial_shutdown;
     sd->initialize = sol_serial_initialize;
 }
@@ -488,6 +504,14 @@ sol_tcp_update_bitrate(ipmi_sol_t *sol)
 static void
 sol_tcp_send_break(ipmi_sol_t *sol)
 {
+    soldata_t *sd = sol->soldata;
+    int left = sizeof(sd->inbuf) - sd->inlen;
+
+     if (left < 2)
+	return;
+
+    sd->inbuf[sd->inlen++] = SOL_TELNET_IAC;
+    sd->inbuf[sd->inlen++] = SOL_TELNET_BREAK;
 }
 
 static void
@@ -499,11 +523,6 @@ static int
 sol_tcp_activate(ipmi_sol_t *sol, msg_t *msg)
 {
     return 0;
-}
-
-static void
-sol_tcp_deactivate(ipmi_sol_t *sol)
-{
 }
 
 static void
@@ -600,7 +619,6 @@ sol_tcp_setup(ipmi_sol_t *sol)
     sd->send_break = sol_tcp_send_break;
     sd->update_modemstate = sol_tcp_update_modemstate;
     sd->activate = sol_tcp_activate;
-    sd->deactivate = sol_tcp_deactivate;
     sd->shutdown = sol_tcp_shutdown;
     sd->initialize = sol_tcp_initialize;
 }
@@ -891,7 +909,6 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 		    unsigned int  *rdata_len)
 {
     ipmi_sol_t *sol = ipmi_mc_get_sol(mc);
-    soldata_t *sd = sol->soldata;
     unsigned int instance;
     uint32_t session_id;
 
@@ -915,8 +932,6 @@ ipmi_sol_deactivate(lmc_data_t    *mc,
 	*rdata_len = 1;
 	return;
     }
-
-    sd->deactivate(sol);
 
     sol_session_closed(mc, session_id, sol);
     channel->set_associated_mc(channel, session_id, msg->data[0] & 0xf, NULL,
@@ -1019,6 +1034,13 @@ next_seq(soldata_t *sd)
 	sd->curr_packet_seq = 1;
 }
 
+static unsigned char sol_telnet_initseq[] = {
+    SOL_TELNET_IAC, SOL_TELNET_DO, SOL_TELNETCODE_BINARY,
+    SOL_TELNET_IAC, SOL_TELNET_WILL, SOL_TELNETCODE_BINARY,
+    SOL_TELNET_IAC, SOL_TELNET_DONT, SOL_TELNETCODE_ECHO,
+    SOL_TELNET_IAC, SOL_TELNET_WONT, SOL_TELNETCODE_ECHO
+};
+
 static int
 sol_port_init(ipmi_sol_t *sol)
 {
@@ -1034,6 +1056,15 @@ sol_port_init(ipmi_sol_t *sol)
 
     sd->read_enabled = 1;
     sd->write_enabled = 0;
+
+    if (sol->do_telnet) {
+	int len = sizeof(sol_telnet_initseq);
+
+	memcpy(sd->outbuf, sol_telnet_initseq, len);
+	sd->outlen = len;
+	sd->write_enabled = 1;
+    }
+
     err = sd->sys->add_io_hnd(sd->sys, sd->fd, sol_data_ready, sol, &sd->fd_id);
     if (err) {
 	sol->configured--;
@@ -1118,12 +1149,28 @@ handle_sol_port_payload(lanserv_data_t *lan, ipmi_sol_t *sol, msg_t *msg)
 	    }
 	} else if (len) {
 	    sd->last_acked_packet = seq;
-	    if (len > (sizeof(sd->inbuf) - sd->inlen))
-		len = sizeof(sd->inbuf) - sd->inlen;
-	    sd->last_acked_packet_len = len;
-	    memcpy(sd->inbuf + sd->inlen, data, len);
-	    sd->inlen += len;
+	    if (sol->do_telnet) {
+		unsigned int i;
 
+		for (i = 0; i < len; i++) {
+		    int left = sizeof(sd->inbuf) - sd->inlen;
+		    if (left < 1)
+			break;
+		    if (data[i] == SOL_TELNET_IAC) {
+			if (left < 2)
+			    break;
+			sd->inbuf[sd->inlen++] = SOL_TELNET_IAC;
+		    }
+		    sd->inbuf[sd->inlen++] = data[i];
+		}
+	    } else {
+		if (len > (sizeof(sd->inbuf) - sd->inlen))
+		    len = sizeof(sd->inbuf) - sd->inlen;
+		memcpy(sd->inbuf + sd->inlen, data, len);
+		sd->inlen += len;
+	    }
+
+	    sd->last_acked_packet_len = len;
 	    need_send_ack = 1;
 	    set_write_enable(sol->soldata);
 	}
@@ -1411,6 +1458,65 @@ add_to_history(ipmi_sol_t *sol, unsigned char *buf, unsigned int len)
     sd->history_end += len;
 }
 
+static int
+sol_handle_telnet(ipmi_sol_t *sol, unsigned char *buf, int len)
+{
+    soldata_t *sd = sol->soldata;
+    int i, j;
+
+    for (i = 0, j = 0; i < len; i++) {
+	switch (sd->telnet_state) {
+	case SOL_TELNETST_NORMAL:
+	    if (buf[i] == SOL_TELNET_IAC)
+		sd->telnet_state = SOL_TELNETST_IAC;
+	    else
+		buf[j++] = buf[i];
+	    break;
+
+	case SOL_TELNETST_IAC:
+	    switch (buf[i]) {
+	    case SOL_TELNET_DONT:
+	    case SOL_TELNET_DO:
+	    case SOL_TELNET_WONT:
+	    case SOL_TELNET_WILL:
+		sd->telnet_twobyte = buf[i];
+		sd->telnet_state = SOL_TELNETST_TWOBYTE;
+		break;
+
+	    case SOL_TELNET_SB:
+		sd->telnet_state = SOL_TELNETST_SUBNEG;
+		break;
+
+	    case SOL_TELNET_IAC:
+		buf[j++] = SOL_TELNET_IAC;
+		/* Fallthrough */
+	    default:
+		/* Ignore everything else. */
+		sd->telnet_state = SOL_TELNETST_NORMAL;
+		break;
+	    }
+	    break;
+
+	case SOL_TELNETST_TWOBYTE:
+	    /* Don't listen to these. */
+	    sd->telnet_state = SOL_TELNETST_NORMAL;
+	    break;
+
+	case SOL_TELNETST_SUBNEG:
+	    /* Don't listen to these. */
+	    if (buf[i] == SOL_TELNET_IAC)
+		sd->telnet_state = SOL_TELNETST_SUBNEG_IAC;
+	    break;
+
+	case SOL_TELNETST_SUBNEG_IAC:
+	    if (buf[i] == SOL_TELNET_SE)
+		sd->telnet_state = SOL_TELNETST_NORMAL;
+	}
+    }
+
+    return j;
+}
+
 static void
 sol_data_ready(int fd, void *cb_data)
 {
@@ -1436,6 +1542,9 @@ sol_data_ready(int fd, void *cb_data)
 	sol_port_error(sol);
 	return;
     }
+
+    if (sol->do_telnet)
+	rv = sol_handle_telnet(sol, buf, rv);
 
     add_to_history(sol, buf, rv);
 
@@ -1479,6 +1588,9 @@ sol_read_config(char **tokptr, sys_data_t *sys, const char **err)
 
     if (strncmp(sol->device, "tcp:", 4) == 0) {
 	sol->tcpdest = sol->device + 4;
+    } else if (strncmp(sol->device, "telnet:", 7) == 0) {
+	sol->do_telnet = 1;
+	sol->tcpdest = sol->device + 7;
     }
 
     if (sol->tcpdest) {

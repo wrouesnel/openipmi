@@ -78,6 +78,7 @@ typedef struct ipmi_sol_s {
     /* TCP-specific information. */
     const char *tcpdest;
     const char *tcpport;
+    int do_telnet;
 
     int set_in_progress;
     solparm_t solparm;
