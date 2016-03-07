@@ -169,6 +169,8 @@ struct misc_data
     console_info_t *consoles;
 };
 
+static misc_data_t *global_misc_data;
+
 static void *
 balloc(sys_data_t *sys, int size)
 {
@@ -568,8 +570,8 @@ ser_channel_init(void *info, channel_t *chan)
 }
 
 static void
-isim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
-	 int len)
+isim_log(sys_data_t *sys, int logtype, msg_t *msg, const char *format,
+	 va_list ap, int len)
 {
     misc_data_t *data = sys->info;
     char *str;
@@ -621,7 +623,7 @@ isim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
 }
 
 static void
-sim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
+sim_log(sys_data_t *sys, int logtype, msg_t *msg, const char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -636,7 +638,7 @@ sim_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
 }
 
 static void
-sim_chan_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+sim_chan_log(channel_t *chan, int logtype, msg_t *msg, const char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -646,7 +648,7 @@ sim_chan_log(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
     len = vsnprintf(&dummy, 1, format, ap);
     va_end(ap);
     va_start(ap, format);
-    isim_log(NULL, logtype, msg, format, ap, len);
+    isim_log(global_misc_data->sys, logtype, msg, format, ap, len);
     va_end(ap);
 }
 
@@ -1378,6 +1380,8 @@ main(int argc, const char *argv[])
     poptFreeContext(poptCtx);
 
     printf("IPMI Simulator version %s\n", PVERSION);
+
+    global_misc_data = &data;
 
     data.os_hnd = ipmi_posix_setup_os_handler();
     if (!data.os_hnd) {

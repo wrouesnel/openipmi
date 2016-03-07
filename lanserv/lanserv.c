@@ -95,7 +95,7 @@ static int daemonize = 1;
 #define MAX_ADDR 4
 
 static void lanserv_log(sys_data_t *sys, int logtype, msg_t *msg,
-			char *format, ...);
+			const char *format, ...);
 
 typedef struct misc_data
 {
@@ -430,8 +430,8 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 }
 
 static void
-ilanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
-	     int len)
+ilanserv_log(sys_data_t *sys, int logtype, msg_t *msg, const char *format,
+	     va_list ap, int len)
 {
     if (msg) {
 	char *str, dummy;
@@ -479,7 +479,7 @@ ilanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, va_list ap,
 }
 
 static void
-lanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
+lanserv_log(sys_data_t *sys, int logtype, msg_t *msg, const char *format, ...)
 {
     va_list ap;
     char dummy;
@@ -494,7 +494,8 @@ lanserv_log(sys_data_t *sys, int logtype, msg_t *msg, char *format, ...)
 }
 
 static void
-lanserv_chan_log(channel_t *sys, int logtype, msg_t *msg, char *format, ...)
+lanserv_chan_log(channel_t *sys, int logtype, msg_t *msg,
+		 const char *format, ...)
 {
     va_list ap;
     char dummy;

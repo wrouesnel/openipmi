@@ -149,7 +149,8 @@ struct channel_s
     unsigned int channel_num;
 
     /* Used by channel code. */
-    void (*log)(channel_t *chan, int logtype, msg_t *msg, char *format, ...)
+    void (*log)(channel_t *chan, int logtype, msg_t *msg,
+		const char *format, ...)
 	__attribute__ ((__format__ (__printf__, 4, 5)));
 
     int (*smi_send)(channel_t *chan, msg_t *msg);
@@ -341,7 +342,7 @@ struct sys_data_s {
 #define INFO				10
 #define DEBUG				11
 #define SETUP_ERROR			12
-    void (*log)(sys_data_t *sys, int type, msg_t *msg, char *format, ...)
+    void (*log)(sys_data_t *sys, int type, msg_t *msg, const char *format, ...)
 	__attribute__ ((__format__ (__printf__, 4, 5)));
 
     /* Console port.  Length is zero if not set. */
@@ -397,7 +398,8 @@ struct sys_data_s {
      * These are a hack so the channel code in the MCs can pick up
      * these functions.
      */
-    void (*clog)(channel_t *chan, int logtype, msg_t *msg, char *format, ...);
+    void (*clog)(channel_t *chan, int logtype, msg_t *msg,
+		 const char *format, ...);
     int (*csmi_send)(channel_t *chan, msg_t *msg);
     void *(*calloc)(channel_t *chan, int size);
     void (*cfree)(channel_t *chan, void *data);
@@ -501,7 +503,7 @@ void post_init_dynamic_libs(sys_data_t *sys);
 
 void debug_log_raw_msg(sys_data_t *sys,
 		       unsigned char *data, unsigned int len,
-		       char *format, ...);
+		       const char *format, ...);
 
 unsigned int ipmi_get_uint16(uint8_t *data);
 void ipmi_set_uint16(uint8_t *data, int val);

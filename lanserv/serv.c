@@ -239,7 +239,7 @@ sysinfo_init(sys_data_t *sys)
 void
 debug_log_raw_msg(sys_data_t *sys,
 		  unsigned char *data, unsigned int len,
-		  char *format, ...)
+		  const char *format, ...)
 {
     va_list ap;
     char *str;
