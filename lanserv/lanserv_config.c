@@ -154,6 +154,7 @@ lanserv_read_config(sys_data_t    *sys,
 		    lan->port = lan->lan_addr.addr.s_ipsock.s_addr6.sin6_port;
 		else
 		    lan->port = 0;
+		lan->port = htons(lan->port);
 	    }
 	} else if (strcmp(tok, "guid") == 0) {
 	    if (!lan->guid)
