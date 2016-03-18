@@ -1060,8 +1060,8 @@ sol_port_init(ipmi_sol_t *sol)
     if (sol->do_telnet) {
 	int len = sizeof(sol_telnet_initseq);
 
-	memcpy(sd->outbuf, sol_telnet_initseq, len);
-	sd->outlen = len;
+	memcpy(sd->inbuf, sol_telnet_initseq, len);
+	sd->inlen = len;
 	sd->write_enabled = 1;
     }
 
