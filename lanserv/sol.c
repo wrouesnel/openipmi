@@ -1394,7 +1394,7 @@ sol_write_ready(int fd, void *cb_data)
     rv = write(fd, sd->inbuf, sd->inlen);
     if (rv < 0) {
 	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
-			 "Error reading from serial port: %d, disabling\n",
+			 "Error writing to serial port: %d, disabling\n",
 			 errno);
 	sol_port_error(sol);
 	return;
