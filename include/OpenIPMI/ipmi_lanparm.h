@@ -114,7 +114,7 @@ int ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
 #define IPMI_LANPARM_AUTH_TYPE_ENABLES		2
 #define IPMI_LANPARM_IP_ADDRESS			3
 #define IPMI_LANPARM_IP_ADDRESS_SRC		4
-#define IPMI_LANPARM_MAX_ADDRESS		5
+#define IPMI_LANPARM_MAC_ADDRESS		5
 #define IPMI_LANPARM_SUBNET_MASK		6
 #define IPMI_LANPARM_IPV4_HDR_PARMS		7
 #define IPMI_LANPARM_PRIMARY_RMCP_PORT		8
@@ -135,6 +135,11 @@ int ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
 #define IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT	23
 #define IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV	24
 #define IPMI_LANPARM_DEST_VLAN_TAG		25
+
+#define IPMI_LANPARM_IP_ADDR_SRC_STATIC		1
+#define IPMI_LANPARM_IP_ADDR_SRC_DHCP		2
+#define IPMI_LANPARM_IP_ADDR_SRC_BIOS		3
+#define IPMI_LANPARM_IP_ADDR_SRC_OTHER		4
 
 /* A full LAN configuration.  Note that you cannot allocate one of
    these, you can only fetch them, modify them, set them, and free

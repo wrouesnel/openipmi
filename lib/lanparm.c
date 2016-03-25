@@ -1791,6 +1791,21 @@ set_done(ipmi_lanparm_t *lanparm,
 
  next_parm:
     switch (lanc->curr_parm) {
+    /*
+     * Set the IP address source before the IP address itself.  Some
+     * BMCs are picky and won't set the IP address if the address
+     * source is not static.
+     */
+    case IPMI_LANPARM_AUTH_TYPE_ENABLES:
+	lanc->curr_parm = IPMI_LANPARM_IP_ADDRESS_SRC;
+	break;
+    case IPMI_LANPARM_IP_ADDRESS_SRC:
+	lanc->curr_parm = IPMI_LANPARM_IP_ADDRESS;
+	break;
+    case IPMI_LANPARM_IP_ADDRESS:
+	lanc->curr_parm = IPMI_LANPARM_MAC_ADDRESS;
+	break;
+
     case IPMI_LANPARM_NUM_DESTINATIONS:
 	lanc->curr_parm++;
 	if (lanc->num_alert_destinations == 0) {
@@ -1846,6 +1861,18 @@ set_done(ipmi_lanparm_t *lanparm,
 	/* The parameter is read-only or not supported, just go on. */
 	goto next_parm;
     }
+
+    if (lanc->curr_parm == IPMI_LANPARM_IP_ADDRESS &&
+	lanc->ip_addr_source != IPMI_LANPARM_IP_ADDR_SRC_STATIC)
+    {
+	/*
+	 * Only set the IP address if the address source is static.  Some
+	 * BMCs are picky about this and will error if you try to set
+	 * the IP address and the address source is not static.
+	 */
+	goto next_parm;
+    }
+
 
     lp->set_handler(lanc, lp, data);
     err = ipmi_lanparm_set_parm(lanparm, lanc->curr_parm,
