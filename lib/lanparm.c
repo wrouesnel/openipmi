@@ -1862,13 +1862,17 @@ set_done(ipmi_lanparm_t *lanparm,
 	goto next_parm;
     }
 
-    if (lanc->curr_parm == IPMI_LANPARM_IP_ADDRESS &&
-	lanc->ip_addr_source != IPMI_LANPARM_IP_ADDR_SRC_STATIC)
+    if ((lanc->ip_addr_source == IPMI_LANPARM_IP_ADDR_SRC_DHCP) &&
+	(lanc->curr_parm == IPMI_LANPARM_IP_ADDRESS ||
+	 lanc->curr_parm == IPMI_LANPARM_SUBNET_MASK ||
+	 lanc->curr_parm == IPMI_LANPARM_DEFAULT_GATEWAY_ADDR ||
+	 lanc->curr_parm == IPMI_LANPARM_BACKUP_GATEWAY_ADDR))
     {
 	/*
-	 * Only set the IP address if the address source is static.  Some
-	 * BMCs are picky about this and will error if you try to set
-	 * the IP address and the address source is not static.
+	 * Don't set the fields that come from DHCP if the address
+	 * source is DHCP.  Some BMCs are picky about this and will
+	 * error if you try to set these fields and the address source
+	 * is DHCP.
 	 */
 	goto next_parm;
     }
