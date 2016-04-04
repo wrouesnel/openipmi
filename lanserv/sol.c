@@ -1062,7 +1062,6 @@ sol_port_init(ipmi_sol_t *sol)
 
 	memcpy(sd->inbuf, sol_telnet_initseq, len);
 	sd->inlen = len;
-	sd->write_enabled = 1;
     }
 
     err = sd->sys->add_io_hnd(sd->sys, sd->fd, sol_data_ready, sol, &sd->fd_id);
