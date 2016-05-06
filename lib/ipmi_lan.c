@@ -5627,6 +5627,11 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	if (rv)
 	    return EINVAL;
 
+	if (res0->ai_addrlen > sizeof(cparm.ip_addr[count].s_ipsock)) {
+	    freeaddrinfo(res0);
+	    return EFBIG;
+	}
+
 	/* Only get the first choices */
 	memcpy(&(cparm.ip_addr[count].s_ipsock), res0->ai_addr,
 	       res0->ai_addrlen);
@@ -5645,6 +5650,9 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	paddr = (struct sockaddr_in *)&(cparm.ip_addr[i]);
         paddr->sin_family = AF_INET;
         paddr->sin_port = htons(atoi(ports[i]));
+	if (ent->h_length > sizeof(paddr->sin_addr))
+	    return EFBIG;
+
 	memcpy(&(paddr->sin_addr), ent->h_addr_list[0], ent->h_length);
 	cparm.ip_addr[count].ip_addr_len = ent->h_length;
 	count++;
