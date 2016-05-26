@@ -1364,10 +1364,10 @@ hash_lan(const ipmi_con_t *ipmi)
     return idx;
 }
 
-static int
+static unsigned int
 hash_lan_addr(const struct sockaddr *addr)
 {
-    int idx;
+    unsigned int idx;
     switch (addr->sa_family)
     {
     case PF_INET:
