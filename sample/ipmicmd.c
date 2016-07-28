@@ -676,7 +676,11 @@ main(int argc, char *argv[])
     }
 
     /* Create selector with os handler. */
-    sel_alloc_selector(os_hnd, &sel);
+    rv = sel_alloc_selector_nothread(&sel);
+    if (rv) {
+	fprintf(stderr, "Error allocating selector: 0x%x\n", rv);
+	exit(1);
+    }
 
     /* The OS handler has to know about the selector. */
     ipmi_posix_os_handler_set_sel(os_hnd, sel);

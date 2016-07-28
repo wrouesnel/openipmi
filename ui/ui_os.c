@@ -45,7 +45,7 @@
 
 #include <OpenIPMI/internal/ipmi_int.h>
 
-extern selector_t *ui_sel;
+selector_t *ui_sel;
 
 #ifdef IPMI_CHECK_LOCKS
 static void check_no_locks(os_handler_t *handler);
@@ -526,6 +526,21 @@ static int get_real_time(os_handler_t *handler,
     return get_posix_time(CLOCK_REALTIME, tv);
 }
 
+static void free_os_handler(os_handler_t *handler)
+{
+    sel_free_selector(ui_sel);
+}
+
+static int perform_one_op(os_handler_t *os_hnd, struct timeval *timeout)
+{
+    int           rv;
+
+    rv = sel_select(ui_sel, NULL, 0, NULL, timeout);
+    if (rv == -1)
+	return errno;
+    return 0;
+}
+
 os_handler_t ipmi_ui_cb_handlers =
 {
     .mem_alloc = ui_malloc,
@@ -536,6 +551,8 @@ os_handler_t ipmi_ui_cb_handlers =
     .stop_timer = stop_timer,
     .alloc_timer = alloc_timer,
     .free_timer = free_timer,
+    .free_os_handler = free_os_handler,
+    .perform_one_op = perform_one_op,
 #ifdef IPMI_CHECK_LOCKS
     .create_lock = create_lock,
     .destroy_lock = destroy_lock,

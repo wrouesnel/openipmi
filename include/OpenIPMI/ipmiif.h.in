@@ -38,6 +38,7 @@
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/deprecator.h>
 
 #ifdef __cplusplus
 extern "C" {

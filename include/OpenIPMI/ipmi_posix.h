@@ -36,6 +36,7 @@
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
+#include <OpenIPMI/deprecator.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -77,7 +78,7 @@ selector_t *ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd);
  *	exit(1);
  *  }
  *
- *  rv = sel_alloc_selector(os_hnd, &sel);
+ *  rv = sel_alloc_selector_nothread(&sel);
  *  if (rv)
  *      handle_error();
  *
@@ -109,9 +110,12 @@ selector_t *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
 
 /**********************************************************************
  * Special code, like the previous non-threaded ones.  Only needed
- * if you have special selector needs.
+ * if you have special selector needs.  Don't use
+ * ipmi_posix_thread_get_os_handler(), it has no way to set the
+ * wake signal.
  *********************************************************************/
 os_handler_t *ipmi_posix_thread_get_os_handler(void);
+os_handler_t *ipmi_posix_thread_get_os_handler2(int wake_sig);
 void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
 					  selector_t   *sel);

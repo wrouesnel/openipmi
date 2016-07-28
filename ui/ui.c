@@ -44,7 +44,6 @@
 #include <sys/time.h>
 #include <ctype.h>
 
-#include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -71,8 +70,6 @@ WINDOW *log_pad;
 WINDOW *dummy_pad;
 WINDOW *display_pad;
 
-selector_t *ui_sel;
-
 int log_pad_top_line;
 int display_pad_top_line;
 
@@ -81,7 +78,7 @@ command_t commands;
 
 ipmi_domain_id_t domain_id;
 
-extern os_handler_t ipmi_ui_cb_handlers;
+os_handler_t *ipmi_ui_os_hnd;
 ipmi_pef_t *pef;
 ipmi_pef_config_t *pef_config;
 ipmi_lanparm_t *lanparm;
@@ -157,7 +154,7 @@ static char *line_buffer = NULL;
 static int  line_buffer_max = 0;
 static int  line_buffer_pos = 0;
 
-sel_timer_t *redisplay_timer;
+os_hnd_timer_id_t *redisplay_timer;
 
 static void
 conv_from_spaces(char *name)
@@ -427,7 +424,7 @@ ui_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
     int do_nl = 1;
     struct timeval now;
 
-    ipmi_ui_cb_handlers.get_real_time(&ipmi_ui_cb_handlers, &now);
+    ipmi_ui_os_hnd->get_real_time(ipmi_ui_os_hnd, &now);
 
     if (full_screen) {
 	int x = 0, y = 0, old_x = 0, old_y = 0;
@@ -557,7 +554,7 @@ ui_log(char *format, ...)
     struct timeval now;
     va_list ap;
 
-    ipmi_ui_cb_handlers.get_real_time(&ipmi_ui_cb_handlers, &now);
+    ipmi_ui_os_hnd->get_real_time(ipmi_ui_os_hnd, &now);
 
     va_start(ap, format);
 
@@ -586,8 +583,8 @@ leave(int rv, char *format, ...)
 
     ipmi_shutdown();
 
-    sel_stop_timer(redisplay_timer);
-    sel_free_timer(redisplay_timer);
+    ipmi_ui_os_hnd->stop_timer(ipmi_ui_os_hnd, redisplay_timer);
+    ipmi_ui_os_hnd->free_timer(ipmi_ui_os_hnd, redisplay_timer);
 
     if (full_screen) {
 	endwin();
@@ -621,7 +618,7 @@ leave(int rv, char *format, ...)
     command_free(commands);
     keypad_free(keymap);
 
-    sel_free_selector(ui_sel);
+    ipmi_ui_os_hnd->free_os_handler(ipmi_ui_os_hnd);
 
     va_start(ap, format);
     vfprintf(stderr, format, ap);
@@ -643,7 +640,7 @@ leave_err(int err, char *format, ...)
 	fcntl(0, F_SETFL, old_flags);
 	tcdrain(0);
     }
-    sel_free_selector(ui_sel);
+    ipmi_ui_os_hnd->free_os_handler(ipmi_ui_os_hnd);
 
     va_start(ap, format);
     vfprintf(stderr, format, ap);
@@ -694,7 +691,7 @@ void handle_user_char(int c)
 }
 
 void
-user_input_ready(int fd, void *data)
+user_input_ready(int fd, void *data, os_hnd_fd_id_t *id)
 {
     int c;
 
@@ -5566,7 +5563,7 @@ addevent_cmd(char *cmd, char **toks, void *cb_data)
 	    return 0;
     }
 
-    ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &time);
+    ipmi_ui_os_hnd->get_monotonic_time(ipmi_ui_os_hnd, &time);
     info.timestamp = time.tv_sec * 1000000000;
 
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, addevent_cmder, &info);
@@ -6158,8 +6155,8 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 
     for (i=0; i<set; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
-				 &ipmi_ui_cb_handlers,
-				 ui_sel,
+				 ipmi_ui_os_hnd,
+				 NULL,
 				 &con[i]);
 	if (rv) {
 	    cmd_win_out("ipmi_ip_setup_con: %s\n", strerror(rv));
@@ -6962,9 +6959,7 @@ event_handler(ipmi_domain_t *domain,
 }
 
 static void
-redisplay_timeout(selector_t  *sel,
-		  sel_timer_t *timer,
-		  void        *data)
+redisplay_timeout(void *cb_data, os_hnd_timer_id_t *id)
 {
     struct timeval now;
     int            rv;
@@ -6989,9 +6984,10 @@ redisplay_timeout(selector_t  *sel,
 		   rv);
     }
 
-    ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &now);
+    ipmi_ui_os_hnd->get_monotonic_time(ipmi_ui_os_hnd, &now);
     now.tv_sec += 1;
-    rv = sel_start_timer(timer, &now);
+    rv = ipmi_ui_os_hnd->start_timer(ipmi_ui_os_hnd, id, &now,
+				     redisplay_timeout, NULL);
     if (rv)
 	ui_log("Unable to restart redisplay timer: 0x%x\n", rv);
 }
@@ -7050,23 +7046,25 @@ ipmi_ui_domain_ready(ipmi_domain_t *domain,
 {
 }
 
+os_hnd_fd_id_t *user_input_id;
+
 int
-ipmi_ui_init(selector_t **selector, int do_full_screen)
+ipmi_ui_init(os_handler_t *os_hnd, int do_full_screen)
 {
     int rv;
 
     full_screen = do_full_screen;
 
-    ipmi_init(&ipmi_ui_cb_handlers);
+    ipmi_ui_os_hnd = os_hnd;
 
-    rv = sel_alloc_selector(&ipmi_ui_cb_handlers, &ui_sel);
+    ipmi_init(ipmi_ui_os_hnd);
+
+    rv = os_hnd->add_fd_to_wait_for(os_hnd, 0, user_input_ready, NULL, NULL,
+				    &user_input_id);
     if (rv) {
-	fprintf(stderr, "Could not allocate selector\n");
+        fprintf(stderr, "Could not add stdin waiter: %s\n", strerror(rv));
 	exit(1);
     }
-
-    sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL, NULL);
-    sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
 
     /* This is a dummy allocation just to make sure that the malloc
        debugger is working. */
@@ -7127,18 +7125,17 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     {
 	struct timeval now;
-	rv = sel_alloc_timer(ui_sel, redisplay_timeout, NULL,
-			     &redisplay_timer);
+
+	rv = os_hnd->alloc_timer(os_hnd, &redisplay_timer);
 	if (rv)
 	    leave_err(rv, "sel_alloc_timer");
-	ipmi_ui_cb_handlers.get_monotonic_time(&ipmi_ui_cb_handlers, &now);
+	ipmi_ui_os_hnd->get_monotonic_time(ipmi_ui_os_hnd, &now);
 	now.tv_sec += 1;
-	rv = sel_start_timer(redisplay_timer, &now);
+	rv = os_hnd->start_timer(os_hnd, redisplay_timer, &now,
+				 redisplay_timeout, NULL);
 	if (rv)
 	    leave_err(rv, "Unable to restart redisplay timer");
     }
-
-    *selector = ui_sel;
 
     return 0;
 }

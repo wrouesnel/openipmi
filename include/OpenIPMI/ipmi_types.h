@@ -56,20 +56,9 @@
 #ifndef _IPMI_TYPES_H
 #define _IPMI_TYPES_H
 
-#ifndef IPMI_FUNC_DEPRECATED
-# if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
-#  define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
-#  define IPMI_TYPE_DEPRECATED __attribute__ ((deprecated))
-#  define IPMI_VAR_DEPRECATED __attribute__ ((deprecated))
-# else
-#  define IPMI_FUNC_DEPRECATED
-#  define IPMI_TYPE_DEPRECATED
-#  define IPMI_VAR_DEPRECATED
-# endif
-#endif
-
 #include <stdint.h>
 #include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/deprecator.h>
 
 #ifdef __cplusplus
 extern "C" {

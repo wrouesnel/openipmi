@@ -679,7 +679,7 @@ ipmi_posix_setup_os_handler(void)
     if (!os_hnd)
 	return NULL;
 
-    rv = sel_alloc_selector(os_hnd, &sel);
+    rv = sel_alloc_selector_nothread(&sel);
     if (rv) {
 	ipmi_posix_free_os_handler(os_hnd);
 	os_hnd = NULL;

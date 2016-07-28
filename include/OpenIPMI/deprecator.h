@@ -1,13 +1,13 @@
 /*
- * ipmi_mc.ui
+ * deprecator.h
  *
- * MontaVista IPMI interface for a basic curses UI
+ * MontaVista IPMI deprecation defines
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2016 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -31,33 +31,17 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_UI_H
-#define _IPMI_UI_H
+#ifndef __IPMI_DEPRECATOR_H
+#define __IPMI_DEPRECATOR_H
 
-#include <OpenIPMI/ipmi_types.h>
-#include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
-
-#ifdef __cplusplus
-extern "C" {
+#if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
+# define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
+# define IPMI_TYPE_DEPRECATED __attribute__ ((deprecated))
+# define IPMI_VAR_DEPRECATED __attribute__ ((deprecated))
+#else
+# define IPMI_FUNC_DEPRECATED
+# define IPMI_TYPE_DEPRECATED
+# define IPMI_VAR_DEPRECATED
 #endif
 
-extern os_handler_t ipmi_ui_cb_handlers;
-
-int ipmi_ui_init(os_handler_t *os_hnd, int full_screen);
-void ipmi_ui_shutdown(void);
-
-void ipmi_ui_set_first_domain(ipmi_domain_id_t fdomain_id);
-
-void ipmi_ui_setup_done(ipmi_domain_t *mc,
-			int           err,
-			unsigned int  conn_num,
-			unsigned int  port_num,
-			int           still_connected,
-			void          *user_data);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* _IPMI_UI_H */
+#endif /* __IPMI_DEPRECATOR_H */

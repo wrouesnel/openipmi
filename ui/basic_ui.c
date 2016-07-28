@@ -62,6 +62,8 @@
 # endif
 #endif
 
+extern selector_t *ui_sel;
+
 /* This is here because the POSIX library requires it, but we only
    pull the posix library to get the selector code, so this is not
    used. */
@@ -147,37 +149,119 @@ snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
 
 struct snmp_session *snmp_session;
 
-void snmp_add_read_fds(selector_t     *sel,
-		       int            *num_fds,
-		       fd_set         *fdset,
-		       struct timeval *timeout,
-		       int            *timeout_invalid,
-		       void           *cb_data)
+struct snmp_fd_data {
+    int fd;
+    os_hnd_fd_id_t *id;
+    struct snmp_fd_data *next;
+};
+
+static struct snmp_fd_data *snmpfd = NULL;
+os_hnd_timer_id_t *snmp_timer = NULL;
+
+static void
+snmp_check_read_fds(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
-    snmp_select_info(num_fds, fdset, timeout, timeout_invalid);
+    fd_set fdset;
+
+    FD_ZERO(&fdset);
+    FD_SET(fd, &fdset);
+    snmp_read(&fdset);
 }
 
-void snmp_check_read_fds(selector_t *sel,
-			 fd_set     *fds,
-			 void       *cb_data)
-{
-    snmp_read(fds);
-}
-
-void snmp_check_timeout(selector_t *sel,
-			void       *cb_data)
+static void
+snmp_check_timeout(void *cb_data, os_hnd_timer_id_t *id)
 {
     snmp_timeout();
 }
 
+static void
+snmp_setup_fds(os_handler_t *os_hnd)
+{
+    int nfds = 0, block = 0, i, rv;
+    fd_set fdset;
+    struct timeval tv;
+    struct snmp_fd_data *fdd, *nfdd, *prev = NULL;
+
+    FD_ZERO(&fdset);
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    snmp_select_info(&nfds, &fdset, &tv, &block);
+
+    /* Run through the list.  Since the list is kept sorted, we only
+       need one pass. */
+    fdd = snmpfd;
+    for (i = 0; i < nfds; i++) {
+	if (!FD_ISSET(i, &fdset))
+	    continue;
+
+	if (fdd) {
+	    if (fdd->fd == i) {
+		/* Didn't change. */
+		prev = fdd;
+		fdd = fdd->next;
+		continue;
+	    }
+	    if (fdd->fd < i) {
+		/* Current one was deleted. */
+		os_hnd->remove_fd_to_wait_for(os_hnd, fdd->id);
+		if (prev)
+		    prev->next = fdd->next;
+		else
+		    snmpfd = fdd->next;
+		os_hnd->mem_free(fdd);
+		continue;
+	    }
+	}
+
+	/* New one to add. */
+	nfdd = os_hnd->mem_alloc(sizeof(*fdd));
+	if (!nfdd) {
+	    rv = ENOMEM;
+	    goto err;
+	}
+	nfdd->fd = i;
+	rv = os_hnd->add_fd_to_wait_for(os_hnd, i, snmp_check_read_fds,
+					NULL, NULL, &nfdd->id);
+	if (rv)
+	    goto err;
+
+	/* Insert after */
+	if (fdd) {
+	    nfdd->next = fdd->next;
+	    fdd->next = nfdd;
+	} else {
+	    nfdd->next = NULL;
+	    snmpfd = fdd;
+	}
+    }
+
+    if (!block) {
+	os_hnd->stop_timer(os_hnd, snmp_timer);
+    } else {
+	os_hnd->stop_timer(os_hnd, snmp_timer);
+	os_hnd->start_timer(os_hnd, snmp_timer, &tv, snmp_check_timeout, NULL);
+    }
+    return;
+
+ err:
+    fprintf(stderr, "Error handling SNMP fd data: %s\n", strerror(rv));
+    exit(1);
+}
 
 int
-snmp_init(selector_t *sel)
+snmp_init(os_handler_t *os_hnd)
 {
     struct snmp_session session;
 #ifdef HAVE_NETSNMP
     netsnmp_transport *transport = NULL;
     static char *snmp_default_port = "udp:162";
+    int rv;
+
+    rv = os_hnd->alloc_timer(os_hnd, &snmp_timer);
+    if (rv) {
+	fprintf(stderr, "Could not allocate SNMP timer\n");
+	return -1;
+    }
 
     netsnmp_ds_set_boolean(NETSNMP_DS_LIBRARY_ID,
 			   NETSNMP_DS_LIB_MIB_ERRORS,
@@ -216,14 +300,10 @@ snmp_init(selector_t *sel)
 	return -1;
     }
 
-    ipmi_sel_set_read_fds_handler(sel,
-				  snmp_add_read_fds,
-				  snmp_check_read_fds,
-				  snmp_check_timeout,
-				  NULL);
-
     return 0;
 }
+#else
+static void snmp_setup_fds(os_handler_t *os_hnd) { }
 #endif /* HAVE_UCDSNMP */
     
 int
@@ -241,9 +321,6 @@ main(int argc, char *argv[])
     ipmi_args_t      *con_parms[2];
     ipmi_con_t       *con[2];
     int              last_con = 0;
-    selector_t       *selector;
-
-
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -270,11 +347,17 @@ main(int argc, char *argv[])
 	}
     }
 
-    rv = ipmi_ui_init(&selector, full_screen);
+    rv = sel_alloc_selector_nothread(&ui_sel);
+    if (rv) {
+	fprintf(stderr, "Could not allocate selector\n");
+	exit(1);
+    }
+
+    rv = ipmi_ui_init(&ipmi_ui_cb_handlers, full_screen);
 
 #ifdef HAVE_UCDSNMP
     if (init_snmp) {
-	if (snmp_init(selector) < 0)
+	if (snmp_init(&ipmi_ui_cb_handlers) < 0)
 	    goto out;
     }
 #endif
@@ -300,7 +383,7 @@ main(int argc, char *argv[])
     for (i=0; i<last_con; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
 				 &ipmi_ui_cb_handlers,
-				 selector,
+				 NULL,
 				 &con[i]);
 	if (rv) {
 	    fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
@@ -318,7 +401,11 @@ main(int argc, char *argv[])
 	goto out;
     }
 
-    sel_select_loop(selector, NULL, 0, NULL);
+    for (;;) {
+      if (init_snmp)
+	  snmp_setup_fds(&ipmi_ui_cb_handlers);
+      ipmi_ui_cb_handlers.perform_one_op(&ipmi_ui_cb_handlers, NULL);
+    }
 
  out:
     ipmi_ui_shutdown();

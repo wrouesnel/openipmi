@@ -887,7 +887,7 @@ static os_handler_t ipmi_posix_thread_os_handler =
 };
 
 os_handler_t *
-ipmi_posix_thread_get_os_handler(void)
+ipmi_posix_thread_get_os_handler2(int wake_sig)
 {
     os_handler_t     *rv;
     pt_os_hnd_data_t *info;
@@ -918,7 +918,57 @@ ipmi_posix_thread_get_os_handler(void)
     }
 #endif
 
+    info->wake_sig = wake_sig;
+
     return rv;
+}
+
+os_handler_t *
+ipmi_posix_thread_get_os_handler(void)
+{
+    return ipmi_posix_thread_get_os_handler2(0);
+}
+
+struct sel_lock_s
+{
+    os_handler_t *os_hnd;
+    os_hnd_lock_t *lock;
+};
+
+static sel_lock_t *
+slock_alloc(void *cb_data)
+{
+    os_handler_t *os_hnd = cb_data;
+    sel_lock_t *l;
+
+    l = os_hnd->mem_alloc(sizeof(*l));
+    if (!l)
+	return NULL;
+    l->os_hnd = os_hnd;
+    if (os_hnd->create_lock(os_hnd, &l->lock)) {
+	os_hnd->mem_free(l);
+	l = NULL;
+    }
+    return l;
+}
+
+static void
+slock_free(sel_lock_t *l)
+{
+    l->os_hnd->destroy_lock(l->os_hnd, l->lock);
+    l->os_hnd->mem_free(l);
+}
+
+static void
+slock_lock(sel_lock_t *l)
+{
+    l->os_hnd->lock(l->os_hnd, l->lock);
+}
+
+static void
+slock_unlock(sel_lock_t *l)
+{
+    l->os_hnd->unlock(l->os_hnd, l->lock);
 }
 
 os_handler_t *
@@ -929,14 +979,15 @@ ipmi_posix_thread_setup_os_handler(int wake_sig)
     struct sigaction act;
     int              rv;
 
-    os_hnd = ipmi_posix_thread_get_os_handler();
+    os_hnd = ipmi_posix_thread_get_os_handler2(wake_sig);
     if (!os_hnd)
 	return NULL;
 
     info = os_hnd->internal_data;
-    info->wake_sig = wake_sig;
 
-    rv = sel_alloc_selector(os_hnd, &info->sel);
+    rv = sel_alloc_selector_thread(&info->sel, wake_sig,
+				   slock_alloc, slock_free,
+				   slock_lock, slock_unlock, os_hnd);
     if (rv) {
 	ipmi_posix_thread_free_os_handler(os_hnd);
 	os_hnd = NULL;

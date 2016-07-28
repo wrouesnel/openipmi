@@ -34,7 +34,6 @@
 #ifndef SELECTOR
 #define SELECTOR
 #include <sys/time.h> /* For timeval */
-#include <OpenIPMI/os_handler.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +44,21 @@ struct selector_s;
 typedef struct selector_s selector_t;
 
 /* You have to create a selector before you can use it. */
-int sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector);
+
+/* Create a selector for use with threads.  You have to pass in the
+   lock functions and a signal used to wake waiting threads. */
+typedef struct sel_lock_s sel_lock_t;
+int sel_alloc_selector_thread(selector_t **new_selector, int wake_sig,
+			      sel_lock_t *(*sel_lock_alloc)(void *cb_data),
+			      void (*sel_lock_free)(sel_lock_t *),
+			      void (*sel_lock)(sel_lock_t *),
+			      void (*sel_unlock)(sel_lock_t *),
+			      void *cb_data);
+
+  /* Create a selector for use in a single-threaded environment.  No
+     need for locks or wakeups.  This just call the above call with
+     NULL for all the values. */
+int sel_alloc_selector_nothread(selector_t **new_selector);
 
 /* Used to destroy a selector. */
 int sel_free_selector(selector_t *new_selector);
@@ -102,6 +115,18 @@ int sel_start_timer(sel_timer_t    *timer,
 		    struct timeval *timeout);
 
 int sel_stop_timer(sel_timer_t *timer);
+int sel_stop_timer_with_done(sel_timer_t *timer,
+			     sel_timeout_handler_t done_handler,
+			     void *cb_data);
+
+/* Use this for times provided to sel_start_time() */
+void sel_get_monotonic_time(struct timeval *tv);
+
+typedef struct sel_runner_s sel_runner_t;
+typedef void (*sel_runner_func_t)(sel_runner_t *runner, void *cb_data);
+int sel_alloc_runner(selector_t *sel, sel_runner_t **new_runner);
+int sel_free_runner(sel_runner_t *runner);
+int sel_run(sel_runner_t *runner, sel_runner_func_t func, void *cb_data);
 
 /* For multi-threaded programs, you will need to wake the selector
    thread if you add a timer to the top of the heap or change the fd
@@ -146,11 +171,18 @@ typedef void (*ipmi_sel_check_read_fds_cb)(selector_t *sel,
 					   void       *cb_data);
 typedef void (*ipmi_sel_check_timeout_cb)(selector_t *sel,
 					  void       *cb_data);
-void ipmi_sel_set_read_fds_handler(selector_t                 *sel, 
+void ipmi_sel_set_read_fds_handler(selector_t                 *sel,
 				   ipmi_sel_add_read_fds_cb   add,
 				   ipmi_sel_check_read_fds_cb handle,
 				   ipmi_sel_check_timeout_cb  timeout,
 				   void                       *cb_data);
+
+/* DEPRECATED - Do not use any more. */
+
+#include <OpenIPMI/deprecator.h>
+#include <OpenIPMI/os_handler.h>
+int sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
+  IPMI_FUNC_DEPRECATED;
 
 #ifdef __cplusplus
 }
