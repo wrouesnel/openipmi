@@ -220,12 +220,14 @@ extcmd_setval(void *baseloc, extcmd_info_t *t)
 static int
 process_extcmd_value(void *baseloc, extcmd_info_t *t, char *buf)
 {
-    while (buf) {
-	unsigned int len = strlen(t->name);
+    unsigned int len = strlen(t->name);
 
+    while (buf) {
+	while (*buf == '\n')
+	    buf++;
 	if ((strncmp(buf, t->name, len) == 0) && buf[len] == ':')
 	    return extcmd_getval(baseloc, t, buf + len + 1);
-	buf = strchr(buf, '\n') + 1;
+	buf = strchr(buf, '\n');
     }
     return EEXIST;
 }
