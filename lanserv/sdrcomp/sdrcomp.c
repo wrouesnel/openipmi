@@ -1682,9 +1682,9 @@ main(int argc, char *argv[])
 	help();
     }
 
-    f = fopen(argv[1], "r");
+    f = fopen(argv[argn], "r");
     if (!f) {
-	fprintf(stderr, "Unable to open input file %s\n", argv[1]);
+	fprintf(stderr, "Unable to open input file %s\n", argv[argn]);
 	exit(1);
     }
 
@@ -1696,7 +1696,7 @@ main(int argc, char *argv[])
 	}
     }
 
-    parse_file(argv[1], f, p, outraw, &sdrnum);
+    parse_file(argv[argn], f, p, outraw, &sdrnum);
 
     fclose(f);
 
