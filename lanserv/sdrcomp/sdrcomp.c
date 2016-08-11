@@ -170,7 +170,10 @@ static struct sdr_field_name sensor_type_fields[] = {
     { "Battery", 41 },
     { "Session_Audit", 42 },
     { "Version_Change", 43 },
-    { "FRU_State", 44 }
+    { "FRU_State", 44 },
+    { "picmg_FruHotSwap", 0xF0 },
+    { "picmg_IPMB0", 0xF1 },
+    { "picmg_ModuleHotSwap", 0xF2 },
 };
 
 static struct sdr_field_name sensor_access_fields[] = {
