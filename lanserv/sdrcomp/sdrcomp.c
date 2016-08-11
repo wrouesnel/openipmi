@@ -120,7 +120,10 @@ static struct sdr_field_name entity_id_fields[] = {
     { "pci_express_bus", 49 },
     { "scsi_bus", 50 },
     { "sata_/_sas_bus", 51 },
-    { "processor_/_front-side_bus", 52 }
+    { "processor_/_front-side_bus", 52 },
+    { "picmg_front", 0xa0 },
+    { "picmg_rtm", 0xc0 },
+    { "picmg_amc", 0xc1 },
 };
 
 static struct sdr_field_name sensor_type_fields[] = {
