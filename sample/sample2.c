@@ -281,15 +281,6 @@ main(int argc, char *argv[])
 
     progname = argv[0];
 
-    if (argc < 4) {
-	usage();
-	exit(1);
-    }
-
-    entity_id = strtoul(argv[1], NULL, 10);
-    entity_instance = strtoul(argv[2], NULL, 10);
-    control_name = argv[3];
-
     /* OS handler allocated first. */
     os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
     if (!os_hnd) {
@@ -301,6 +292,15 @@ main(int argc, char *argv[])
 
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);
+
+    if (argc < 4) {
+	usage();
+	exit(1);
+    }
+
+    entity_id = strtoul(argv[1], NULL, 10);
+    entity_instance = strtoul(argv[2], NULL, 10);
+    control_name = argv[3];
 
     rv = ipmi_parse_args2(&curr_arg, argc, argv, &args);
     if (rv) {
