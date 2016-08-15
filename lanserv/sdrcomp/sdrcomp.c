@@ -598,7 +598,7 @@ static struct sdr_field type2[] =
     { "unr_thrsh_settable",	SDR_BOOLBIT,	20, 5, 1 },
     { "uc_thrsh_settable",	SDR_BOOLBIT,	20, 4, 1 },
     { "unc_thrsh_settable",	SDR_BOOLBIT,	20, 3, 1 },
-    { "lnr_thresh_settable",	SDR_BOOLBIT,	20, 2, 1 },
+    { "lnr_thrsh_settable",	SDR_BOOLBIT,	20, 2, 1 },
     { "lc_thrsh_settable",	SDR_BOOLBIT,	20, 1, 1 },
     { "lnc_thrsh_settable",	SDR_BOOLBIT,	20, 0, 1 },
     { "unr_thrsh_readable",	SDR_BOOLBIT,	19, 5, 1 },
@@ -1482,10 +1482,22 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		fx = (((fval / pow(10, r_exp)) - ((double) b) * pow(10, b_exp))
 		      / ((double) m));
 
-		if (t[i].name[0] == 'u')
-		    fx = ceil(fx);
-		else if (t[i].name[0] != 'l')
-		    fx += .5; /* round */
+		/*
+		 * We always round here.  This means that a threshold
+		 * may be set that is on the "wrong side" of the
+		 * threshold, and the trigger may too sensitive.  Or
+		 * perhaps insensitive.  Of course, that can happen
+		 * without rounding, too.  There appears to be no easy
+		 * way to second-guess the user of this program and,
+		 * given a floating point value, figure out the proper
+		 * integer value they want. Instead, they are expected
+		 * to give a floating point value that will evaluate
+		 * very closely to the integer they want.  Rounding
+		 * should handle the issue of getting it right on the
+		 * integer value the user wants and avoid issues with
+		 * floating point imprecision.
+		 */
+		fx = round(fx);
 
 		if (fx < 0.0 || fx > 255.0) {
 		    err = -1;
