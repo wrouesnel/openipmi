@@ -54,7 +54,7 @@ struct sdr_field_name {
 struct sdr_field {
     char *name;
     enum { SDR_BITS, SDR_SBITS, SDR_MULTIBITS, SDR_MULTISBITS, SDR_MULTIBITS2,
-	   SDR_STRING, SDR_BOOLBIT, SDR_THRESH } type;
+	   SDR_STRING, SDR_BOOLBIT, SDR_THRESH, SDR_THRESHREL } type;
     /*
      * IMPORTANT: pos is offset + 1, the values given in the IPMI spec.
      * It is not zero-based.
@@ -479,7 +479,9 @@ static struct sdr_field type1[] =
     { "lc_fthresh",		SDR_THRESH,	41, 0, 8 },
     { "lnc_fthresh",		SDR_THRESH,	42, 0, 8 },
     { "positive_hysteresis",	SDR_BITS,	43, 0, 8 },
+    { "positive_fhysteresis",	SDR_THRESHREL,	43, 0, 8 },
     { "negative_hysteresis",	SDR_BITS,	44, 0, 8 },
+    { "negative_fhysteresis",	SDR_THRESHREL,	44, 0, 8 },
     { "oem",			SDR_BITS,	47, 0, 8 },
     { "id_string",		SDR_STRING,	48, 0, 8, .required = 1 },
 };
@@ -1456,6 +1458,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		break;
 
 	    case SDR_THRESH:
+	    case SDR_THRESHREL:
 	    {
 		double fval, fx;
 		int m, b, r_exp, b_exp;
@@ -1479,8 +1482,18 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		if (b_exp & (1 << 3))
 		    b_exp |= (~0 << 4);
 
-		fx = (((fval / pow(10, r_exp)) - ((double) b) * pow(10, b_exp))
-		      / ((double) m));
+		if (t[i].type == SDR_THRESHREL)
+		    /*
+		     * A threshold value, like hysteresis.  It's not
+		     * an absolute value, it's a relative value, so we
+		     * leave "b" out of the equation.  Note that this
+		     * only works for linear equations.
+		     */
+		    fx = (((fval / pow(10, r_exp))) / ((double) m));
+		else
+		    fx = (((fval / pow(10, r_exp))
+			   - ((double) b) * pow(10, b_exp))
+			  / ((double) m));
 
 		/*
 		 * We always round here.  This means that a threshold
