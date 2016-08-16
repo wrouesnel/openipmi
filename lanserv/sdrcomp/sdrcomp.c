@@ -124,6 +124,7 @@ static struct sdr_field_name entity_id_fields[] = {
     { "picmg_front", 0xa0 },
     { "picmg_rtm", 0xc0 },
     { "picmg_amc", 0xc1 },
+    { NULL }
 };
 
 static struct sdr_field_name sensor_type_fields[] = {
@@ -174,6 +175,7 @@ static struct sdr_field_name sensor_type_fields[] = {
     { "picmg_FruHotSwap", 0xF0 },
     { "picmg_IPMB0", 0xF1 },
     { "picmg_ModuleHotSwap", 0xF2 },
+    { NULL }
 };
 
 static struct sdr_field_name sensor_access_fields[] = {
@@ -295,7 +297,8 @@ static struct sdr_field_name base_unit_fields[] = {
     { "characters", 87 },
     { "error", 88 },
     { "correctable_error", 89 },
-    { "uncorrectable_error", 90 }
+    { "uncorrectable_error", 90 },
+    { NULL }
 };
 
 static struct sdr_field_name linearization_fields[] = {
