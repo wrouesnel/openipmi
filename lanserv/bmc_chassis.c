@@ -362,7 +362,8 @@ set_system_boot_options(lmc_data_t    *mc,
 	    break;
 	}
 	break;
-
+    case 3: /* BMC boot flag valid bit clearing, just ignore this for now. */
+	break;
     case 4: /* Boot Info Ack */
 	if (msg->len < 3) {
 	    rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
