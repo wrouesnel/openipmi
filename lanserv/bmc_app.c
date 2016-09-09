@@ -227,11 +227,15 @@ watchdog_timeout(void *cb_data)
     case IPMI_MC_WATCHDOG_ACTION_POWER_DOWN:
 	set_sensor_bit(mc, sens, 2, 1, 0xc2, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
+	if (bchan->stop_cmd)
+	    bchan->stop_cmd(bchan, 0);
 	break;
 
     case IPMI_MC_WATCHDOG_ACTION_POWER_CYCLE:
 	set_sensor_bit(mc, sens, 3, 1, 0xc3, mc->watchdog_use & 0xf, 0xff, 1);
 	bchan->hw_op(bchan, HW_OP_POWEROFF);
+	if (bchan->stop_cmd)
+	    bchan->stop_cmd(bchan, 0);
 	start_poweron_timer(mc);
 	break;
     }

@@ -182,7 +182,6 @@ struct channel_s
 #define HW_OP_IRQ_DISABLE	5
 #define HW_OP_GRACEFUL_SHUTDOWN	6
 #define HW_OP_CHECK_POWER	7
-#define HW_OP_FORCEOFF		8
     unsigned int hw_capabilities; /* Bitmask of above bits for capabilities. */
 #define HW_OP_CAN_RESET(chan) ((chan)->hw_capabilities & (1 << HW_OP_RESET))
 #define HW_OP_CAN_POWER(chan) ((chan)->hw_capabilities & (1 << HW_OP_POWERON))

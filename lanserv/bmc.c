@@ -797,9 +797,7 @@ handle_tick(void *info, unsigned int seconds)
 	    /* Waiting for the first kill */
 	    mc->startcmd.wait_poweroff--;
 	    if (mc->startcmd.wait_poweroff == 0) {
-		if (HW_OP_CAN_POWER(mc->channels[15]))
-		    mc->channels[15]->hw_op(mc->channels[15], HW_OP_FORCEOFF);
-		else if (mc->startcmd.vmpid)
+		if (mc->startcmd.vmpid)
 		    ipmi_do_kill(&mc->startcmd, 0);
 		mc->startcmd.wait_poweroff = -mc->startcmd.kill_wait_time;
 	    }

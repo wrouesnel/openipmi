@@ -745,7 +745,8 @@ tm_setup(serserv_data_t *si)
 #define   VM_CAPABILITIES_IRQ	0x04
 #define   VM_CAPABILITIES_NMI	0x08
 #define   VM_CAPABILITIES_ATTN	0x10
-#define VM_CMD_FORCEOFF		0x09
+#define   VM_CAPABILITIES_GRACEFUL_SHUTDOWN 0x20
+#define VM_CMD_GRACEFUL_SHUTDOWN 0x09
 
 struct vm_data {
     unsigned char recv_msg[IPMI_SIM_MAX_MSG_LENGTH + 4];
@@ -806,6 +807,8 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 	    return;
 	if (imsg[1] & VM_CAPABILITIES_POWER)
 	    si->channel.hw_capabilities |= (1 << HW_OP_POWERON);
+	if (imsg[1] & VM_CAPABILITIES_GRACEFUL_SHUTDOWN)
+	    si->channel.hw_capabilities |= (1 << HW_OP_GRACEFUL_SHUTDOWN);
 	if (imsg[1] & VM_CAPABILITIES_RESET)
 	    si->channel.hw_capabilities |= (1 << HW_OP_RESET);
 	if (imsg[1] & VM_CAPABILITIES_IRQ)
@@ -961,9 +964,9 @@ vm_hw_op(channel_t *chan, unsigned int op)
 	    chan->stop_cmd(chan, !si->connected);
 	break;
 	
-    case HW_OP_FORCEOFF:
+    case HW_OP_GRACEFUL_SHUTDOWN:
 	if (si->connected)
-	    vm_add_char(VM_CMD_FORCEOFF, c, &len);
+	    vm_add_char(VM_CMD_GRACEFUL_SHUTDOWN, c, &len);
 	break;
 	
     case HW_OP_SEND_NMI:
