@@ -1087,6 +1087,8 @@ debug_cmd(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    level |= DEBUG_RAW_MSG;
 	} else if (strcmp(tok, "msg") == 0) {
 	    level |= DEBUG_MSG;
+	} else if (strcmp(tok, "sol") == 0) {
+	    level |= DEBUG_SOL;
 	} else {
 	    out->printf(out, "Invalid debug level '%s', options are 'raw' and 'msg'\n",
 		   tok);

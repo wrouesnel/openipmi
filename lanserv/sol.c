@@ -574,9 +574,10 @@ sol_tcp_initialize(ipmi_sol_t *sol)
     if (rv == -1) {
 	close(sd->fd);
 	sd->fd = -1;
-	sd->logchan->log(sd->logchan, OS_ERROR, NULL,
-			 "Error connecting tcp sol port socket for %s:%s: %s",
-			 sol->tcpdest, sol->tcpport, strerror(errno));
+	if (sd->sys->debug & DEBUG_SOL)
+	    sd->logchan->log(sd->logchan, OS_ERROR, NULL,
+			   "Error connecting tcp sol port socket for %s:%s: %s",
+			   sol->tcpdest, sol->tcpport, strerror(errno));
 	goto out;
     }
 

@@ -328,6 +328,7 @@ struct sys_data_s {
 
 #define DEBUG_RAW_MSG	(1 << 0)
 #define DEBUG_MSG	(1 << 1)
+#define DEBUG_SOL	(1 << 2)
     unsigned int debug;
 
 #define NEW_SESSION			1
