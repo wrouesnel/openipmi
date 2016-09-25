@@ -86,7 +86,7 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     unsigned int   l = *payload_len;
     unsigned int   i;
     unsigned char  *d;
-    EVP_CIPHER_CTX ctx;
+    EVP_CIPHER_CTX *ctx;
     int            rv;
     int            outlen;
     int            tmplen;
@@ -133,15 +133,19 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     *header_len -= 16;
     *max_payload_len += 16;
 
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+	    rv = ENOMEM;
+	    goto out_cleanup;
+    }
     /* Ok, we're set to do the crypt operation. */
-    EVP_CIPHER_CTX_init(&ctx);
-    EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, iv);
-    EVP_CIPHER_CTX_set_padding(&ctx, 0);
-    if (!EVP_EncryptUpdate(&ctx, *payload, &outlen, d, l)) {
+    EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, info->k2, iv);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+    if (!EVP_EncryptUpdate(ctx, *payload, &outlen, d, l)) {
 	rv = ENOMEM; /* right? */
 	goto out_cleanup;
     }
-    if (!EVP_EncryptFinal_ex(&ctx, (*payload) + outlen, &tmplen)) {
+    if (!EVP_EncryptFinal_ex(ctx, (*payload) + outlen, &tmplen)) {
 	rv = ENOMEM; /* right? */
 	goto out_cleanup;
     }
@@ -154,7 +158,7 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     *payload_len = outlen + 16;
 
  out_cleanup:
-    EVP_CIPHER_CTX_cleanup(&ctx);
+    EVP_CIPHER_CTX_free(ctx);
     ipmi_mem_free(d);
 
     return rv;
@@ -170,7 +174,7 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     unsigned int   l = *payload_len;
     unsigned char  *d;
     unsigned char  *p;
-    EVP_CIPHER_CTX ctx;
+    EVP_CIPHER_CTX *ctx;
     int            outlen;
     int            rv = 0;
     unsigned char  *pad;
@@ -195,10 +199,14 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     memcpy(d, p, l);
 
     /* Ok, we're set to do the decrypt operation. */
-    EVP_CIPHER_CTX_init(&ctx);
-    EVP_DecryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, *payload);
-    EVP_CIPHER_CTX_set_padding(&ctx, 0);
-    if (!EVP_DecryptUpdate(&ctx, p, &outlen, d, l)) {
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+	    rv = ENOMEM;
+	    goto out_cleanup;
+    }
+    EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, info->k2, *payload);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+    if (!EVP_DecryptUpdate(ctx, p, &outlen, d, l)) {
 	rv = EINVAL;
 	goto out_cleanup;
     }
@@ -231,7 +239,7 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     *payload_len = outlen;
 
  out_cleanup:
-    EVP_CIPHER_CTX_cleanup(&ctx);
+    EVP_CIPHER_CTX_free(ctx);
     ipmi_mem_free(d);
     return rv;
 }
