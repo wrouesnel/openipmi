@@ -39,6 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -1616,8 +1617,15 @@ fru_sem_trywait(fru_data_t *fru)
 
     /* Wait 250ms for the semaphore. */
   restart:
-    ts.tv_sec = 0;
-    ts.tv_nsec = 250000000;
+    rv = clock_gettime(CLOCK_REALTIME, &ts);
+    if (rv == -1)
+	return errno;
+
+    ts.tv_nsec += 250000000;
+    if (ts.tv_nsec >= 1000000000) {
+	ts.tv_nsec -= 1000000000;
+	ts.tv_sec += 1;
+    }
     rv = sem_timedwait(&fru->sem, &ts);
     if (rv) {
 	if (rv == EINTR)
