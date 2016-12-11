@@ -1381,8 +1381,10 @@ hash_lan_addr(const struct sockaddr *addr)
 	{
 	    /* Use the lower 4 bytes of the IPV6 address. */
 	    struct sockaddr_in6 *iaddr = (struct sockaddr_in6 *) addr;
-	    idx = htonl(*((uint32_t *) &iaddr->sin6_addr.s6_addr[12]));
-	    idx %= LAN_HASH_SIZE;
+	    idx = iaddr->sin6_addr.s6_addr[12];
+	    idx |= iaddr->sin6_addr.s6_addr[13] << 8;
+	    idx |= iaddr->sin6_addr.s6_addr[14] << 16;
+	    idx |= iaddr->sin6_addr.s6_addr[15] << 24;
 	    break;
 	}
 #endif
