@@ -2196,25 +2196,24 @@ ipmi_get_all_sels(ipmi_sel_info_t *sel,
 	    rv = EINVAL;
 	    goto out_unlock;
 	}
-	for (i=0; ; ) {
+	for (i = 0; ; ) {
 	    sel_event_holder_t *holder = ilist_get(&iter);
 
-	    if (! holder->deleted) {
-		array[i] = ipmi_event_dup(holder->event);
-	    }
-	    i++;
+	    if (holder->deleted)
+		continue;
+
+	    array[i++] = ipmi_event_dup(holder->event);
 	    if (i < sel->num_sels) {
 		if (! ilist_next(&iter)) {
 		    rv = EINVAL;
-		    i--;
-		    while (i >= 0)
-			ipmi_event_free(array[i]);
+		    while (i > 0)
+			ipmi_event_free(array[--i]);
 		    goto out_unlock;
 		}
 	    } else
 		break;
 	}
-	*array_size = sel->num_sels;
+	*array_size = i;
     }
 
  out_unlock:
