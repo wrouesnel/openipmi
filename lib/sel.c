@@ -2199,10 +2199,8 @@ ipmi_get_all_sels(ipmi_sel_info_t *sel,
 	for (i = 0; ; ) {
 	    sel_event_holder_t *holder = ilist_get(&iter);
 
-	    if (holder->deleted)
-		continue;
-
-	    array[i++] = ipmi_event_dup(holder->event);
+	    if (!holder->deleted)
+		array[i++] = ipmi_event_dup(holder->event);
 	    if (i < sel->num_sels) {
 		if (! ilist_next(&iter)) {
 		    rv = EINVAL;
