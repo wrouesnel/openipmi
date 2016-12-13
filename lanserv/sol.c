@@ -190,7 +190,7 @@ uucp_fname_lock(char *buf, const char *devname)
 static int
 write_full(int fd, char *data, size_t count)
 {
-    size_t written;
+    ssize_t written;
 
  restart:
     while ((written = write(fd, data, count)) > 0) {
@@ -263,7 +263,7 @@ uucp_mk_lock(sys_data_t *sys, const char *devname)
 
 	if (pid == 0) {
 	    int mask;
-	    size_t rv;
+	    int rv;
 
 	    mask = umask(022);
 	    fd = open(lck_file, O_WRONLY | O_CREAT | O_EXCL, 0666);
