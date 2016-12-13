@@ -137,7 +137,7 @@ timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     struct timeval diff;
     int            rv;
 
-    printf("Timeout!\n");
+    fprintf(stderr, "Timeout!\n");
     test_os_hnd->get_monotonic_time(test_os_hnd, &now);
     diff_timeval(&diff, &now, then);
     if (expect_timeout == 0) {
@@ -174,11 +174,11 @@ test_os_handler(os_handler_t *os_hnd, os_handler_waiter_factory_t *factory)
     /* Override the default log handler (so I can catch them). */
     os_hnd->set_log_handler(os_hnd, my_vlog);
 
-    printf("Log test\n");
+    fprintf(stderr, "Log test\n");
     os_hnd->log(os_hnd, IPMI_LOG_FATAL, "This is a test: %d %s",
 		47, "Hello");
 
-    printf("Timer test\n");
+    fprintf(stderr, "Timer test\n");
     timer_waiter = os_handler_alloc_waiter(factory);
     if (!timer_waiter)
 	err_leave(0, "Unable to allocate waiter\n");
@@ -224,7 +224,7 @@ main(int argc, char *argv[])
     os_handler_t *os_hnd;
     int          rv;
 
-    printf("*** Testing POSIX OS handler\n");
+    fprintf(stderr, "*** Testing POSIX OS handler\n");
     reset_tests();
     os_hnd = ipmi_posix_setup_os_handler();
     if (!os_hnd) {
@@ -240,7 +240,7 @@ main(int argc, char *argv[])
 	err_leave(rv, "Unable to allocate waiter factory\n");
     test_os_handler(os_hnd, factory);
 
-    printf("*** Testing POSIX Threaded OS handler (multithread)\n");
+    fprintf(stderr, "*** Testing POSIX Threaded OS handler (singlethread)\n");
     reset_tests();
     os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
     if (!os_hnd) {
@@ -252,8 +252,7 @@ main(int argc, char *argv[])
     if (rv)
 	err_leave(rv, "Unable to allocate waiter factory\n");
     test_os_handler(os_hnd, factory);
-
-    printf("*** Testing POSIX Threaded OS handler (singlethread)\n");
+    fprintf(stderr, "*** Testing POSIX Threaded OS handler (multithread)\n");
     reset_tests();
     os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
     if (!os_hnd) {
