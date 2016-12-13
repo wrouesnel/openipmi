@@ -435,6 +435,13 @@ void os_handler_waiter_release(os_handler_waiter_t *waiter);
 int os_handler_waiter_wait(os_handler_waiter_t *waiter,
 			   struct timeval      *timeout);
 
+/*
+ * This is for shutting down to a level that you can restart the
+ * system again.  It basically removes the built-in OS handler
+ * used for memory allocation so it can be re-assigned.
+ */
+void os_handler_global_shutdown(void);
+
 #ifdef __cplusplus
 }
 #endif

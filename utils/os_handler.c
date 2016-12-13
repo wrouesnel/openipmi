@@ -184,6 +184,8 @@ single_waiter_thread(void *data)
 
 extern int ipmi_malloc_init(os_handler_t *os_hnd);
 
+extern void ipmi_malloc_shutdown(void);
+
 int
 os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
 				unsigned int num_threads,
@@ -262,6 +264,12 @@ os_handler_alloc_waiter_factory(os_handler_t *os_hnd,
     *factory = nf;
 
     return 0;
+}
+
+void
+os_handler_global_shutdown(void)
+{
+    ipmi_malloc_shutdown();
 }
 
 int

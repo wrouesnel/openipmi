@@ -82,7 +82,7 @@ void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, const char *format, ...)
 
 int __ipmi_debug_malloc = 0;
 
-os_handler_t *malloc_os_hnd;
+static os_handler_t *malloc_os_hnd = NULL;
 
 struct dbg_malloc_header
 {
@@ -471,4 +471,10 @@ ipmi_malloc_init(os_handler_t *os_hnd)
     if (!malloc_os_hnd)
 	malloc_os_hnd = os_hnd;
     return 0;
+}
+
+void
+ipmi_malloc_shutdown(void)
+{
+    malloc_os_hnd = NULL;
 }

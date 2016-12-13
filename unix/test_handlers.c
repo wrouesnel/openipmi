@@ -205,6 +205,7 @@ test_os_handler(os_handler_t *os_hnd, os_handler_waiter_factory_t *factory)
     if (rv)
 	err_leave(rv, "Error freeing factory\n");
 
+    os_handler_global_shutdown();
     os_hnd->free_os_handler(os_hnd);
 }
 
