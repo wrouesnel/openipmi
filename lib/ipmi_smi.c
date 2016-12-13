@@ -948,9 +948,11 @@ smi_send_command(ipmi_con_t            *ipmi,
     ipmi_addr_t   *addr = (ipmi_addr_t *) addr_data;
     ipmi_msgi_t   *rspi = trspi;
 
-    *addr = *iaddr;
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
+
+    memset(addr, 0, sizeof(*addr));
+    memcpy(addr, iaddr, addr_len);
 
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EINVAL;
