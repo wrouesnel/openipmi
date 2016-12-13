@@ -1513,30 +1513,6 @@ add_stat(ipmi_con_t *ipmi, int stat, int count)
     locked_list_iterate(lan->lan_stat_list, add_stat_cb, &sinfo);
 }
 
-static inline void
-diff_timeval(struct timeval *dest,
-             struct timeval *left,
-             struct timeval *right)
-{
-    if (   (left->tv_sec < right->tv_sec)
-        || (   (left->tv_sec == right->tv_sec)
-            && (left->tv_usec < right->tv_usec)))
-    {
-        /* If left < right, just force to zero, don't allow negative
-           numbers. */
-        dest->tv_sec = 0;
-        dest->tv_usec = 0;
-        return;
-    }
-
-    dest->tv_sec = left->tv_sec - right->tv_sec;
-    dest->tv_usec = left->tv_usec - right->tv_usec;
-    while (dest->tv_usec < 0) {
-        dest->tv_usec += 1000000;
-        dest->tv_sec--;
-    }
-}
-
 /* Must be called with the ipmi read or write lock. */
 static int lan_valid_ipmi(ipmi_con_t *ipmi)
 {
