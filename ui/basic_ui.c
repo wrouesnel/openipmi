@@ -397,7 +397,7 @@ main(int argc, char *argv[])
     rv = ipmi_open_domain("first", con, last_con, ipmi_ui_setup_done,
 			  NULL, NULL, NULL, NULL, 0, &domain_id);
     if (rv) {
-	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
+	fprintf(stderr, "ipmi_open_domain: %s\n", strerror(rv));
 	goto out;
     }
 
