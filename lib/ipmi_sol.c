@@ -3088,7 +3088,7 @@ handle_get_channel_payload_support_response(ipmi_sol_conn_t *conn,
 	return;
     }
 
-    if (!(msg_in->data[1] && (1 << IPMI_RMCPP_PAYLOAD_TYPE_SOL))) {
+    if (!(msg_in->data[1] & (1 << IPMI_RMCPP_PAYLOAD_TYPE_SOL))) {
 	/* SoL is not supported! */
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_sol.c(handle_get_channel_payload_support_response): "
