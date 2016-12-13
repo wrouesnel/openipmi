@@ -1893,7 +1893,7 @@ set_done(ipmi_pef_t *pef,
 	 void       *cb_data)
 {
     ipmi_pef_config_t *pefc = cb_data;
-    unsigned char     data[MAX_IPMI_DATA_SIZE];
+    unsigned char     data[MAX_IPMI_DATA_SIZE] = { 0, 0 };
     pefparms_t        *lp = &(pefparms[pefc->curr_parm]);
     unsigned int      length;
 

@@ -1773,7 +1773,7 @@ set_done(ipmi_lanparm_t *lanparm,
 	 void           *cb_data)
 {
     ipmi_lan_config_t *lanc = cb_data;
-    unsigned char     data[MAX_IPMI_DATA_SIZE];
+    unsigned char     data[MAX_IPMI_DATA_SIZE] = { 0, 0 };
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
     if (err == IPMI_IPMI_ERR_VAL(0x82)) {
