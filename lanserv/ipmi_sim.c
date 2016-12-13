@@ -972,6 +972,7 @@ console_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	err = write(rv, msg, strlen(msg));
 	close(rv);
 	free(newcon);
+	return;
     }
 
     newcon->next = misc->consoles;

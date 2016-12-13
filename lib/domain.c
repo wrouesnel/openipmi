@@ -845,7 +845,7 @@ static int con_register_stat(ipmi_ll_stat_info_t *info,
 			     const char          *instance,
 			     void                **stat)
 {
-    ipmi_domain_stat_t *rstat;
+    ipmi_domain_stat_t *rstat = NULL;
     int                rv;
     ipmi_domain_t      *domain = ipmi_ll_con_stat_get_user_data(info);
 
