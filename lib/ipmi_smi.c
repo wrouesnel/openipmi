@@ -703,6 +703,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 
     ipmi_mem_free(cmd);
     cmd = NULL; /* It's gone after this point. */
+    recv->msgid = 0;
 
     ipmi_handle_rsp_item_copymsg(ipmi, rspi, &recv->msg, rsp_handler);
 
