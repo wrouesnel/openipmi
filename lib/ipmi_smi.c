@@ -392,7 +392,7 @@ open_smi_fd(int if_num, int *reterr)
 {
     char devname[30];
     int  fd;
-    int  err;
+    int  err = 0;
 
     sprintf(devname, "/dev/ipmidev/%d", if_num);
     fd = open(devname, O_RDWR);
