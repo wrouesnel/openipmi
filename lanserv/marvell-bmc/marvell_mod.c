@@ -512,14 +512,17 @@ get_uintval(const char *fname, unsigned int *val)
 {
     FILE *f;
     char line[80];
-    int rv;
+    size_t rv;
 
     f = fopen(fname, "r");
     if (!f)
        return errno;
     rv = fread(line, 1, sizeof(line), f);
-    if (rv <= 0) {
-	int retval = errno;
+    if (rv == 0) {
+        int retval = 0;
+        if (ferror(f)) {
+            retval = errno;
+        }
 	fclose(f);
 	return retval;
     }
@@ -536,14 +539,17 @@ get_intval(const char *fname, int *val)
 {
     FILE *f;
     char line[80];
-    int rv;
+    size_t rv;
 
     f = fopen(fname, "r");
     if (!f)
        return errno;
     rv = fread(line, 1, sizeof(line), f);
-    if (rv == -1) {
-	int retval = errno;
+    if (rv == 0) {
+        int retval = 0;
+        if (ferror(f)) {
+            retval = errno;
+        }
 	fclose(f);
 	return retval;
     }
