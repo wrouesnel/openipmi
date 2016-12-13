@@ -3958,7 +3958,7 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
     int                          num;
     int                          len;
 
-    if ((index >= 0) && (index < NUM_FRUL_ENTRIES)) {
+    if (index < NUM_FRUL_ENTRIES) {
 	num = 0;
 	rv = ipmi_fru_get(fru, index, name, &num, NULL, NULL, NULL, NULL,
 			  NULL);
@@ -4074,11 +4074,11 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
     ipmi_fru_t     *fru = _ipmi_fru_node_get_data(pnode);
     fru_data_rep_t *p;
 
-    if ((index < 0) || (index > (int) NUM_FRUL_ENTRIES))
+    if (index > NUM_FRUL_ENTRIES)
 	return EINVAL;
 
     p = frul + index;
-    if ((index >= 0) && (index < NUM_FRUL_ENTRIES)) {
+    if (index < NUM_FRUL_ENTRIES) {
 	if (p->hasnum) {
 	    /* Insert/delete array indexes. */
 	    if (intval >= 0) {
@@ -4148,7 +4148,7 @@ fru_node_settable(ipmi_fru_node_t           *node,
 {
     fru_data_rep_t *p;
 
-    if ((index >= 0) && (index < (int) NUM_FRUL_ENTRIES)) {
+    if (index < NUM_FRUL_ENTRIES) {
 	p = frul + index;
 	if (p->settable)
 	    return 0;

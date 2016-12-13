@@ -1473,17 +1473,17 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		m = get_sdr_bits(sdr, 25, 0, 8);
 		m |= get_sdr_bits(sdr, 26, 6, 2) << 8;
 		if (m & (1 << 9))
-		    m |= (~0 << 10);
+		    m |= (~0U << 10);
 		b = get_sdr_bits(sdr, 27, 0, 8);
 		b |= get_sdr_bits(sdr, 28, 6, 2) << 8;
 		if (b & (1 << 9))
-		    b |= (~0 << 10);
+		    b |= (~0U << 10);
 		r_exp = get_sdr_bits(sdr, 30, 4, 4);
 		if (r_exp & (1 << 3))
-		    r_exp |= (~0 << 4);
+		    r_exp |= (~0U << 4);
 		b_exp = get_sdr_bits(sdr, 30, 0, 4);
 		if (b_exp & (1 << 3))
-		    b_exp |= (~0 << 4);
+		    b_exp |= (~0U << 4);
 
 		if (t[i].type == SDR_THRESHREL)
 		    /*

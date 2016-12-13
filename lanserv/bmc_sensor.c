@@ -1514,9 +1514,7 @@ sensor_poll(void *cb_data)
 	}
 	
 	if (sensor->event_reading_code == IPMI_EVENT_READING_TYPE_THRESHOLD) {
-	    if (val < 0)
-		val = 0;
-	    else if (val > 255)
+	    if (val > 255)
 		val = 255;
 	    set_sensor_value(mc, sensor, val, 1);
 	} else {
