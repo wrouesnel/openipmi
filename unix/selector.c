@@ -988,14 +988,14 @@ sel_select(selector_t      *sel,
 	   struct timeval  *timeout)
 {
     int             err;
-    struct timeval  loc_timeout;
+    struct timeval  loc_timeout = { 0, 0 };
     sel_wait_list_t wait_entry;
 
     sel_timer_lock(sel);
     process_runners(sel);
-    process_timers(sel, (struct timeval *)(&loc_timeout));
+    process_timers(sel, &loc_timeout);
     if (timeout) {
-	if (cmp_timeval((struct timeval *)(&loc_timeout), timeout) >= 0)
+	if (cmp_timeval(&loc_timeout, timeout) >= 0)
 	    memcpy(&loc_timeout, timeout, sizeof(loc_timeout));
     }
     add_sel_wait_list(sel, &wait_entry, send_sig, cb_data, thread_id,
