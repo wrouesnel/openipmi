@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <math.h>
@@ -43,8 +44,22 @@
 #include <OpenIPMI/ipmi_string.h>
 
 #include "persist.c"
+#include "string.c"
 
 #define MAX_SDR_LINE 256
+
+static FILE *outfile;
+static char *outfname = NULL;
+
+static void
+out_err(int err)
+{
+    if (outfname) {
+	unlink(outfname);
+    }
+
+    exit(err);
+}
 
 struct sdr_field_name {
     char *name;
@@ -1590,7 +1605,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 		fprintf(stderr,
 			"%s:%3d: Invalid input, expecting \"sdr type <n>\"\n",
 			filename, line);
-		exit(1);
+		out_err(1);
 	    }
 
 	    err = get_uint(&tokptr, &sdrtype, &errstr, NULL);
@@ -1599,7 +1614,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 			"%s:%3d: Invalid input, expecting \"sdr type <n>\":"
 			" %s\n",
 			filename, line, errstr);
-		exit(1);
+		out_err(1);
 	    }
 
 	    err = ipmi_compile_sdr(f, sdrtype, &sdr, &sdrlen, &errstr, &errstr2,
@@ -1610,19 +1625,19 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 			    errstr, errstr2);
 		else
 		    fprintf(stderr, "%s:%3d: %s\n", filename, line, errstr);
-		exit(1);
+		out_err(1);
 	    }
 
 	    sdr[0] = *sdrnum & 0xff;
 	    sdr[1] = (*sdrnum >> 8) & 0xff;
 
 	    if (outraw) {
-		fwrite(sdr, sdrlen, 1, stdout);
+		fwrite(sdr, sdrlen, 1, outfile);
 	    } else {
 		err = add_persist_data(p, sdr, sdrlen, "%d", *sdrnum);
 		if (err) {
 		    fprintf(stderr, "Out of memory\n");
-		    exit(1);
+		    out_err(1);
 		}
 	    }
 	    (*sdrnum)++;
@@ -1635,7 +1650,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 		fprintf(stderr,
 			"%s:%3d: Invalid input, expecting variable name\n",
 			filename, line);
-		exit(1);
+		out_err(1);
 	    }
 
 	    err = get_delim_str(&tokptr, &value, &errstr);
@@ -1643,12 +1658,12 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 		fprintf(stderr,
 			"%s:%3d: Invalid value, expecting quote delimited"
 			" string: %s\n", filename, line, errstr);
-		exit(1);
+		out_err(1);
 	    }
 	    
 	    err = add_variable(name, value);
 	    if (err)
-		exit(1);
+		out_err(1);
 	} else if (strcmp(tok, "include") == 0) {
 	    const char *nfilename;
 	    FILE *f2;
@@ -1658,14 +1673,14 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 		fprintf(stderr,
 			"%s:%3d: Invalid filename, expecting quote delimited"
 			" string: %s\n", filename, line, errstr);
-		exit(1);
+		out_err(1);
 	    }
 
 	    f2 = fopen(nfilename, "r");
 	    if (!f2) {
 		fprintf(stderr, "%s:%3d: Unable to open included file %s\n",
 			filename, line, nfilename);
-		exit(1);
+		out_err(1);
 	    }
 
 	    parse_file(nfilename, f2, p, outraw, sdrnum);
@@ -1675,7 +1690,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 	    fprintf(stderr, "%s:%3d: Invalid input,"
 		    " expecting \"sdr type <n>\"\n",
 		    filename, line);
-	    exit(1);
+	    out_err(1);
 	}
     }
 
@@ -1691,6 +1706,7 @@ main(int argc, char *argv[])
     int outraw = 0;
 
     progname = argv[0];
+    outfile = stdout;
 
     for (argn = 1; argn < argc; argn++) {
 	if (argv[argn][0] != '-')
@@ -1699,6 +1715,13 @@ main(int argc, char *argv[])
 	    break;
 	if (strcmp(argv[argn], "-r") == 0) {
 	    outraw = 1;
+	} else if (strcmp(argv[argn], "-o") == 0) {
+	    argn++;
+	    if (argn == argc) {
+		fprintf(stderr, "No value supplied for -o\n");
+		exit(1);
+	    }
+	    outfname = argv[argn];
 	} else {
 	    fprintf(stderr, "Invalid option: %s\n", argv[argn]);
 	    exit(1);
@@ -1716,10 +1739,25 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
+    argn++;
+    if (argn < argc) {
+	fprintf(stderr, "Extra arguments at end: %s\n", argv[argn]);
+	exit(1);
+    }
+
     if (!outraw) {
 	p = alloc_persist("");
 	if (!p) {
 	    fprintf(stderr, "Out of memory\n");
+	    exit(1);
+	}
+    }
+
+    if (outfname) {
+	outfile = fopen(outfname, "w");
+	if (!outfile) {
+	    fprintf(stderr, "Unable to open output file %s: %s\n",
+		    outfname, strerror(errno));
 	    exit(1);
 	}
     }
@@ -1730,7 +1768,7 @@ main(int argc, char *argv[])
 
     if (!outraw) {
 	add_persist_int(p, time(NULL), "last_add_time");
-	write_persist_file(p, stdout);
+	write_persist_file(p, outfile);
 	free_persist(p);
     }
 
