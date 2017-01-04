@@ -46,16 +46,23 @@ ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 
 man_MANS = ipmilan.8 ipmi_lan.5 ipmi_sim.1 ipmi_sim_cmd.5
 
-EXTRA_DIST = atca.emu README.vm lan.conf ipmisim1.emu $(man_MANS)
+READMES = README.ipmi_sim README.vm README.design README.yourownbmc
+EXTRA_DIST = atca.emu lan.conf ipmisim1.emu ipmisim1.sdrs \
+	$(man_MANS) $(READMES)
 
 install-data-local:
 	$(INSTALL) -m 755 -d "$(DESTDIR)$(sysconfdir)/ipmi/"; \
 	$(INSTALL) -m 644 $(srcdir)/lan.conf "$(DESTDIR)$(sysconfdir)/ipmi/"; 
 	$(INSTALL) -m 644 $(srcdir)/ipmisim1.emu "$(DESTDIR)$(sysconfdir)/ipmi/"; 
 
+noinst_DATA = ipmisim1.bsdr
+
+ipmisim1.bsdr: $(top_srcdir)/lanserv/ipmisim1.sdrs sdrcomp/sdrcomp_build
+	sdrcomp/sdrcomp_build -o $@ $<
+
 uninstall-local:
 	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/lan.conf"
 	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/sim.emu"
 	-rmdir "$(DESTDIR)$(sysconfdir)/ipmi" 2>/dev/null
 
-CLEANFILES = libIPMIlanserv.map
+CLEANFILES = libIPMIlanserv.map ipmisim1.bsdr
