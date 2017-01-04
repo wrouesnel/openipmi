@@ -1,0 +1,98 @@
+This is the IPMI simulator, which can perform the function of a BMC.
+It can act as a real BMC, too, see README.yourownbmc for details.
+
+Unfortunately, the documentation is lacking at the moment.  The
+available docs will have to suffice at the moment.
+
+There are some example config files in this directory.  If you want
+to just try it out, you can run:
+
+  mkdir my_statedir
+  ./ipmi_sim lan.conf -f ipmisim1.emu -s my_statedir
+
+You will be a BMC on your host at 9001.  Then you can do, for instance:
+
+  cminyard@t430:~$ ipmitool -I lanplus -U ipmiusr -P test -p 9001 -H localhost mc info
+  Device ID                 : 0
+  Device Revision           : 3
+  Firmware Revision         : 9.08
+  IPMI Version              : 2.0
+  Manufacturer ID           : 4753
+  Manufacturer Name         : Unknown (0x1291)
+  Product ID                : 3842 (0x0f02)
+  Product Name              : Unknown (0xF02)
+  Device Available          : yes
+  Provides Device SDRs      : no
+  Additional Device Support :
+      Sensor Device
+      SDR Repository Device
+      SEL Device
+      FRU Inventory Device
+      IPMB Event Receiver
+      Chassis Device
+  Aux Firmware Rev Info     : 
+      0x00
+      0x00
+      0x00
+      0x00
+
+Unfortunately, you won't get any SDRs by default, the SDR repository
+will be empty:
+
+  cminyard@t430:~$ ipmitool -I lanplus -U ipmiusr -P test -p 9001 -H localhost sdr list
+  SDRR successfully erased
+  Err in cmd get sensor sdr info
+  Get SDR 0000 command failed: Requested sensor, data, or record not found
+  Get SDR 0000 command failed: Requested sensor, data, or record not found
+  Get SDR 0000 command failed: Requested sensor, data, or record not found
+  Get SDR 0000 command failed: Requested sensor, data, or record not found
+  Get SDR 0000 command failed: Requested sensor, data, or record not found
+
+To fix this, you have to install SDRs in the state directory.  The
+SDRs should already be build for you, so you just have to copy them
+in.  If you look in the my_statedir directory, you will see that it
+has created some directories:
+
+cminyard@t430:~/git/openipmi/O/lanserv$ ls -lR my_statedir/
+  my_statedir/:
+  total 4
+  drwxr-xr-x 3 cminyard cminyard 4096 Jan  4 14:54 ipmi_sim
+
+  my_statedir/ipmi_sim:
+  total 4
+  drwxr-xr-x 2 cminyard cminyard 4096 Jan  4 14:54 ipmisim1
+
+  my_statedir/ipmi_sim/ipmisim1:
+  total 0
+
+Stop ipmi_sim, install the compiled SDRs:
+
+  cp ipmisim1.bsdr my_statedir/ipmi_sim/ipmisim1/sdr.20.main
+
+then restart ipmi_sim as above.  Now you have SDRs matching the sensors:
+
+  cminyard@t430:~$ ipmitool -I lanplus -U ipmiusr -P test -p 9001 -H localhost sdr list
+  MBTemp           | 96 degrees C      | ok
+  SubTemp          | 0 degrees C       | ok
+
+Note that if you use IPMI commands to make any changes to the users,
+the users in the lan.conf file will no longer work, as the persistent
+data overrides what is in lan.conf.
+
+For more information, see:
+
+  README.yourownbmc - More information on setting up BMCs, simulated
+  and real
+
+  README.vm - Information on the protocol to talk to qemu.
+
+  README.design - Information about the design structure of ipmi_sim.
+
+  ipmi_lan.5 - A man file describing lan.conf.  lan.conf has quite a
+  bit of information in it, too.
+
+  ipmi_sim_cmd.5 - A amn file describing the ipmi_sim command language.
+  This is what is in ipmisim1.emu (which doesn't have that much info
+  in it) and is how you add MCs, sensors, etc.
+
+  ipmi_sim.1 - A short man page on the program itself.
