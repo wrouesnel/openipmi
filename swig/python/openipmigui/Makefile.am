@@ -5,7 +5,7 @@ EXTRA_DIST = _control.py _domain.py _entity.py _mc.py _sensor.py \
 	_conn.py gui_cmdwin.py _term.py gui_SoL.py _mc_solparm.py \
 	_mc_pefparm.py gui_errstr.py gui_popup.py gui_setdialog.py \
 	gui_lightset.py gui_treelist.py gui_list.py gui_term.py \
-	_misc.py
+	_misc.py gui_winsys.py
 
 PYC_FILES = _control.pyc _domain.pyc _entity.pyc _mc.pyc _sensor.pyc \
 	gui_domainDialog.pyc gui.pyc __init__.pyc _saveprefs.pyc _fru.pyc \
@@ -13,7 +13,7 @@ PYC_FILES = _control.pyc _domain.pyc _entity.pyc _mc.pyc _sensor.pyc \
 	_conn.pyc gui_cmdwin.pyc _term.pyc gui_SoL.pyc _mc_solparm.pyc \
 	_mc_pefparm.pyc gui_errstr.pyc gui_popup.pyc gui_setdialog.pyc \
 	gui_lightset.pyc gui_treelist.pyc gui_list.pyc gui_term.pyc \
-	_misc.pyc
+	_misc.pyc gui_winsys.pyc
 
 PYO_FILES = _control.pyo _domain.pyo _entity.pyo _mc.pyo _sensor.pyo \
 	gui_domainDialog.pyo gui.pyo __init__.pyo _saveprefs.pyo _fru.pyo \
@@ -21,7 +21,7 @@ PYO_FILES = _control.pyo _domain.pyo _entity.pyo _mc.pyo _sensor.pyo \
 	_conn.pyo gui_cmdwin.pyo _term.pyo gui_SoL.pyo _mc_solparm.pyo \
 	_mc_pefparm.pyo gui_errstr.pyo gui_popup.pyo gui_setdialog.pyo \
 	gui_lightset.pyo gui_treelist.pyo gui_list.pyo gui_term.pyo \
-	_misc.pyo
+	_misc.pyo gui_winsys.pyo
 
 # Python doesn't have any way to output the compiled files somewhere else,
 # and it doesn't work very well for them to be remote, anyway, so maintain
