@@ -17,6 +17,7 @@ OPENIPMI_SMI=
 case $target_os in
 	linux*)
 		AC_DEFINE([HAVE_OPENIPMI_SMI], [], [We have a local IPMI interface])
+		AM_CONDITIONAL([HAVE_OPENIPMI_SMI], [true])
 		;;
 
 	cygwin*)

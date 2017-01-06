@@ -4,8 +4,17 @@ AM_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
 
 bin_PROGRAMS = openipmicmd solterm rmcp_ping openipmi_eventd
 
+if HAVE_OPENIPMI_SMI
+CMDHANDLER = linux_cmd_handler
+else
+CMDHANDLER =
+endif
+
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3 ipmi_serial_bmc_emu \
-		  ipmi_dump_sensors waiter_sample
+		  ipmi_dump_sensors waiter_sample $(CMDHANDLER)
+EXTRA_PROGRAMS = linux_cmd_handler
+
+linux_cmd_handler_SOURCES = linux_cmd_handler.c
 
 ipmisample_SOURCES = sample.c
 ipmisample_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \

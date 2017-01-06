@@ -149,6 +149,12 @@ struct ipmi_msg
 #define IPMI_RESPONSE_RECV_TYPE		1 /* A response to a command */
 #define IPMI_ASYNC_EVENT_RECV_TYPE	2 /* Something from the event queue */
 #define IPMI_CMD_RECV_TYPE		3 /* A command from somewhere else */
+#define IPMI_RESPONSE_RESPONSE_TYPE	4 /* The response for
+					      a sent response, giving any
+					      error status for sending the
+					      response.  When you send a
+					      response message, this will
+					      be returned. */
 /* Note that async events and received commands do not have a completion
    code as the first byte of the incoming data, unlike a response. */
 
