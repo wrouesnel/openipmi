@@ -577,7 +577,7 @@ static char *sensor_states[256][16] =
     },
     { /* 0x10 */
 	"correctable memory error logging disabled",
-	"event type logging siabled",
+	"event type logging disabled",
 	"log area reset/cleared",
 	"all event logging disabled",
     },
