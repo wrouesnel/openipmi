@@ -402,8 +402,10 @@ main(int argc, char *argv[])
     }
 
     for (;;) {
+#ifdef HAVE_UCDSNMP
       if (init_snmp)
 	  snmp_setup_fds(&ipmi_ui_cb_handlers);
+#endif
       ipmi_ui_cb_handlers.perform_one_op(&ipmi_ui_cb_handlers, NULL);
     }
 
