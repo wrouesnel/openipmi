@@ -282,8 +282,6 @@ wake_timer_sel_thread(selector_t *sel, volatile sel_timer_t *old_top)
     if (old_top != theap_get_top(&sel->timer_heap))
 	/* If the top value changed, restart the waiting thread. */
 	wake_sel_thread(sel);
-
-    sel_timer_unlock(sel);
 }
 
 /* Wait list management.  These *must* be called with the timer list
@@ -636,6 +634,8 @@ sel_start_timer(sel_timer_t    *timer,
 
     wake_timer_sel_thread(sel, top);
 
+    sel_timer_unlock(sel);
+
     return 0;
 }
 
@@ -659,6 +659,8 @@ sel_stop_timer(sel_timer_t *timer)
 	wake_timer_sel_thread(sel, top);
     }
     timer->val.stopped = 1;
+
+    sel_timer_unlock(sel);
 
     return 0;
 }
@@ -693,6 +695,7 @@ sel_stop_timer_with_done(sel_timer_t *timer,
 	wake_timer_sel_thread(sel, top);
     }
     timer->val.stopped = 1;
+    sel_timer_unlock(sel);
 
  out:
     done_handler(sel, timer, cb_data);
