@@ -265,7 +265,7 @@ struct lanserv_data_s
     lanparm_data_t lanparm_rollback;
 
     /* Used to access and set the external LAN config items. */
-    const char *config_prog;
+    char *config_prog;
 
     lan_addr_t lan_addr;
     int lan_addr_set;

@@ -158,8 +158,11 @@ struct variable {
     struct variable *next;
 } *vars;
 
+/*
+ *
+ */
 int
-add_variable(const char *name, const char *value)
+add_variable(const char *name, char *value)
 {
     struct variable *var = vars, *last = NULL;
 
@@ -176,8 +179,10 @@ add_variable(const char *name, const char *value)
 	if (!var)
 	    return ENOMEM;
 	var->name = strdup(name);
-	if (!var->name)
+	if (!var->name) {
+	    free(var);
 	    return ENOMEM;
+	}
 	var->next = NULL;
 	if (last)
 	    last->next = var;
@@ -185,7 +190,7 @@ add_variable(const char *name, const char *value)
 	    vars = var;
     }
     
-    var->value = strdup(value);
+    var->value = value;
     if (!var->value)
 	return ENOMEM;
 
@@ -272,7 +277,7 @@ isquote(char c)
 }
 
 int
-get_delim_str(char **rtokptr, const char **rval, const char **err)
+get_delim_str(char **rtokptr, char **rval, const char **err)
 {
     char *tokptr = *rtokptr;
     char endc;
@@ -753,7 +758,8 @@ read_config(sys_data_t *sys,
 	    continue;
 
 	if (strcmp(tok, "define") == 0) {
-	    const char *varname, *value;
+	    const char *varname;
+	    char *value;
 
 	    varname = mystrtok(NULL, " \t\n", &tokptr);
 	    if (!varname) {
@@ -766,12 +772,13 @@ read_config(sys_data_t *sys,
 		goto next;
 	    err = add_variable(varname, value);
 	    if (err) {
+		free(value);
 		err = ENOMEM;
 		errstr = "Out of memory";
 		goto next;
 	    }
 	} else if (strcmp(tok, "loadlib") == 0) {
-	    const char *library = NULL, *initstr = NULL;
+	    char *library = NULL, *initstr = NULL;
 	    struct dliblist *dlib, *dlibp;
 
 	    err = get_delim_str(&tokptr, &library, &errstr);
@@ -824,7 +831,7 @@ read_config(sys_data_t *sys,
 	} else if (strcmp(tok, "sol") == 0) {
 	    err = sol_read_config(&tokptr, sys, &errstr);
 	} else if (strcmp(tok, "chassis_control") == 0) {
-	    const char *prog;
+	    char *prog;
 	    err = get_delim_str(&tokptr, &prog, &errstr);
 	    if (!err)
 		ipmi_set_chassis_control_prog(sys->mc, prog);

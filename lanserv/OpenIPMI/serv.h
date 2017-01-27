@@ -301,7 +301,7 @@ typedef struct lan_addr_s {
 
 struct startcmd_s {
     /* Command to start a VM */
-    const char *startcmd;
+    char *startcmd;
     unsigned int startnow; /* Start startcmd at simulator startup? */
     unsigned int poweroff_wait_time;
     unsigned int kill_wait_time;
@@ -320,7 +320,7 @@ struct startcmd_s {
  * required for all server types.
  */
 struct sys_data_s {
-    const char *name;
+    char *name;
 
     /* The MCs in the system */
     lmc_data_t *ipmb_addrs[IPMI_MAX_MCS];
@@ -474,10 +474,15 @@ void sysinfo_init(sys_data_t *sys);
 #define MAX_CONFIG_LINE 1024
 
 const char *mystrtok(char *str, const char *delim, char **next);
-int add_variable(const char *name, const char *value);
+
+/*
+ * Note that "value" must be dynamically allocated.  "name" does not have
+ * to be.
+ */
+int add_variable(const char *name, char *value);
 const char *find_bvariable(const char *name);
 
-int get_delim_str(char **rtokptr, const char **rval, const char **err);
+int get_delim_str(char **rtokptr, char **rval, const char **err);
 
 int get_bool(char **tokptr, unsigned int *rval, const char **err);
 

@@ -615,10 +615,8 @@ init_mc(emu_data_t *emu, lmc_data_t *mc, unsigned int persist_sdr)
 
     err = mc->sysinfo->alloc_timer(mc->sysinfo, watchdog_timeout,
 				   mc, &mc->watchdog_timer);
-    if (err) {
-	free(mc);
+    if (err)
 	return err;
-    }
 
     if (persist_sdr && mc->has_device_sdrs) {
 	read_mc_sdrs(mc, &mc->device_sdrs[0], "device0");
@@ -914,6 +912,8 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     }
 
     if (ipmb == emu->sysinfo->bmc_ipmb) {
+	int rv;
+
 	if (!mc->channels[15]) {
 	    /* No one specified a system channel, make one up */
 	    mc->sys_channel.medium_type = IPMI_CHANNEL_MEDIUM_SYS_INTF;
@@ -925,7 +925,11 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	}
 
 	mc->sysinfo = emu->sysinfo;
-	init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
+	rv = init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
+	if (rv) {
+	    free(mc);
+	    return rv;
+	}
     }
 
     if (mc->startcmd.startcmd) {

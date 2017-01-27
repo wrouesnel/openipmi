@@ -73,7 +73,7 @@ typedef struct soldata_s soldata_t;
 typedef struct ipmi_sol_s {
     int configured;
 
-    const char *device;
+    char *device;
 
     /* TCP-specific information. */
     const char *tcpdest;

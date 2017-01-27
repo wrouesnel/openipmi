@@ -1311,7 +1311,7 @@ file_init(lmc_data_t *mc,
 	  char **toks, void *cb_data, void **rcb_data,
 	  const char **errstr)
 {
-    const char *fname;
+    char *fname = NULL;
     struct file_data *f;
     char *end;
     int err;
@@ -1324,10 +1324,12 @@ file_init(lmc_data_t *mc,
 
     err = get_delim_str(toks, &fname, errstr);
     if (err)
-	return err;
-    f = malloc(sizeof(*f));
-    if (!f)
 	return ENOMEM;
+    f = malloc(sizeof(*f));
+    if (!f) {
+	free(fname);
+	return ENOMEM;
+    }
     memset(f, 0, sizeof(*f));
     f->emu = mc->emu;
     f->sensor_mc = mc;
@@ -1440,16 +1442,13 @@ file_init(lmc_data_t *mc,
 	tok = mystrtok(NULL, " \t\n", toks);
     }
 
-    f->filename = strdup(fname);
-    if (!f->filename) {
-	free(f);
-	return ENOMEM;
-    }
+    f->filename = fname;
 
     *rcb_data = f;
     return 0;
 
   out_err:
+    free(fname);
     free(f);
     return -1;
 }

@@ -338,7 +338,7 @@ static char *threshold_types[] =
 const char *
 ipmi_get_threshold_string(enum ipmi_thresh_e val)
 {
-    if (val > NUM_THRESHOLD_TYPES)
+    if (val >= NUM_THRESHOLD_TYPES)
 	return "invalid";
     return threshold_types[val];
 }
@@ -352,7 +352,7 @@ static char *value_dir_types[] =
 const char *
 ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val)
 {
-    if (val > NUM_VALUE_DIR_TYPES)
+    if (val >= NUM_VALUE_DIR_TYPES)
 	return "invalid";
     return value_dir_types[val];
 }
@@ -366,7 +366,7 @@ static char *event_dir_types[] =
 const char *
 ipmi_get_event_dir_string(enum ipmi_event_dir_e val)
 {
-    if (val > NUM_EVENT_DIR_TYPES)
+    if (val >= NUM_EVENT_DIR_TYPES)
 	return "invalid";
     return event_dir_types[val];
 }

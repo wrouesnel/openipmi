@@ -921,17 +921,19 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     }
     if (strcmp(tok, "file") == 0) {
 	unsigned int file_offset;
+	char *frufn;
 
 	rv = emu_get_uint(out, toks, &file_offset, "file offset");
 	if (rv)
 	    return rv;
 
-	rv = get_delim_str(toks, &tok, &errstr);
+	rv = get_delim_str(toks, &frufn, &errstr);
 	if (rv) {
 	    out->printf(out, "**Error with FRU filename: %d", strerror(rv));
 	    return rv;
 	}
-	rv = ipmi_mc_add_fru_file(mc, devid, length, file_offset, (void *) tok);
+	rv = ipmi_mc_add_fru_file(mc, devid, length, file_offset,
+				  (void *) frufn);
 	if (rv)
 	    out->printf(out, "**Unable to add FRU file, error 0x%x\n", rv);
 	
@@ -1077,7 +1079,8 @@ mc_set_num_leds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 read_cmds(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    const char *filename, *errstr;
+    char *filename;
+    const char *errstr;
     int err;
 
     err = get_delim_str(toks, &filename, &errstr);
@@ -1184,7 +1187,8 @@ quit(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 static int
 do_define(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
-    const char *name, *value;
+    const char *name;
+    char *value;
     int err;
     const char *errstr;
 
@@ -1200,6 +1204,7 @@ do_define(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
     }
     err = add_variable(name, value);
     if (err) {
+	free(value);
 	out->printf(out, "Out of memory setting variable %s\n", name);
 	return err;
     }
