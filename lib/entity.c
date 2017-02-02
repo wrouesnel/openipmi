@@ -3997,13 +3997,13 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	memset(&dlr, 0, sizeof(dlr));
 
 	switch (sdr.type) {
-	    case IPMI_SDR_ENITY_ASSOCIATION_RECORD:
+	    case IPMI_SDR_ENTITY_ASSOCIATION_RECORD:
 		rv = decode_ear(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
-	    case IPMI_SDR_DR_ENITY_ASSOCIATION_RECORD:
+	    case IPMI_SDR_DR_ENTITY_ASSOCIATION_RECORD:
 		rv = decode_drear(&sdr, &dlr, mc);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
@@ -4420,7 +4420,7 @@ do_ear_output(ipmi_sdr_info_t *sdrs,
     int old_flags_pos;
     int i;
 
-    if (sdr->type == IPMI_SDR_ENITY_ASSOCIATION_RECORD) {
+    if (sdr->type == IPMI_SDR_ENTITY_ASSOCIATION_RECORD) {
 	/* not device-relative */
 	memset(sdr->data+3, 0, 8);
 	old_flags = sdr->data[2];
@@ -4491,12 +4491,12 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
     if ((sdr.major_version == 1) && (sdr.minor_version < 5)) {
 	/* IPMI 1.0, we can olny use normal entity association
 	   records */
-	sdr.type = IPMI_SDR_ENITY_ASSOCIATION_RECORD;
+	sdr.type = IPMI_SDR_ENTITY_ASSOCIATION_RECORD;
 	sdr.length = 11;
 	sdr.data[2] = (ent->info.presence_sensor_always_there << 5);
     } else {
 	/* IPMI 1.5, we only use the device-relative EARs. */
-	sdr.type = IPMI_SDR_DR_ENITY_ASSOCIATION_RECORD;
+	sdr.type = IPMI_SDR_DR_ENTITY_ASSOCIATION_RECORD;
 	sdr.length = 27;
 	sdr.data[2] = ent->info.slave_address;
 	sdr.data[3] = ent->info.channel;
