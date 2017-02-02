@@ -279,7 +279,7 @@ extcmd_getvals(sys_data_t *sys,
 {
     int rv;
     char *cmd;
-    FILE *f;
+    FILE *f = NULL;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
@@ -321,6 +321,7 @@ extcmd_getvals(sys_data_t *sys,
     buf[rv] = '\0';
 
     rv = pclose(f);
+    f = NULL;
     if (rv) {
 	sys->log(sys, OS_ERROR, NULL, 
 		 "extcmd read command (%s) failed: %x: %s", cmd, rv, buf);
@@ -337,6 +338,8 @@ extcmd_getvals(sys_data_t *sys,
 	}
     }
   out:
+    if (f)
+	pclose(f);
     free(cmd);
     return rv;
 }
@@ -348,7 +351,7 @@ extcmd_setvals(sys_data_t *sys,
 {
     int rv = 0;
     char *cmd;
-    FILE *f;
+    FILE *f = NULL;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
@@ -397,6 +400,7 @@ extcmd_setvals(sys_data_t *sys,
     buf[rv] = '\0';
 
     rv = pclose(f);
+    f = NULL;
     if (rv) {
 	sys->log(sys, OS_ERROR, NULL, 
 		 "extcmd write command (%s) failed: %x: %s", cmd, rv, buf);
@@ -404,6 +408,8 @@ extcmd_setvals(sys_data_t *sys,
     }
 
   out:
+    if (f)
+	pclose(f);
     free(cmd);
     return rv;
 }
@@ -415,7 +421,7 @@ extcmd_checkvals(sys_data_t *sys,
 {
     int rv = 0;
     char *cmd;
-    FILE *f;
+    FILE *f = NULL;
     unsigned int i;
     char buf[2048];
     unsigned int buflen = sizeof(buf);
@@ -463,8 +469,11 @@ extcmd_checkvals(sys_data_t *sys,
 
     /* Return value should tell us if it's ok. */
     rv = pclose(f);
+    f = NULL;
 
   out:
+    if (f)
+	pclose(f);
     free(cmd);
     return rv;
 }

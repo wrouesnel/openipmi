@@ -1258,7 +1258,7 @@ serserv_read_config(char **tokptr, sys_data_t *sys, const char **errstr)
     err = get_sock_addr(tokptr, &ser->addr.addr, &ser->addr.addr_len,
 			NULL, SOCK_STREAM, errstr);
     if (err)
-	return err;
+	goto out_err;
 
     for (tok = mystrtok(NULL, " \t\n", tokptr); tok;
 	 tok = mystrtok(NULL, " \t\n", tokptr)) {

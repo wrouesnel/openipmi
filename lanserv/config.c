@@ -304,8 +304,12 @@ get_delim_str(char **rtokptr, char **rval, const char **err)
 	    oldc = *tokptr;
 	    *tokptr = '\0';
 	    val = find_variable(val);
-	    if (!val)
+	    if (!val) {
+		if (rv)
+		    free(rv);
+		*err = "unable to find variable";
 		return -1;
+	    }
 	    *tokptr = oldc;
 	} else if (isquote(*tokptr)) {
 	    endc = *tokptr;
@@ -321,6 +325,8 @@ get_delim_str(char **rtokptr, char **rval, const char **err)
 	    *tokptr = '\0';
 	    tokptr++;
 	} else {
+	    if (rv)
+		free(rv);
 	    *err = "string value must start with '\"' or '''";
 	    return -1;
 	}
@@ -328,6 +334,7 @@ get_delim_str(char **rtokptr, char **rval, const char **err)
 	if (rv) {
 	    char *newrv = malloc(strlen(rv) + strlen(val) + 1);
 	    if (!newrv) {
+		free(rv);
 		*err = "Out of memory copying string";
 		return -1;
 	    }
@@ -691,6 +698,7 @@ load_dynamic_libs(sys_data_t *sys, int print_version)
 	    if (func) {
 		err = func(sys, dlib->init);
 		if (err) {
+		    dlclose(handle);
 		    fprintf(stderr, "Error from module %s version print: %s\n",
 			    dlib->file, strerror(err));
 		    return EINVAL;
@@ -702,6 +710,7 @@ load_dynamic_libs(sys_data_t *sys, int print_version)
 	    if (func) {
 		err = func(sys, dlib->init);
 		if (err) {
+		    dlclose(handle);
 		    fprintf(stderr, "Error from module %s init: %s\n",
 			    dlib->file, strerror(err));
 		    return EINVAL;

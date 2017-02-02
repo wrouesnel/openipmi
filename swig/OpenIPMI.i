@@ -2248,7 +2248,7 @@ light_setting_to_str(ipmi_light_setting_t *e)
     char dummy[1];
     int  size = 0;
 
-    for (i=0; i<count; i++) {
+    for (i = 0; i < count; i++) {
 	int val;
 	size += 1; /* For the colon */
 	val = 0;
@@ -2266,10 +2266,12 @@ light_setting_to_str(ipmi_light_setting_t *e)
 	size += snprintf(dummy, 1, "%d ", val);
     }
 
-    str = malloc(size+1);
+    str = malloc(size + 1);
+    if (!str)
+	return NULL;
     s = str;
 
-    for (i=0; i<count; i++) {
+    for (i = 0; i < count; i++) {
 	int val;
 	const char *ov;
 
@@ -2363,10 +2365,13 @@ control_val_get_light_handler(ipmi_control_t *control, int err,
 {
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
+    char        *str;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
-    swig_call_cb(cb, "control_get_light_cb", "%p%d%s", &control_ref, err,
-		 light_setting_to_str(val));
+    str = light_setting_to_str(val);
+    if (!str)
+	str = "err";
+    swig_call_cb(cb, "control_get_light_cb", "%p%d%s", &control_ref, err, str);
     swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -7480,6 +7485,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	    goto out_err;
 	if (!nil_swig_cb(handler)) {
 	    if (! valid_swig_cb(handler, sensor_event_enable_cb)) {
+		free(st);
 		rv = EINVAL;
 		goto out_err;
 	    }
@@ -7570,9 +7576,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 			       sensor_cb, handler_val);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+    out_err:
 	if (st)
 	    free(st);
-    out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return rv;
     }
@@ -7682,7 +7688,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	if (!nil_swig_cb(handler)) {
 	    if (! valid_swig_cb(handler, sensor_set_thresholds_cb)) {
 		rv = EINVAL;
-		goto out_err;
+		goto out_err_free;
 	    }
 	    sensor_cb = sensor_set_thresholds_handler;
 	    handler_val = ref_swig_cb(handler, sensor_set_thresholds_cb);
@@ -7690,6 +7696,8 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 	rv = ipmi_sensor_set_thresholds(self, th, sensor_cb, handler_val);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
+    out_err_free:
+	free(th);
     out_err:
 	IPMI_SWIG_C_CB_EXIT
 	return rv;

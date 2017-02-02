@@ -95,6 +95,7 @@ persist_init(const char *papp, const char *instance, const char *ibasedir)
     char *dname;
     struct stat st;
     char *n;
+    int rv = 0;
 
     if (app)
 	return EBUSY;
@@ -111,11 +112,14 @@ persist_init(const char *papp, const char *instance, const char *ibasedir)
 
     len = strlen(basedir) + strlen(app) + 3;
     dname = malloc(len);
-    if (!dname)
+    if (!dname) {
+	free(app);
 	return ENOMEM;
+    }
     strcpy(dname, basedir);
     strcat(dname, "/");
     strcat(dname, app);
+    free(app);
     strcat(dname, "/");
     if (dname[0] == '/')
 	n = strchr(dname + 1, '/');
@@ -124,14 +128,20 @@ persist_init(const char *papp, const char *instance, const char *ibasedir)
     while (n) {
 	*n = '\0';
 	if (stat(dname, &st) != 0) {
-	    if (mkdir(dname, 0755) != 0)
-		return errno;
-	} else if (!S_ISDIR(st.st_mode))
-	    return ENOTDIR;
+	    if (mkdir(dname, 0755) != 0) {
+		rv = errno;
+		goto out;
+	    }
+	} else if (!S_ISDIR(st.st_mode)) {
+	    rv = ENOTDIR;
+	    goto out;
+	}
 	*n++ = '/';
 	n = strchr(n, '/');
     }
-    return 0;
+ out:
+    free(dname);
+    return rv;
 }
 
 static char *

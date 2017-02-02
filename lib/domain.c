@@ -2738,7 +2738,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     CHECK_DOMAIN_LOCK(domain);
 
-    if (channel > MAX_IPMI_USED_CHANNELS)
+    if (channel >= MAX_IPMI_USED_CHANNELS)
 	return EINVAL;
 
     if ((domain->chan[channel].medium != 1)
