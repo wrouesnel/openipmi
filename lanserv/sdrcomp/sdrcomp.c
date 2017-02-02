@@ -63,11 +63,12 @@ out_err(int err)
 
 struct sdr_field_name {
     char *name;
-    unsigned int val;
+    int val;
 };
 
 struct sdr_field {
     char *name;
+    /* SBITS means signed bits, the highest bit is a sign bit, 2s complement */
     enum { SDR_BITS, SDR_SBITS, SDR_MULTIBITS, SDR_MULTISBITS, SDR_MULTIBITS2,
 	   SDR_STRING, SDR_BOOLBIT, SDR_THRESH, SDR_THRESHREL } type;
     /*
@@ -931,7 +932,7 @@ isquote(char c)
 }
 
 int
-get_delim_str(char **rtokptr, const char **rval, char **err)
+get_delim_str(char **rtokptr, char **rval, char **err)
 {
     char *tokptr = *rtokptr;
     char endc;
@@ -958,8 +959,12 @@ get_delim_str(char **rtokptr, const char **rval, char **err)
 	    oldc = *tokptr;
 	    *tokptr = '\0';
 	    val = find_var(val);
-	    if (!val)
+	    if (!val) {
+		if (rv)
+		    free(rv);
+		*err = "variable not found";
 		return -1;
+	    }
 	    *tokptr = oldc;
 	} else if (isquote(*tokptr)) {
 	    endc = *tokptr;
@@ -967,6 +972,8 @@ get_delim_str(char **rtokptr, const char **rval, char **err)
 	    val = tokptr;
 	    while (*tokptr != endc) {
 		if (*tokptr == '\0') {
+		    if (rv)
+			free(rv);
 		    *err = "End of line in string";
 		    return -1;
 		}
@@ -975,6 +982,8 @@ get_delim_str(char **rtokptr, const char **rval, char **err)
 	    *tokptr = '\0';
 	    tokptr++;
 	} else {
+	    if (rv)
+		free(rv);
 	    *err = "string value must start with '\"' or '''";
 	    return -1;
 	}
@@ -1207,6 +1216,69 @@ get_sdr_bits(unsigned char *sdr, unsigned int pos, unsigned int bitoff,
 }
 
 int
+get_sdr_type(int type, struct sdr_field **t, unsigned int *tlen,
+	     unsigned int *sdr_len, char **errstr)
+{
+    switch (type) {
+    case 1:
+	*t = type1;
+	*tlen = TYPE1_LEN;
+	*sdr_len = 48;
+	break;
+
+    case 2:
+	*t = type2;
+	*tlen = TYPE2_LEN;
+	*sdr_len = 32;
+	break;
+
+    case 3:
+	*t = type3;
+	*tlen = TYPE3_LEN;
+	*sdr_len = 17;
+	break;
+
+    case 8:
+	*t = type8;
+	*tlen = TYPE8_LEN;
+	*sdr_len = 16;
+	break;
+
+    case 9:
+	*t = type9;
+	*tlen = TYPE9_LEN;
+	*sdr_len = 32;
+	break;
+
+    case 16:
+	*t = type16;
+	*tlen = TYPE16_LEN;
+	*sdr_len = 16;
+	break;
+
+    case 17:
+	*t = type17;
+	*tlen = TYPE17_LEN;
+	*sdr_len = 16;
+	break;
+
+    case 18:
+	*t = type18;
+	*tlen = TYPE18_LEN;
+	*sdr_len = 16;
+	break;
+
+    default:
+	if (errstr)
+	    *errstr = "Unknown SDR type, supported types are 1, 2, 3, 8, 9,"
+		" 16 (0x10) and 17 (0x11)";
+	return -1;
+    }
+
+    return 0;
+}
+
+int
 ipmi_compile_sdr(FILE *f, unsigned int type,
 		 unsigned char **retbuf, unsigned int *retlen,
 		 char **errstr, char **errstr2, unsigned int *line)
@@ -1222,60 +1294,8 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 
     *errstr2 = NULL;
 
-    switch (type) {
-    case 1:
-	t = type1;
-	tlen = TYPE1_LEN;
-	sdr_len = 48;
-	break;
-
-    case 2:
-	t = type2;
-	tlen = TYPE2_LEN;
-	sdr_len = 32;
-	break;
-
-    case 3:
-	t = type3;
-	tlen = TYPE3_LEN;
-	sdr_len = 17;
-	break;
-
-    case 8:
-	t = type8;
-	tlen = TYPE8_LEN;
-	sdr_len = 16;
-	break;
-
-    case 9:
-	t = type9;
-	tlen = TYPE9_LEN;
-	sdr_len = 32;
-	break;
-
-    case 16:
-	t = type16;
-	tlen = TYPE16_LEN;
-	sdr_len = 16;
-	break;
-
-    case 17:
-	t = type17;
-	tlen = TYPE17_LEN;
-	sdr_len = 16;
-	break;
-
-    case 18:
-	t = type18;
-	tlen = TYPE18_LEN;
-	sdr_len = 16;
-	break;
-
-    default:
-	*errstr = "Unknown SDR type, supported types are 1, 2, 3, 8, 9,"
-	    " 16 (0x10) and 17 (0x11)";
+    if (get_sdr_type(type, &t, &tlen, &sdr_len, errstr))
 	return -1;
-    }
 
     requireds = malloc(tlen * sizeof(char));
     if (!requireds) {
@@ -1351,7 +1371,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		err = get_uint_str(&t[i], &tokptr, &uval, errstr);
 		if (err)
 		    goto out_err;
-		umax = 1 << t[i].bitsize;
+		umax = (1 << t[i].bitsize) - 1;
 		if (uval > umax) {
 		    err = -1;
 		    *errstr = "Value too large for bit size";
@@ -1370,7 +1390,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		err = get_int(&tokptr, &sval, errstr);
 		if (err)
 		    goto out_err;
-		smax = 1 << (t[i].bitsize - 1);
+		smax = (1 << (t[i].bitsize - 1)) - 1;
 		smin = -smax - 1;
 		if (sval > smax || sval < smin) {
 		    err = -1;
@@ -1447,7 +1467,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 	    case SDR_STRING:
 	    {
 		unsigned char str[IPMI_MAX_STR_LEN];
-		const char *sval;
+		char *sval;
 		unsigned int out_len = sizeof(str);
 
 		err = get_delim_str(&tokptr, &sval, errstr);
@@ -1455,6 +1475,7 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
 		    goto out_err;
 		ipmi_set_device_string(sval, IPMI_ASCII_STR, strlen(sval),
 				       str, 0, &out_len);
+		free(sval);
 		if (out_len > 1) {
 		    unsigned char *newsdr = realloc(sdr, sdr_len + out_len - 1);
 		    if (!newsdr) {
@@ -1569,17 +1590,9 @@ ipmi_compile_sdr(FILE *f, unsigned int type,
     return err;
 }
 
-static char *progname;
-
-static void help(void)
-{
-    fprintf(stderr, "%s [-r] <input file>\n", progname);
-    exit(1);
-}
-
 static void
-parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
-	   unsigned int *sdrnum)
+compile_file(const char *filename, FILE *f, persist_t *p, int outraw,
+	     unsigned int *sdrnum)
 {
     char buf[MAX_SDR_LINE];
     char *s;
@@ -1644,7 +1657,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 	    free(sdr);
 	} else if (strcmp(tok, "define") == 0) {
 	    const char *name;
-	    const char *value;
+	    char *value;
 	    name = mystrtok(NULL, " \n\t", &tokptr);
 	    if (!name) {
 		fprintf(stderr,
@@ -1662,10 +1675,12 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 	    }
 	    
 	    err = add_variable(name, value);
-	    if (err)
+	    if (err) {
+		free(value);
 		out_err(1);
+	    }
 	} else if (strcmp(tok, "include") == 0) {
-	    const char *nfilename;
+	    char *nfilename;
 	    FILE *f2;
 
 	    err = get_delim_str(&tokptr, &nfilename, &errstr);
@@ -1683,7 +1698,7 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 		out_err(1);
 	    }
 
-	    parse_file(nfilename, f2, p, outraw, sdrnum);
+	    compile_file(nfilename, f2, p, outraw, sdrnum);
 	    
 	    fclose(f2);
 	} else {
@@ -1696,6 +1711,250 @@ parse_file(const char *filename, FILE *f, persist_t *p, int outraw,
 
 }
 
+static int
+extract_bits(uint8_t *sdr, struct sdr_field *t)
+{
+    unsigned int v;
+
+    /*
+     * Note that the pos is the IPMI 1's based offset, not a zero
+     * based offset.  So we subtract 1 to get the array position.
+     */
+    v = sdr[t->pos - 1];
+    v >>= t->bitoff;
+    v &= (1 << t->bitsize) - 1;
+    return v;
+}
+
+static int
+sign_extend(int v, int bitsize)
+{
+    if (v & (1 << (bitsize - 1))) {
+	/* Negative */
+	v &= ~(1 << (bitsize - 1));
+	v = -v - 1;
+    }
+
+    return v;
+}
+
+static void
+dump_val(struct sdr_field *t, int v)
+{
+    struct sdr_field_name *n = t->strvals;
+
+    if (n) {
+	while (n->name) {
+	    if (v == n->val) {
+		fprintf(outfile, "%s\n", n->name);
+		return;
+	    }
+	    n++;
+	}
+    }
+    fprintf(outfile, "%d\n", v);
+}
+
+static void
+dump_int(uint8_t *sdr, struct sdr_field *t, int is_signed)
+{
+    int v = extract_bits(sdr, t);
+
+    if (is_signed)
+	v = sign_extend(v, t->bitsize);
+
+    dump_val(t, v);
+}
+
+static void
+dump_multibits(uint8_t *sdr, struct sdr_field *t, int is_signed)
+{
+    int v = extract_bits(sdr, t);
+    int shift = t->bitsize;
+
+    t++;
+    while (t->type == SDR_MULTIBITS2) {
+	v |= extract_bits(sdr, t) << shift;
+	shift += t->bitsize;
+	t++;
+    }
+    if (is_signed)
+	v = sign_extend(v, t->bitsize);
+
+    dump_val(t, v);
+}
+
+static void
+dump_thresh(uint8_t *sdr, struct sdr_field *t, int is_rel)
+{
+    int v = extract_bits(sdr, t);
+    int m, b, r_exp, b_exp, is_signed;
+    double fx;
+
+    is_signed = get_sdr_bits(sdr, 21, 6, 2);
+    if (is_signed)
+	v = sign_extend(v, t->bitsize);
+
+    m = get_sdr_bits(sdr, 25, 0, 8);
+    m |= get_sdr_bits(sdr, 26, 6, 2) << 8;
+    if (m & (1 << 9))
+	m |= (~0U << 10);
+    b = get_sdr_bits(sdr, 27, 0, 8);
+    b |= get_sdr_bits(sdr, 28, 6, 2) << 8;
+    if (b & (1 << 9))
+	b |= (~0U << 10);
+    r_exp = get_sdr_bits(sdr, 30, 4, 4);
+    if (r_exp & (1 << 3))
+	r_exp |= (~0U << 4);
+    b_exp = get_sdr_bits(sdr, 30, 0, 4);
+    if (b_exp & (1 << 3))
+	b_exp |= (~0U << 4);
+
+    fx = ((double) m) * ((double) v);
+    if (!is_rel)
+	fx += ((double) b) * pow(10, b_exp);
+    fx *= pow(10, r_exp);
+
+    fprintf(outfile, "%f\n", fx);
+}
+
+static void
+dump_string(uint8_t *sdr, struct sdr_field *t, unsigned int sdr_len)
+{
+    unsigned char *sptr = ((unsigned char *) sdr) + t->pos - 1;
+    char str[IPMI_MAX_STR_LEN + 1];
+    unsigned int out_len;
+    enum ipmi_str_type_e stype;
+    int err;
+
+    err = ipmi_get_device_string(&sptr, sdr_len + 5 - t->pos + 1, str,
+				 IPMI_STR_SDR_SEMANTICS, 0, &stype,
+				 sizeof(str), &out_len);
+    if (err) {
+	fprintf(stderr, "Warning: Invalid SDR string, search for **INVALID**"
+		" in output\n");
+	fprintf(outfile, "**INVALID**\n");
+	return;
+    }
+
+    str[out_len] = '\0';
+    fprintf(outfile, "%s\n", str);
+}
+
+static void
+dump_sdr_field(uint8_t *sdr, struct sdr_field *t, unsigned int len)
+{
+    if (t->type == SDR_MULTIBITS2)
+	return;
+
+    fprintf(outfile, "\t%s\t", t->name);
+    switch(t->type)
+    {
+    case SDR_BITS:
+    case SDR_SBITS:
+	dump_int(sdr, t, t->type == SDR_SBITS);
+	break;
+
+    case SDR_BOOLBIT:
+	if (sdr[t->pos] & (1 << t->bitoff))
+	    fprintf(outfile, "true\n");
+	else
+	    fprintf(outfile, "false\n");
+	break;
+
+    case SDR_MULTIBITS:
+    case SDR_MULTISBITS:
+	dump_multibits(sdr, t, t->type == SDR_MULTISBITS);
+	break;
+
+    case SDR_MULTIBITS2:
+	break;
+
+    case SDR_THRESH:
+    case SDR_THRESHREL:
+	dump_thresh(sdr, t, t->type == SDR_THRESHREL);
+	break;
+
+    case SDR_STRING:
+	dump_string(sdr, t, len);
+	break;
+    }
+}
+
+static void
+decompile_file(FILE *f)
+{
+    uint8_t sdr[261];
+    size_t l;
+    int recnum = 0;
+    struct sdr_field *t;
+    unsigned int tlen, sdr_len;
+    size_t offset = 0;
+    unsigned int i;
+
+    l = fread(sdr, 5, 1, f);
+    while (l == 1) {
+	uint16_t recid = sdr[0] | sdr[1] << 8;
+	int badtype = 0;
+
+	if (sdr[2] != 0x51) {
+	    fprintf(stderr, "SDR %d offset %ld: Unknown SDR version: 0x%x\n",
+		    recnum, offset, sdr[2]);
+	}
+
+	fprintf(outfile, "# Record id: %d\n", recid);
+	fprintf(outfile, "# Record num: %d\n", recnum);
+
+	if (get_sdr_type(sdr[3], &t, &tlen, &sdr_len, NULL)) {
+	    fprintf(outfile, "# unknown type: %d\n", sdr[3]);
+	    badtype = 1;
+	} else if (sdr[4] < sdr_len - 5) {
+	    fprintf(stderr, "SDR %d offset %ld type %d: not long enough: %d,"
+		    " expected %d\n",
+		    recnum, offset, sdr[3], sdr[4], sdr_len - 5);
+	    exit(1);
+	}
+	
+	l = fread(sdr + 5, sdr[4], 1, f);
+	if (l != 1) {
+	    if (ferror(f)) {
+		fprintf(stderr, "Error reading file: %s\n", strerror(errno));
+		exit(1);
+	    } else {
+		fprintf(stderr, "End of file in the middle of"
+			" record %d offset %ld\n", recnum, offset);
+		exit(1);
+	    }
+	}
+
+	if (!badtype) {
+	    fprintf(outfile, "sdr %d\n", sdr[3]);
+	    for (i = 0; i < tlen; i++)
+		dump_sdr_field(sdr, t + i, sdr[4]);
+	    fprintf(outfile, "endsdr\n\n");
+	}
+
+	offset += sdr[4] + 5;
+
+	l = fread(sdr, 5, 1, f);
+	recnum++;
+    }
+
+    if (ferror(f)) {
+	fprintf(stderr, "Error reading file: %s\n", strerror(errno));
+	exit(1);
+    }
+}
+
+static char *progname;
+
+static void
+help(void)
+{
+    fprintf(stderr, "%s [-r] [-o <outfile>] [-d] <input file>\n", progname);
+    exit(1);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1704,6 +1963,7 @@ main(int argc, char *argv[])
     unsigned int sdrnum = 1;
     int argn;
     int outraw = 0;
+    int decompile = 0;
 
     progname = argv[0];
     outfile = stdout;
@@ -1715,6 +1975,8 @@ main(int argc, char *argv[])
 	    break;
 	if (strcmp(argv[argn], "-r") == 0) {
 	    outraw = 1;
+	} else if (strcmp(argv[argn], "-d") == 0) {
+	    decompile = 1;
 	} else if (strcmp(argv[argn], "-o") == 0) {
 	    argn++;
 	    if (argn == argc) {
@@ -1745,7 +2007,7 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    if (!outraw) {
+    if (!outraw && !decompile) {
 	p = alloc_persist("");
 	if (!p) {
 	    fprintf(stderr, "Out of memory\n");
@@ -1762,11 +2024,14 @@ main(int argc, char *argv[])
 	}
     }
 
-    parse_file(argv[argn], f, p, outraw, &sdrnum);
+    if (decompile)
+	decompile_file(f);
+    else
+	compile_file(argv[argn], f, p, outraw, &sdrnum);
 
     fclose(f);
 
-    if (!outraw) {
+    if (!outraw && !decompile) {
 	add_persist_int(p, time(NULL), "last_add_time");
 	write_persist_file(p, outfile);
 	free_persist(p);
