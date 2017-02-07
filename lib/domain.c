@@ -2525,8 +2525,9 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
+    ipmb->slave_addr += 2;
     if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	|| (ipmb->slave_addr >= info->end_addr)) {
+	|| (ipmb->slave_addr > info->end_addr)) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(domain, 0, info->cb_data);
@@ -2536,7 +2537,6 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
 	ipmi_mem_free(info);
 	goto out;
     }
-    ipmb->slave_addr += 2;
     info->missed_responses = 0;
     if (in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
 	goto next_addr_nolock;
@@ -2691,8 +2691,9 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
+    ipmb->slave_addr += 2;
     if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	|| (ipmb->slave_addr >= info->end_addr)) {
+	|| (ipmb->slave_addr > info->end_addr)) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(domain, 0, info->cb_data);
@@ -2702,7 +2703,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	ipmi_mem_free(info);
 	goto out;
     }
-    ipmb->slave_addr += 2;
     info->missed_responses = 0;
     if (in_ipmb_ignores(domain, ipmb->channel, ipmb->slave_addr))
 	goto next_addr_nolock;
