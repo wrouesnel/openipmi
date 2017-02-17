@@ -193,7 +193,7 @@ handle_get_chassis_status(lmc_data_t    *mc,
 	*rdata_len = 1;
 	return;
     } else {
-	rdata[0] = !!rv;
+	rdata[1] = !!rv;
     }
     rdata[2] = 0;
     rdata[3] = 0;
