@@ -8989,7 +8989,7 @@ somewhat strange if you already know another OO programming language.
 As an example, to create a domain connection and read all the events,
 you might use the following code:
 
-\verbatimtabinput{../swig/perl/get_events}
+\verbatimtabinput{\topdir/swig/perl/get_events}
 
 Unfortunately, the documentation for the Perl interface is in the file
 \verb=swig/OpenIPMI.i= along with the sources.  It will hopefully be
@@ -9234,29 +9234,29 @@ The following program shows basic setup, registration, and registering
 to handle new entitys, sensors, and controls as they are created.
 Some basic information is dumped.
 
-\verbatimtabinput{../sample/sample.c}
+\verbatimtabinput{\topdir/sample/sample.c}
 
 %---------------------------------------------------------------------
 \chapter{Sample Program Showing Event Setup}
 \label{app-sample-prog-event-setup}
 The following program show how to set up events.  For every sensor
 that is detected, it will turn on all events that the sensor supports.
-\verbatimtabinput{../sample/sample3.c}
+\verbatimtabinput{\topdir/sample/sample3.c}
 
 %---------------------------------------------------------------------
 \chapter{Command Receiver Program}
 \label{recv-cmd-prog}
-\verbatimtabinput{recv_cmd.c}
+\verbatimtabinput{\topdir/doc/recv_cmd.c}
 
 %---------------------------------------------------------------------
 \chapter{Connection Handling Interface (ipmi\_conn.h)}
 \label{ipmi-conn-h}
-\verbatimtabinput{../include/OpenIPMI/ipmi_conn.h}
+\verbatimtabinput{\topdir/include/OpenIPMI/ipmi_conn.h}
 
 %---------------------------------------------------------------------
 \chapter{OS Handler Interface (os\_handler.h)}
 \label{os-handler-h}
-\verbatimtabinput{../include/OpenIPMI/os_handler.h}
+\verbatimtabinput{\topdir/include/OpenIPMI/os_handler.h}
 
 \bibliographystyle{plain}
 \bibliography{ipmi}
