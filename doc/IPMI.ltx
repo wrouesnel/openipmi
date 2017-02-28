@@ -5953,24 +5953,24 @@ possible for an entity to have more than one parent; there is no
 direct prohibition of this in \acs{IPMI}, although it would be a
 little wierd.  To iterate the parents, use the following call:
 \begin{verbatim}
-typedef void (*ipmi_entity_iterate_child_cb)(ipmi_entity_t *ent,
-                                             ipmi_entity_t *child,
-                                             void          *cb_data);
-void ipmi_entity_iterate_children(ipmi_entity_t                *ent,
-                                  ipmi_entity_iterate_child_cb handler,
-                                  void                         *cb_data);
-\end{verbatim}
-
-Similarly, an entity may have children, but it is certain that more
-than one child is allowed.  To iterate entities children, use the
-following call:
-\begin{verbatim}
 typedef void (*ipmi_entity_iterate_parent_cb)(ipmi_entity_t *ent,
                                               ipmi_entity_t *parent,
                                               void          *cb_data);
 void ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
                                  ipmi_entity_iterate_parent_cb handler,
                                  void                          *cb_data);
+\end{verbatim}
+
+Similarly, an entity may have children, but it is certain that more
+than one child is allowed.  To iterate entities children, use the
+following call:
+\begin{verbatim}
+typedef void (*ipmi_entity_iterate_child_cb)(ipmi_entity_t *ent,
+                                             ipmi_entity_t *child,
+                                             void          *cb_data);
+void ipmi_entity_iterate_children(ipmi_entity_t                *ent,
+                                  ipmi_entity_iterate_child_cb handler,
+                                  void                         *cb_data);
 \end{verbatim}
 
 To discover if an entity is a child (has parent entities) or is a
