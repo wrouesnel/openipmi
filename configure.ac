@@ -120,28 +120,6 @@ AC_ARG_WITH(gliblibs,
     gliblibs="$withval",
 )
 
-tryglib12=yes
-AC_ARG_WITH(glib12,
-[  --with-glib12=yes|no            Look for glib version 1.2.],
-    if test "x$withval" = "xyes"; then
-      tryglib12=yes
-    elif test "x$withval" = "xno"; then
-      tryglib12=no
-    fi,
-)
-
-glib12cflags=
-AC_ARG_WITH(glib12cflags,
-[  --with-glib12cflags=flags       Set the flags to compile with glib 1.2.],
-    glibcflags="$withval",
-)
-
-gliblibs=
-AC_ARG_WITH(glib12libs,
-[  --with-glib12libs=libs          Set the libraries to link with glib 1.2.],
-    gliblibs="$withval",
-)
-
 trytcl=yes
 AC_ARG_WITH(tcl,
 [  --with-tcl=yes|no               Look for tcl.],
@@ -324,27 +302,16 @@ if test "x$glibver" = "x" -o "x$glibcflags" = "x" -o "x$gliblibs" = "x"; then
    if test "x$tryglib" != "xno"; then
       if test "x$pkgprog" != "x"; then
          glibprog=$pkgprog
-      else
-         AC_PATH_PROG(glibprog, glib-config)
       fi
    fi
    GLIB_CFLAGS=
    GLIB_LIBS=
    if test "x$glibprog" != "x"; then
-      # Try 2.0 first
       GLIB_CFLAGS=`$glibprog --cflags gthread-2.0 2>/dev/null`
       if test $? = 0; then
          haveglib=yes
          GLIB_VERSION='2.0'
          GLIB_LIBS=`$glibprog --libs gthread-2.0 2>/dev/null`
-      else
-         # Now try 1.2
-         GLIB_CFLAGS=`$glibprog --cflags gthread`
-         if test $? = 0; then
-            haveglib=yes
-	    GLIB_VERSION='1.2'
-	    GLIB_LIBS=`$glibprog --libs gthread`
-         fi
       fi
    fi
 else
@@ -376,69 +343,10 @@ AC_SUBST(GLIB_SO)
 AC_SUBST(GLIB_PKGCONF)
 AC_SUBST(GLIB_TARGET)
 
-
-# We allow a glib 1.2 specific library, too.
-haveglib12=no
-if test "x$glib12cflags" = "x" -o "x$glib12libs" = "x"; then
-   glibprog=
-   if test "x$tryglib12" != "xno"; then
-      AC_PATH_PROG(glibprog, glib-config)
-   fi
-   GLIB12_CFLAGS=
-   GLIB12_LIBS=
-   if test "x$glibprog" != "x"; then
-      GLIB12_CFLAGS=`$glibprog --cflags gthread`
-      if test $? = 0; then
-         haveglib12=yes
-   	 GLIB12_LIBS=`$glibprog --libs gthread`
-      fi
-   fi
-else
-   haveglib12=yes
-   GLIB12_CFLAGS="$glib12cflags"
-   GLIB12_LIBS="$glib12libs"
-fi
-
-echo "checking for glib 1.2... $haveglib12"
-
-if test "x$haveglib12" = "xyes"; then
-   AC_DEFINE([HAVE_GLIB12], [], [Have the GLIB 1.2 libraries])
-   GLIB12_LIB='$(top_builddir)/glib/libOpenIPMIglib12.la'
-   GLIB12_SO='$(top_builddir)/glib/.libs/libOpenIPMIglib12.so'
-   GLIB12_PKGCONF=OpenIPMIglib12.pc
-   GLIB12_TARGET=libOpenIPMIglib12.la
-else
-   GLIB12_LIB=
-   GLIB12_SO=
-   GLIB12_PKGCONF=
-   GLIB12_TARGET=
-fi
-AC_SUBST(GLIB12_CFLAGS)
-AC_SUBST(GLIB12_LIBS)
-
-AC_SUBST(GLIB12_LIB)
-AC_SUBST(GLIB12_SO)
-AC_SUBST(GLIB12_PKGCONF)
-AC_SUBST(GLIB12_TARGET)
-
-
-if test "x$haveglib12" = "xyes" -o "x$haveglib" = "xyes"; then
+if test "x$haveglib" = "xyes"; then
    GLIB_DIR=glib
-   # If we only have one glib library, just directly link with it in swig.
-   # If we have two libraries, the swig code dynamically loads it and we
-   # don't directly link with it.
-   if test "x$haveglib12" = "xyes" -a "x$haveglib" = "xyes"; then
-      GLIB_SINGLE_LIB=
-      GLIB_SINGLE_SO=
-   else
-      if test "x$haveglib12" = "xyes"; then
-         GLIB_SINGLE_LIB=$GLIB12_LIB
-         GLIB_SINGLE_SO=$GLIB12_SO
-      else
-         GLIB_SINGLE_LIB=$GLIB_LIB
-         GLIB_SINGLE_SO=$GLIB_SO
-      fi
-   fi
+   GLIB_SINGLE_LIB=$GLIB_LIB
+   GLIB_SINGLE_SO=$GLIB_SO
 else
    GLIB_DIR=
    GLIB_SINGLE_LIB=
@@ -947,7 +855,6 @@ AC_OUTPUT(Makefile
 	  OpenIPMIpthread.pc
 	  OpenIPMIposix.pc
 	  OpenIPMIglib.pc
-	  OpenIPMIglib12.pc
 	  OpenIPMItcl.pc
 	  OpenIPMIcmdlang.pc
 	  OpenIPMIui.pc)
