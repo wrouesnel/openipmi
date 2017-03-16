@@ -13,14 +13,9 @@ sdrcomp_DEPENDENCIES = $(top_srcdir)/lanserv/persist.c \
 sdrcomp_SOURCES = sdrcomp.c
 sdrcomp_LDFLAGS = -lm
 
-sdrcomp_build_DEPENDENCIES = $(top_srcdir)/lanserv/persist.c \
+# Build host version of the program
+BUILD_SDRCOMP_DEPS = $(top_srcdir)/lanserv/persist.c \
 	$(top_srcdir)/utils/string.c
-sdrcomp_build_SOURCES = sdrcomp.c
-sdrcomp_build_LDFLAGS = -lm
-sdrcomp_build_CC = $(BUILD_CC)
-
-# Host version of the program
-BUILD_SDRCOMP_SRCS = $(top_srcdir)/$(subdir)/sdrcomp.c \
-		$(top_srcdir)/utils/string.c
-sdrcomp.build: $(BUILD_SDRCOMP_SRCS) $(top_srcdir)/lanserv/persist.c
+BUILD_SDRCOMP_SRCS = $(top_srcdir)/$(subdir)/sdrcomp.c
+sdrcomp_build$(EXEEXT): $(BUILD_SDRCOMP_SRCS) $(BUILD_SDRCOMP_DEPS)
 	$(BUILD_CC) -o $@ $(BUILD_SDRCOMP_SRCS) $(AM_CFLAGS) -lm
