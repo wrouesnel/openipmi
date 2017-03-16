@@ -25,7 +25,7 @@ noinst_HEADERS = emu.h bmc.h
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c lanserv_config.c config.c serv.c serial_ipmi.c \
 	persist.c extcmd.c
-libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS) -ldl
+libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS) -ldl $(RT_LIB)
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map \
 	../utils/libOpenIPMIutils.la
@@ -33,14 +33,14 @@ libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
-ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la -ldl
+ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la -ldl $(RT_LIB)
 ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
 
 ipmi_sim_SOURCES = ipmi_sim.c bmc.c emu_cmd.c sol.c \
 	bmc_storage.c bmc_app.c bmc_chassis.c bmc_transport.c \
 	bmc_sensor.c bmc_picmg.c
-ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread
+ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread $(RT_LIB)
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
 

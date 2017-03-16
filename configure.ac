@@ -263,6 +263,10 @@ AC_CHECK_FUNCS(getaddrinfo)
 
 AC_CHECK_HEADERS(execinfo.h)
 
+# Check whether we need -lrt added.
+AC_CHECK_LIB(c, clock_gettime, RT_LIB=, RT_LIB=-lrt)
+AC_SUBST(RT_LIB)
+
 AC_SUBST(POPTLIBS)
 
 FOUND_POPT_HEADER=no

@@ -29,7 +29,7 @@ openipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(TERM_LIBS) \
 		$(SNMPLIBS) $(GLIB_LIB) $(GLIB_LIBS) \
 		$(TCL_LIB) $(TCL_LIBS) \
-		$(OPENSSLLIBS) $(GDBM_LIB)
+		$(OPENSSLLIBS) $(GDBM_LIB) $(RT_LIB)
 
 CLEANFILES = libOpenIPMIcmdlang.map
 
