@@ -6742,13 +6742,13 @@ The \verb=name= returns the string name for the index.  Note that the
 indexes may change between release, so don't rely on absolute numbers.
 The names will remain the same, so you can rely on those.
 
-The \verb=number= is a pointer to an integer with the number of the
-item to get within the field.  Some fields (custom records) have
-multiple items in them.  The first item will be zero, and the integer
-here will be updated to reference the next item.  When the last item
-is reached, the field will be updated to -1.  For fields that don't
-have multiple items, this will not modify the value num points to,
-so you can use that to detect if indexes are used for the item.
+\verb=num= is a pointer to an integer with the index of the item to get
+within the field. Some fields (custom records) have multiple items in
+them. The first item will be at index zero, and the integer here will
+be updated to reference the next item. When the last item is reached,
+the integer will be updated to -1. For fields that don’t have multiple
+items, this will not modify the value num points to, so you can use
+that to detect if indexes are used for the item.
 
 The \verb=dtype= field will be set to the data type.  If it is an
 integer value, then \verb=intval= will be set to whatever the value
