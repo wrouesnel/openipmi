@@ -119,7 +119,6 @@ persist_init(const char *papp, const char *instance, const char *ibasedir)
     strcpy(dname, basedir);
     strcat(dname, "/");
     strcat(dname, app);
-    free(app);
     strcat(dname, "/");
     if (dname[0] == '/')
 	n = strchr(dname + 1, '/');
