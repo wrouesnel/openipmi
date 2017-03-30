@@ -14,6 +14,7 @@ sdrcomp_SOURCES = sdrcomp.c
 sdrcomp_LDFLAGS = -lm
 
 # Build host version of the program
+sdrcomp_build_SOURCES = sdrcomp.c
 BUILD_SDRCOMP_DEPS = $(top_srcdir)/lanserv/persist.c \
 	$(top_srcdir)/utils/string.c
 BUILD_SDRCOMP_SRCS = $(top_srcdir)/$(subdir)/sdrcomp.c
