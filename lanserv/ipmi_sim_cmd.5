@@ -69,7 +69,7 @@ Execute the commands in the given file.
 .SH MC COMMANDS
 
 .TP
-\fBmc_add\fP \fIIPMBAddress\fP \fIDeviceID\fP \fIHasDeviceSDRs\fP \fIDeviceRevision\fP \fIMajorFWRev\fP \fIMinorFWRev\fP \fIDeviceSupport\fP \fIManufacturerID\fP \fIProduceID\fP
+\fBmc_add\fP \fIIPMBAddress\fP \fIDeviceID\fP \fIHasDeviceSDRs\fP \fIDeviceRevision\fP \fIMajorFWRev\fP \fIMinorFWRev\fP \fIDeviceSupport\fP \fIManufacturerID\fP \fIProductID\fP
 Add an MC to the simulator.  All values are hexadecimal.  These are mostly
 values for the ``Get Device ID'' command, see the spec for details.  Note
 that the MC is not enabled after being added, you must add it.
@@ -81,7 +81,7 @@ work.
 You may use has-device-sdrs or no-device-sdrs in the HasDeviceSDRs field.
 
 .TP
-\fBmc_add_fru_data\fP \fImc-addr\fP \fIDeviceID\fP \fIFRUSize\fP [\fIbyte1\fP [\fIbyte2\fP [...]]] | [\fIfile\fP \fIoffset\fP \fIfilename\f{]
+\fBmc_add_fru_data\fP \fImc-addr\fP \fIDeviceID\fP \fIFRUSize\fP (data [\fIbyte1\fP [\fIbyte2\fP [...]]] | \fIfile\fP \fIoffset\fP \fIfilename\f{)
 Set the FRU data for a given MC and device id.  Data may be supplied
 directly here, or it may be given as a file.  The offset is the start
 from the beginning of the file where the data is kept.
@@ -250,7 +250,7 @@ to make it a bit more readable.  The thresholds are:
 \fBsensor_set_event_support\fP \fImc-addr\fP \fILUN\fP \fIsensor-num\fP \fIevents-enable\fP \fIscanning\fP \fIevent-support\fP \fIassert-support\fP \fIdeassert-support\fP \fIassert-enabled\fP \fIdeassert-enabled\fP 
 
 Set the event support of a sensor.  The events-enable will enable
-global events ont the sensor if non-zero, otherwise they are disabled.
+global events on the sensor if non-zero, otherwise they are disabled.
 The scanning values set the scanning value for the sensor.  The
 event-support value sets the event capabilities in the sensor, this is
 the same as the ``sensor event message control support'' value in the
