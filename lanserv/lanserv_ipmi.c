@@ -643,7 +643,6 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
     uint8_t  data[21];
     user_t   *user;
     uint32_t sid;
-    uint8_t  authtype;
     int      rv;
 
     if (msg->len < 17) {
@@ -653,7 +652,6 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
 	return;
     }
 
-    authtype = msg->data[0] & 0xf;
     user = find_user(lan, msg->data+1, 1, 0);
     if (!user) {
 	lan->sysinfo->log(lan->sysinfo, SESSION_CHALLENGE_FAILED, msg,
@@ -662,13 +660,6 @@ handle_get_session_challenge(lanserv_data_t *lan, msg_t *msg)
 	    return_err(lan, msg, NULL, 0x82); /* no null user */
 	else
 	    return_err(lan, msg, NULL, 0x81); /* no user */
-	return;
-    }
-
-    if (!(user->allowed_auths & (1 << authtype))) {
-	lan->sysinfo->log(lan->sysinfo, SESSION_CHALLENGE_FAILED, msg,
-		 "Session challenge failed: Invalid authorization type");
-	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
 	return;
     }
 
@@ -893,20 +884,6 @@ handle_temp_session(lanserv_data_t *lan, msg_t *msg)
     if (! (user->valid)) {
 	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Invalid user idx: 0x%x", user_idx);
-	return;
-    }
-    if (! (user->allowed_auths & (1 << auth))) {
-	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
-		 "Activate session failed: Requested auth %d was invalid for"
-		 " user 0x%x",
-		 auth, user_idx);
-	return;
-    }
-    if (! (user->allowed_auths & (1 << msg->authtype))) {
-	lan->sysinfo->log(lan->sysinfo, NEW_SESSION_FAILED, msg,
-		 "Activate session failed: Message auth %d was invalid for"
-		 " user 0x%x",
-		 msg->authtype, user_idx);
 	return;
     }
 

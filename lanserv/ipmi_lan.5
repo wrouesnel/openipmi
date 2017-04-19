@@ -44,7 +44,7 @@ default value of the ipmi_sim startup command file and the place where
 persistent data is stored.
 
 .TP
-\fBuser\fP \fIusernum\fP \fIenabled\fP \fIusername\fP \fIpassword\fP \fImax-priv\fP \fImax-session\fP [\fIauth\fP [\fIauth\fP [...]]]
+\fBuser\fP \fIusernum\fP \fIenabled\fP \fIusername\fP \fIpassword\fP \fImax-priv\fP \fImax-session\fP
 .I usernum
 specifies the user number for the user.  Note that user number \fB0\fP is
 invalid, and user number \fB1\fP is the special "anonymous" user, whose
@@ -67,10 +67,6 @@ specifies the maximum privilege level allowed for the user.
 
 .I max.sessions
 specifies the maximum number of session the user may open.
-
-.I auth
-specifies the allowed authorization types for the user.  Only the specified ones
-are allowed, so if none are specified, the user will be disabled.
 
 .TP
 \fBstartcmd\fP \fI"cmd"\fP

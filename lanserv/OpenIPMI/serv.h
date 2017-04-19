@@ -227,7 +227,6 @@ struct user_s
     unsigned char privilege;
     unsigned char max_sessions;
     unsigned char curr_sessions;
-    uint16_t      allowed_auths;
 
     /* Set by the user code. */
     int           idx; /* My idx in the table. */

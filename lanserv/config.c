@@ -109,8 +109,6 @@ read_persist_users(sys_data_t *sys)
 		users[j].privilege = iv;
 	    if (!read_persist_int(p, &iv, "%d.max_sessions", j))
 		users[j].max_sessions = iv;
-	    if (!read_persist_int(p, &iv, "%d.allowed_auths", j))
-		users[j].allowed_auths = iv;
 	}
 	free_persist(p);
     }
@@ -144,7 +142,6 @@ write_persist_users(sys_data_t *sys)
 			     "%d.passwd", j);
 	    add_persist_int(p, users[j].privilege, "%d.privilege", j);
 	    add_persist_int(p, users[j].max_sessions, "%d.max_sessions", j);
-	    add_persist_int(p, users[j].allowed_auths, "%d.allowed_auths", j);
 	}
 	write_persist(p);
 	free_persist(p);
@@ -659,11 +656,6 @@ get_user(char **tokptr, sys_data_t *sys, const char **err)
     if (rv)
 	return rv;
     sys->cusers[num].max_sessions = val;
-
-    rv = get_auths(tokptr, &val, err);
-    if (rv)
-	return rv;
-    sys->cusers[num].allowed_auths = val;
 
     return 0;
 }
