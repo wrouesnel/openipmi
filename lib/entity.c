@@ -3664,7 +3664,7 @@ decode_mcdlr(ipmi_sdr_t *sdr, dlr_info_t *info, ipmi_mc_t *mc)
 				&info->id_type, ENTITY_ID_LEN, &info->id_len);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%sentity.c(decode_frudlr):"
+		 "%sentity.c(decode_mcdlr):"
 		 " Error getting device ID string from SDR record %d: %d,"
 		 " this entity will be named **INVALID**",
 		 MC_NAME(mc), sdr->record_id, rv);
