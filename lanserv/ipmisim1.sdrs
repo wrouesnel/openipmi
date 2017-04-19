@@ -92,3 +92,35 @@ sdr type 1
 	sensor_minimum		0
 	id_string		"SubTemp"
 endsdr
+
+# A presence sensor for memory module 1
+sdr type 2
+	sensor_owner_id		0x20
+	sensor_owner_lun	0
+	channel_number		0
+	sensor_number		2
+	entity_id		memory_module
+	entity_instance		1
+	sensor_type		Entity_Presence
+	event_reading_type_code	0x6f
+	event0_state_ret	true
+	assert_event0		true
+	deassert_event0		true
+	event1_state_ret	true
+	assert_event1		true
+	deassert_event1		true
+	id_string		"mm1pres"
+endsdr
+
+# A FRU device locator for memory module 2
+sdr type 0x11
+	device_access_address	0x20
+	fru_device_address	3
+	logical_fru		1
+	lun			0
+	device_type		0x10
+	device_type_modifier	0
+	fru_entity_id		memory_module
+	fru_entity_instance	2
+	id_string		"mm2frudev"
+endsdr

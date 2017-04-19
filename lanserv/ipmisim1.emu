@@ -27,6 +27,17 @@ sensor_set_event_support 0x20 0 1 enable scanning per-state \
 	000111111000000 000111111000000 \
 	000111111000000 000111111000000
 
+# Add a memory module presence sensor.
+sensor_add 0x20 0 2 37 0x6f
+sensor_set_bit_clr_rest 0x20 0 2 1 1
+#sensor_set_bit_clr_rest 0x20 0 2 0 1
+sensor_set_event_support 0x20 0 2 enable scanning per-state \
+	000000000000011 000000000000011 \
+	000000000000011 000000000000011
+
+# FRU data for entity 8.2
+mc_add_fru_data 0x20 3 128 data 0
+
 # Add a satellite MC
 mc_add 0x30 2 no-device-sdrs 0x98 0x10 1 0xa0 0x1291 0xf03
 
