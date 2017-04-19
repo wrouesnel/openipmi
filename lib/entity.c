@@ -4159,7 +4159,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    /* Set up the MC information for the device. */
 	    if (infos.dlrs[i]->type == IPMI_ENTITY_FRU) {
 		channel = infos.dlrs[i]->channel;
-		ipmb = infos.dlrs[i]->slave_address;
+		ipmb = infos.dlrs[i]->access_address;
 		memcpy(&found->ent->pending_info, infos.dlrs[i],
 		       sizeof(dlr_info_t));
 		found->ent->pending_info_ready = 1;		
