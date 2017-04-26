@@ -471,6 +471,8 @@ sub dup_fru {
     }
 
     sub fru_fetched {
+	print "CheckRead4: Fru fetched\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
@@ -504,6 +506,8 @@ sub dup_fru {
     }
 
     sub fru_written {
+	print "CheckRead3: Fru written\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
@@ -529,6 +533,8 @@ sub dup_fru {
     }
 
     sub fru_fetched {
+	print "CheckRead3: Fru fetched\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
@@ -574,6 +580,8 @@ sub dup_fru {
     }
 
     sub fru_fetched {
+	print "CheckRead2: Fru fetched\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
@@ -623,6 +631,8 @@ sub dup_fru {
     }
 
     sub fru_written {
+	print "CheckRead1: Fru written\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
@@ -648,6 +658,8 @@ sub dup_fru {
     }
 
     sub fru_fetched {
+	print "CheckRead1: Fru fetched\n";
+
 	my $self = shift;
 	my $domain = shift;
 	my $fru = shift;
