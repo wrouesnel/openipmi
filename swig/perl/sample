@@ -87,7 +87,6 @@ use OpenIPMI;
 	    printf " %2.2x", $val;
 	}
 	print "\n";
-	$event->call_handler($self)
     }
 
     sub entity_presence_cb {
@@ -566,6 +565,8 @@ use OpenIPMI;
 	    $i = $fru->str_to_index("blah blah");
 	    if ($i != -1) {
 		print "*** FRU string 'blah blah' was valid\n";
+	    } else {
+		print "  invalid fru string properly failed\n";
 	    }
 
 	    $i = 0;
