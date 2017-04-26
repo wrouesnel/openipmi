@@ -2986,6 +2986,7 @@ sdrs_fetched_mc_cb(ipmi_mc_t *mc, void *cb_data)
 {
     sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
     int              rv = 0;
+    ipmi_domain_t    *domain = info->domain;
 
     if (info->err) {
 	sdr_reread_done(info, mc, info->err);
@@ -2996,13 +2997,15 @@ sdrs_fetched_mc_cb(ipmi_mc_t *mc, void *cb_data)
 	mc->fixup_sdrs_handler(mc, info->sdrs, mc->fixup_sdrs_cb_data);
 
     if (info->changed) {
-	ipmi_entity_scan_sdrs(info->domain, mc,
-			      ipmi_domain_get_entities(info->domain),
+	ipmi_entity_scan_sdrs(domain, mc,
+			      ipmi_domain_get_entities(domain),
 			      info->sdrs);
-	rv = ipmi_sensor_handle_sdrs(info->domain, mc, info->sdrs);
+	rv = ipmi_sensor_handle_sdrs(domain, mc, info->sdrs);
 
 	if (!rv)
-	    ipmi_detect_domain_presence_changes(info->domain, 0);
+	    ipmi_detect_domain_presence_changes(domain, 0);
+
+	_ipmi_entities_report_sdrs_read(ipmi_domain_get_entities(domain));
     }
 
     sdr_reread_done(info, mc, rv);

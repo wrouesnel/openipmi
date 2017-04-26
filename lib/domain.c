@@ -444,20 +444,16 @@ deliver_rsp(ipmi_domain_t                *domain,
  *
  **********************************************************************/
 void
-_ipmi_get_domain_fully_up(ipmi_domain_t *domain, char *name)
+_ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name)
 {
-    if (!domain->domain_fully_up)
-	return;
     ipmi_lock(domain->domain_lock);
     domain->fully_up_count++;
     ipmi_unlock(domain->domain_lock);
 }
 
 void
-_ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name)
+_ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name)
 {
-    if (!domain->domain_fully_up)
-	return;
     ipmi_lock(domain->domain_lock);
     domain->fully_up_count--;
     if (domain->fully_up_count == 0) {
@@ -468,7 +464,9 @@ _ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name)
 	domain_fully_up_cb_data = domain->domain_fully_up_cb_data;
 	domain->domain_fully_up = NULL;
 	ipmi_unlock(domain->domain_lock);
-	domain_fully_up(domain, domain_fully_up_cb_data);
+	_ipmi_entities_report_mcs_scanned(domain->entities);
+	if (domain_fully_up)
+	    domain_fully_up(domain, domain_fully_up_cb_data);
 	return;
     }
     ipmi_unlock(domain->domain_lock);
@@ -3033,6 +3031,7 @@ refetch_sdr_handler(ipmi_sdr_info_t *sdrs,
 			      domain->entities, domain->main_sdrs);
 	ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
 	ipmi_detect_ents_presence_changes(domain->entities, 1);
+	_ipmi_entities_report_sdrs_read(domain->entities);
     }
 }
 
@@ -4579,6 +4578,7 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_unlock(domain->domain_lock);
     if (SDRs_read_handler)
 	SDRs_read_handler(domain, 0, SDRs_read_handler_cb_data);
+    _ipmi_entities_report_sdrs_read(domain->entities);
     _ipmi_put_domain_fully_up(domain, "con_up_complete");
 }
 

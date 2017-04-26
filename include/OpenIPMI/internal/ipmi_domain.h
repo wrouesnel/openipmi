@@ -254,8 +254,8 @@ int _ipmi_domain_in_shutdown(ipmi_domain_t *domain);
 
 /* Used as a refcount to know when the domain is completely
    operational. */
-void _ipmi_get_domain_fully_up(ipmi_domain_t *domain, char *name);
-void _ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name);
+void _ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name);
+void _ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name);
 
 /* Return connections for a domain. */
 int _ipmi_domain_get_connection(ipmi_domain_t *domain,

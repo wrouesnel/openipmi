@@ -53,6 +53,14 @@ int _ipmi_entity_get(ipmi_entity_t *ent);
 /* Must be called with no locks held. */
 void _ipmi_entity_put(ipmi_entity_t *ent);
 
+/* Called by the domain code when it finishes processing SDRs, so that
+   the entity code can know when to report entities fully up. */
+void _ipmi_entities_report_sdrs_read(ipmi_entity_info_t *ents);
+
+/* Called by the domain code when it finishes scanning MCs, so that
+   the entity code can know when to report entities fully up. */
+void _ipmi_entities_report_mcs_scanned(ipmi_entity_info_t *ents);
+
 /* Used so entities can be forced to be kept around. */
 int _ipmi_entity_add_ref(ipmi_entity_t *ent);
 int _ipmi_entity_remove_ref(ipmi_entity_t *ent);
