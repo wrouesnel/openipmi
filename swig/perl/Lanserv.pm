@@ -17,7 +17,7 @@ if (defined $srcdir) {
 }
 my $this_srcdir = $top_srcdir . "/swig/perl";
 my $lanserv_conf = $this_srcdir . "/lan.conf";
-my $lanserv_emu = $top_builddir . "/lanserv/ipmi_sim -c " . $lanserv_conf . " -x 'mc_setbmc 0x20'";
+my $lanserv_emu = $top_builddir . "/lanserv/ipmi_sim -c " . $lanserv_conf . " -s tmppersist -x 'mc_setbmc 0x20'";
 
 sub reader {
     my $self = shift;
