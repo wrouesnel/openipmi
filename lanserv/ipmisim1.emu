@@ -36,7 +36,7 @@ sensor_set_event_support 0x20 0 2 enable scanning per-state \
 	000000000000011 000000000000011
 
 # FRU data for entity 8.2
-mc_add_fru_data 0x20 3 128 data 0
+mc_add_fru_data 0x30 3 128 data 0
 
 # Add a satellite MC
 mc_add 0x30 2 no-device-sdrs 0x98 0x10 1 0xa0 0x1291 0xf03

@@ -114,7 +114,7 @@ endsdr
 
 # A FRU device locator for memory module 2
 sdr type 0x11
-	device_access_address	0x20
+	device_access_address	0x30
 	fru_device_address	3
 	logical_fru		1
 	lun			0
