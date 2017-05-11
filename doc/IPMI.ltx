@@ -5391,10 +5391,13 @@ and handles all the aspects of talking to sensors, controls, and
 \ac{MC}.  However, exceptions exist, so the operation is described
 here.
 
-First, you should probably decide if you want a clean interface to the
-function through a control.  A control provides a clean interface to a
-device and should probably be used if possible.  You would then send
-the messages from functions that are part of the control interface.
+If you are trying to control some physical thing on the system (an
+LED, siren, reset, or some other output) you probably want a clean
+interface to the function through a control.  You would then send the
+messages from functions that are part of the control interface.
+
+But not everything fits that scenario, and if you build a control,
+you probably still need to send messages, so...
 
 To send a message, you can either send it to an address in the domain
 or to an \acs{MC}.  To send to an address, you must have or construct
