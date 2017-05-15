@@ -824,6 +824,23 @@ int ipmi_entity_remove_fully_up_handler_cl(ipmi_entity_t              *entity,
 					   ipmi_entity_fully_up_cl_cb handler,
 					   void                   *event_data);
 
+/*
+ * Set a presence detector for an entity that will override normal
+ * presence detection.  When the handler is called, it must either
+ * return an error or call ipmi_entity_detector_done().  It must do
+ * one of those and must not do both.
+ *
+ * To set the presence back to normal means, the detector can be
+ * set to NULL.
+ */
+typedef int (*ipmi_entity_presence_detect_cb)(ipmi_entity_t *entity,
+					      void *handler_data);
+void ipmi_entity_set_presence_detector(ipmi_entity_t *entity,
+				       ipmi_entity_presence_detect_cb handler,
+				       void *handler_data);
+void ipmi_entity_detector_done(ipmi_entity_t *entity,
+			       int present);
+  
 /* Type of entities.  Note that you will never see EAR and DREAR
    entities, so don't worry about those. */
 enum ipmi_dlr_type_e { IPMI_ENTITY_UNKNOWN = 0,

@@ -197,6 +197,10 @@ struct ipmi_entity_s
 
     const char *entity_id_string;
 
+    /* Function to detect presence. */
+    ipmi_entity_presence_detect_cb detect_presence;
+    void *detect_presence_data;
+
     /* A standard presence sensor.  This one overrides everything. */
     ipmi_sensor_t    *presence_sensor;
     ipmi_sensor_id_t presence_sensor_id;
@@ -2472,6 +2476,24 @@ states_bit_read(ipmi_sensor_t *sensor,
     presence_finalize(ent, "states_bit_read");
 }
 
+void
+ipmi_entity_set_presence_detector(ipmi_entity_t *entity,
+				  ipmi_entity_presence_detect_cb handler,
+				  void *handler_data)
+{
+    entity->detect_presence = handler;
+    entity->detect_presence_data = handler_data;
+    entity->presence_possibly_changed = 1;
+}
+
+void
+ipmi_entity_detector_done(ipmi_entity_t *entity,
+			  int present)
+{
+    presence_changed(entity, present);
+    presence_finalize(entity, "entity_detector_done");
+}
+  
 static void
 ent_detect_presence_nolock(ipmi_entity_t *ent, void *cb_data)
 {
@@ -2491,7 +2513,13 @@ ent_detect_presence_nolock(ipmi_entity_t *ent, void *cb_data)
     }
 
     _ipmi_get_domain_fully_up(ent->domain, "ent_detect_presence");
-    if (ent->presence_sensor) {
+    if (ent->detect_presence) {
+	ent_unlock(ent);
+	rv = ent->detect_presence(ent, ent->detect_presence_data);
+	if (rv)
+	    presence_finalize(ent, "ent_detect_presence(4)");
+	ent_lock(ent);
+    } else if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
 	ipmi_sensor_id_t psi = ent->presence_sensor_id;
 	ent_unlock(ent);
