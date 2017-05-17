@@ -150,7 +150,10 @@ typedef struct ipmi_msg_item_s
 } ipmi_msgi_t;
 
 /* Return values for function that take the previous item. */
+/* Use this if you are not keeping the message structure for later user. */
 #define IPMI_MSG_ITEM_NOT_USED	0
+/* If you keep the message data in a callback, return this so the caller
+   knows to not free the data itself.  You must free it later. */
 #define IPMI_MSG_ITEM_USED	1
 
 /* Pay no attention to the contents of these structures... */
