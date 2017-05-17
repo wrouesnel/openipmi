@@ -206,6 +206,11 @@ struct ipmi_entity_s
        presence sensor. */
     ipmi_sensor_t    *presence_bit_sensor;
     ipmi_sensor_id_t presence_bit_sensor_id;
+
+    /* For a standard presence sensor, the offset of the present bit,
+       the absent bit will be !presence_bit.  For a presence bit
+       sensor, the offset of the actual bit, it's always a present
+       bit. */
     int              presence_bit_offset;
 
     int           present;
@@ -1907,9 +1912,9 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
     /* zero offset is the "present" offset, 1 or 2 means it absent or
        disabled, coupled with the assertion/deassertion. */
     if (dir == IPMI_ASSERTION)
-	presence_changed(ent, offset == 0);
+	presence_changed(ent, offset == ent->presence_bit_offset);
     else if (dir == IPMI_DEASSERTION)
-	presence_changed(ent, offset != 0);
+	presence_changed(ent, offset != ent->presence_bit_offset);
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -2423,13 +2428,15 @@ states_read(ipmi_sensor_t *sensor,
 	   not present. */
 	present = 0;
     else {
-	rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
+	rv = ipmi_sensor_discrete_event_readable(sensor,
+						 ent->presence_bit_offset,
+						 &val);
 	if (rv || !val)
-	    /* The present bit is not supported, so use the not present bit. */
-	    present = ! ipmi_is_state_set(states, 1);
+	    /* The present bit is not supported, so use the absent bit. */
+	    present = !ipmi_is_state_set(states, !ent->presence_bit_offset);
 	else
 	    /* The present bit is supported. */
-	    present = ipmi_is_state_set(states, 0);
+	    present = ipmi_is_state_set(states, ent->presence_bit_offset);
     }
 
     presence_changed(ent, present);
@@ -2589,6 +2596,16 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 						  presence_sensor_changed,
 						  ent);
     }
+
+    /*
+     * Unfortunately, the present/absent bits in the sensor-specific
+     * verses the generic device presence types are backwards.
+     */
+    if (ipmi_sensor_get_event_reading_type(sensor) ==
+		IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE)
+	ent->presence_bit_offset = 1;
+    else
+	ent->presence_bit_offset = 0;
 
     event_support = ipmi_sensor_get_event_support(sensor);
 
@@ -3022,8 +3039,8 @@ static int
 is_presence_sensor(ipmi_sensor_t *sensor)
 {
     int val, rv;
-    int supports_present = 0;
-    int supports_absent = 0;
+    int supports_bit0 = 0;
+    int supports_bit1 = 0;
     int reading_type;
 
     /* Is it the right type (a presence sensor)? */
@@ -3031,8 +3048,9 @@ is_presence_sensor(ipmi_sensor_t *sensor)
 	return 0;
 
     reading_type = ipmi_sensor_get_event_reading_type(sensor);
-    if (reading_type != IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
-	/* Don't know how to interpret a "generic" reating type code */
+    if (reading_type != IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC &&
+	reading_type != IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE)
+	/* Don't know how to interpret an other reading type codes. */
 	return 0;
 
     /* Presense sensors that don't generate events are kind of useless. */
@@ -3042,15 +3060,15 @@ is_presence_sensor(ipmi_sensor_t *sensor)
     /* Check present bit */
     rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
     if ((!rv) && (val))
-	supports_present = 1;
+	supports_bit0 = 1;
     /* Check absent bit. */
     rv = ipmi_sensor_discrete_event_readable(sensor, 1, &val);
     if ((!rv) && (val))
-	supports_absent = 1;
+	supports_bit1 = 1;
 
     /* What good is this?  No support for the proper bits, I need to
        be able to read them. */
-    if ((!supports_present) && (!supports_absent))
+    if ((!supports_bit0) && (!supports_bit1))
 	return 0;
 
     return 1;
