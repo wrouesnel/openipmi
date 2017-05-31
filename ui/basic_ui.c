@@ -120,7 +120,7 @@ int snmp_input(int op,
     }
     if (var->val_len < 46)
 	goto out;
-    
+
     ipmi_handle_snmp_trap_data(src_ip,
 		    	       sizeof(*src_ip),
 			       IPMI_EXTERN_ADDR_IP,
@@ -305,7 +305,7 @@ snmp_init(os_handler_t *os_hnd)
 #else
 static void snmp_setup_fds(os_handler_t *os_hnd) { }
 #endif /* HAVE_UCDSNMP */
-    
+
 int
 main(int argc, char *argv[])
 {
@@ -402,8 +402,10 @@ main(int argc, char *argv[])
     }
 
     for (;;) {
+#ifdef HAVE_UCDSNMP
       if (init_snmp)
 	  snmp_setup_fds(&ipmi_ui_cb_handlers);
+#endif
       ipmi_ui_cb_handlers.perform_one_op(&ipmi_ui_cb_handlers, NULL);
     }
 
