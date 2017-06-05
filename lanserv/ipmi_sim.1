@@ -6,13 +6,15 @@ ipmi_sim \- IPMI LAN BMC Simulator
 .SH SYNOPSIS
 .B ipmi_sim
 .RB [ \-c
-.IR configfile ]
+.IR config-file ]
 .RB [ \-f
-.IR commandfile ]
-.RB [ \-d ]
-.RB [ \-n ]
+.IR command-file ]
 .RB [ \-x
 .IR command ]
+.RB [ \-s
+.IR state-dir ]
+.RB [ \-d ]
+.RB [ \-n ]
 
 .SH "DESCRIPTION"
 The
@@ -47,6 +49,17 @@ See ipmi_sim_cmd(5) for details.
 .TP
 .B \-x\  command
 Execute a single command.
+.TP
+.BI \-s\  state-dir
+Specify a state directory for
+.B ipmi_sim
+to use instead of the default.  The state directory must exist, and
+.B ipmi_sim
+will store information there for when it restarts.  For instance, if
+someone changes user information, then it will store the new user
+information there and what is in the config file will no longer be
+used.
+.TP
 .TP
 .B \-d
 Turns on debugging to standard output (if -n is not specified) and
