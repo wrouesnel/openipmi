@@ -708,7 +708,7 @@ If a function returns an error, any callbacks provided to that
 function will \emph{never} be called.  If a function that takes a
 callback returns success, the callback will \emph{always} be called,
 even if the object associated has ceased to exist.  If an object with
-outstandard operations ceases to exist, all the callbacks for
+outstanding operations ceases to exist, all the callbacks for
 outstanding operations will be called with \verb=ECANCELED= as the
 error.  Errors are passed into many callbacks, if an error is present
 the rest of the data in the callback is probably not valid except for
