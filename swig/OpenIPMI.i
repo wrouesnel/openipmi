@@ -884,11 +884,44 @@ entity_fru_update_handler(enum ipmi_update_e op,
 }
 
 static void
+entity_fru_update_werr_handler(enum ipmi_update_werr_e op,
+			       int                     err,
+			       ipmi_entity_t           *entity,
+			       void                    *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    fru_ref;
+    ipmi_fru_t  *fru;
+
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    fru = ipmi_entity_get_fru(entity);
+    if (fru)
+	ipmi_fru_ref(fru);
+    fru_ref = swig_make_ref_destruct(fru, ipmi_fru_t);
+    swig_call_cb(cb, "entity_fru_update_werr_cb", "%s%d%p%p",
+		 ipmi_update_werr_e_string(op), err, &entity_ref, &fru_ref);
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
+    swig_free_ref(fru_ref);
+}
+
+static void
 entity_fru_update_handler_cl(ipmi_entity_fru_cb handler,
 			     void               *handler_data,
 			     void               *cb_data)
 {
     if (handler != entity_fru_update_handler)
+	return;
+    swig_cb_val handler_val = handler_data;
+    deref_swig_cb_val(handler_val);
+}
+
+static void
+entity_fru_update_werr_handler_cl(ipmi_entity_fru_werr_cb handler,
+				  void                    *handler_data,
+				  void                    *cb_data)
+{
+    if (handler != entity_fru_update_werr_handler)
 	return;
     swig_cb_val handler_val = handler_data;
     deref_swig_cb_val(handler_val);
@@ -5136,6 +5169,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * entity_fru_update_cb method on the first parameter will be
      * called with the following parameters: <self>
      * added|deleted|changed <entity> <fru>.
+     *
+     * Deprecated, use the werr version below so you can get errors
+     * reported.
      */
     int add_fru_update_handler(swig_cb handler)
     {
@@ -5150,6 +5186,28 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     int remove_fru_update_handler(swig_cb handler)
     {
 	cb_rm(entity, fru_update, entity_fru_update_cb);
+    }
+
+    /*
+     * Add a handler to be called when the FRU data in the entity is
+     * added, deleted, or updated.  When the FRU data changes the
+     * entity_fru_update_werr_cb method on the first parameter will be
+     * called with the following parameters: <self>
+     * added|deleted|changed|error <errnum> <entity> <fru>.
+     */
+    int add_fru_update_werr_handler(swig_cb handler)
+    {
+	ipmi_entity_add_fru_update_werr_handler_cl
+	    (self, entity_fru_update_werr_handler_cl, NULL);
+	cb_add(entity, fru_update_werr, entity_fru_update_werr_cb);
+    }
+
+    /*
+     * Remove the FRU data update handler.
+     */
+    int remove_fru_update_werr_handler(swig_cb handler)
+    {
+	cb_rm(entity, fru_update_werr, entity_fru_update_werr_cb);
     }
 
     /*

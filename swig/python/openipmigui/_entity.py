@@ -471,4 +471,11 @@ class Entity:
             pass
         return
 
+    def entity_fru_update_werr_cb(self, op, err, entity, fru):
+        if (self.destroyed):
+            return
+        if (op == "error"):
+            _oi_logging.error("Error getting entity fru: " + str(err))
+        return
+
     pass

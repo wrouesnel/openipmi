@@ -64,8 +64,17 @@ extern "C" {
 
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
-enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
+enum ipmi_update_e { IPMI_ADDED = 0, IPMI_DELETED = 1, IPMI_CHANGED = 2 };
 const char *ipmi_update_e_string(enum ipmi_update_e val);
+
+/*
+ * Like the above, but with an error value.  Certain things, like
+ * reading FRU data, can result in an error, this is used to report
+ * those situations.  Must match the previous values.
+ */
+enum ipmi_update_werr_e { IPMIE_ADDED = 0, IPMIE_DELETED = 1, IPMIE_CHANGED = 2,
+			  IPMIE_ERROR = 3 };
+const char *ipmi_update_werr_e_string(enum ipmi_update_werr_e val);
 
 /*
  * When dealing with strings, they can be unicode or ASCII, and some

@@ -53,6 +53,18 @@ ipmi_update_e_string(enum ipmi_update_e val)
     }
 }
 
+const char *
+ipmi_update_werr_e_string(enum ipmi_update_werr_e val)
+{
+    switch (val) {
+    case IPMIE_ADDED: return "added";
+    case IPMIE_DELETED: return "deleted";
+    case IPMIE_CHANGED: return "changed";
+    case IPMIE_ERROR: return "error";
+    default: return "invalid";
+    }
+}
+
 static char *hysteresis_support_types[] =
 {
     "none",

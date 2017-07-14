@@ -545,14 +545,18 @@ use OpenIPMI;
 	}
     }
 
-    sub entity_fru_update_cb {
+    sub entity_fru_update_werr_cb {
 	my $self = shift;
 	my $op = shift;
+	my $err = shift;
 	my $entity = shift;
 	my $fru = shift;
 	my $rv;
 
 	print $op, " fru for ", $entity->get_name(), "\n";
+	if ($op eq "error") {
+	    print "  error is $err\n";
+	}
 	if (($op eq "added") || ($op eq "changed")) {
 	    my ($i, $j, $k);
 
@@ -692,7 +696,7 @@ use OpenIPMI;
 		if ($rv) {
 		    print "***Unable to add hot-swap handler: $rv\n";
 		}
-		$rv = $entity->add_fru_update_handler($self);
+		$rv = $entity->add_fru_update_werr_handler($self);
 		if ($rv) {
 		    print "***Unable to add fru handler: $rv\n";
 		}
@@ -714,7 +718,7 @@ use OpenIPMI;
 	    if ($rv) {
 		print "***Unable to remove hot-swap handler: $rv\n";
 	    }
-	    $rv = $entity->remove_fru_update_handler($self);
+	    $rv = $entity->remove_fru_update_werr_handler($self);
 	    if ($rv) {
 		print "***Unable to add fru handler: $rv\n";
 	    }

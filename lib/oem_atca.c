@@ -3624,7 +3624,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	_ipmi_entity_get(info->shelf_entity);
 
 	/* We added FRU info, report it. */
-	_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED);
+	_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED, 0);
     }
 
     add_power_feed_control(info);

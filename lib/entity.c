@@ -273,6 +273,7 @@ struct ipmi_entity_s
 
     /* Callbacks for various events on an entity. */
     locked_list_t *fru_handlers, *fru_handlers_cl;
+    locked_list_t *fru_handlers_werr, *fru_handlers_werr_cl;
     locked_list_t *sensor_handlers, *sensor_handlers_cl;
     locked_list_t *control_handlers, *control_handlers_cl;
     locked_list_t *presence_handlers, *presence_handlers_cl;
@@ -660,6 +661,34 @@ fru_cleanup(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
+typedef struct fru_werr_cl_info_s
+{
+    ipmi_entity_fru_werr_cb handler;
+    void                    *handler_data;
+} fru_werr_cl_info_t;
+
+static int
+iterate_fru_werr_cl(void *cb_data, void *item1, void *item2)
+{
+    fru_werr_cl_info_t  *info = cb_data;
+    ipmi_entity_fru_werr_cl_cb handler = item1;
+
+    handler(info->handler, info->handler_data, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+fru_werr_cleanup(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = cb_data;
+    fru_werr_cl_info_t info;
+
+    info.handler = item1;
+    info.handler_data = item2;
+    locked_list_iterate(ent->fru_handlers_werr_cl, iterate_fru_werr_cl, &info);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 typedef struct control_cl_info_s
 {
     ipmi_entity_control_cb handler;
@@ -756,8 +785,11 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     locked_list_destroy(ent->fully_up_handlers);
     locked_list_destroy(ent->fully_up_handlers_cl);
     locked_list_iterate(ent->fru_handlers, fru_cleanup, ent);
+    locked_list_iterate(ent->fru_handlers_werr, fru_werr_cleanup, ent);
     locked_list_destroy(ent->fru_handlers);
     locked_list_destroy(ent->fru_handlers_cl);
+    locked_list_destroy(ent->fru_handlers_werr);
+    locked_list_destroy(ent->fru_handlers_werr_cl);
     locked_list_iterate(ent->control_handlers, control_cleanup, ent);
     locked_list_destroy(ent->control_handlers);
     locked_list_destroy(ent->control_handlers_cl);
@@ -1382,6 +1414,13 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent->fru_handlers)
 	goto out_err;
 
+    ent->fru_handlers_werr_cl = locked_list_alloc(ent->os_hnd);
+    if (!ent->fru_handlers_werr_cl)
+	goto out_err;
+    ent->fru_handlers_werr = locked_list_alloc(ent->os_hnd);
+    if (!ent->fru_handlers_werr)
+	goto out_err;
+
     ent->sensor_handlers_cl = locked_list_alloc(ent->os_hnd);
     if (!ent->sensor_handlers_cl)
 	goto out_err;
@@ -1465,6 +1504,10 @@ entity_add(ipmi_entity_info_t *ents,
 	locked_list_destroy(ent->fru_handlers);
     if (ent->fru_handlers_cl)
 	locked_list_destroy(ent->fru_handlers_cl);
+    if (ent->fru_handlers_werr)
+	locked_list_destroy(ent->fru_handlers_werr);
+    if (ent->fru_handlers_werr_cl)
+	locked_list_destroy(ent->fru_handlers_werr_cl);
     if (ent->control_handlers)
 	locked_list_destroy(ent->control_handlers);
     if (ent->control_handlers_cl)
@@ -1836,7 +1879,7 @@ presence_changed(ipmi_entity_t *ent, int present)
 		ent->fru = NULL;
 		ipmi_fru_destroy_internal(fru, NULL, NULL);
 
-		_ipmi_entity_call_fru_handlers(ent, IPMI_DELETED);
+		_ipmi_entity_call_fru_handlers(ent, IPMI_DELETED, 0);
 	    }
 	}
 
@@ -5668,10 +5711,59 @@ ipmi_entity_remove_fru_update_handler_cl(ipmi_entity_t         *ent,
 	return EINVAL;
 }
 
+int
+ipmi_entity_add_fru_update_werr_handler(ipmi_entity_t           *ent,
+					ipmi_entity_fru_werr_cb handler,
+					void                    *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->fru_handlers_werr, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_fru_update_werr_handler(ipmi_entity_t           *ent,
+					   ipmi_entity_fru_werr_cb handler,
+					   void                    *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->fru_handlers_werr, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+int
+ipmi_entity_add_fru_update_werr_handler_cl(ipmi_entity_t              *ent,
+					   ipmi_entity_fru_werr_cl_cb handler,
+					   void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_add(ent->fru_handlers_werr_cl, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_remove_fru_update_werr_handler_cl(ipmi_entity_t         *ent,
+					     ipmi_entity_fru_werr_cl_cb handler,
+					     void                  *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+    if (locked_list_remove(ent->fru_handlers_werr_cl, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 typedef struct fru_handler_s
 {
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
+    enum ipmi_update_werr_e op;
+    int                     err;
+    ipmi_entity_t           *entity;
 } fru_handler_t;
 
 static int
@@ -5684,13 +5776,28 @@ call_fru_handler(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
+static int
+call_fru_handler_werr(void *cb_data, void *item1, void *item2)
+{
+    fru_handler_t      *info = cb_data;
+    ipmi_entity_fru_werr_cb handler = item1;
+
+    handler(info->op, info->err, info->entity, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 void
-_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op)
+_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_werr_e op,
+			       int err)
 {
     fru_handler_t info;
 
     info.op = op;
+    info.err = err;
     info.entity = ent;
+    locked_list_iterate(ent->fru_handlers_werr, call_fru_handler_werr, &info);
+    if (op == IPMIE_ERROR) /* Old handler doesn't handle error value. */
+	info.op = IPMI_CHANGED;
     locked_list_iterate(ent->fru_handlers, call_fru_handler, &info);
 }
 
@@ -5709,18 +5816,18 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
     fru_ent_info_t *info = cb_data;
 
     if (!info->err) {
-	enum ipmi_update_e op;
-	ipmi_fru_t         *ofru = ent->fru;
+	enum ipmi_update_werr_e op;
+	ipmi_fru_t              *ofru = ent->fru;
 
 	ent->fru = info->fru;
 	if (ofru) {
-	    op = IPMI_CHANGED;
+	    op = IPMIE_CHANGED;
 	    ipmi_fru_destroy_internal(ofru, NULL, NULL);
 	} else {
-	    op = IPMI_ADDED;
+	    op = IPMIE_ADDED;
 	}
 
-	_ipmi_entity_call_fru_handlers(ent, op);
+	_ipmi_entity_call_fru_handlers(ent, op, 0);
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
@@ -5734,7 +5841,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    /* Keep it if we got it, it might have some useful
 	       information. */
 	    ent->fru = info->fru;
-	_ipmi_entity_call_fru_handlers(ent, IPMI_CHANGED);
+	_ipmi_entity_call_fru_handlers(ent, IPMIE_ERROR, info->err);
     }
 
     if (info->done)

@@ -955,8 +955,11 @@ typedef void (*ipmi_entity_time_cb)(ipmi_entity_t  *ent,
 /* Register a handler that will be called fru information is added,
    deleted, or modified.  If you call this in the entity added
    callback for the domain, you are guaranteed to get this set before
-   any fru exist.  The "add/remove" function allow multiple handlers
-   to be added. */
+   any fru exists.  The "add/remove" function allow multiple handlers
+   to be added.
+
+   This is deprecated, use the version below with werr.  If the FRU update
+   has an issue, this interface is unable to report that. */
 typedef void (*ipmi_entity_fru_cb)(enum ipmi_update_e op,
 				   ipmi_entity_t      *ent,
 				   void               *cb_data);
@@ -966,6 +969,28 @@ int ipmi_entity_add_fru_update_handler(ipmi_entity_t     *ent,
 int ipmi_entity_remove_fru_update_handler(ipmi_entity_t     *ent,
 					  ipmi_entity_fru_cb handler,
 					  void              *cb_data);
+
+/*
+ * Like the about, but with error handling.  You will get an
+ * IPMIE_ADDED if the FRU data is added and it wasn't already present,
+ * IPMIE_DELETED if the FRU data was present and the FRU becomes not
+ * present, IPMIE_CHANGED if FRU data was already present and changed
+ * for some reason (SDR update, for instance) and IPMIE_ERROR if the
+ * FRU data fetch fails.  If you get IPMIE_ERROR, if FRU data was
+ * already present then the old data will still be kept.  The "err"
+ * value is only set for IPMIE_ERROR.
+ */
+typedef void (*ipmi_entity_fru_werr_cb)(enum ipmi_update_werr_e op,
+					int                     err,
+					ipmi_entity_t           *ent,
+					void                    *cb_data);
+int ipmi_entity_add_fru_update_werr_handler(ipmi_entity_t      *ent,
+				       ipmi_entity_fru_werr_cb handler,
+				       void                    *cb_data);
+int ipmi_entity_remove_fru_update_werr_handler(ipmi_entity_t           *ent,
+					       ipmi_entity_fru_werr_cb handler,
+					       void                    *cb_data);
+
 /* Called for updated handler still registered when a domain is
    destroyed. */
 typedef void (*ipmi_entity_fru_cl_cb)(ipmi_entity_fru_cb handler,
@@ -977,6 +1002,18 @@ int ipmi_entity_add_fru_update_handler_cl(ipmi_entity_t         *entity,
 int ipmi_entity_remove_fru_update_handler_cl(ipmi_entity_t         *entity,
 					     ipmi_entity_fru_cl_cb handler,
 					     void                 *event_data);
+/* Called for updated with err handler still registered when a domain is
+   destroyed. */
+typedef void (*ipmi_entity_fru_werr_cl_cb)(ipmi_entity_fru_werr_cb handler,
+					   void               *handler_data,
+					   void               *cb_data);
+int ipmi_entity_add_fru_update_werr_handler_cl(ipmi_entity_t         *entity,
+					  ipmi_entity_fru_werr_cl_cb handler,
+					  void                  *event_data);
+int ipmi_entity_remove_fru_update_werr_handler_cl(ipmi_entity_t         *entity,
+					     ipmi_entity_fru_werr_cl_cb handler,
+					     void                 *event_data);
+
 
 /* Register a handler that will be called when a sensor that monitors
    this entity is added, deleted, or modified.  If you call this in

@@ -38,6 +38,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_fru.h>
+#include <OpenIPMI/ipmi_err.h>
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -799,15 +800,17 @@ entity_hs_check(ipmi_entity_t *entity, void *cb_data)
 }
 
 
-static void fru_change(enum ipmi_update_e op,
-		       ipmi_entity_t      *entity,
-		       void               *cb_data)
+static void fru_change(enum ipmi_update_werr_e op,
+		       int                     err,
+		       ipmi_entity_t           *entity,
+		       void                    *cb_data)
 {
     char            *errstr;
     int             rv;
     ipmi_cmd_info_t *evi;
     ipmi_fru_t      *fru;
     char            entity_name[IPMI_ENTITY_NAME_LEN];
+    char            errbuf[32];
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
 
@@ -822,7 +825,7 @@ static void fru_change(enum ipmi_update_e op,
     ipmi_cmdlang_out(evi, "Name", entity_name);
 
     switch (op) {
-    case IPMI_ADDED:
+    case IPMIE_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
 	if (ipmi_cmdlang_get_evinfo()) {
 	    ipmi_cmdlang_down(evi);
@@ -833,11 +836,11 @@ static void fru_change(enum ipmi_update_e op,
 	}
 	break;
 
-    case IPMI_DELETED:
+    case IPMIE_DELETED:
 	ipmi_cmdlang_out(evi, "Operation", "Delete");
 	break;
 
-    case IPMI_CHANGED:
+    case IPMIE_CHANGED:
 	ipmi_cmdlang_out(evi, "Operation", "Change");
 	if (ipmi_cmdlang_get_evinfo()) {
 	    ipmi_cmdlang_down(evi);
@@ -846,6 +849,15 @@ static void fru_change(enum ipmi_update_e op,
 		ipmi_cmdlang_dump_fru_info(evi, fru);
 	    ipmi_cmdlang_up(evi);
 	}
+	break;
+
+    case IPMIE_ERROR:
+	ipmi_cmdlang_out(evi, "Operation", "Error");
+	ipmi_cmdlang_global_err(entity_name,
+				"Error fetching FRU data",
+				ipmi_get_error_string(err, errbuf,
+						      sizeof(errbuf)),
+				err);
 	break;
     }
 
@@ -1020,9 +1032,9 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	    errstr = "ipmi_entity_add_sensor_update_handler";
 	    goto out_err;
 	}
-	rv = ipmi_entity_add_fru_update_handler(entity,
-						fru_change,
-						entity);
+	rv = ipmi_entity_add_fru_update_werr_handler(entity,
+						     fru_change,
+						     entity);
 	if (rv) {
 	    errstr = "ipmi_entity_add_control_fru_handler";
 	    goto out_err;

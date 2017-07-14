@@ -470,8 +470,10 @@ class Handlers:
             pass
         return
 
-    def entity_fru_update_cb(self, op, entity, fru):
+    def entity_fru_update_werr_cb(self, op, err, entity, fru):
 	print op + " fru for " + entity.get_name()
+        if (op == "error"):
+            print "  error is " + str(err)
         if ((op == "added") or (op == "changed")):
 	    i = fru.str_to_index("internal_use_version")
             if i == -1:
@@ -597,7 +599,7 @@ class Handlers:
                 if rv:
 		    print "***Unable to add hot-swap handler: " + str(rv)
                     pass
-		rv = entity.add_fru_update_handler(self)
+		rv = entity.add_fru_update_werr_handler(self)
                 if rv:
 		    print "***Unable to add fru handler: " + str(rv)
                     pass
@@ -620,7 +622,7 @@ class Handlers:
             if rv:
 		print "***Unable to remove hot-swap handler: " + str(rv)
                 pass
-	    rv = entity.remove_fru_update_handler(self)
+	    rv = entity.remove_fru_update_werr_handler(self)
             if rv:
 		print "***Unable to add fru handler: " + str(rv)
                 pass
