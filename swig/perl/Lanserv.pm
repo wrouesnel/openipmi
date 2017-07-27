@@ -226,6 +226,9 @@ sub new {
     pipe(CONTROLREAD, CONTROLWRITE) || return;
     pipe(RESPONSEREAD, RESPONSEWRITE) || return;
 
+    # These can confuse other programs.
+    $ENV{'LD_PRELOAD'} = "";
+    $ENV{'LD_LIBRARY_PATH'} = "";
     $child = open2(READFILE, WRITEFILE, "$lanserv_emu")
 	|| return;
 

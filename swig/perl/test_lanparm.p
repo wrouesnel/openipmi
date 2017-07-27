@@ -1,0 +1,860 @@
+#!/usr/bin/perl
+
+# test_lanparm
+#
+# Test of the lanparm code
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+use Lanserv;
+use OpenIPMI;
+
+my $errcountholder : shared = 0;
+$errcount = \$errcountholder;
+
+my $fru_field_table = {};
+
+sub reg_err {
+    my $str = shift;
+
+    $$errcount++;
+    print STDERR "***", $str, "\n";
+}
+
+sub get_errcount {
+    return $$errcount;
+}
+
+{
+    package CloseDomain;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	$b = bless $b;
+	return $b;
+    }
+
+    sub domain_cb {
+	my $self = shift;
+	my $domain = shift;
+
+	$domain->close($$self);
+    }
+
+    package aaa;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    package Handlers;
+
+    sub new {
+	my $a = {};
+	$a->{keepon} = 1;
+	$a->{accmode} = 0;
+	return bless \$a;
+    }
+
+    sub log {
+	my $self = shift;
+	my $level = shift;
+	my $log = shift;
+
+	print $level, ": ", $log, "\n";
+    }
+
+    sub lanparm_set_parm_cb {
+	my $self = shift;
+	my $lanparm = shift;
+	my $err = shift;
+
+	print "Parm set: ", $$self->{accmode}, "\n";
+	$rv = $lanparm->get_parm($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
+				 0, 0, $self);
+	if ($rv) {
+	    main::reg_err("Unable to request lan parm(1): $rv\n");
+	    $self->close();
+	    return;
+	}
+    }
+
+
+    sub lanparm_got_parm_cb {
+	my $self = shift;
+	my $lanparm = shift;
+	my $err = shift;
+	my $parm_rev = shift;
+	my @vals = @_;
+
+	print "Parm retrieved: ", $$self->{accmode}, "\n";
+	if ($parm_rev != 0x11) {
+	    main::reg_err("Invalid parm revision\n");
+	}
+
+	if ($$self->{accmode} == 1) {
+	    if (join(" ", @vals) ne "23 23 23 23 0") {
+		main::reg_err("Invalid get parms(1): " . join(" ", @vals) . "\n");
+		$self->close();
+		return;
+	    }
+	    $vals[2] = 0x01;
+	    $$self->{accmode} = 2;
+	    $rv = $lanparm->set_parm($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
+				     join(" ", @vals), $self);
+	    if ($rv) {
+		main::reg_err("Error setting parms(1): $rv\n");
+		$self->close();
+		return;
+	    }
+	} elsif ($$self->{accmode} == 2) {
+	    #FIXME - currently immutable in ipmi_sim
+	    if (join(" ", @vals) ne "23 23 23 23 0") {
+                main::reg_err("Invalid get parms(2): " . join(" ", @vals) . "\n");
+		$self->close();
+		return;
+	    }
+	    $vals[4] = 0x04;
+	    $$self->{accmode} = 3;
+	    $rv = $lanparm->set_parm_array($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
+					   \@vals, $self);
+	    if ($rv) {
+		main::reg_err("Error setting parms(2): $rv\n");
+		$self->close();
+		return;
+	    }
+	} else {
+	    #FIXME - currently immutable in ipmi_sim
+	    if (join(" ", @vals) ne "23 23 23 23 0") {
+		main::reg_err("Invalid get parms(3)\n");
+		$self->close();
+		return;
+	    }
+
+	    $self->close();
+	}
+    }
+
+    @first_configs =
+	( "0 -1 -1 support_auth_oem bool false",
+	  "1 -1 -1 support_auth_straight bool true",
+	  "2 -1 -1 support_auth_md5 bool true",
+	  "3 -1 -1 support_auth_md2 bool true",
+	  "4 -1 -1 support_auth_none bool true",
+	  "5 -1 -1 ip_addr_source integer 0",
+	  "6 -1 -1 ipv4_ttl integer 0",
+	  "7 -1 -1 ipv4_flags integer 0",
+	  "8 -1 -1 ipv4_precedence integer 0",
+	  "9 -1 -1 ipv4_tos integer 0",
+	  "10 0 1 enable_auth_oem bool false",
+	  "10 1 2 enable_auth_oem bool false",
+	  "10 2 3 enable_auth_oem bool false",
+	  "10 3 4 enable_auth_oem bool false",
+	  "10 4 -1 enable_auth_oem bool false",
+	  "11 0 1 enable_auth_straight bool true",
+	  "11 1 2 enable_auth_straight bool true",
+	  "11 2 3 enable_auth_straight bool true",
+	  "11 3 4 enable_auth_straight bool true",
+	  "11 4 -1 enable_auth_straight bool false",
+	  "12 0 1 enable_auth_md5 bool true",
+	  "12 1 2 enable_auth_md5 bool true",
+	  "12 2 3 enable_auth_md5 bool true",
+	  "12 3 4 enable_auth_md5 bool true",
+	  "12 4 -1 enable_auth_md5 bool false",
+	  "13 0 1 enable_auth_md2 bool true",
+	  "13 1 2 enable_auth_md2 bool true",
+	  "13 2 3 enable_auth_md2 bool true",
+	  "13 3 4 enable_auth_md2 bool true",
+	  "13 4 -1 enable_auth_md2 bool false",
+	  "14 0 1 enable_auth_none bool true",
+	  "14 1 2 enable_auth_none bool true",
+	  "14 2 3 enable_auth_none bool true",
+	  "14 3 4 enable_auth_none bool true",
+	  "14 4 -1 enable_auth_none bool false",
+	  "15 -1 -1 ip_addr ip 0.0.0.0",
+	  "16 -1 -1 mac_addr mac 00:00:00:00:00:00",
+	  "17 -1 -1 subnet_mask ip 0.0.0.0",
+	  #"18 -1 -1 port_rmcp_primary integer 0",
+	  #"19 -1 -1 port_rmcp_secondary integer 0",
+	  #"20 -1 -1 bmc_generated_arps bool false",
+	  #"21 -1 -1 bmc_generated_garps bool false",
+	  #"22 -1 -1 garp_interval integer 0",
+	  "23 -1 -1 default_gateway_ip_addr ip 0.0.0.0",
+	  "24 -1 -1 default_gateway_mac_addr mac 00:00:00:00:00:00",
+	  "25 -1 -1 backup_gateway_ip_addr ip 0.0.0.0",
+	  "26 -1 -1 backup_gateway_mac_addr mac 00:00:00:00:00:00",
+	  "27 -1 -1 community_string data 0x70%0x75%0x62%0x6c%0x69%0x63%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00",
+	  "28 -1 -1 num_alert_destinations integer 0",
+	  #"29 0 1 alert_ack bool false",
+	  #"29 1 2 alert_ack bool false",
+	  #"29 2 3 alert_ack bool false",
+	  #"29 3 4 alert_ack bool false",
+	  #"29 4 5 alert_ack bool false",
+	  #"29 5 6 alert_ack bool false",
+	  #"29 6 7 alert_ack bool false",
+	  #"29 7 8 alert_ack bool false",
+	  #"29 8 9 alert_ack bool false",
+	  #"29 9 10 alert_ack bool false",
+	  #"29 10 11 alert_ack bool false",
+	  #"29 11 12 alert_ack bool false",
+	  #"29 12 13 alert_ack bool false",
+	  #"29 13 14 alert_ack bool false",
+	  #"29 14 15 alert_ack bool false",
+	  #"29 15 -1 alert_ack bool false",
+	  #"30 0 1 dest_type integer 0",
+	  #"30 1 2 dest_type integer 0",
+	  #"30 2 3 dest_type integer 0",
+	  #"30 3 4 dest_type integer 0",
+	  #"30 4 5 dest_type integer 0",
+	  #"30 5 6 dest_type integer 0",
+	  #"30 6 7 dest_type integer 0",
+	  #"30 7 8 dest_type integer 0",
+	  #"30 8 9 dest_type integer 0",
+	  #"30 9 10 dest_type integer 0",
+	  #"30 10 11 dest_type integer 0",
+	  #"30 11 12 dest_type integer 0",
+	  #"30 12 13 dest_type integer 0",
+	  #"30 13 14 dest_type integer 0",
+	  #"30 14 15 dest_type integer 0",
+	  #"30 15 -1 dest_type integer 0",
+	  #"31 0 1 alert_retry_interval integer 0",
+	  #"31 1 2 alert_retry_interval integer 0",
+	  #"31 2 3 alert_retry_interval integer 0",
+	  #"31 3 4 alert_retry_interval integer 0",
+	  #"31 4 5 alert_retry_interval integer 0",
+	  #"31 5 6 alert_retry_interval integer 0",
+	  #"31 6 7 alert_retry_interval integer 0",
+	  #"31 7 8 alert_retry_interval integer 0",
+	  #"31 8 9 alert_retry_interval integer 0",
+	  #"31 9 10 alert_retry_interval integer 0",
+	  #"31 10 11 alert_retry_interval integer 0",
+	  #"31 11 12 alert_retry_interval integer 0",
+	  #"31 12 13 alert_retry_interval integer 0",
+	  #"31 13 14 alert_retry_interval integer 0",
+	  #"31 14 15 alert_retry_interval integer 0",
+	  #"31 15 -1 alert_retry_interval integer 0",
+	  #"32 0 1 max_alert_retries integer 0",
+	  #"32 1 2 max_alert_retries integer 0",
+	  #"32 2 3 max_alert_retries integer 0",
+	  #"32 3 4 max_alert_retries integer 0",
+	  #"32 4 5 max_alert_retries integer 0",
+	  #"32 5 6 max_alert_retries integer 0",
+	  #"32 6 7 max_alert_retries integer 0",
+	  #"32 7 8 max_alert_retries integer 0",
+	  #"32 8 9 max_alert_retries integer 0",
+	  #"32 9 10 max_alert_retries integer 0",
+	  #"32 10 11 max_alert_retries integer 0",
+	  #"32 11 12 max_alert_retries integer 0",
+	  #"32 12 13 max_alert_retries integer 0",
+	  #"32 13 14 max_alert_retries integer 0",
+	  #"32 14 15 max_alert_retries integer 0",
+	  #"32 15 -1 max_alert_retries integer 0",
+	  #"33 0 1 dest_format integer 0",
+	  #"33 1 2 dest_format integer 0",
+	  #"33 2 3 dest_format integer 0",
+	  #"33 3 4 dest_format integer 0",
+	  #"33 4 5 dest_format integer 0",
+	  #"33 5 6 dest_format integer 0",
+	  #"33 6 7 dest_format integer 0",
+	  #"33 7 8 dest_format integer 0",
+	  #"33 8 9 dest_format integer 0",
+	  #"33 9 10 dest_format integer 0",
+	  #"33 10 11 dest_format integer 0",
+	  #"33 11 12 dest_format integer 0",
+	  #"33 12 13 dest_format integer 0",
+	  #"33 13 14 dest_format integer 0",
+	  #"33 14 15 dest_format integer 0",
+	  #"33 15 -1 dest_format integer 0",
+	  #"34 0 1 gw_to_use integer 0",
+	  #"34 1 2 gw_to_use integer 0",
+	  #"34 2 3 gw_to_use integer 0",
+	  #"34 3 4 gw_to_use integer 0",
+	  #"34 4 5 gw_to_use integer 0",
+	  #"34 5 6 gw_to_use integer 0",
+	  #"34 6 7 gw_to_use integer 0",
+	  #"34 7 8 gw_to_use integer 0",
+	  #"34 8 9 gw_to_use integer 0",
+	  #"34 9 10 gw_to_use integer 0",
+	  #"34 10 11 gw_to_use integer 0",
+	  #"34 11 12 gw_to_use integer 0",
+	  #"34 12 13 gw_to_use integer 0",
+	  #"34 13 14 gw_to_use integer 0",
+	  #"34 14 15 gw_to_use integer 0",
+	  #"34 15 -1 gw_to_use integer 0",
+	  #"35 0 1 dest_ip_addr ip 0.0.0.0",
+	  #"35 1 2 dest_ip_addr ip 0.0.0.0",
+	  #"35 2 3 dest_ip_addr ip 0.0.0.0",
+	  #"35 3 4 dest_ip_addr ip 0.0.0.0",
+	  #"35 4 5 dest_ip_addr ip 0.0.0.0",
+	  #"35 5 6 dest_ip_addr ip 0.0.0.0",
+	  #"35 6 7 dest_ip_addr ip 0.0.0.0",
+	  #"35 7 8 dest_ip_addr ip 0.0.0.0",
+	  #"35 8 9 dest_ip_addr ip 0.0.0.0",
+	  #"35 9 10 dest_ip_addr ip 0.0.0.0",
+	  #"35 10 11 dest_ip_addr ip 0.0.0.0",
+	  #"35 11 12 dest_ip_addr ip 0.0.0.0",
+	  #"35 12 13 dest_ip_addr ip 0.0.0.0",
+	  #"35 13 14 dest_ip_addr ip 0.0.0.0",
+	  #"35 14 15 dest_ip_addr ip 0.0.0.0",
+	  #"35 15 -1 dest_ip_addr ip 0.0.0.0",
+	  #"36 0 1 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 1 2 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 2 3 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 3 4 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 4 5 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 5 6 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 6 7 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 7 8 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 8 9 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 9 10 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 10 11 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 11 12 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 12 13 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 13 14 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 14 15 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"36 15 -1 dest_mac_addr mac 00:00:00:00:00:00",
+	  #"37 0 1 dest_vlan_tag_type integer 0",
+	  #"37 1 2 dest_vlan_tag_type integer 0",
+	  #"37 2 3 dest_vlan_tag_type integer 0",
+	  #"37 3 4 dest_vlan_tag_type integer 0",
+	  #"37 4 5 dest_vlan_tag_type integer 0",
+	  #"37 5 6 dest_vlan_tag_type integer 0",
+	  #"37 6 7 dest_vlan_tag_type integer 0",
+	  #"37 7 8 dest_vlan_tag_type integer 0",
+	  #"37 8 9 dest_vlan_tag_type integer 0",
+	  #"37 9 10 dest_vlan_tag_type integer 0",
+	  #"37 10 11 dest_vlan_tag_type integer 0",
+	  #"37 11 12 dest_vlan_tag_type integer 0",
+	  #"37 12 13 dest_vlan_tag_type integer 0",
+	  #"37 13 14 dest_vlan_tag_type integer 0",
+	  #"37 14 15 dest_vlan_tag_type integer 0",
+	  #"37 15 -1 dest_vlan_tag_type integer 0",
+	  #"38 0 1 dest_vlan_tag integer 0",
+	  #"38 1 2 dest_vlan_tag integer 0",
+	  #"38 2 3 dest_vlan_tag integer 0",
+	  #"38 3 4 dest_vlan_tag integer 0",
+	  #"38 4 5 dest_vlan_tag integer 0",
+	  #"38 5 6 dest_vlan_tag integer 0",
+	  #"38 6 7 dest_vlan_tag integer 0",
+	  #"38 7 8 dest_vlan_tag integer 0",
+	  #"38 8 9 dest_vlan_tag integer 0",
+	  #"38 9 10 dest_vlan_tag integer 0",
+	  #"38 10 11 dest_vlan_tag integer 0",
+	  #"38 11 12 dest_vlan_tag integer 0",
+	  #"38 12 13 dest_vlan_tag integer 0",
+	  #"38 13 14 dest_vlan_tag integer 0",
+	  #"38 14 15 dest_vlan_tag integer 0",
+	  #"38 15 -1 dest_vlan_tag integer 0",
+	  "39 -1 -1 vlan_id_enable bool false",
+	  "40 -1 -1 vlan_id integer 0",
+	  "41 -1 -1 vlan_priority integer 0",
+	  "42 -1 -1 num_cipher_suites integer 16",
+	  "43 0 1 cipher_suite_entry integer 1",
+	  "43 1 2 cipher_suite_entry integer 2",
+	  "43 2 3 cipher_suite_entry integer 3",
+	  "43 3 4 cipher_suite_entry integer 4",
+	  "43 4 5 cipher_suite_entry integer 5",
+	  "43 5 6 cipher_suite_entry integer 6",
+	  "43 6 7 cipher_suite_entry integer 7",
+	  "43 7 8 cipher_suite_entry integer 8",
+	  "43 8 9 cipher_suite_entry integer 9",
+	  "43 9 10 cipher_suite_entry integer 10",
+	  "43 10 11 cipher_suite_entry integer 11",
+	  "43 11 12 cipher_suite_entry integer 12",
+	  "43 12 13 cipher_suite_entry integer 13",
+	  "43 13 14 cipher_suite_entry integer 14",
+	  "43 14 15 cipher_suite_entry integer 15",
+	  "43 15 -1 cipher_suite_entry integer 16",
+	  "44 0 1 max_priv_for_cipher_suite integer 4",
+	  "44 1 2 max_priv_for_cipher_suite integer 4",
+	  "44 2 3 max_priv_for_cipher_suite integer 4",
+	  "44 3 4 max_priv_for_cipher_suite integer 4",
+	  "44 4 5 max_priv_for_cipher_suite integer 4",
+	  "44 5 6 max_priv_for_cipher_suite integer 4",
+	  "44 6 7 max_priv_for_cipher_suite integer 4",
+	  "44 7 8 max_priv_for_cipher_suite integer 4",
+	  "44 8 9 max_priv_for_cipher_suite integer 4",
+	  "44 9 10 max_priv_for_cipher_suite integer 4",
+	  "44 10 11 max_priv_for_cipher_suite integer 4",
+	  "44 11 12 max_priv_for_cipher_suite integer 4",
+	  "44 12 13 max_priv_for_cipher_suite integer 4",
+	  "44 13 14 max_priv_for_cipher_suite integer 4",
+	  "44 14 15 max_priv_for_cipher_suite integer 4",
+	  "44 15 -1 max_priv_for_cipher_suite integer 4" );
+
+    @set_configs =
+	( "0 -1 -1 support_auth_oem bool false 1",
+	  #"1 -1 -1 support_auth_straight bool false 1",
+	  #"2 -1 -1 support_auth_md5 bool false 1",
+	  #"3 -1 -1 support_auth_md2 bool false 1",
+	  #"4 -1 -1 support_auth_none bool false 1",
+	  #"5 -1 -1 ip_addr_source integer 1",
+	  #"6 -1 -1 ipv4_ttl integer 2",
+	  #"7 -1 -1 ipv4_flags integer 3",
+	  #"8 -1 -1 ipv4_precedence integer 4",
+	  #"9 -1 -1 ipv4_tos integer 5",
+	  #"10 0 1 enable_auth_oem bool true",
+	  #"10 1 2 enable_auth_oem bool true",
+	  #"10 2 3 enable_auth_oem bool true",
+	  #"10 3 4 enable_auth_oem bool true",
+	  #"10 4 -1 enable_auth_oem bool true",
+	  #"11 0 1 enable_auth_straight bool true",
+	  #"11 1 2 enable_auth_straight bool true",
+	  #"11 2 3 enable_auth_straight bool true",
+	  #"11 3 4 enable_auth_straight bool true",
+	  #"11 4 -1 enable_auth_straight bool true",
+	  #"12 0 1 enable_auth_md5 bool true",
+	  #"12 1 2 enable_auth_md5 bool true",
+	  #"12 2 3 enable_auth_md5 bool true",
+	  #"12 3 4 enable_auth_md5 bool true",
+	  #"12 4 -1 enable_auth_md5 bool true",
+	  #"13 0 1 enable_auth_md2 bool true",
+	  #"13 1 2 enable_auth_md2 bool true",
+	  #"13 2 3 enable_auth_md2 bool true",
+	  #"13 3 4 enable_auth_md2 bool true",
+	  #"13 4 -1 enable_auth_md2 bool true",
+	  #"14 0 1 enable_auth_none bool true",
+	  #"14 1 2 enable_auth_none bool true",
+	  #"14 2 3 enable_auth_none bool true",
+	  #"14 3 4 enable_auth_none bool true",
+	  #"14 4 -1 enable_auth_none bool true",
+	  #"15 -1 -1 ip_addr ip 1.2.3.4",
+	  #"16 -1 -1 mac_addr mac 11:22:33:44:55:bb",
+	  #"17 -1 -1 subnet_mask ip 5.6.7.8",
+	  #"18 -1 -1 port_rmcp_primary integer 9",
+	  #"19 -1 -1 port_rmcp_secondary integer 10",
+	  #"20 -1 -1 bmc_generated_arps bool true",
+	  #"21 -1 -1 bmc_generated_garps bool true",
+	  #"22 -1 -1 garp_interval integer 11",
+	  #"23 -1 -1 default_gateway_ip_addr ip 12.13.14.15",
+	  #"24 -1 -1 default_gateway_mac_addr mac cc:16:17:18:19:20",
+	  #"25 -1 -1 backup_gateway_ip_addr ip 21.22.23.24",
+	  #"26 -1 -1 backup_gateway_mac_addr mac dd:25:26:27:28:29",
+	  #"27 -1 -1 community_string data 0x30%0x31%0x32%0x33%0x34%0x35%0x36%0x37%0x38%0x39%0x3a%0x3b%0x3c%0x3d%0x3e%0x3f%0x40%0x41",
+	  #"28 -1 -1 num_alert_destinations integer 16 1",
+	  #"29 0 1 alert_ack bool true",
+	  #"29 1 2 alert_ack bool true",
+	  #"29 2 3 alert_ack bool true",
+	  #"29 3 4 alert_ack bool true",
+	  #"29 4 5 alert_ack bool true",
+	  #"29 5 6 alert_ack bool true",
+	  #"29 6 7 alert_ack bool true",
+	  #"29 7 8 alert_ack bool true",
+	  #"29 8 9 alert_ack bool true",
+	  #"29 9 10 alert_ack bool true",
+	  #"29 10 11 alert_ack bool true",
+	  #"29 11 12 alert_ack bool true",
+	  #"29 12 13 alert_ack bool true",
+	  #"29 13 14 alert_ack bool true",
+	  #"29 14 15 alert_ack bool true",
+	  #"29 15 -1 alert_ack bool true",
+	  #"30 0 1 dest_type integer 1",
+	  #"30 1 2 dest_type integer 2",
+	  #"30 2 3 dest_type integer 3",
+	  #"30 3 4 dest_type integer 4",
+	  #"30 4 5 dest_type integer 5",
+	  #"30 5 6 dest_type integer 6",
+	  #"30 6 7 dest_type integer 7",
+	  #"30 7 8 dest_type integer 7",
+	  #"30 8 9 dest_type integer 6",
+	  #"30 9 10 dest_type integer 5",
+	  #"30 10 11 dest_type integer 4",
+	  #"30 11 12 dest_type integer 3",
+	  #"30 12 13 dest_type integer 2",
+	  #"30 13 14 dest_type integer 1",
+	  #"30 14 15 dest_type integer 2",
+	  #"30 15 -1 dest_type integer 3",
+	  #"31 0 1 alert_retry_interval integer 1",
+	  #"31 1 2 alert_retry_interval integer 2",
+	  #"31 2 3 alert_retry_interval integer 3",
+	  #"31 3 4 alert_retry_interval integer 4",
+	  #"31 4 5 alert_retry_interval integer 5",
+	  #"31 5 6 alert_retry_interval integer 6",
+	  #"31 6 7 alert_retry_interval integer 7",
+	  #"31 7 8 alert_retry_interval integer 8",
+	  #"31 8 9 alert_retry_interval integer 9",
+	  #"31 9 10 alert_retry_interval integer 10",
+	  #"31 10 11 alert_retry_interval integer 11",
+	  #"31 11 12 alert_retry_interval integer 12",
+	  #"31 12 13 alert_retry_interval integer 13",
+	  #"31 13 14 alert_retry_interval integer 14",
+	  #"31 14 15 alert_retry_interval integer 15",
+	  #"31 15 -1 alert_retry_interval integer 14",
+	  #"32 0 1 max_alert_retries integer 1",
+	  #"32 1 2 max_alert_retries integer 2",
+	  #"32 2 3 max_alert_retries integer 3",
+	  #"32 3 4 max_alert_retries integer 4",
+	  #"32 4 5 max_alert_retries integer 5",
+	  #"32 5 6 max_alert_retries integer 6",
+	  #"32 6 7 max_alert_retries integer 7",
+	  #"32 7 8 max_alert_retries integer 6",
+	  #"32 8 9 max_alert_retries integer 5",
+	  #"32 9 10 max_alert_retries integer 4",
+	  #"32 10 11 max_alert_retries integer 3",
+	  #"32 11 12 max_alert_retries integer 2",
+	  #"32 12 13 max_alert_retries integer 1",
+	  #"32 13 14 max_alert_retries integer 2",
+	  #"32 14 15 max_alert_retries integer 3",
+	  #"32 15 -1 max_alert_retries integer 4",
+	  #"33 0 1 dest_format integer 1",
+	  #"33 1 2 dest_format integer 2",
+	  #"33 2 3 dest_format integer 3",
+	  #"33 3 4 dest_format integer 4",
+	  #"33 4 5 dest_format integer 5",
+	  #"33 5 6 dest_format integer 6",
+	  #"33 6 7 dest_format integer 7",
+	  #"33 7 8 dest_format integer 8",
+	  #"33 8 9 dest_format integer 9",
+	  #"33 9 10 dest_format integer 10",
+	  #"33 10 11 dest_format integer 11",
+	  #"33 11 12 dest_format integer 12",
+	  #"33 12 13 dest_format integer 13",
+	  #"33 13 14 dest_format integer 14",
+	  #"33 14 15 dest_format integer 15",
+	  #"33 15 -1 dest_format integer 14",
+	  #"34 0 1 gw_to_use integer 1",
+	  #"34 1 2 gw_to_use integer 1",
+	  #"34 2 3 gw_to_use integer 1",
+	  #"34 3 4 gw_to_use integer 1",
+	  #"34 4 5 gw_to_use integer 1",
+	  #"34 5 6 gw_to_use integer 1",
+	  #"34 6 7 gw_to_use integer 1",
+	  #"34 7 8 gw_to_use integer 1",
+	  #"34 8 9 gw_to_use integer 1",
+	  #"34 9 10 gw_to_use integer 1",
+	  #"34 10 11 gw_to_use integer 1",
+	  #"34 11 12 gw_to_use integer 1",
+	  #"34 12 13 gw_to_use integer 1",
+	  #"34 13 14 gw_to_use integer 1",
+	  #"34 14 15 gw_to_use integer 1",
+	  #"34 15 -1 gw_to_use integer 1",
+	  #"35 0 1 dest_ip_addr ip 1.1.1.1",
+	  #"35 1 2 dest_ip_addr ip 2.2.2.2",
+	  #"35 2 3 dest_ip_addr ip 3.3.3.3",
+	  #"35 3 4 dest_ip_addr ip 4.4.4.4",
+	  #"35 4 5 dest_ip_addr ip 5.5.5.5",
+	  #"35 5 6 dest_ip_addr ip 6.6.6.6",
+	  #"35 6 7 dest_ip_addr ip 7.7.7.7",
+	  #"35 7 8 dest_ip_addr ip 8.8.8.8",
+	  #"35 8 9 dest_ip_addr ip 9.9.9.9",
+	  #"35 9 10 dest_ip_addr ip 10.10.10.10",
+	  #"35 10 11 dest_ip_addr ip 11.11.11.11",
+	  #"35 11 12 dest_ip_addr ip 12.12.12.12",
+	  #"35 12 13 dest_ip_addr ip 13.13.13.13",
+	  #"35 13 14 dest_ip_addr ip 14.14.14.14",
+	  #"35 14 15 dest_ip_addr ip 15.15.15.15",
+	  #"35 15 -1 dest_ip_addr ip 16.16.16.16",
+	  #"36 0 1 dest_mac_addr mac 11:11:11:11:11:11",
+	  #"36 1 2 dest_mac_addr mac 22:22:22:22:22:22",
+	  #"36 2 3 dest_mac_addr mac 33:33:33:33:33:33",
+	  #"36 3 4 dest_mac_addr mac 44:44:44:44:44:44",
+	  #"36 4 5 dest_mac_addr mac 55:55:55:55:55:55",
+	  #"36 5 6 dest_mac_addr mac 66:66:66:66:66:66",
+	  #"36 6 7 dest_mac_addr mac 77:77:77:77:77:77",
+	  #"36 7 8 dest_mac_addr mac 88:88:88:88:88:88",
+	  #"36 8 9 dest_mac_addr mac 99:99:99:99:99:99",
+	  #"36 9 10 dest_mac_addr mac aa:aa:aa:aa:aa:aa",
+	  #"36 10 11 dest_mac_addr mac bb:bb:bb:bb:bb:bb",
+	  #"36 11 12 dest_mac_addr mac cc:cc:cc:cc:cc:cc",
+	  #"36 12 13 dest_mac_addr mac dd:dd:dd:dd:dd:dd",
+	  #"36 13 14 dest_mac_addr mac ee:ee:ee:ee:ee:ee",
+	  #"36 14 15 dest_mac_addr mac ff:ff:ff:ff:ff:ff",
+	  #"36 15 -1 dest_mac_addr mac ee:ee:ee:ee:ee:ee",
+	  #"37 0 1 dest_vlan_tag_type integer 1",
+	  #"37 1 2 dest_vlan_tag_type integer 2",
+	  #"37 2 3 dest_vlan_tag_type integer 3",
+	  #"37 3 4 dest_vlan_tag_type integer 4",
+	  #"37 4 5 dest_vlan_tag_type integer 5",
+	  #"37 5 6 dest_vlan_tag_type integer 6",
+	  #"37 6 7 dest_vlan_tag_type integer 7",
+	  #"37 7 8 dest_vlan_tag_type integer 8",
+	  #"37 8 9 dest_vlan_tag_type integer 9",
+	  #"37 9 10 dest_vlan_tag_type integer 10",
+	  #"37 10 11 dest_vlan_tag_type integer 11",
+	  #"37 11 12 dest_vlan_tag_type integer 12",
+	  #"37 12 13 dest_vlan_tag_type integer 13",
+	  #"37 13 14 dest_vlan_tag_type integer 14",
+	  #"37 14 15 dest_vlan_tag_type integer 15",
+	  #"37 15 -1 dest_vlan_tag_type integer 14",
+	  #"38 0 1 dest_vlan_tag integer 1234",
+	  #"38 1 2 dest_vlan_tag integer 3333",
+	  #"38 2 3 dest_vlan_tag integer 4353",
+	  #"38 3 4 dest_vlan_tag integer 46434",
+	  #"38 4 5 dest_vlan_tag integer 3453",
+	  #"38 5 6 dest_vlan_tag integer 56455",
+	  #"38 6 7 dest_vlan_tag integer 3434",
+	  #"38 7 8 dest_vlan_tag integer 36344",
+	  #"38 8 9 dest_vlan_tag integer 34755",
+	  #"38 9 10 dest_vlan_tag integer 2346",
+	  #"38 10 11 dest_vlan_tag integer 34",
+	  #"38 11 12 dest_vlan_tag integer 54904",
+	  #"38 12 13 dest_vlan_tag integer 53094",
+	  #"38 13 14 dest_vlan_tag integer 59045",
+	  #"38 14 15 dest_vlan_tag integer 4564",
+	  #"38 15 -1 dest_vlan_tag integer 49433",
+	  #"39 -1 -1 vlan_id_enable bool true",
+	  #"40 -1 -1 vlan_id integer 18",
+	  #"41 -1 -1 vlan_priority integer 3",
+	  "42 -1 -1 num_cipher_suites integer 16 1",
+	  "43 0 1 cipher_suite_entry integer 1 1",
+	  "43 1 2 cipher_suite_entry integer 2 1",
+	  "43 2 3 cipher_suite_entry integer 3 1",
+	  "43 3 4 cipher_suite_entry integer 4 1",
+	  "43 4 5 cipher_suite_entry integer 5 1",
+	  "43 5 6 cipher_suite_entry integer 6 1",
+	  "43 6 7 cipher_suite_entry integer 7 1",
+	  "43 7 8 cipher_suite_entry integer 8 1",
+	  "43 8 9 cipher_suite_entry integer 9 1",
+	  "43 9 10 cipher_suite_entry integer 10 1",
+	  "43 10 11 cipher_suite_entry integer 11 1",
+	  "43 11 12 cipher_suite_entry integer 12 1",
+	  "43 12 13 cipher_suite_entry integer 13 1",
+	  "43 13 14 cipher_suite_entry integer 14 1",
+	  "43 14 15 cipher_suite_entry integer 15 1",
+	  "43 15 -1 cipher_suite_entry integer 16 1",
+	  #"44 0 1 max_priv_for_cipher_suite integer 15",
+	  #"44 1 2 max_priv_for_cipher_suite integer 14",
+	  #"44 2 3 max_priv_for_cipher_suite integer 13",
+	  #"44 3 4 max_priv_for_cipher_suite integer 12",
+	  #"44 4 5 max_priv_for_cipher_suite integer 11",
+	  #"44 5 6 max_priv_for_cipher_suite integer 10",
+	  #"44 6 7 max_priv_for_cipher_suite integer 9",
+	  #"44 7 8 max_priv_for_cipher_suite integer 8",
+	  #"44 8 9 max_priv_for_cipher_suite integer 7",
+	  #"44 9 10 max_priv_for_cipher_suite integer 6",
+	  #"44 10 11 max_priv_for_cipher_suite integer 5",
+	  #"44 11 12 max_priv_for_cipher_suite integer 4",
+	  #"44 12 13 max_priv_for_cipher_suite integer 3",
+	  #"44 13 14 max_priv_for_cipher_suite integer 2",
+	  #"44 14 15 max_priv_for_cipher_suite integer 1",
+	  #"44 15 -1 max_priv_for_cipher_suite integer 2"
+	);
+
+    sub lanparm_set_config_cb {
+	my $self = shift;
+	my $lanparm = shift;
+	my $err = shift;
+
+	if ($err) {
+	    print main::reg_err("Error esting lanparm config: $err");
+	    return;
+	}
+
+	print "Lanparm config set\n";
+
+	$rv = $lanparm->get_config($self);
+	if ($rv) {
+	    main::reg_err("Unable to get lanparm config: $rv\n");
+	    $self->close();
+	    return;
+        }
+    }
+
+    sub lanparm_got_config_cb {
+	my $self = shift;
+	my $lanparm = shift;
+	my $err = shift;
+	my $config = shift;
+	my $rv;
+	my $i;
+
+	if ($$self->{accmode} == 0) {
+	    @config = @first_configs;
+	    print "Checking first config\n";
+	} else {
+	    @config = @set_configs;
+	    print "Checking second config\n";
+	}
+
+	if ($err) {
+	    print main::reg_err("Error fetching config: $err");
+	    return
+	}
+
+	for $i (@config) {
+	    my ($parm, $idx, $nidx, $name, $type, $val) = split /\s+/, $i;
+	    $val = join(" ", split(/%/, $val));
+	    my $vidx = int($idx);
+	    my $v = $config->get_val($parm, \$vidx);
+	    my ($vname, $vtype, $vval) = split /\s+/, $v, 3;
+	    if ($name ne $vname) {
+		main::reg_err("$parm($idx) name mismatch, expected $name, got $vname");
+	    }
+	    if ($type ne $vtype) {
+		main::reg_err("$parm($idx) type mismatch, expected $type, got $vtype");
+	    }
+	    if ($val ne $vval) {
+		main::reg_err("$parm($idx) val mismatch, expected $val, got $vval");
+	    }
+	    if ($nidx != $vidx) {
+		main::reg_err("$parm($idx) nidx mismatch, expected $nidx, got $vidx");
+	    }
+	}
+
+	if ($$self->{accmode} == 0) {
+	    for $i (@set_configs) {
+		my ($parm, $idx, $nidx, $name, $type, $val, $ro) = split /\s+/, $i;
+		next if ($ro); # skip read-only vals
+		$val = join(" ", split(/%/, $val));
+		$rv = $config->set_val($parm, $idx, $type, $val);
+		if ($rv) {
+		    main::reg_err("error $rv setting parm $parm($idx) $type $val");
+		}
+	    }
+	    $$self->{accmode} = 1;
+
+	    $rv = $lanparm->set_config($config, $self);
+	    if ($rv) {
+		main::reg_err("Unable to set lanparm config: $rv\n");
+		$self->close();
+		return;
+	    }
+	} else {
+	    $rv = $lanparm->get_parm($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
+				     0, 0, $self);
+	    if ($rv) {
+		main::reg_err("Unable to request lan parm(1): $rv\n");
+		$self->close();
+		return;
+	    }
+	}
+    }
+
+    sub mc_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $domain = shift;
+	my $mc = shift;
+	my $rv;
+	my $lanparm;
+
+	if ($op eq "added") {
+	    print $op, " MC ", $mc->get_name(), "\n";
+	    $lanparm = $mc->get_lanparm(7);
+	    if (! defined($lanparm)) {
+		main::reg_err("Unable to get lanparm\n");
+		$self->close();
+	        return;
+	    }
+	    $rv = $lanparm->get_config($self);
+	    if ($rv) {
+		main::reg_err("Unable to get lanparm config: $rv\n");
+		$self->close();
+		return;
+	    }
+	}
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+	my $rv;
+
+	if ($err) {
+	    main::reg_err("Error starting up IPMI connection: $err");
+	    $self->close();
+	    return;
+	}
+
+	print "Connection up!\n";
+	$rv = $domain->add_mc_update_handler($self);
+	if ($rv) {
+	    main::reg_err("Unable to add mc updated handler: $rv\n");
+	    $self->close();
+	    return;
+	}
+    }
+
+    sub domain_close_done_cb {
+	my $self = shift;
+
+	$$self->{keepon} = 0;
+    }
+
+    sub close {
+	my $self = shift;
+	my $domain = shift;
+
+	if (defined $$self->{domain_id}) {
+	    my $v = CloseDomain::new($self);
+	    $$self->{domain_id}->to_domain($v);
+	} else {
+	    $$self->{keepon} = 0;
+	}
+    }
+
+}
+
+package main;
+
+$lanserv = Lanserv->new();
+if (! $lanserv) {
+    main::reg_err("Unable to start lanserv");
+    exit(1);
+}
+
+# Add a BMC
+$lanserv->cmd("mc_add 0x20 0 has-device-sdrs 0x23 9 8 0x1f 0x1291 0xf02");
+$lanserv->cmd("mc_enable 0x20");
+
+sleep 1;
+
+#OpenIPMI::enable_debug_msg();
+OpenIPMI::enable_debug_malloc();
+
+# Now start OpenIPMI
+OpenIPMI::init();
+
+$h = Handlers::new();
+
+OpenIPMI::set_log_handler($h);
+
+@args = ( "-noseteventrcvr",
+	  "lan", "-p", "9000", "-U", "minyard", "-P", "test", "localhost");
+$$h->{domain_id} = OpenIPMI::open_domain2("test", \@args, $h, \undef);
+if (! $$h->{domain_id}) {
+    $lanserv->close();
+    print "IPMI open failed\n";
+    exit 1;
+}
+
+while ($$h->{keepon}) {
+    OpenIPMI::wait_io(1000);
+}
+
+$lanserv->close();
+OpenIPMI::shutdown_everything();
+exit main::get_errcount();

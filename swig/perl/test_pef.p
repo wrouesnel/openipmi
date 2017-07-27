@@ -1,0 +1,1465 @@
+#!/usr/bin/perl
+
+# test_pef
+#
+# Test of the pef code
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+use Lanserv;
+use OpenIPMI;
+
+my $errcountholder : shared = 0;
+$errcount = \$errcountholder;
+
+my $fru_field_table = {};
+
+sub reg_err {
+    my $str = shift;
+
+    $$errcount++;
+    print STDERR "***", $str, "\n";
+}
+
+sub get_errcount {
+    return $$errcount;
+}
+
+{
+    package CloseDomain;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	$b = bless $b;
+	return $b;
+    }
+
+    sub domain_cb {
+	my $self = shift;
+	my $domain = shift;
+
+	$domain->close($$self);
+    }
+
+    package aaa;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    package Handlers;
+
+    sub new {
+	my $a = {};
+	$a->{keepon} = 1;
+	$a->{accmode} = 0;
+	return bless \$a;
+    }
+
+    sub log {
+	my $self = shift;
+	my $level = shift;
+	my $log = shift;
+
+	print $level, ": ", $log, "\n";
+    }
+
+    sub pef_set_parm_cb {
+	my $self = shift;
+	my $pef = shift;
+	my $err = shift;
+
+	print "Parm set: ", $$self->{accmode}, "\n";
+	$rv = $pef->get_parm($OpenIPMI::PEFPARM_ALERT_STRING,
+			     12, 2, $self);
+	if ($rv) {
+	    main::reg_err("Unable to request lan parm(1): $rv\n");
+	    $self->close();
+	    return;
+	}
+    }
+
+
+    sub pef_got_parm_cb {
+	my $self = shift;
+	my $pef = shift;
+	my $err = shift;
+	my $parm_rev = shift;
+	my @vals = @_;
+
+	print "Parm retrieved: ", $$self->{accmode}, "\n";
+	if ($parm_rev != 0x11) {
+	    main::reg_err("Invalid parm revision\n");
+	}
+
+	if ($$self->{accmode} == 1) {
+	    if (join(" ", @vals) ne "12 2 99 115 100 102 0 0 0 0 0 0 0 0 0 0 0 0") {
+		main::reg_err("Invalid get parms(1), '" . join(" ", @vals) . "'\n");
+		$self->close();
+		return;
+	    }
+	    $vals[6] = 0x31;
+	    $$self->{accmode} = 2;
+	    $rv = $pef->set_parm($OpenIPMI::PEFPARM_ALERT_STRING,
+				 join(" ", @vals), $self);
+	    if ($rv) {
+		main::reg_err("Error setting parms(1): $rv\n");
+		$self->close();
+		return;
+	    }
+	} elsif ($$self->{accmode} == 2) {
+	    if (join(" ", @vals) ne "12 2 99 115 100 102 49 0 0 0 0 0 0 0 0 0 0 0") {
+		main::reg_err("Invalid get parms(2), '" . join(" ", @vals) . "'\n");
+		$self->close();
+		return;
+	    }
+	    $vals[7] = 0x32;
+	    $$self->{accmode} = 3;
+	    $rv = $pef->set_parm_array($OpenIPMI::PEFPARM_ALERT_STRING,
+				       \@vals, $self);
+	    if ($rv) {
+		main::reg_err("Error setting parms(2): $rv\n");
+		$self->close();
+		return;
+	    }
+	} else {
+	    if (join(" ", @vals) ne "12 2 99 115 100 102 49 50 0 0 0 0 0 0 0 0 0 0") {
+		main::reg_err("Invalid get parms(3)\n");
+		$self->close();
+		return;
+	    }
+
+	    $self->close();
+	}
+    }
+
+    @first_configs =
+	("0 -1 -1 alert_startup_delay_enabled bool false",
+         "1 -1 -1 startup_delay_enabled bool false",
+	 "2 -1 -1 event_messages_enabled bool false",
+	 "3 -1 -1 pef_enabled bool false",
+	 "4 -1 -1 diagnostic_interrupt_enabled bool false",
+	 "5 -1 -1 oem_action_enabled bool false",
+	 "6 -1 -1 power_cycle_enabled bool false",
+	 "7 -1 -1 reset_enabled bool false",
+	 "8 -1 -1 power_down_enabled bool false",
+	 "9 -1 -1 alert_enabled bool false",
+	 "10 -1 -1 startup_delay integer 0",
+	 "11 -1 -1 alert_startup_delay integer 0",
+	 "12 -1 -1 guid_enabled bool false",
+	 "13 -1 -1 guid_val data 0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00%0x00",
+	 "14 -1 -1 num_event_filters integer 15",
+	 "15 0 1 enable_filter bool false",
+	 "15 1 2 enable_filter bool false",
+	 "15 2 3 enable_filter bool false",
+	 "15 3 4 enable_filter bool false",
+	 "15 4 5 enable_filter bool false",
+	 "15 5 6 enable_filter bool false",
+	 "15 6 7 enable_filter bool false",
+	 "15 7 8 enable_filter bool false",
+	 "15 8 9 enable_filter bool false",
+	 "15 9 10 enable_filter bool false",
+	 "15 10 11 enable_filter bool false",
+	 "15 11 12 enable_filter bool false",
+	 "15 12 13 enable_filter bool false",
+	 "15 13 14 enable_filter bool false",
+	 "15 14 -1 enable_filter bool false",
+	 "16 0 1 filter_type integer 0",
+	 "16 1 2 filter_type integer 0",
+	 "16 2 3 filter_type integer 0",
+	 "16 3 4 filter_type integer 0",
+	 "16 4 5 filter_type integer 0",
+	 "16 5 6 filter_type integer 0",
+	 "16 6 7 filter_type integer 0",
+	 "16 7 8 filter_type integer 0",
+	 "16 8 9 filter_type integer 0",
+	 "16 9 10 filter_type integer 0",
+	 "16 10 11 filter_type integer 0",
+	 "16 11 12 filter_type integer 0",
+	 "16 12 13 filter_type integer 0",
+	 "16 13 14 filter_type integer 0",
+	 "16 14 -1 filter_type integer 0",
+	 "17 0 1 diagnostic_interrupt bool false",
+	 "17 1 2 diagnostic_interrupt bool false",
+	 "17 2 3 diagnostic_interrupt bool false",
+	 "17 3 4 diagnostic_interrupt bool false",
+	 "17 4 5 diagnostic_interrupt bool false",
+	 "17 5 6 diagnostic_interrupt bool false",
+	 "17 6 7 diagnostic_interrupt bool false",
+	 "17 7 8 diagnostic_interrupt bool false",
+	 "17 8 9 diagnostic_interrupt bool false",
+	 "17 9 10 diagnostic_interrupt bool false",
+	 "17 10 11 diagnostic_interrupt bool false",
+	 "17 11 12 diagnostic_interrupt bool false",
+	 "17 12 13 diagnostic_interrupt bool false",
+	 "17 13 14 diagnostic_interrupt bool false",
+	 "17 14 -1 diagnostic_interrupt bool false",
+	 "18 0 1 oem_action bool false",
+	 "18 1 2 oem_action bool false",
+	 "18 2 3 oem_action bool false",
+	 "18 3 4 oem_action bool false",
+	 "18 4 5 oem_action bool false",
+	 "18 5 6 oem_action bool false",
+	 "18 6 7 oem_action bool false",
+	 "18 7 8 oem_action bool false",
+	 "18 8 9 oem_action bool false",
+	 "18 9 10 oem_action bool false",
+	 "18 10 11 oem_action bool false",
+	 "18 11 12 oem_action bool false",
+	 "18 12 13 oem_action bool false",
+	 "18 13 14 oem_action bool false",
+	 "18 14 -1 oem_action bool false",
+	 "19 0 1 power_cycle bool false",
+	 "19 1 2 power_cycle bool false",
+	 "19 2 3 power_cycle bool false",
+	 "19 3 4 power_cycle bool false",
+	 "19 4 5 power_cycle bool false",
+	 "19 5 6 power_cycle bool false",
+	 "19 6 7 power_cycle bool false",
+	 "19 7 8 power_cycle bool false",
+	 "19 8 9 power_cycle bool false",
+	 "19 9 10 power_cycle bool false",
+	 "19 10 11 power_cycle bool false",
+	 "19 11 12 power_cycle bool false",
+	 "19 12 13 power_cycle bool false",
+	 "19 13 14 power_cycle bool false",
+	 "19 14 -1 power_cycle bool false",
+	 "20 0 1 reset bool false",
+	 "20 1 2 reset bool false",
+	 "20 2 3 reset bool false",
+	 "20 3 4 reset bool false",
+	 "20 4 5 reset bool false",
+	 "20 5 6 reset bool false",
+	 "20 6 7 reset bool false",
+	 "20 7 8 reset bool false",
+	 "20 8 9 reset bool false",
+	 "20 9 10 reset bool false",
+	 "20 10 11 reset bool false",
+	 "20 11 12 reset bool false",
+	 "20 12 13 reset bool false",
+	 "20 13 14 reset bool false",
+	 "20 14 -1 reset bool false",
+	 "21 0 1 power_down bool false",
+	 "21 1 2 power_down bool false",
+	 "21 2 3 power_down bool false",
+	 "21 3 4 power_down bool false",
+	 "21 4 5 power_down bool false",
+	 "21 5 6 power_down bool false",
+	 "21 6 7 power_down bool false",
+	 "21 7 8 power_down bool false",
+	 "21 8 9 power_down bool false",
+	 "21 9 10 power_down bool false",
+	 "21 10 11 power_down bool false",
+	 "21 11 12 power_down bool false",
+	 "21 12 13 power_down bool false",
+	 "21 13 14 power_down bool false",
+	 "21 14 -1 power_down bool false",
+	 "22 0 1 alert bool false",
+	 "22 1 2 alert bool false",
+	 "22 2 3 alert bool false",
+	 "22 3 4 alert bool false",
+	 "22 4 5 alert bool false",
+	 "22 5 6 alert bool false",
+	 "22 6 7 alert bool false",
+	 "22 7 8 alert bool false",
+	 "22 8 9 alert bool false",
+	 "22 9 10 alert bool false",
+	 "22 10 11 alert bool false",
+	 "22 11 12 alert bool false",
+	 "22 12 13 alert bool false",
+	 "22 13 14 alert bool false",
+	 "22 14 -1 alert bool false",
+	 "23 0 1 alert_policy_number integer 0",
+	 "23 1 2 alert_policy_number integer 0",
+	 "23 2 3 alert_policy_number integer 0",
+	 "23 3 4 alert_policy_number integer 0",
+	 "23 4 5 alert_policy_number integer 0",
+	 "23 5 6 alert_policy_number integer 0",
+	 "23 6 7 alert_policy_number integer 0",
+	 "23 7 8 alert_policy_number integer 0",
+	 "23 8 9 alert_policy_number integer 0",
+	 "23 9 10 alert_policy_number integer 0",
+	 "23 10 11 alert_policy_number integer 0",
+	 "23 11 12 alert_policy_number integer 0",
+	 "23 12 13 alert_policy_number integer 0",
+	 "23 13 14 alert_policy_number integer 0",
+	 "23 14 -1 alert_policy_number integer 0",
+	 "24 0 1 event_severity integer 0",
+	 "24 1 2 event_severity integer 0",
+	 "24 2 3 event_severity integer 0",
+	 "24 3 4 event_severity integer 0",
+	 "24 4 5 event_severity integer 0",
+	 "24 5 6 event_severity integer 0",
+	 "24 6 7 event_severity integer 0",
+	 "24 7 8 event_severity integer 0",
+	 "24 8 9 event_severity integer 0",
+	 "24 9 10 event_severity integer 0",
+	 "24 10 11 event_severity integer 0",
+	 "24 11 12 event_severity integer 0",
+	 "24 12 13 event_severity integer 0",
+	 "24 13 14 event_severity integer 0",
+	 "24 14 -1 event_severity integer 0",
+	 "25 0 1 generator_id_addr integer 0",
+	 "25 1 2 generator_id_addr integer 0",
+	 "25 2 3 generator_id_addr integer 0",
+	 "25 3 4 generator_id_addr integer 0",
+	 "25 4 5 generator_id_addr integer 0",
+	 "25 5 6 generator_id_addr integer 0",
+	 "25 6 7 generator_id_addr integer 0",
+	 "25 7 8 generator_id_addr integer 0",
+	 "25 8 9 generator_id_addr integer 0",
+	 "25 9 10 generator_id_addr integer 0",
+	 "25 10 11 generator_id_addr integer 0",
+	 "25 11 12 generator_id_addr integer 0",
+	 "25 12 13 generator_id_addr integer 0",
+	 "25 13 14 generator_id_addr integer 0",
+	 "25 14 -1 generator_id_addr integer 0",
+	 "26 0 1 generator_id_channel_lun integer 0",
+	 "26 1 2 generator_id_channel_lun integer 0",
+	 "26 2 3 generator_id_channel_lun integer 0",
+	 "26 3 4 generator_id_channel_lun integer 0",
+	 "26 4 5 generator_id_channel_lun integer 0",
+	 "26 5 6 generator_id_channel_lun integer 0",
+	 "26 6 7 generator_id_channel_lun integer 0",
+	 "26 7 8 generator_id_channel_lun integer 0",
+	 "26 8 9 generator_id_channel_lun integer 0",
+	 "26 9 10 generator_id_channel_lun integer 0",
+	 "26 10 11 generator_id_channel_lun integer 0",
+	 "26 11 12 generator_id_channel_lun integer 0",
+	 "26 12 13 generator_id_channel_lun integer 0",
+	 "26 13 14 generator_id_channel_lun integer 0",
+	 "26 14 -1 generator_id_channel_lun integer 0",
+	 "27 0 1 sensor_type integer 0",
+	 "27 1 2 sensor_type integer 0",
+	 "27 2 3 sensor_type integer 0",
+	 "27 3 4 sensor_type integer 0",
+	 "27 4 5 sensor_type integer 0",
+	 "27 5 6 sensor_type integer 0",
+	 "27 6 7 sensor_type integer 0",
+	 "27 7 8 sensor_type integer 0",
+	 "27 8 9 sensor_type integer 0",
+	 "27 9 10 sensor_type integer 0",
+	 "27 10 11 sensor_type integer 0",
+	 "27 11 12 sensor_type integer 0",
+	 "27 12 13 sensor_type integer 0",
+	 "27 13 14 sensor_type integer 0",
+	 "27 14 -1 sensor_type integer 0",
+	 "28 0 1 sensor_number integer 0",
+	 "28 1 2 sensor_number integer 0",
+	 "28 2 3 sensor_number integer 0",
+	 "28 3 4 sensor_number integer 0",
+	 "28 4 5 sensor_number integer 0",
+	 "28 5 6 sensor_number integer 0",
+	 "28 6 7 sensor_number integer 0",
+	 "28 7 8 sensor_number integer 0",
+	 "28 8 9 sensor_number integer 0",
+	 "28 9 10 sensor_number integer 0",
+	 "28 10 11 sensor_number integer 0",
+	 "28 11 12 sensor_number integer 0",
+	 "28 12 13 sensor_number integer 0",
+	 "28 13 14 sensor_number integer 0",
+	 "28 14 -1 sensor_number integer 0",
+	 "29 0 1 event_trigger integer 0",
+	 "29 1 2 event_trigger integer 0",
+	 "29 2 3 event_trigger integer 0",
+	 "29 3 4 event_trigger integer 0",
+	 "29 4 5 event_trigger integer 0",
+	 "29 5 6 event_trigger integer 0",
+	 "29 6 7 event_trigger integer 0",
+	 "29 7 8 event_trigger integer 0",
+	 "29 8 9 event_trigger integer 0",
+	 "29 9 10 event_trigger integer 0",
+	 "29 10 11 event_trigger integer 0",
+	 "29 11 12 event_trigger integer 0",
+	 "29 12 13 event_trigger integer 0",
+	 "29 13 14 event_trigger integer 0",
+	 "29 14 -1 event_trigger integer 0",
+	 "30 0 1 data1_offset_mask integer 0",
+	 "30 1 2 data1_offset_mask integer 0",
+	 "30 2 3 data1_offset_mask integer 0",
+	 "30 3 4 data1_offset_mask integer 0",
+	 "30 4 5 data1_offset_mask integer 0",
+	 "30 5 6 data1_offset_mask integer 0",
+	 "30 6 7 data1_offset_mask integer 0",
+	 "30 7 8 data1_offset_mask integer 0",
+	 "30 8 9 data1_offset_mask integer 0",
+	 "30 9 10 data1_offset_mask integer 0",
+	 "30 10 11 data1_offset_mask integer 0",
+	 "30 11 12 data1_offset_mask integer 0",
+	 "30 12 13 data1_offset_mask integer 0",
+	 "30 13 14 data1_offset_mask integer 0",
+	 "30 14 -1 data1_offset_mask integer 0",
+	 "31 0 1 data1_mask integer 0",
+	 "31 1 2 data1_mask integer 0",
+	 "31 2 3 data1_mask integer 0",
+	 "31 3 4 data1_mask integer 0",
+	 "31 4 5 data1_mask integer 0",
+	 "31 5 6 data1_mask integer 0",
+	 "31 6 7 data1_mask integer 0",
+	 "31 7 8 data1_mask integer 0",
+	 "31 8 9 data1_mask integer 0",
+	 "31 9 10 data1_mask integer 0",
+	 "31 10 11 data1_mask integer 0",
+	 "31 11 12 data1_mask integer 0",
+	 "31 12 13 data1_mask integer 0",
+	 "31 13 14 data1_mask integer 0",
+	 "31 14 -1 data1_mask integer 0",
+	 "32 0 1 data1_compare1 integer 0",
+	 "32 1 2 data1_compare1 integer 0",
+	 "32 2 3 data1_compare1 integer 0",
+	 "32 3 4 data1_compare1 integer 0",
+	 "32 4 5 data1_compare1 integer 0",
+	 "32 5 6 data1_compare1 integer 0",
+	 "32 6 7 data1_compare1 integer 0",
+	 "32 7 8 data1_compare1 integer 0",
+	 "32 8 9 data1_compare1 integer 0",
+	 "32 9 10 data1_compare1 integer 0",
+	 "32 10 11 data1_compare1 integer 0",
+	 "32 11 12 data1_compare1 integer 0",
+	 "32 12 13 data1_compare1 integer 0",
+	 "32 13 14 data1_compare1 integer 0",
+	 "32 14 -1 data1_compare1 integer 0",
+	 "33 0 1 data1_compare2 integer 0",
+	 "33 1 2 data1_compare2 integer 0",
+	 "33 2 3 data1_compare2 integer 0",
+	 "33 3 4 data1_compare2 integer 0",
+	 "33 4 5 data1_compare2 integer 0",
+	 "33 5 6 data1_compare2 integer 0",
+	 "33 6 7 data1_compare2 integer 0",
+	 "33 7 8 data1_compare2 integer 0",
+	 "33 8 9 data1_compare2 integer 0",
+	 "33 9 10 data1_compare2 integer 0",
+	 "33 10 11 data1_compare2 integer 0",
+	 "33 11 12 data1_compare2 integer 0",
+	 "33 12 13 data1_compare2 integer 0",
+	 "33 13 14 data1_compare2 integer 0",
+	 "33 14 -1 data1_compare2 integer 0",
+	 "34 0 1 data2_mask integer 0",
+	 "34 1 2 data2_mask integer 0",
+	 "34 2 3 data2_mask integer 0",
+	 "34 3 4 data2_mask integer 0",
+	 "34 4 5 data2_mask integer 0",
+	 "34 5 6 data2_mask integer 0",
+	 "34 6 7 data2_mask integer 0",
+	 "34 7 8 data2_mask integer 0",
+	 "34 8 9 data2_mask integer 0",
+	 "34 9 10 data2_mask integer 0",
+	 "34 10 11 data2_mask integer 0",
+	 "34 11 12 data2_mask integer 0",
+	 "34 12 13 data2_mask integer 0",
+	 "34 13 14 data2_mask integer 0",
+	 "34 14 -1 data2_mask integer 0",
+	 "35 0 1 data2_compare1 integer 0",
+	 "35 1 2 data2_compare1 integer 0",
+	 "35 2 3 data2_compare1 integer 0",
+	 "35 3 4 data2_compare1 integer 0",
+	 "35 4 5 data2_compare1 integer 0",
+	 "35 5 6 data2_compare1 integer 0",
+	 "35 6 7 data2_compare1 integer 0",
+	 "35 7 8 data2_compare1 integer 0",
+	 "35 8 9 data2_compare1 integer 0",
+	 "35 9 10 data2_compare1 integer 0",
+	 "35 10 11 data2_compare1 integer 0",
+	 "35 11 12 data2_compare1 integer 0",
+	 "35 12 13 data2_compare1 integer 0",
+	 "35 13 14 data2_compare1 integer 0",
+	 "35 14 -1 data2_compare1 integer 0",
+	 "36 0 1 data2_compare2 integer 0",
+	 "36 1 2 data2_compare2 integer 0",
+	 "36 2 3 data2_compare2 integer 0",
+	 "36 3 4 data2_compare2 integer 0",
+	 "36 4 5 data2_compare2 integer 0",
+	 "36 5 6 data2_compare2 integer 0",
+	 "36 6 7 data2_compare2 integer 0",
+	 "36 7 8 data2_compare2 integer 0",
+	 "36 8 9 data2_compare2 integer 0",
+	 "36 9 10 data2_compare2 integer 0",
+	 "36 10 11 data2_compare2 integer 0",
+	 "36 11 12 data2_compare2 integer 0",
+	 "36 12 13 data2_compare2 integer 0",
+	 "36 13 14 data2_compare2 integer 0",
+	 "36 14 -1 data2_compare2 integer 0",
+	 "37 0 1 data3_mask integer 0",
+	 "37 1 2 data3_mask integer 0",
+	 "37 2 3 data3_mask integer 0",
+	 "37 3 4 data3_mask integer 0",
+	 "37 4 5 data3_mask integer 0",
+	 "37 5 6 data3_mask integer 0",
+	 "37 6 7 data3_mask integer 0",
+	 "37 7 8 data3_mask integer 0",
+	 "37 8 9 data3_mask integer 0",
+	 "37 9 10 data3_mask integer 0",
+	 "37 10 11 data3_mask integer 0",
+	 "37 11 12 data3_mask integer 0",
+	 "37 12 13 data3_mask integer 0",
+	 "37 13 14 data3_mask integer 0",
+	 "37 14 -1 data3_mask integer 0",
+	 "38 0 1 data3_compare1 integer 0",
+	 "38 1 2 data3_compare1 integer 0",
+	 "38 2 3 data3_compare1 integer 0",
+	 "38 3 4 data3_compare1 integer 0",
+	 "38 4 5 data3_compare1 integer 0",
+	 "38 5 6 data3_compare1 integer 0",
+	 "38 6 7 data3_compare1 integer 0",
+	 "38 7 8 data3_compare1 integer 0",
+	 "38 8 9 data3_compare1 integer 0",
+	 "38 9 10 data3_compare1 integer 0",
+	 "38 10 11 data3_compare1 integer 0",
+	 "38 11 12 data3_compare1 integer 0",
+	 "38 12 13 data3_compare1 integer 0",
+	 "38 13 14 data3_compare1 integer 0",
+	 "38 14 -1 data3_compare1 integer 0",
+	 "39 0 1 data3_compare2 integer 0",
+	 "39 1 2 data3_compare2 integer 0",
+	 "39 2 3 data3_compare2 integer 0",
+	 "39 3 4 data3_compare2 integer 0",
+	 "39 4 5 data3_compare2 integer 0",
+	 "39 5 6 data3_compare2 integer 0",
+	 "39 6 7 data3_compare2 integer 0",
+	 "39 7 8 data3_compare2 integer 0",
+	 "39 8 9 data3_compare2 integer 0",
+	 "39 9 10 data3_compare2 integer 0",
+	 "39 10 11 data3_compare2 integer 0",
+	 "39 11 12 data3_compare2 integer 0",
+	 "39 12 13 data3_compare2 integer 0",
+	 "39 13 14 data3_compare2 integer 0",
+	 "39 14 -1 data3_compare2 integer 0",
+	 "40 -1 -1 num_alert_policies integer 15",
+	 "41 0 1 policy_num integer 0",
+	 "41 1 2 policy_num integer 0",
+	 "41 2 3 policy_num integer 0",
+	 "41 3 4 policy_num integer 0",
+	 "41 4 5 policy_num integer 0",
+	 "41 5 6 policy_num integer 0",
+	 "41 6 7 policy_num integer 0",
+	 "41 7 8 policy_num integer 0",
+	 "41 8 9 policy_num integer 0",
+	 "41 9 10 policy_num integer 0",
+	 "41 10 11 policy_num integer 0",
+	 "41 11 12 policy_num integer 0",
+	 "41 12 13 policy_num integer 0",
+	 "41 13 14 policy_num integer 0",
+	 "41 14 -1 policy_num integer 0",
+	 "42 0 1 enabled bool false",
+	 "42 1 2 enabled bool false",
+	 "42 2 3 enabled bool false",
+	 "42 3 4 enabled bool false",
+	 "42 4 5 enabled bool false",
+	 "42 5 6 enabled bool false",
+	 "42 6 7 enabled bool false",
+	 "42 7 8 enabled bool false",
+	 "42 8 9 enabled bool false",
+	 "42 9 10 enabled bool false",
+	 "42 10 11 enabled bool false",
+	 "42 11 12 enabled bool false",
+	 "42 12 13 enabled bool false",
+	 "42 13 14 enabled bool false",
+	 "42 14 -1 enabled bool false",
+	 "43 0 1 policy integer 0",
+	 "43 1 2 policy integer 0",
+	 "43 2 3 policy integer 0",
+	 "43 3 4 policy integer 0",
+	 "43 4 5 policy integer 0",
+	 "43 5 6 policy integer 0",
+	 "43 6 7 policy integer 0",
+	 "43 7 8 policy integer 0",
+	 "43 8 9 policy integer 0",
+	 "43 9 10 policy integer 0",
+	 "43 10 11 policy integer 0",
+	 "43 11 12 policy integer 0",
+	 "43 12 13 policy integer 0",
+	 "43 13 14 policy integer 0",
+	 "43 14 -1 policy integer 0",
+	 "44 0 1 channel integer 0",
+	 "44 1 2 channel integer 0",
+	 "44 2 3 channel integer 0",
+	 "44 3 4 channel integer 0",
+	 "44 4 5 channel integer 0",
+	 "44 5 6 channel integer 0",
+	 "44 6 7 channel integer 0",
+	 "44 7 8 channel integer 0",
+	 "44 8 9 channel integer 0",
+	 "44 9 10 channel integer 0",
+	 "44 10 11 channel integer 0",
+	 "44 11 12 channel integer 0",
+	 "44 12 13 channel integer 0",
+	 "44 13 14 channel integer 0",
+	 "44 14 -1 channel integer 0",
+	 "45 0 1 destination_selector integer 0",
+	 "45 1 2 destination_selector integer 0",
+	 "45 2 3 destination_selector integer 0",
+	 "45 3 4 destination_selector integer 0",
+	 "45 4 5 destination_selector integer 0",
+	 "45 5 6 destination_selector integer 0",
+	 "45 6 7 destination_selector integer 0",
+	 "45 7 8 destination_selector integer 0",
+	 "45 8 9 destination_selector integer 0",
+	 "45 9 10 destination_selector integer 0",
+	 "45 10 11 destination_selector integer 0",
+	 "45 11 12 destination_selector integer 0",
+	 "45 12 13 destination_selector integer 0",
+	 "45 13 14 destination_selector integer 0",
+	 "45 14 -1 destination_selector integer 0",
+	 "46 0 1 alert_string_event_specific bool false",
+	 "46 1 2 alert_string_event_specific bool false",
+	 "46 2 3 alert_string_event_specific bool false",
+	 "46 3 4 alert_string_event_specific bool false",
+	 "46 4 5 alert_string_event_specific bool false",
+	 "46 5 6 alert_string_event_specific bool false",
+	 "46 6 7 alert_string_event_specific bool false",
+	 "46 7 8 alert_string_event_specific bool false",
+	 "46 8 9 alert_string_event_specific bool false",
+	 "46 9 10 alert_string_event_specific bool false",
+	 "46 10 11 alert_string_event_specific bool false",
+	 "46 11 12 alert_string_event_specific bool false",
+	 "46 12 13 alert_string_event_specific bool false",
+	 "46 13 14 alert_string_event_specific bool false",
+	 "46 14 -1 alert_string_event_specific bool false",
+	 "47 0 1 alert_string_selector integer 0",
+	 "47 1 2 alert_string_selector integer 0",
+	 "47 2 3 alert_string_selector integer 0",
+	 "47 3 4 alert_string_selector integer 0",
+	 "47 4 5 alert_string_selector integer 0",
+	 "47 5 6 alert_string_selector integer 0",
+	 "47 6 7 alert_string_selector integer 0",
+	 "47 7 8 alert_string_selector integer 0",
+	 "47 8 9 alert_string_selector integer 0",
+	 "47 9 10 alert_string_selector integer 0",
+	 "47 10 11 alert_string_selector integer 0",
+	 "47 11 12 alert_string_selector integer 0",
+	 "47 12 13 alert_string_selector integer 0",
+	 "47 13 14 alert_string_selector integer 0",
+	 "47 14 -1 alert_string_selector integer 0",
+	 "48 -1 -1 num_alert_strings integer 16",
+	 "49 0 1 event_filter integer 0",
+	 "49 1 2 event_filter integer 0",
+	 "49 2 3 event_filter integer 0",
+	 "49 3 4 event_filter integer 0",
+	 "49 4 5 event_filter integer 0",
+	 "49 5 6 event_filter integer 0",
+	 "49 6 7 event_filter integer 0",
+	 "49 7 8 event_filter integer 0",
+	 "49 8 9 event_filter integer 0",
+	 "49 9 10 event_filter integer 0",
+	 "49 10 11 event_filter integer 0",
+	 "49 11 12 event_filter integer 0",
+	 "49 12 13 event_filter integer 0",
+	 "49 13 14 event_filter integer 0",
+	 "49 14 15 event_filter integer 0",
+	 "49 15 -1 event_filter integer 0",
+	 "50 0 1 alert_string_set integer 0",
+	 "50 1 2 alert_string_set integer 0",
+	 "50 2 3 alert_string_set integer 0",
+	 "50 3 4 alert_string_set integer 0",
+	 "50 4 5 alert_string_set integer 0",
+	 "50 5 6 alert_string_set integer 0",
+	 "50 6 7 alert_string_set integer 0",
+	 "50 7 8 alert_string_set integer 0",
+	 "50 8 9 alert_string_set integer 0",
+	 "50 9 10 alert_string_set integer 0",
+	 "50 10 11 alert_string_set integer 0",
+	 "50 11 12 alert_string_set integer 0",
+	 "50 12 13 alert_string_set integer 0",
+	 "50 13 14 alert_string_set integer 0",
+	 "50 14 15 alert_string_set integer 0",
+	 "50 15 -1 alert_string_set integer 0",
+	 "51 0 1 alert_string string",
+	 "51 1 2 alert_string string",
+	 "51 2 3 alert_string string",
+	 "51 3 4 alert_string string",
+	 "51 4 5 alert_string string",
+	 "51 5 6 alert_string string",
+	 "51 6 7 alert_string string",
+	 "51 7 8 alert_string string",
+	 "51 8 9 alert_string string",
+	 "51 9 10 alert_string string",
+	 "51 10 11 alert_string string",
+	 "51 11 12 alert_string string",
+	 "51 12 13 alert_string string",
+	 "51 13 14 alert_string string",
+	 "51 14 15 alert_string string",
+	 "51 15 -1 alert_string string" );
+
+    @set_configs =
+	("0 -1 -1 alert_startup_delay_enabled bool true",
+         "1 -1 -1 startup_delay_enabled bool true",
+	 "2 -1 -1 event_messages_enabled bool true",
+	 "3 -1 -1 pef_enabled bool true",
+	 "4 -1 -1 diagnostic_interrupt_enabled bool true",
+	 "5 -1 -1 oem_action_enabled bool true",
+	 "6 -1 -1 power_cycle_enabled bool true",
+	 "7 -1 -1 reset_enabled bool true",
+	 "8 -1 -1 power_down_enabled bool true",
+	 "9 -1 -1 alert_enabled bool true",
+	 "10 -1 -1 startup_delay integer 1",
+	 "11 -1 -1 alert_startup_delay integer 2",
+	 "12 -1 -1 guid_enabled bool true",
+	 "13 -1 -1 guid_val data 0x03%0x04%0x05%0x06%0x77%0x88%0x99%0xaa%0xbb%0xcc%0xdd%0xee%0xff%0xee%0xdd%0xcc",
+	 "14 -1 -1 num_event_filters integer 15 r",
+	 "15 0 1 enable_filter bool true",
+	 "15 1 2 enable_filter bool true",
+	 "15 2 3 enable_filter bool true",
+	 "15 3 4 enable_filter bool true",
+	 "15 4 5 enable_filter bool true",
+	 "15 5 6 enable_filter bool true",
+	 "15 6 7 enable_filter bool true",
+	 "15 7 8 enable_filter bool true",
+	 "15 8 9 enable_filter bool true",
+	 "15 9 10 enable_filter bool true",
+	 "15 10 11 enable_filter bool true",
+	 "15 11 12 enable_filter bool true",
+	 "15 12 13 enable_filter bool true",
+	 "15 13 14 enable_filter bool true",
+	 "15 14 -1 enable_filter bool true",
+	 "16 0 1 filter_type integer 2",
+	 "16 1 2 filter_type integer 3",
+	 "16 2 3 filter_type integer 2",
+	 "16 3 4 filter_type integer 3",
+	 "16 4 5 filter_type integer 2",
+	 "16 5 6 filter_type integer 1",
+	 "16 6 7 filter_type integer 2",
+	 "16 7 8 filter_type integer 3",
+	 "16 8 9 filter_type integer 1",
+	 "16 9 10 filter_type integer 3",
+	 "16 10 11 filter_type integer 2",
+	 "16 11 12 filter_type integer 1",
+	 "16 12 13 filter_type integer 2",
+	 "16 13 14 filter_type integer 3",
+	 "16 14 -1 filter_type integer 2",
+	 "17 0 1 diagnostic_interrupt bool true",
+	 "17 1 2 diagnostic_interrupt bool true",
+	 "17 2 3 diagnostic_interrupt bool true",
+	 "17 3 4 diagnostic_interrupt bool true",
+	 "17 4 5 diagnostic_interrupt bool true",
+	 "17 5 6 diagnostic_interrupt bool true",
+	 "17 6 7 diagnostic_interrupt bool true",
+	 "17 7 8 diagnostic_interrupt bool true",
+	 "17 8 9 diagnostic_interrupt bool true",
+	 "17 9 10 diagnostic_interrupt bool true",
+	 "17 10 11 diagnostic_interrupt bool true",
+	 "17 11 12 diagnostic_interrupt bool true",
+	 "17 12 13 diagnostic_interrupt bool true",
+	 "17 13 14 diagnostic_interrupt bool true",
+	 "17 14 -1 diagnostic_interrupt bool true",
+	 "18 0 1 oem_action bool true",
+	 "18 1 2 oem_action bool true",
+	 "18 2 3 oem_action bool true",
+	 "18 3 4 oem_action bool true",
+	 "18 4 5 oem_action bool true",
+	 "18 5 6 oem_action bool true",
+	 "18 6 7 oem_action bool true",
+	 "18 7 8 oem_action bool true",
+	 "18 8 9 oem_action bool true",
+	 "18 9 10 oem_action bool true",
+	 "18 10 11 oem_action bool true",
+	 "18 11 12 oem_action bool true",
+	 "18 12 13 oem_action bool true",
+	 "18 13 14 oem_action bool true",
+	 "18 14 -1 oem_action bool true",
+	 "19 0 1 power_cycle bool true",
+	 "19 1 2 power_cycle bool true",
+	 "19 2 3 power_cycle bool true",
+	 "19 3 4 power_cycle bool true",
+	 "19 4 5 power_cycle bool true",
+	 "19 5 6 power_cycle bool true",
+	 "19 6 7 power_cycle bool true",
+	 "19 7 8 power_cycle bool true",
+	 "19 8 9 power_cycle bool true",
+	 "19 9 10 power_cycle bool true",
+	 "19 10 11 power_cycle bool true",
+	 "19 11 12 power_cycle bool true",
+	 "19 12 13 power_cycle bool true",
+	 "19 13 14 power_cycle bool true",
+	 "19 14 -1 power_cycle bool true",
+	 "20 0 1 reset bool true",
+	 "20 1 2 reset bool true",
+	 "20 2 3 reset bool true",
+	 "20 3 4 reset bool true",
+	 "20 4 5 reset bool true",
+	 "20 5 6 reset bool true",
+	 "20 6 7 reset bool true",
+	 "20 7 8 reset bool true",
+	 "20 8 9 reset bool true",
+	 "20 9 10 reset bool true",
+	 "20 10 11 reset bool true",
+	 "20 11 12 reset bool true",
+	 "20 12 13 reset bool true",
+	 "20 13 14 reset bool true",
+	 "20 14 -1 reset bool true",
+	 "21 0 1 power_down bool true",
+	 "21 1 2 power_down bool true",
+	 "21 2 3 power_down bool true",
+	 "21 3 4 power_down bool true",
+	 "21 4 5 power_down bool true",
+	 "21 5 6 power_down bool true",
+	 "21 6 7 power_down bool true",
+	 "21 7 8 power_down bool true",
+	 "21 8 9 power_down bool true",
+	 "21 9 10 power_down bool true",
+	 "21 10 11 power_down bool true",
+	 "21 11 12 power_down bool true",
+	 "21 12 13 power_down bool true",
+	 "21 13 14 power_down bool true",
+	 "21 14 -1 power_down bool true",
+	 "22 0 1 alert bool true",
+	 "22 1 2 alert bool true",
+	 "22 2 3 alert bool true",
+	 "22 3 4 alert bool true",
+	 "22 4 5 alert bool true",
+	 "22 5 6 alert bool true",
+	 "22 6 7 alert bool true",
+	 "22 7 8 alert bool true",
+	 "22 8 9 alert bool true",
+	 "22 9 10 alert bool true",
+	 "22 10 11 alert bool true",
+	 "22 11 12 alert bool true",
+	 "22 12 13 alert bool true",
+	 "22 13 14 alert bool true",
+	 "22 14 -1 alert bool true",
+	 "23 0 1 alert_policy_number integer 1",
+	 "23 1 2 alert_policy_number integer 2",
+	 "23 2 3 alert_policy_number integer 3",
+	 "23 3 4 alert_policy_number integer 4",
+	 "23 4 5 alert_policy_number integer 5",
+	 "23 5 6 alert_policy_number integer 6",
+	 "23 6 7 alert_policy_number integer 7",
+	 "23 7 8 alert_policy_number integer 8",
+	 "23 8 9 alert_policy_number integer 9",
+	 "23 9 10 alert_policy_number integer 10",
+	 "23 10 11 alert_policy_number integer 11",
+	 "23 11 12 alert_policy_number integer 12",
+	 "23 12 13 alert_policy_number integer 13",
+	 "23 13 14 alert_policy_number integer 14",
+	 "23 14 -1 alert_policy_number integer 15",
+	 "24 0 1 event_severity integer 1",
+	 "24 1 2 event_severity integer 2",
+	 "24 2 3 event_severity integer 3",
+	 "24 3 4 event_severity integer 4",
+	 "24 4 5 event_severity integer 5",
+	 "24 5 6 event_severity integer 6",
+	 "24 6 7 event_severity integer 7",
+	 "24 7 8 event_severity integer 8",
+	 "24 8 9 event_severity integer 9",
+	 "24 9 10 event_severity integer 10",
+	 "24 10 11 event_severity integer 11",
+	 "24 11 12 event_severity integer 12",
+	 "24 12 13 event_severity integer 13",
+	 "24 13 14 event_severity integer 14",
+	 "24 14 -1 event_severity integer 15",
+	 "25 0 1 generator_id_addr integer 1",
+	 "25 1 2 generator_id_addr integer 2",
+	 "25 2 3 generator_id_addr integer 3",
+	 "25 3 4 generator_id_addr integer 4",
+	 "25 4 5 generator_id_addr integer 5",
+	 "25 5 6 generator_id_addr integer 6",
+	 "25 6 7 generator_id_addr integer 7",
+	 "25 7 8 generator_id_addr integer 8",
+	 "25 8 9 generator_id_addr integer 9",
+	 "25 9 10 generator_id_addr integer 10",
+	 "25 10 11 generator_id_addr integer 11",
+	 "25 11 12 generator_id_addr integer 12",
+	 "25 12 13 generator_id_addr integer 13",
+	 "25 13 14 generator_id_addr integer 14",
+	 "25 14 -1 generator_id_addr integer 15",
+	 "26 0 1 generator_id_channel_lun integer 1",
+	 "26 1 2 generator_id_channel_lun integer 2",
+	 "26 2 3 generator_id_channel_lun integer 3",
+	 "26 3 4 generator_id_channel_lun integer 4",
+	 "26 4 5 generator_id_channel_lun integer 5",
+	 "26 5 6 generator_id_channel_lun integer 6",
+	 "26 6 7 generator_id_channel_lun integer 7",
+	 "26 7 8 generator_id_channel_lun integer 8",
+	 "26 8 9 generator_id_channel_lun integer 9",
+	 "26 9 10 generator_id_channel_lun integer 10",
+	 "26 10 11 generator_id_channel_lun integer 11",
+	 "26 11 12 generator_id_channel_lun integer 12",
+	 "26 12 13 generator_id_channel_lun integer 13",
+	 "26 13 14 generator_id_channel_lun integer 14",
+	 "26 14 -1 generator_id_channel_lun integer 15",
+	 "27 0 1 sensor_type integer 1",
+	 "27 1 2 sensor_type integer 2",
+	 "27 2 3 sensor_type integer 3",
+	 "27 3 4 sensor_type integer 4",
+	 "27 4 5 sensor_type integer 5",
+	 "27 5 6 sensor_type integer 6",
+	 "27 6 7 sensor_type integer 7",
+	 "27 7 8 sensor_type integer 8",
+	 "27 8 9 sensor_type integer 9",
+	 "27 9 10 sensor_type integer 10",
+	 "27 10 11 sensor_type integer 11",
+	 "27 11 12 sensor_type integer 12",
+	 "27 12 13 sensor_type integer 13",
+	 "27 13 14 sensor_type integer 14",
+	 "27 14 -1 sensor_type integer 15",
+	 "28 0 1 sensor_number integer 1",
+	 "28 1 2 sensor_number integer 2",
+	 "28 2 3 sensor_number integer 3",
+	 "28 3 4 sensor_number integer 4",
+	 "28 4 5 sensor_number integer 5",
+	 "28 5 6 sensor_number integer 6",
+	 "28 6 7 sensor_number integer 7",
+	 "28 7 8 sensor_number integer 8",
+	 "28 8 9 sensor_number integer 9",
+	 "28 9 10 sensor_number integer 10",
+	 "28 10 11 sensor_number integer 11",
+	 "28 11 12 sensor_number integer 12",
+	 "28 12 13 sensor_number integer 13",
+	 "28 13 14 sensor_number integer 14",
+	 "28 14 -1 sensor_number integer 15",
+	 "29 0 1 event_trigger integer 1",
+	 "29 1 2 event_trigger integer 2",
+	 "29 2 3 event_trigger integer 3",
+	 "29 3 4 event_trigger integer 4",
+	 "29 4 5 event_trigger integer 5",
+	 "29 5 6 event_trigger integer 6",
+	 "29 6 7 event_trigger integer 7",
+	 "29 7 8 event_trigger integer 8",
+	 "29 8 9 event_trigger integer 9",
+	 "29 9 10 event_trigger integer 10",
+	 "29 10 11 event_trigger integer 11",
+	 "29 11 12 event_trigger integer 12",
+	 "29 12 13 event_trigger integer 13",
+	 "29 13 14 event_trigger integer 14",
+	 "29 14 -1 event_trigger integer 15",
+	 "30 0 1 data1_offset_mask integer 1",
+	 "30 1 2 data1_offset_mask integer 2",
+	 "30 2 3 data1_offset_mask integer 3",
+	 "30 3 4 data1_offset_mask integer 4",
+	 "30 4 5 data1_offset_mask integer 5",
+	 "30 5 6 data1_offset_mask integer 6",
+	 "30 6 7 data1_offset_mask integer 7",
+	 "30 7 8 data1_offset_mask integer 8",
+	 "30 8 9 data1_offset_mask integer 9",
+	 "30 9 10 data1_offset_mask integer 10",
+	 "30 10 11 data1_offset_mask integer 11",
+	 "30 11 12 data1_offset_mask integer 12",
+	 "30 12 13 data1_offset_mask integer 13",
+	 "30 13 14 data1_offset_mask integer 14",
+	 "30 14 -1 data1_offset_mask integer 15",
+	 "31 0 1 data1_mask integer 1",
+	 "31 1 2 data1_mask integer 2",
+	 "31 2 3 data1_mask integer 3",
+	 "31 3 4 data1_mask integer 4",
+	 "31 4 5 data1_mask integer 5",
+	 "31 5 6 data1_mask integer 6",
+	 "31 6 7 data1_mask integer 7",
+	 "31 7 8 data1_mask integer 8",
+	 "31 8 9 data1_mask integer 9",
+	 "31 9 10 data1_mask integer 10",
+	 "31 10 11 data1_mask integer 11",
+	 "31 11 12 data1_mask integer 12",
+	 "31 12 13 data1_mask integer 13",
+	 "31 13 14 data1_mask integer 14",
+	 "31 14 -1 data1_mask integer 15",
+	 "32 0 1 data1_compare1 integer 1",
+	 "32 1 2 data1_compare1 integer 2",
+	 "32 2 3 data1_compare1 integer 3",
+	 "32 3 4 data1_compare1 integer 4",
+	 "32 4 5 data1_compare1 integer 5",
+	 "32 5 6 data1_compare1 integer 6",
+	 "32 6 7 data1_compare1 integer 7",
+	 "32 7 8 data1_compare1 integer 8",
+	 "32 8 9 data1_compare1 integer 9",
+	 "32 9 10 data1_compare1 integer 10",
+	 "32 10 11 data1_compare1 integer 11",
+	 "32 11 12 data1_compare1 integer 12",
+	 "32 12 13 data1_compare1 integer 13",
+	 "32 13 14 data1_compare1 integer 14",
+	 "32 14 -1 data1_compare1 integer 15",
+	 "33 0 1 data1_compare2 integer 1",
+	 "33 1 2 data1_compare2 integer 2",
+	 "33 2 3 data1_compare2 integer 3",
+	 "33 3 4 data1_compare2 integer 4",
+	 "33 4 5 data1_compare2 integer 5",
+	 "33 5 6 data1_compare2 integer 6",
+	 "33 6 7 data1_compare2 integer 7",
+	 "33 7 8 data1_compare2 integer 8",
+	 "33 8 9 data1_compare2 integer 9",
+	 "33 9 10 data1_compare2 integer 10",
+	 "33 10 11 data1_compare2 integer 11",
+	 "33 11 12 data1_compare2 integer 12",
+	 "33 12 13 data1_compare2 integer 13",
+	 "33 13 14 data1_compare2 integer 14",
+	 "33 14 -1 data1_compare2 integer 15",
+	 "34 0 1 data2_mask integer 1",
+	 "34 1 2 data2_mask integer 2",
+	 "34 2 3 data2_mask integer 3",
+	 "34 3 4 data2_mask integer 4",
+	 "34 4 5 data2_mask integer 5",
+	 "34 5 6 data2_mask integer 6",
+	 "34 6 7 data2_mask integer 7",
+	 "34 7 8 data2_mask integer 8",
+	 "34 8 9 data2_mask integer 9",
+	 "34 9 10 data2_mask integer 10",
+	 "34 10 11 data2_mask integer 11",
+	 "34 11 12 data2_mask integer 12",
+	 "34 12 13 data2_mask integer 13",
+	 "34 13 14 data2_mask integer 14",
+	 "34 14 -1 data2_mask integer 15",
+	 "35 0 1 data2_compare1 integer 1",
+	 "35 1 2 data2_compare1 integer 2",
+	 "35 2 3 data2_compare1 integer 3",
+	 "35 3 4 data2_compare1 integer 4",
+	 "35 4 5 data2_compare1 integer 5",
+	 "35 5 6 data2_compare1 integer 6",
+	 "35 6 7 data2_compare1 integer 7",
+	 "35 7 8 data2_compare1 integer 8",
+	 "35 8 9 data2_compare1 integer 9",
+	 "35 9 10 data2_compare1 integer 10",
+	 "35 10 11 data2_compare1 integer 11",
+	 "35 11 12 data2_compare1 integer 12",
+	 "35 12 13 data2_compare1 integer 13",
+	 "35 13 14 data2_compare1 integer 14",
+	 "35 14 -1 data2_compare1 integer 15",
+	 "36 0 1 data2_compare2 integer 1",
+	 "36 1 2 data2_compare2 integer 2",
+	 "36 2 3 data2_compare2 integer 3",
+	 "36 3 4 data2_compare2 integer 4",
+	 "36 4 5 data2_compare2 integer 5",
+	 "36 5 6 data2_compare2 integer 6",
+	 "36 6 7 data2_compare2 integer 7",
+	 "36 7 8 data2_compare2 integer 8",
+	 "36 8 9 data2_compare2 integer 9",
+	 "36 9 10 data2_compare2 integer 10",
+	 "36 10 11 data2_compare2 integer 11",
+	 "36 11 12 data2_compare2 integer 12",
+	 "36 12 13 data2_compare2 integer 13",
+	 "36 13 14 data2_compare2 integer 14",
+	 "36 14 -1 data2_compare2 integer 15",
+	 "37 0 1 data3_mask integer 1",
+	 "37 1 2 data3_mask integer 2",
+	 "37 2 3 data3_mask integer 3",
+	 "37 3 4 data3_mask integer 4",
+	 "37 4 5 data3_mask integer 5",
+	 "37 5 6 data3_mask integer 6",
+	 "37 6 7 data3_mask integer 7",
+	 "37 7 8 data3_mask integer 8",
+	 "37 8 9 data3_mask integer 9",
+	 "37 9 10 data3_mask integer 10",
+	 "37 10 11 data3_mask integer 11",
+	 "37 11 12 data3_mask integer 12",
+	 "37 12 13 data3_mask integer 13",
+	 "37 13 14 data3_mask integer 14",
+	 "37 14 -1 data3_mask integer 15",
+	 "38 0 1 data3_compare1 integer 1",
+	 "38 1 2 data3_compare1 integer 2",
+	 "38 2 3 data3_compare1 integer 3",
+	 "38 3 4 data3_compare1 integer 4",
+	 "38 4 5 data3_compare1 integer 5",
+	 "38 5 6 data3_compare1 integer 6",
+	 "38 6 7 data3_compare1 integer 7",
+	 "38 7 8 data3_compare1 integer 8",
+	 "38 8 9 data3_compare1 integer 9",
+	 "38 9 10 data3_compare1 integer 10",
+	 "38 10 11 data3_compare1 integer 11",
+	 "38 11 12 data3_compare1 integer 12",
+	 "38 12 13 data3_compare1 integer 13",
+	 "38 13 14 data3_compare1 integer 14",
+	 "38 14 -1 data3_compare1 integer 15",
+	 "39 0 1 data3_compare2 integer 1",
+	 "39 1 2 data3_compare2 integer 2",
+	 "39 2 3 data3_compare2 integer 3",
+	 "39 3 4 data3_compare2 integer 4",
+	 "39 4 5 data3_compare2 integer 5",
+	 "39 5 6 data3_compare2 integer 6",
+	 "39 6 7 data3_compare2 integer 7",
+	 "39 7 8 data3_compare2 integer 8",
+	 "39 8 9 data3_compare2 integer 9",
+	 "39 9 10 data3_compare2 integer 10",
+	 "39 10 11 data3_compare2 integer 11",
+	 "39 11 12 data3_compare2 integer 12",
+	 "39 12 13 data3_compare2 integer 13",
+	 "39 13 14 data3_compare2 integer 14",
+	 "39 14 -1 data3_compare2 integer 15",
+	 "40 -1 -1 num_alert_policies integer 15 r",
+	 "41 0 1 policy_num integer 1",
+	 "41 1 2 policy_num integer 2",
+	 "41 2 3 policy_num integer 3",
+	 "41 3 4 policy_num integer 4",
+	 "41 4 5 policy_num integer 5",
+	 "41 5 6 policy_num integer 6",
+	 "41 6 7 policy_num integer 7",
+	 "41 7 8 policy_num integer 8",
+	 "41 8 9 policy_num integer 9",
+	 "41 9 10 policy_num integer 10",
+	 "41 10 11 policy_num integer 11",
+	 "41 11 12 policy_num integer 12",
+	 "41 12 13 policy_num integer 13",
+	 "41 13 14 policy_num integer 14",
+	 "41 14 -1 policy_num integer 15",
+	 "42 0 1 enabled bool true",
+	 "42 1 2 enabled bool true",
+	 "42 2 3 enabled bool true",
+	 "42 3 4 enabled bool true",
+	 "42 4 5 enabled bool true",
+	 "42 5 6 enabled bool true",
+	 "42 6 7 enabled bool true",
+	 "42 7 8 enabled bool true",
+	 "42 8 9 enabled bool true",
+	 "42 9 10 enabled bool true",
+	 "42 10 11 enabled bool true",
+	 "42 11 12 enabled bool true",
+	 "42 12 13 enabled bool true",
+	 "42 13 14 enabled bool true",
+	 "42 14 -1 enabled bool true",
+	 "43 0 1 policy integer 1",
+	 "43 1 2 policy integer 2",
+	 "43 2 3 policy integer 3",
+	 "43 3 4 policy integer 4",
+	 "43 4 5 policy integer 5",
+	 "43 5 6 policy integer 6",
+	 "43 6 7 policy integer 7",
+	 "43 7 8 policy integer 6",
+	 "43 8 9 policy integer 5",
+	 "43 9 10 policy integer 4",
+	 "43 10 11 policy integer 3",
+	 "43 11 12 policy integer 2",
+	 "43 12 13 policy integer 1",
+	 "43 13 14 policy integer 2",
+	 "43 14 -1 policy integer 3",
+	 "44 0 1 channel integer 1",
+	 "44 1 2 channel integer 2",
+	 "44 2 3 channel integer 3",
+	 "44 3 4 channel integer 4",
+	 "44 4 5 channel integer 5",
+	 "44 5 6 channel integer 6",
+	 "44 6 7 channel integer 7",
+	 "44 7 8 channel integer 8",
+	 "44 8 9 channel integer 9",
+	 "44 9 10 channel integer 10",
+	 "44 10 11 channel integer 11",
+	 "44 11 12 channel integer 12",
+	 "44 12 13 channel integer 13",
+	 "44 13 14 channel integer 14",
+	 "44 14 -1 channel integer 15",
+	 "45 0 1 destination_selector integer 1",
+	 "45 1 2 destination_selector integer 2",
+	 "45 2 3 destination_selector integer 3",
+	 "45 3 4 destination_selector integer 4",
+	 "45 4 5 destination_selector integer 5",
+	 "45 5 6 destination_selector integer 6",
+	 "45 6 7 destination_selector integer 7",
+	 "45 7 8 destination_selector integer 8",
+	 "45 8 9 destination_selector integer 9",
+	 "45 9 10 destination_selector integer 10",
+	 "45 10 11 destination_selector integer 11",
+	 "45 11 12 destination_selector integer 12",
+	 "45 12 13 destination_selector integer 13",
+	 "45 13 14 destination_selector integer 14",
+	 "45 14 -1 destination_selector integer 15",
+	 "46 0 1 alert_string_event_specific bool true",
+	 "46 1 2 alert_string_event_specific bool true",
+	 "46 2 3 alert_string_event_specific bool true",
+	 "46 3 4 alert_string_event_specific bool true",
+	 "46 4 5 alert_string_event_specific bool true",
+	 "46 5 6 alert_string_event_specific bool true",
+	 "46 6 7 alert_string_event_specific bool true",
+	 "46 7 8 alert_string_event_specific bool true",
+	 "46 8 9 alert_string_event_specific bool true",
+	 "46 9 10 alert_string_event_specific bool true",
+	 "46 10 11 alert_string_event_specific bool true",
+	 "46 11 12 alert_string_event_specific bool true",
+	 "46 12 13 alert_string_event_specific bool true",
+	 "46 13 14 alert_string_event_specific bool true",
+	 "46 14 -1 alert_string_event_specific bool true",
+	 "47 0 1 alert_string_selector integer 1",
+	 "47 1 2 alert_string_selector integer 2",
+	 "47 2 3 alert_string_selector integer 3",
+	 "47 3 4 alert_string_selector integer 4",
+	 "47 4 5 alert_string_selector integer 5",
+	 "47 5 6 alert_string_selector integer 6",
+	 "47 6 7 alert_string_selector integer 7",
+	 "47 7 8 alert_string_selector integer 8",
+	 "47 8 9 alert_string_selector integer 9",
+	 "47 9 10 alert_string_selector integer 10",
+	 "47 10 11 alert_string_selector integer 11",
+	 "47 11 12 alert_string_selector integer 12",
+	 "47 12 13 alert_string_selector integer 13",
+	 "47 13 14 alert_string_selector integer 14",
+	 "47 14 -1 alert_string_selector integer 15",
+	 "48 -1 -1 num_alert_strings integer 16 r",
+	 "49 0 1 event_filter integer 1",
+	 "49 1 2 event_filter integer 2",
+	 "49 2 3 event_filter integer 3",
+	 "49 3 4 event_filter integer 4",
+	 "49 4 5 event_filter integer 5",
+	 "49 5 6 event_filter integer 6",
+	 "49 6 7 event_filter integer 7",
+	 "49 7 8 event_filter integer 8",
+	 "49 8 9 event_filter integer 9",
+	 "49 9 10 event_filter integer 10",
+	 "49 10 11 event_filter integer 11",
+	 "49 11 12 event_filter integer 12",
+	 "49 12 13 event_filter integer 13",
+	 "49 13 14 event_filter integer 14",
+	 "49 14 15 event_filter integer 15",
+	 "49 15 -1 event_filter integer 14",
+	 "50 0 1 alert_string_set integer 1",
+	 "50 1 2 alert_string_set integer 2",
+	 "50 2 3 alert_string_set integer 3",
+	 "50 3 4 alert_string_set integer 4",
+	 "50 4 5 alert_string_set integer 5",
+	 "50 5 6 alert_string_set integer 6",
+	 "50 6 7 alert_string_set integer 7",
+	 "50 7 8 alert_string_set integer 8",
+	 "50 8 9 alert_string_set integer 9",
+	 "50 9 10 alert_string_set integer 10",
+	 "50 10 11 alert_string_set integer 11",
+	 "50 11 12 alert_string_set integer 12",
+	 "50 12 13 alert_string_set integer 13",
+	 "50 13 14 alert_string_set integer 14",
+	 "50 14 15 alert_string_set integer 15",
+	 "50 15 -1 alert_string_set integer 14",
+	 "51 0 1 alert_string string asdfasdf",
+	 "51 1 2 alert_string string asd8asdlk",
+	 "51 2 3 alert_string string sadfjskl;d",
+	 "51 3 4 alert_string string asdfsafs,.,",
+	 "51 4 5 alert_string string 9s0dfn;33lkl",
+	 "51 5 6 alert_string string 90asld902lk2k",
+	 "51 6 7 alert_string string 9asd02lk3l2n2l",
+	 "51 7 8 alert_string string 90232lk32nklsll",
+	 "51 8 9 alert_string string 9s0fl2nkclshdm2,",
+	 "51 9 10 alert_string string ksla89slksn2ln2lw",
+	 "51 10 11 alert_string string klns8s9sn22ln2lk3s",
+	 "51 11 12 alert_string string 89asdn2jks9f822nnfd",
+	 "51 12 13 alert_string string lslskdf892j22njkcsdf",
+	 "51 13 14 alert_string string s79lkwjn29nsjd9slkjd3",
+	 "51 14 15 alert_string string 8sdn22ls88jwlsidnlwnas",
+	 "51 15 -1 alert_string string 9sn2njcs92kljsjkcsyskba");
+
+    sub pef_set_config_cb {
+	my $self = shift;
+	my $pef = shift;
+	my $err = shift;
+
+	print "Pef config set\n";
+
+	$rv = $pef->get_config($self);
+	if ($rv) {
+	    main::reg_err("Unable to get pef config: $rv\n");
+	    $self->close();
+	    return;
+        }
+    }
+
+    sub pef_got_config_cb {
+	my $self = shift;
+	my $pef = shift;
+	my $err = shift;
+	my $config = shift;
+	my $rv;
+	my $i;
+
+	if ($$self->{accmode} == 0) {
+	    @config = @first_configs;
+	    print "Checking first config\n";
+	} else {
+	    @config = @set_configs;
+	    print "Checking second config\n";
+	}
+
+	for $i (@config) {
+	    my ($parm, $idx, $nidx, $name, $type, $val) = split /\s+/, $i;
+	    if (defined($val)) {
+		$val = join(" ", split(/%/, $val));
+	    } else {
+		$val = "";
+	    }
+	    my $vidx = int($idx);
+	    my $v = $config->get_val($parm, \$vidx);
+	    my ($vname, $vtype, $vval) = split /\s+/, $v, 3;
+	    if ($name ne $vname) {
+		main::reg_err("$parm($idx) name mismatch, expected $name, got $vname");
+	    }
+	    if ($type ne $vtype) {
+		main::reg_err("$parm($idx) type mismatch, expected $type, got $vtype");
+		print join(" ", $parm, $idx, $nidx, $name, $type, $val), "\n";
+	    }
+	    if ($val ne $vval) {
+		main::reg_err("$parm($idx) val mismatch, expected $val, got $vval");
+	    }
+	    if ($nidx != $vidx) {
+		main::reg_err("$parm($idx) nidx mismatch, expected $nidx, got $vidx");
+	    }
+	}
+
+	if ($$self->{accmode} == 0) {
+	    for $i (@set_configs) {
+		my ($parm, $idx, $nidx, $name, $type, $val, $ro) = split /\s+/, $i;
+		next if ($ro); # skip read-only vals
+		$val = join(" ", split(/%/, $val));
+		$rv = $config->set_val($parm, $idx, $type, $val);
+		if ($rv) {
+		    main::reg_err("error $rv setting parm $parm($idx) $type $val");
+		  }
+	    }
+	    $$self->{accmode} = 1;
+
+	    $rv = $pef->set_config($config, $self);
+	    if ($rv) {
+		main::reg_err("Unable to set pef config: $rv\n");
+		$self->close();
+		return;
+	    }
+	} else {
+	    $rv = $pef->get_parm($OpenIPMI::PEFPARM_ALERT_STRING,
+				     12, 2, $self);
+	    if ($rv) {
+		main::reg_err("Unable to request lan parm(1): $rv\n");
+		$self->close();
+		return;
+	    }
+	}
+    }
+
+    sub got_pef_cb {
+	my $self = shift;
+	my $pef = shift;
+	my $err = shift;
+
+	if ($err) {
+	    main::reg_err("Unable to get pef: $err\n");
+	    $self->close();
+	    return;
+	}
+
+	$rv = $pef->get_config($self);
+	if ($rv) {
+	    main::reg_err("Unable to get pef config: $rv\n");
+	    $self->close();
+	    return;
+	}
+    }
+
+    sub mc_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $domain = shift;
+	my $mc = shift;
+	my $rv;
+	my $pef;
+
+	if ($op eq "added") {
+	    print $op, " MC ", $mc->get_name(), "\n";
+	    $pef = $mc->get_pef($self);
+	    if (! defined($pef)) {
+		main::reg_err("Unable to get pef\n");
+		$self->close();
+	        return;
+	    }
+	}
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+	my $rv;
+
+	if ($err) {
+	    main::reg_err("Error starting up IPMI connection: $err");
+	    $self->close();
+	    return;
+	}
+
+	print "Connection up!\n";
+	$rv = $domain->add_mc_update_handler($self);
+	if ($rv) {
+	    main::reg_err("Unable to add mc updated handler: $rv\n");
+	    $self->close();
+	    return;
+	}
+    }
+
+    sub domain_close_done_cb {
+	my $self = shift;
+
+	$$self->{keepon} = 0;
+    }
+
+    sub close {
+	my $self = shift;
+	my $domain = shift;
+
+	if (defined $$self->{domain_id}) {
+	    my $v = CloseDomain::new($self);
+	    $$self->{domain_id}->to_domain($v);
+	} else {
+	    $$self->{keepon} = 0;
+	}
+    }
+
+}
+
+package main;
+
+$lanserv = Lanserv->new();
+if (! $lanserv) {
+    main::reg_err("Unable to start lanserv");
+    exit(1);
+}
+
+# Add a BMC
+$lanserv->cmd("mc_add 0x20 0 has-device-sdrs 0x23 9 8 0x1f 0x1291 0xf02");
+$lanserv->cmd("mc_enable 0x20");
+
+sleep 1;
+
+#OpenIPMI::enable_debug_msg();
+OpenIPMI::enable_debug_malloc();
+
+# Now start OpenIPMI
+OpenIPMI::init();
+
+$h = Handlers::new();
+
+OpenIPMI::set_log_handler($h);
+
+@args = ( "-noseteventrcvr",
+	  "lan", "-p", "9000", "-U", "minyard", "-P", "test", "localhost");
+$$h->{domain_id} = OpenIPMI::open_domain2("test", \@args, $h, \undef);
+if (! $$h->{domain_id}) {
+    $lanserv->close();
+    print "IPMI open failed\n";
+    exit 1;
+}
+
+while ($$h->{keepon}) {
+    OpenIPMI::wait_io(1000);
+}
+
+$lanserv->close();
+OpenIPMI::shutdown_everything();
+exit main::get_errcount();

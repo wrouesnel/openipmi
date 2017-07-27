@@ -1,0 +1,4 @@
+#!/bin/sh
+
+prog="`basename $0`.p"
+LD_PRELOAD="${TEST_LD_PRELOAD}" perl ${srcdir}/$prog
