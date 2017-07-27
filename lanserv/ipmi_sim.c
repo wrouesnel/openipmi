@@ -996,6 +996,8 @@ init_term(void)
     new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
 			     |INLCR|IGNCR|ICRNL|IXON);
     new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
+    new_termios.c_cc[VTIME] = 0;
+    new_termios.c_cc[VMIN] = 0;
     tcsetattr(0, TCSADRAIN, &new_termios);
 }
 

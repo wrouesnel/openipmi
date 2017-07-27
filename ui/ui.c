@@ -7125,6 +7125,8 @@ ipmi_ui_init(os_handler_t *os_hnd, int do_full_screen)
 	new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
 			         |INLCR|IGNCR|ICRNL|IXON);
 	new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
+	new_termios.c_cc[VTIME] = 0;
+	new_termios.c_cc[VMIN] = 0;
 	tcsetattr(0, TCSADRAIN, &new_termios);
 	old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
 //	fcntl(0, F_SETFL, old_flags | O_NONBLOCK);

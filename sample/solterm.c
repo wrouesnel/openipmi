@@ -404,6 +404,8 @@ static void configure_terminal()
 	attr.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN | ECHOE | ECHOK);
 	attr.c_cflag &= ~(CSIZE|PARENB);
 	attr.c_cflag |= CS8;
+	attr.c_cc[VTIME] = 0;
+	attr.c_cc[VMIN] = 0;
 
 	tcsetattr(STDIN_FILENO, TCSANOW, &attr);
 	signal(SIGINT, signal_handler);
