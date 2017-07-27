@@ -25,7 +25,7 @@ OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 	$(SWIG) $(DEFS) -perl5 -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/perl $<
 
 OpenIPMI.so: libOpenIPMI.la
-	cp $< $@
+	cp .libs/libOpenIPMI.so $@
 
 CLEANFILES = OpenIPMI.so OpenIPMI.pm OpenIPMI_wrap.c
 
