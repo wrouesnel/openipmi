@@ -310,9 +310,13 @@ main(int argc, char *argv[])
 			     serv, sizeof(serv), 0);
 	    if (rv) {
 		struct sockaddr_in *ip = (struct sockaddr_in *) src;
-		addrname = inet_ntoa(ip->sin_addr);
-	    } else
-		addrname = host;
+		snprintf(host, sizeof(host), "%d.%d.%d.%d",
+			 (ip->sin_addr.s_addr >> 24) & 0xff,
+			 (ip->sin_addr.s_addr >> 16) & 0xff,
+			 (ip->sin_addr.s_addr >> 8) & 0xff,
+			 (ip->sin_addr.s_addr >> 0) & 0xff);
+	    }
+	    addrname = host;
 	    printf("%s", addrname);
 	    if ((rsp[20] & 0x80) && ((rsp[20] & 0xf) == 0x01))
 		printf(" IPMI");

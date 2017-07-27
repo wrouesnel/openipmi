@@ -115,15 +115,15 @@ struct heap_s
 
 #ifdef HEAP_DEBUG
 #include <stdio.h>
-static FILE **HEAP_EXPORT_NAME(debug_out) = &stderr;
+static FILE *HEAP_EXPORT_NAME(debug_out);
 
 static void
 HEAP_EXPORT_NAME(print_item)(struct heap_node_s *pos, int indent)
 {
     int i;
     for (i=0; i<indent; i++)
-	fprintf(*HEAP_EXPORT_NAME(debug_out), " ");
-    fprintf(*HEAP_EXPORT_NAME(debug_out),
+	fprintf(HEAP_EXPORT_NAME(debug_out), " ");
+    fprintf(HEAP_EXPORT_NAME(debug_out),
 	    "  %p: %p %p %p " HEAP_OUTPUT_PRINTF "\n",
 	    pos, pos->left, pos->right, pos->up, HEAP_OUTPUT_DATA);
     if (pos->left)
@@ -135,11 +135,11 @@ HEAP_EXPORT_NAME(print_item)(struct heap_node_s *pos, int indent)
 static void
 HEAP_EXPORT_NAME(print)(struct heap_s *heap)
 {
-    fprintf(*HEAP_EXPORT_NAME(debug_out), "top=%p\n", heap->top);
+    fprintf(HEAP_EXPORT_NAME(debug_out), "top=%p\n", heap->top);
     if (heap->top)
 	HEAP_EXPORT_NAME(print_item)(heap->top, 0);
-    fprintf(*HEAP_EXPORT_NAME(debug_out), "last=%p\n", heap->last);
-    fflush(*HEAP_EXPORT_NAME(debug_out));
+    fprintf(HEAP_EXPORT_NAME(debug_out), "last=%p\n", heap->last);
+    fflush(HEAP_EXPORT_NAME(debug_out));
 }
 
 static void
@@ -151,16 +151,16 @@ HEAP_EXPORT_NAME(check_item)(struct heap_node_s *curr,
 {
     if (! curr->left) {
 	if (curr->right) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt B\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt B\n");
 	    abort();
 	} else if (*depth > max_depth) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt C\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt C\n");
 	    abort();
 	} else if ((*depth + 1) < max_depth) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt D\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt D\n");
 	    abort();
 	} else if ((*found_last) && (*depth == max_depth)) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt E\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt E\n");
 	    abort();
 	} else if (*depth == max_depth) {
 	    *real_last = curr;
@@ -169,11 +169,11 @@ HEAP_EXPORT_NAME(check_item)(struct heap_node_s *curr,
 	}
     } else {
 	if (curr->left->up != curr) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt I\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt I\n");
 	    abort();
 	}
 	if (heap_cmp_key(&(curr->left->val), &(curr->val)) < 0) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt K\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt K\n");
 	    abort();
 	}
 	(*depth)++;
@@ -186,21 +186,21 @@ HEAP_EXPORT_NAME(check_item)(struct heap_node_s *curr,
 
 	if (! curr->right) {
 	    if (*depth != (max_depth - 1)) {
-		fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt F\n");
+		fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt F\n");
 		abort();
 	    }
 	    if (*found_last) {
-		fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt G\n");
+		fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt G\n");
 		abort();
 	    }
 	    *found_last = 1;
 	} else {
 	    if (curr->right->up != curr) {
-		fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt H\n");
+		fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt H\n");
 		abort();
 	    }
 	    if (heap_cmp_key(&(curr->right->val), &(curr->val)) < 0) {
-		fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt L\n");
+		fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt L\n");
 		abort();
 	    }
 	    (*depth)++;
@@ -223,7 +223,7 @@ HEAP_EXPORT_NAME(check)(struct heap_s *heap)
 
     if (!heap->top) {
 	if (heap->last) {
-	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt A\n");
+	    fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt A\n");
 	    abort();
 	}
 	return;
@@ -243,10 +243,10 @@ HEAP_EXPORT_NAME(check)(struct heap_s *heap)
 				 &found_last);
 
     if (real_last != heap->last) {
-	fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt J\n");
+	fprintf(HEAP_EXPORT_NAME(debug_out), "Tree corrupt J\n");
 	abort();
     }
-    fflush(*HEAP_EXPORT_NAME(debug_out));
+    fflush(HEAP_EXPORT_NAME(debug_out));
 }
 #endif
 
@@ -454,7 +454,7 @@ HEAP_EXPORT_NAME(add)(struct heap_s *heap, struct heap_node_s *elem)
     struct heap_node_s *parent;
 
 #ifdef HEAP_MASSIVE_DEBUG
-    fprintf(*HEAP_EXPORT_NAME(debug_out),
+    fprintf(HEAP_EXPORT_NAME(debug_out),
 	    "HEAP_EXPORT_NAME(add_to_heap) entry\n");
     HEAP_EXPORT_NAME(print)(heap->top, heap->last);
     HEAP_EXPORT_NAME(check)(heap->top, heap->last);
@@ -480,7 +480,7 @@ HEAP_EXPORT_NAME(add)(struct heap_s *heap, struct heap_node_s *elem)
 
  out:
 #ifdef HEAP_MASSIVE_DEBUG
-    fprintf(*HEAP_EXPORT_NAME(debug_out),
+    fprintf(HEAP_EXPORT_NAME(debug_out),
 	    "HEAP_EXPORT_NAME(add_to_heap) exit\n");
     HEAP_EXPORT_NAME(print)(heap->top, heap->last);
     HEAP_EXPORT_NAME(check)(heap->top, heap->last);
@@ -494,7 +494,7 @@ HEAP_EXPORT_NAME(remove)(struct heap_s *heap, struct heap_node_s *elem)
     struct heap_node_s *to_insert;
 
 #ifdef HEAP_MASSIVE_DEBUG
-    fprintf(*HEAP_EXPORT_NAME(debug_out),
+    fprintf(HEAP_EXPORT_NAME(debug_out),
 	    "HEAP_EXPORT_NAME(remove_from_heap) entry\n");
     HEAP_EXPORT_NAME(print)(heap->top, heap->last);
     HEAP_EXPORT_NAME(check)(heap->top, heap->last);
@@ -559,7 +559,7 @@ HEAP_EXPORT_NAME(remove)(struct heap_s *heap, struct heap_node_s *elem)
 
  out:
 #ifdef HEAP_MASSIVE_DEBUG
-    fprintf(*HEAP_EXPORT_NAME(debug_out), "remove_from_head exit\n");
+    fprintf(HEAP_EXPORT_NAME(debug_out), "remove_from_head exit\n");
     HEAP_EXPORT_NAME(print)(heap->top, heap->last);
     HEAP_EXPORT_NAME(check)(heap->top, heap->last);
 #endif
@@ -577,4 +577,7 @@ HEAP_EXPORT_NAME(init)(struct heap_s *heap)
 {
     heap->top = NULL;
     heap->last = NULL;
+#ifdef HEAP_DEBUG
+    HEAP_EXPORT_NAME(debug_out) = stderr;
+#endif
 }

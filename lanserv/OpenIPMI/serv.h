@@ -284,7 +284,7 @@ typedef struct ipmi_io_s ipmi_io_t;
 typedef struct sockaddr_ip_s {
     union
         {
-    	    struct sockaddr s_addr;
+	    struct sockaddr s_addr0;
             struct sockaddr_in  s_addr4;
 #ifdef PF_INET6
             struct sockaddr_in6 s_addr6;

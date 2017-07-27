@@ -16,7 +16,17 @@ AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"' -DSTATEDIR='"$(localstatedir)"'
 
 lib_LTLIBRARIES = libIPMIlanserv.la
 
-bin_PROGRAMS = ipmi_sim ipmilan
+if HAVE_OPENIPMI_SMI
+IPMILAN_PROG = ipmilan
+IPMILAN_MAN = ipmilan.8
+IPMILAN_NOMAN =
+else
+IPMILANPROG =
+IPMILAN_MAN =
+IPMILAN_NOMAN = ipmilan.8
+endif
+
+bin_PROGRAMS = ipmi_sim $(IPMILAN_PROG)
 
 noinst_PROGRAMS = ipmi_checksum
 
@@ -31,23 +41,25 @@ libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
+if HAVE_OPENIPMI_SMI
 ipmilan_SOURCES = lanserv.c
 ipmilan_LDADD = $(POPTLIBS) libIPMIlanserv.la -ldl $(RT_LIB)
 ipmilan_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
 	../utils/libOpenIPMIutils.la
+endif
 
 ipmi_sim_SOURCES = ipmi_sim.c bmc.c emu_cmd.c sol.c \
 	bmc_storage.c bmc_app.c bmc_chassis.c bmc_transport.c \
 	bmc_sensor.c bmc_picmg.c
 ipmi_sim_LDADD = $(POPTLIBS) libIPMIlanserv.la -lpthread $(RT_LIB)
 ipmi_sim_LDFLAGS = -rdynamic ../unix/libOpenIPMIposix.la \
-	../utils/libOpenIPMIutils.la
+	../utils/libOpenIPMIutils.la $(SOCKETLIB)
 
-man_MANS = ipmilan.8 ipmi_lan.5 ipmi_sim.1 ipmi_sim_cmd.5
+man_MANS = $(IPMILAN_MAN) ipmi_lan.5 ipmi_sim.1 ipmi_sim_cmd.5
 
 READMES = README.ipmi_sim README.vm README.design README.yourownbmc
 EXTRA_DIST = atca.emu lan.conf ipmisim1.emu ipmisim1.sdrs \
-	$(man_MANS) $(READMES)
+	$(man_MANS) $(IPMILAN_NOMAN) $(READMES)
 
 install-data-local:
 	$(INSTALL) -m 755 -d "$(DESTDIR)$(sysconfdir)/ipmi/"; \

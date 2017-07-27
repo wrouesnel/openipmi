@@ -249,13 +249,11 @@ lan_send(lanserv_data_t *lan,
     if (!l)
 	return;
 
+    memset(&msg, 0, sizeof(msg));
     msg.msg_name = &(l->addr);
     msg.msg_namelen = l->addr_len;
     msg.msg_iov = data;
     msg.msg_iovlen = vecs;
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
 
     rv = sendmsg(l->xmit_fd, &msg, 0);
     if (rv) {
@@ -370,7 +368,7 @@ lan_channel_init(void *info, channel_t *chan)
     }
 
     if (lan->lan_addr_set) {
-	lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
+	lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr0,
 			     lan->lan_addr.addr_len);
 	if (lan_fd == -1) {
 	    fprintf(stderr, "Unable to open LAN address\n");
@@ -481,7 +479,7 @@ ser_channel_init(void *info, channel_t *chan)
     serserv_data_t *ser = chan->chan_info;
     int err;
     int fd;
-    struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr;
+    struct sockaddr *addr = &ser->addr.addr.s_ipsock.s_addr0;
     os_hnd_fd_id_t *fd_id;
     int val;
 
@@ -1561,7 +1559,7 @@ main(int argc, const char *argv[])
 	int nfd;
 	int val;
 
-	nfd = socket(sysinfo.console_addr.s_ipsock.s_addr.sa_family,
+	nfd = socket(sysinfo.console_addr.s_ipsock.s_addr0.sa_family,
 		     SOCK_STREAM, IPPROTO_TCP);
 	if (nfd == -1) {
 	    perror("Console socket open");

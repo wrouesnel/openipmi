@@ -63,6 +63,11 @@
 #include "ui_keypad.h"
 #include "ui_command.h"
 
+/* X/Open curses deprecates SVr4 vwprintw/vwscanw, but some still have it. */
+#ifndef HAVE_VW_PRINTW
+#define vw_printw vwprintw
+#endif
+
 WINDOW *main_win;
 WINDOW *cmd_win;
 WINDOW *stat_win;
@@ -656,6 +661,7 @@ leave_err(int err, char *format, ...)
     exit(1);
 }
 
+#ifdef HAVE_WRESIZE
 void
 recalc_windows(void)
 {
@@ -681,6 +687,7 @@ recalc_windows(void)
     log_pad_refresh(0);
     display_pad_refresh();
 }
+#endif
 
 static
 void handle_user_char(int c)
@@ -848,12 +855,14 @@ key_leave(int key, void *cb_data)
     return 0;
 }
 
+#ifdef HAVE_WRESIZE
 static int
 key_resize(int key, void *cb_data)
 {
     recalc_windows();
     return 0;
 }
+#endif
 
 static int
 key_set_display(int key, void *cb_data)
@@ -6532,8 +6541,10 @@ init_keypad(void)
 	    err = keypad_bind_key(keymap, KEY_NPAGE, key_npage);
 	if (!err)
 	    err = keypad_bind_key(keymap, KEY_PPAGE, key_ppage);
+#ifdef HAVE_WRESIZE
 	if (!err)
 	    err = keypad_bind_key(keymap, KEY_RESIZE, key_resize);
+#endif
 	if (!err)
 	    err = keypad_bind_key(keymap, KEY_F(1), key_set_display);
 	if (!err)

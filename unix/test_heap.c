@@ -109,7 +109,6 @@ main(int argc, char *argv[])
     if (debug)
 	printf("Random seed is %d\n", random_seed);
     srand(random_seed);
-    test_debug_out = &stdout;
 
     act.sa_handler = handle_fault;
     sigemptyset(&act.sa_mask);
@@ -120,6 +119,7 @@ main(int argc, char *argv[])
     }
 
     test_init(&heap);
+    test_debug_out = stdout;
 
     for (i=0; i<TEST_SIZE; i++) {
 	rand_val = rand() & (TEST_SIZE-1);

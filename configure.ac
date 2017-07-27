@@ -25,6 +25,11 @@ case $target_os in
 	cygwin*)
 		AC_DEFINE([HAVE_CYGWIN_TARGET], 1, [Running on CYGWIN])
 		;;
+
+	solaris*)
+		# Some solaris systems have epoll, but it's too broken to use.
+		ax_cv_have_epoll_pwait=false
+		;;
 esac
 
 AM_CONDITIONAL([HAVE_OPENIPMI_SMI], [${OPENIPMI_SMI}])
@@ -264,6 +269,8 @@ AC_STDC_HEADERS
 AC_CHECK_FUNCS(getaddrinfo)
 
 AC_CHECK_HEADERS(execinfo.h)
+AC_CHECK_HEADERS([netinet/ether.h])
+AC_CHECK_HEADERS([sys/ethernet.h])
 
 # Check whether we need -lrt added.
 AC_CHECK_LIB(c, clock_gettime, RT_LIB=, RT_LIB=-lrt)
@@ -570,7 +577,15 @@ else
 fi
 if test "x$pythonprog" != "x"; then
    if test "x$pythonusepthreads" = "x"; then
-      pythonusepthreads=`echo -e "try:\n  import thread\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
+      cat - <<_ACEOF >conftest.py
+try:
+  import thread
+  print 'yes'
+except:
+  print 'no'
+_ACEOF
+      pythonusepthreads=`python conftest.py`
+      rm -f conftest.py
    fi
    echo "checking for python threads... $pythonusepthreads"
 fi
@@ -594,7 +609,15 @@ AC_SUBST(PYTHON_POSIX_SO)
 # Check for Tkinter/Tix
 if test "x$tkinter" = "x"; then
    if test "x$pythonprog" != "x"; then
-      tkinter=`echo -e "try:\n  import Tix\n  print 'yes'\nexcept:\n  print 'no'\n" | python`
+      cat - <<_ACEOF >conftest.py
+try:
+  import Tix
+  print 'yes'
+except:
+  print 'no'
+_ACEOF
+      tkinter=`python conftest.py`
+      rm -f conftest.py
    fi
 fi
 echo "checking for tkinter... $tkinter"
@@ -717,6 +740,9 @@ fi
 AC_SUBST(OPENSSLLIBS)
 AC_SUBST(OPENSSLINCS)
 
+AC_CHECK_LIB(socket, bind, [SOCKETLIB=-lsocket], [SOCKETLIB=])
+AC_SUBST(SOCKETLIB)
+
 AC_HAVE_FUNCS(syslog)
 
 # Now check for dia and the dia version.  They changed the output format
@@ -799,6 +825,8 @@ AC_CHECK_HEADERS([term.h],,,
 # include <ncurses.h>
 #endif
 ]])
+
+AC_CHECK_FUNCS(wresize vw_printw cfmakeraw)
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST

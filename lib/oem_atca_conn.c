@@ -57,7 +57,7 @@ static unsigned char asf_iana[] = { 0x00, 0x00, 0x11, 0xbe };
 typedef struct sockaddr_ip_s {
     union
         {
-	    struct sockaddr	s_addr;
+	    struct sockaddr	s_addr0;
             struct sockaddr_in  s_addr4;
 #ifdef PF_INET6
             struct sockaddr_in6 s_addr6;
@@ -68,15 +68,15 @@ typedef struct sockaddr_ip_s {
 static int
 lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 {
-    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
+    if (a1->s_ipsock.s_addr0.sa_family != a2->s_ipsock.s_addr0.sa_family) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
-		     a1->s_ipsock.s_addr.sa_family,
-		     a2->s_ipsock.s_addr.sa_family);
+		     a1->s_ipsock.s_addr0.sa_family,
+		     a2->s_ipsock.s_addr0.sa_family);
 	return 0;
     }
 
-    switch (a1->s_ipsock.s_addr.sa_family) {
+    switch (a1->s_ipsock.s_addr0.sa_family) {
     case PF_INET:
 	{
 	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
@@ -94,7 +94,7 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
 	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
 	    if ((ip1->sin6_port == ip2->sin6_port)
-		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
+		&& (memcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
 			 sizeof(struct in6_addr)) == 0))
 		return 1;
 	}
@@ -103,7 +103,7 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
     default:
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan: Unknown protocol family: 0x%x",
-		 a1->s_ipsock.s_addr.sa_family);
+		 a1->s_ipsock.s_addr0.sa_family);
 	break;
     }
 
@@ -305,13 +305,13 @@ atca_decode_addr(atca_ip_addr_info_t *ainfo, ipmi_msg_t *msg)
 	    
 	    goto out;
 	}
-	ainfo->addr.s_ipsock.s_addr.sa_family = AF_INET;
+	ainfo->addr.s_ipsock.s_addr0.sa_family = AF_INET;
 	memcpy(&ainfo->addr.s_ipsock.s_addr4.sin_addr.s_addr, msg->data+10, 4);
 	memcpy(&ainfo->addr.s_ipsock.s_addr4.sin_port, msg->data+14, 2);
 	ainfo->addr_len = sizeof(struct sockaddr_in);
     } else {
     out:
-	ainfo->addr.s_ipsock.s_addr.sa_family = AF_UNSPEC;
+	ainfo->addr.s_ipsock.s_addr0.sa_family = AF_UNSPEC;
     }
 }
 
@@ -604,7 +604,7 @@ atca_get_port_info(ipmi_con_t *ipmi, unsigned int port,
 
     count = snprintf(str, len, "ATCA_aux: ");
 
-    switch (a->s_ipsock.s_addr.sa_family) {
+    switch (a->s_ipsock.s_addr0.sa_family) {
     case PF_INET:
 	{
 	    struct sockaddr_in *ip = &a->s_ipsock.s_addr4;

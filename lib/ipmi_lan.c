@@ -136,7 +136,7 @@ typedef struct lan_wait_queue_s
 typedef struct sockaddr_ip_s {
     union
         {
-	    struct sockaddr	s_addr;
+	    struct sockaddr	s_addr0;
             struct sockaddr_in  s_addr4;
 #ifdef PF_INET6
             struct sockaddr_in6 s_addr6;
@@ -1111,15 +1111,15 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
     if (a1->ip_addr_len != a2->ip_addr_len)
 	return 0;
 
-    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
+    if (a1->s_ipsock.s_addr0.sa_family != a2->s_ipsock.s_addr0.sa_family) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
-		     a1->s_ipsock.s_addr.sa_family,
-		     a2->s_ipsock.s_addr.sa_family);
+		     a1->s_ipsock.s_addr0.sa_family,
+		     a2->s_ipsock.s_addr0.sa_family);
 	return 0;
     }
 
-    switch (a1->s_ipsock.s_addr.sa_family) {
+    switch (a1->s_ipsock.s_addr0.sa_family) {
     case PF_INET:
 	{
 	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
@@ -1137,8 +1137,8 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
 	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
 	    if ((ip1->sin6_port == ip2->sin6_port)
-		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
-			 sizeof(struct in6_addr)) == 0))
+		&& (memcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
+			   sizeof(struct in6_addr)) == 0))
 		return 1;
 	}
 	break;
@@ -1146,7 +1146,7 @@ lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
     default:
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan: Unknown protocol family: 0x%x",
-		 a1->s_ipsock.s_addr.sa_family);
+		 a1->s_ipsock.s_addr0.sa_family);
 	break;
     }
 
@@ -1412,7 +1412,7 @@ lan_add_con(lan_data_t *lan)
     head->prev = &lan->link;
 
     for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	struct sockaddr *addr = &lan->cparm.ip_addr[i].s_ipsock.s_addr;
+	struct sockaddr *addr = &lan->cparm.ip_addr[i].s_ipsock.s_addr0;
 
 	idx = hash_lan_addr(addr);
 
@@ -3793,7 +3793,7 @@ lan_get_port_info(ipmi_con_t *ipmi, unsigned int port,
     else
 	count = snprintf(info, len, "rmcp: ");
     
-    switch (a->s_ipsock.s_addr.sa_family) {
+    switch (a->s_ipsock.s_addr0.sa_family) {
     case PF_INET:
 	{
 	    struct sockaddr_in *ip = &a->s_ipsock.s_addr4;
@@ -5298,7 +5298,7 @@ find_matching_lan(lan_conn_parms_t *cparm)
     unsigned int idx;
 
     /* Look in the first IP addresses list. */
-    idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_addr);
+    idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_addr0);
     ipmi_lock(lan_list_lock);
     l = lan_ip_list[idx].next;
     while (l->lan) {
@@ -5832,7 +5832,7 @@ ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
     while (l->lan) {
 	lan = NULL;
 	for (i=0; i<l->lan->cparm.num_ip_addr; i++) {
-	    if (l->lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
+	    if (l->lan->cparm.ip_addr[i].s_ipsock.s_addr0.sa_family
 		!= src_addr->sa_family)
 	    {
 		continue;

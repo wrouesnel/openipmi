@@ -2,17 +2,19 @@
 AM_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
 	-I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-bin_PROGRAMS = openipmicmd solterm rmcp_ping openipmi_eventd
-
 if HAVE_OPENIPMI_SMI
 CMDHANDLER = linux_cmd_handler
+EVENTD = openipmi_eventd
 else
 CMDHANDLER =
+EVENTD =
 endif
+
+bin_PROGRAMS = openipmicmd solterm rmcp_ping $(EVENTD)
 
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3 ipmi_serial_bmc_emu \
 		  ipmi_dump_sensors waiter_sample $(CMDHANDLER)
-EXTRA_PROGRAMS = linux_cmd_handler
+EXTRA_PROGRAMS = linux_cmd_handler openipmi_eventd
 
 linux_cmd_handler_SOURCES = linux_cmd_handler.c
 
@@ -66,9 +68,11 @@ solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
                 $(OPENSSLLIBS)
 
 rmcp_ping_SOURCES = rmcp_ping.c
+rmcp_ping_LDADD = $(SOCKETLIB)
 
 ipmi_serial_bmc_emu_SOURCES = ipmi_serial_bmc_emu.c
-ipmi_serial_bmc_emu_LDADD = $(top_builddir)/libedit/libedit.a $(TERM_LIBS)
+ipmi_serial_bmc_emu_LDADD = $(top_builddir)/libedit/libedit.a $(TERM_LIBS) \
+		$(SOCKETLIB)
 ipmi_serial_bmc_emu_CFLAGS = -I $(top_srcdir)/libedit
 
 EXTRA_DIST = example_oem.c

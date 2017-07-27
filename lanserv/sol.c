@@ -47,6 +47,7 @@
  *      written permission.
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -343,6 +344,19 @@ sol_serial_reset_modemstate(ipmi_sol_t *sol)
     sol->soldata->modemstate = modemstate & (TIOCM_DTR | TIOCM_RTS);
     ioctl(sol->soldata->fd, TIOCMSET, &modemstate);
 }
+
+#ifndef HAVE_CFMAKERAW
+static void cfmakeraw(struct termios *t)
+{
+    t->c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP
+                    | INLCR | IGNCR | ICRNL | IXON);
+    t->c_oflag &= ~OPOST;
+    t->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    t->c_cflag &= ~(CSIZE | PARENB);
+    t->c_cflag |= CS8;
+
+}
+#endif
 
 /* Initialize a serial port control structure for the first time. */
 static void

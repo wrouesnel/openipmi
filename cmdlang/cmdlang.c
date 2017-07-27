@@ -37,6 +37,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -1654,7 +1655,7 @@ ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 		    struct in_addr  *ip_addr)
 {
     char outstr[16];
-    u_int32_t addr = ntohl(ip_addr->s_addr);
+    uint32_t addr = ntohl(ip_addr->s_addr);
 
     /* Why isn't there an inet_ntoa_r? */
     sprintf(outstr, "%d.%d.%d.%d",

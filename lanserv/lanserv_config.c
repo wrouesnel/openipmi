@@ -148,9 +148,9 @@ lanserv_read_config(sys_data_t    *sys,
 				IPMI_LAN_STD_PORT_STR, SOCK_DGRAM, &errstr);
 	    lan->lan_addr_set = 1;
 	    if (!err) {
-		if (lan->lan_addr.addr.s_ipsock.s_addr.sa_family == AF_INET)
+		if (lan->lan_addr.addr.s_ipsock.s_addr0.sa_family == AF_INET)
 		    lan->port = lan->lan_addr.addr.s_ipsock.s_addr4.sin_port;
-		else if (lan->lan_addr.addr.s_ipsock.s_addr.sa_family == AF_INET6)
+		else if (lan->lan_addr.addr.s_ipsock.s_addr0.sa_family == AF_INET6)
 		    lan->port = lan->lan_addr.addr.s_ipsock.s_addr6.sin6_port;
 		else
 		    lan->port = 0;

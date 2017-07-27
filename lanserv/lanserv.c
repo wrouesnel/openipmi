@@ -858,7 +858,7 @@ main(int argc, const char *argv[])
 		lan->lan_addr_set = 1;
 	    }
 
-	    lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr,
+	    lan_fd = open_lan_fd(&lan->lan_addr.addr.s_ipsock.s_addr0,
 				 lan->lan_addr.addr_len);
 	    if (lan_fd == -1) {
 		fprintf(stderr, "Unable to open LAN address %d\n", i+1);
