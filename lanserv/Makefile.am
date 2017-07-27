@@ -27,7 +27,6 @@ libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	persist.c extcmd.c
 libIPMIlanserv_la_LIBADD = $(OPENSSLLIBS) -ldl $(RT_LIB)
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libIPMIlanserv.map \
 	../utils/libOpenIPMIutils.la
 
 ipmi_checksum_SOURCES = ipmi_checksum.c
@@ -65,4 +64,4 @@ uninstall-local:
 	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/sim.emu"
 	-rmdir "$(DESTDIR)$(sysconfdir)/ipmi" 2>/dev/null
 
-CLEANFILES = libIPMIlanserv.map ipmisim1.bsdr
+CLEANFILES = ipmisim1.bsdr

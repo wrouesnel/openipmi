@@ -11,13 +11,13 @@ libOpenIPMIpthread_la_SOURCES = posix_thread_os_hnd.c selector.c
 libOpenIPMIpthread_la_LIBADD = -lpthread $(GDBM_LIB) \
 	$(top_builddir)/utils/libOpenIPMIutils.la $(RT_LIB)
 libOpenIPMIpthread_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libOpenIPMIpthread.map -L$(libdir)
+	-L$(libdir)
 
 libOpenIPMIposix_la_SOURCES = posix_os_hnd.c selector.c
 libOpenIPMIposix_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 	$(GDBM_LIB) $(RT_LIB)
 libOpenIPMIposix_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libOpenIPMIposix.map -L$(libdir)
+	-L$(libdir)
 
 noinst_HEADERS = heap.h
 
@@ -31,5 +31,3 @@ test_handlers_LDADD = libOpenIPMIposix.la libOpenIPMIpthread.la \
 	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB)
 
 TESTS = test_heap test_handlers
-
-CLEANFILES = libOpenIPMIposix.map libOpenIPMIpthread.map

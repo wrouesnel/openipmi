@@ -11,7 +11,7 @@ libOpenIPMItcl_la_SOURCES = tcl_os_hnd.c
 libOpenIPMItcl_la_CFLAGS = $(TCL_CFLAGS) $(AM_CFLAGS)
 libOpenIPMItcl_la_LIBADD = $(GDBM_LIB)
 libOpenIPMItcl_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
-	-Wl,-Map -Wl,libOpenIPMItcl.map $(TCL_LIBS) -rpath $(libdir)
+	$(TCL_LIBS) -rpath $(libdir)
 
 noinst_PROGRAMS = test_handlers
 
@@ -21,5 +21,3 @@ test_handlers_LDADD = libOpenIPMItcl.la \
 	$(top_builddir)/utils/libOpenIPMIutils.la $(GDBM_LIB) $(TCL_LIBS)
 
 TESTS = test_handlers
-
-CLEANFILES = libOpenIPMItcl.map
