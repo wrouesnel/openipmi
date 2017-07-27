@@ -9029,12 +9029,14 @@ ipmi_args_t *alloc_parse_args(argarray *args);
  * Convert the FRU index to a string.  Returns undefined if the
  * index is out of range.
  */
-%rename fru_index_to_str ipmi_fru_index_to_str;
+%rename(fru_index_to_str) ipmi_fru_index_to_str;
+extern char *ipmi_fru_index_to_str(int idx);
 
 /*
  * Convert a name to an index.  Returns -1 if the name is not valid.
  */
-%rename fru_str_to_index ipmi_fru_str_to_index;
+%rename(fru_str_to_index) ipmi_fru_str_to_index;
+extern int ipmi_fru_str_to_index(char *name);
 
 /*
  * A FRU object
