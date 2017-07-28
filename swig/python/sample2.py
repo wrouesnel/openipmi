@@ -51,6 +51,7 @@ class Handlers:
         return
 
     def domain_close_done_cb(self):
+        print "Close done"
 	self.name = "done"
         return
 
@@ -62,7 +63,9 @@ class Handlers:
         return
 
     def domain_up_cb(self, domain):
+        print "Domain up"
 	domain.iterate_mcs(self)
+        self.domain = domain.get_id();
         return
 
     def mc_cmd_cb(self, mc, netfn, cmd, response):
@@ -70,11 +73,18 @@ class Handlers:
         return
 
     def mc_cb(self, mc):
+        print "MC callback"
         mc.send_command(0, 6, 1, [], self)
+        return
+
+    def domain_cb(self, domain):
+        print "Domain callback"
+        domain.close(self)
         return
 
     def quit(self):
         del self.mc
+        del self.domain
         OpenIPMI.set_log_handler(DummyLogHandler())
         OpenIPMI.shutdown_everything()
         print "done"
@@ -90,7 +100,10 @@ class DummyLogHandler:
 
 
 OpenIPMI.enable_debug_malloc()
-OpenIPMI.init_posix()
+rv = OpenIPMI.init()
+if (rv != 0):
+    print "OpenIPMI init failed: " + str(rv)
+    sys.exit(1)
 
 main_handler = Handlers("hello")
 
@@ -105,8 +118,8 @@ if not a:
 del a
 
 nexttime = time.time()
-num_poll = 1
-while main_handler.name != "done" and num_poll <= 2:
+num_poll = 0
+while main_handler.name != "done":
     OpenIPMI.wait_io(1000)
     now = time.time()
     if main_handler.mc and now >= nexttime:
@@ -114,6 +127,10 @@ while main_handler.name != "done" and num_poll <= 2:
 	num_poll += 1
         if num_poll < 2:
 	    main_handler.mc.to_mc(main_handler)
+        else:
+            main_handler.domain.to_domain(main_handler)
+            pass
+        pass
     pass
 
 main_handler.quit()
