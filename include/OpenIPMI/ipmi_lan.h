@@ -175,6 +175,10 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
    5-6 should be enough for anything.  The value is set in parm_val */
 #define IPMI_LANP_MAX_OUTSTANDING_MSG_COUNT	12
 
+/* Address family, integer value, generally AF_INET or AF_INET6.  If
+   unspecified, it used AF_UNSPEC. */
+#define IPMI_LANP_ADDRESS_FAMILY		13
+
 /*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
  *

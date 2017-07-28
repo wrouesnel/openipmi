@@ -391,6 +391,9 @@ struct lan_data_s
        sequence zero. */
     unsigned int max_outstanding_msg_count;
 
+    /* Address family specified at startup. */
+    unsigned int addr_family;
+
     /* List of messages waiting to be sent. */
     lan_wait_queue_t *wait_q, *wait_q_tail;
 
@@ -5448,6 +5451,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     char               **ports = NULL;
     lan_conn_parms_t   cparm;
     int max_outstanding_msg_count = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
+    unsigned int addr_family = AF_UNSPEC;
+    unsigned int set_addr_family = AF_UNSPEC;
 
     memset(&cparm, 0, sizeof(cparm));
 
@@ -5555,6 +5560,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		return EINVAL;
 	    max_outstanding_msg_count = parms[i].parm_val;
 	    break;
+
+	case IPMI_LANP_ADDRESS_FAMILY:
+	    set_addr_family = addr_family = parms[i].parm_val;
+	    break;
 		
 	default:
 	    return EINVAL;
@@ -5592,9 +5601,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
  
         memset(&hints, 0, sizeof(hints));
         if (count == 0)
-            hints.ai_family = AF_UNSPEC;
-        else
-	{
+            hints.ai_family = addr_family;
+        else {
             /* Make sure all ip address are in the same protocol family*/
 	    struct sockaddr_in *paddr;
 	    paddr = (struct sockaddr_in *)&(cparm.ip_addr[0]);
@@ -5618,7 +5626,11 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	freeaddrinfo(res0);
     }
 #else
-    /* System does not support getaddrinfo, just for IPv4*/
+    /* System does not support getaddrinfo, just for IPv4 */
+    if (addr_family == AF_UNSPEC)
+	addr_family = AF_INET;
+    else if (addr_family != AF_INET)
+	return EINVAL;
     for (i=0; i<cparm.num_ip_addr; i++) {
 	struct hostent *ent;
 	struct sockaddr_in *paddr;
@@ -5699,6 +5711,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
     lan->outstanding_msg_count = 0;
     lan->max_outstanding_msg_count = max_outstanding_msg_count;
+    lan->addr_family = set_addr_family;
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 
@@ -5923,6 +5936,8 @@ typedef struct lan_args_s
 
     unsigned int    hacks;		/* parms 13, 14 */
     unsigned int    max_outstanding_msgs;/* parm 15 */
+
+    unsigned int    addr_family;	/* parm 16 */
 } lan_args_t;
 
 static const char *auth_range[] = { "default", "none", "md2", "md5",
@@ -5966,6 +5981,18 @@ static int conf_alg_vals[] = { IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK,
 			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128,
 			       IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40 };
 
+static const char *addr_family_range[] = { "af_unspec", "af_inet",
+#ifdef AF_INET6
+					   "af_inet6",
+#endif
+					   NULL };
+static int addr_family_vals[] = { AF_UNSPEC, AF_INET
+#ifdef AF_INET6
+	, AF_INET6
+#endif
+};
+
+
 static struct lan_argnum_info_s
 {
     const char *name;
@@ -5973,7 +6000,7 @@ static struct lan_argnum_info_s
     const char *help;
     const char **range;
     const int  *values;
-} lan_argnum_info[17] =
+} lan_argnum_info[18] =
 {
     { "Address",	"str",
       "*IP name or address of the MC",
@@ -6023,6 +6050,9 @@ static struct lan_argnum_info_s
     { "Max_Outstanding_Msgs",	"int",
       "How many outstanding messages on the connection, range 1-63",
       NULL, NULL },
+    { "Address_Family",	"enum",
+      "Specified address family (AF_INET or AF_INET6) or AF_UNSPEC",
+      addr_family_range, addr_family_vals },
 
     { NULL },
 };
@@ -6099,6 +6129,7 @@ get_startup_args(ipmi_con_t *ipmi)
 	largs->bmc_key_set = 1;
     }
     largs->max_outstanding_msgs = lan->max_outstanding_msg_count;
+    largs->addr_family = lan->addr_family;
     return args;
 
  out_err:
@@ -6114,7 +6145,7 @@ lan_connect_args(ipmi_args_t  *args,
 {
     lan_args_t       *largs = _ipmi_args_get_extra_data(args);
     int              i;
-    ipmi_lanp_parm_t parms[12];
+    ipmi_lanp_parm_t parms[13];
     int              rv;
 
     i = 0;
@@ -6164,6 +6195,9 @@ lan_connect_args(ipmi_args_t  *args,
     }
     parms[i].parm_id = IPMI_LANP_MAX_OUTSTANDING_MSG_COUNT;
     parms[i].parm_val = largs->max_outstanding_msgs;
+    i++;
+    parms[i].parm_id = IPMI_LANP_ADDRESS_FAMILY;
+    parms[i].parm_val = largs->addr_family;
     i++;
     rv = ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
     if (!rv)
@@ -6348,6 +6382,10 @@ lan_args_get_val(ipmi_args_t  *args,
 
     case 15:
 	rv = get_int_val(value, largs->max_outstanding_msgs);
+	break;
+
+    case 16:
+	rv = get_enum_val(argnum, value, largs->addr_family, range);
 	break;
 
     default:
@@ -6560,6 +6598,10 @@ lan_args_set_val(ipmi_args_t  *args,
 	rv = set_uint_val(&largs->max_outstanding_msgs, value);
 	break;
 
+    case 16:
+	rv = set_enum_val(argnum, &largs->addr_family, value);
+	break;
+
     default:
 	rv = E2BIG;
     }
@@ -6676,6 +6718,12 @@ lan_parse_args(int         *curr_arg,
 	    else if (strcmp(args[*curr_arg], "rmcpp_integ_sik") == 0)
 		largs->hacks |= IPMI_CONN_HACK_RMCPP_INTEG_SIK;
 	    /* Ignore unknown hacks. */
+	} else if (strcmp(args[*curr_arg], "-4") == 0) {
+		largs->addr_family = AF_INET;
+#ifdef AF_INET6
+	} else if (strcmp(args[*curr_arg], "-6") == 0) {
+		largs->addr_family = AF_INET6;
+#endif
 	} else if (strcmp(args[*curr_arg], "-s") == 0) {
 	    largs->num_addr = 2;
 	} else if (strcmp(args[*curr_arg], "-A") == 0) {
@@ -6836,7 +6884,7 @@ lan_parse_help(void)
 	" lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
 	"     [-L <privilege>] [-s] [-Ra <auth alg>] [-Ri <integ alg>]\n"
 	"     [-Rc <conf algo>] [-Rl] [-Rk <bmc key>] [-H <hackname>]\n"
-	"     [-M <max outstanding msgs>] <host1> [<host2>]\n"
+	"     [-4] [-6] [-M <max outstanding msgs>] <host1> [<host2>]\n"
 	"If -s is supplied, then two host names are taken (the second port\n"
 	"may be specified with -p2).  Otherwise, only one hostname is\n"
 	"taken.  The defaults are an empty username and password (anonymous),\n"
@@ -6861,6 +6909,7 @@ lan_parse_help(void)
 	"name lookup.  -Rk sets the BMC key, needed if the system does two-key\n"
 	"lookups.  The -M option sets the maximum outstanding messages.\n"
 	"The default is 2, ranges 1-63.\n"
+	"-4 and -6 force IPv4 and IPv6.  The default is unspecified.\n"
 	"The -H option enables certain hacks for broken platforms.  This may\n"
 	"be listed multiple times to enable multiple hacks.  The currently\n"
 	"available hacks are:\n"
@@ -6895,6 +6944,7 @@ lan_con_alloc_args(void)
     largs->name_lookup_only = 1;
     largs->max_outstanding_msgs = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
     /* largs->hacks = IPMI_CONN_HACK_RAKP3_WRONG_ROLEM; */
+    largs->addr_family = AF_UNSPEC;
     return args;
 }
 
