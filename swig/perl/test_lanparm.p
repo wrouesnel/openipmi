@@ -836,7 +836,11 @@ sleep 1;
 OpenIPMI::enable_debug_malloc();
 
 # Now start OpenIPMI
-OpenIPMI::init();
+$rv = OpenIPMI::init();
+if ($rv != 0) {
+    print "init failed";
+    exit 1;
+}
 
 $h = Handlers::new();
 

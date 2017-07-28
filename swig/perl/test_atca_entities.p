@@ -308,7 +308,11 @@ sub parent_entity_id {
 $Handlers::stop_count = 0;
 
 OpenIPMI::enable_debug_malloc();
-OpenIPMI::init_posix();
+$rv = OpenIPMI::init();
+if ($rv != 0) {
+    print "init failed";
+    exit 1;
+}
 
 $h = Handlers::new("hello");
 
