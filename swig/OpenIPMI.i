@@ -3113,35 +3113,33 @@ void disable_debug_rawmsg()
     DEBUG_RAWMSG_DISABLE();
 }
 
-void
+int
 init_glib(void)
 {
 #ifdef HAVE_GLIB
     if (swig_os_hnd)
-	return;
+	return 0;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
     swig_os_hnd = init_glib_shim("");
 #else
-    fprintf(stderr, "Error: no support for init_glib()\n");
-    abort();
+    return ENOSYS;
 #endif
 }
 
-void
+int
 init_glib12(void)
 {
 #ifdef HAVE_GLIB12
     if (swig_os_hnd)
-	return;
+	return 0;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
     swig_os_hnd = init_glib_shim("12");
 #else
-    fprintf(stderr, "Error: no support for init_glib12()\n");
-    abort();
+    return ENOSYS;
 #endif
 }
 
@@ -3149,12 +3147,12 @@ init_glib12(void)
 #include <OpenIPMI/ipmi_tcl.h>
 #endif
 
-void
+int
 init_tcl(void)
 {
 #ifdef HAVE_TCL
     if (swig_os_hnd)
-	return;
+	return 0;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
@@ -3163,19 +3161,18 @@ init_tcl(void)
     ipmi_init(swig_os_hnd);
     ipmi_cmdlang_init(swig_os_hnd);
 #else
-    fprintf(stderr, "Error: no support for init_tcl()\n");
-    abort();
+    return ENOSYS;
 #endif
 }
 
 /*
  * Initialize the OS handler and use the POSIX version.
  */
-void
+int
 init_posix(void)
 {
     if (swig_os_hnd)
-	return;
+	return 0;
 #ifdef OpenIPMI_HAVE_INIT_LANG
     init_lang();
 #endif
@@ -3187,20 +3184,21 @@ init_posix(void)
     swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
     ipmi_cmdlang_init(swig_os_hnd);
+    return 0;
 }
 
 /*
  * Initialize the OS handler with the default version.  This is glib
  * if it is present, POSIX if it is not.
  */
-void
+int
 init(void)
 {
-#ifdef HAVE_GLIB
-    init_glib();
-#else
-    init_posix();
-#endif
+    int rv;
+
+    if (rv = init_glib())
+        rv = init_posix();
+    return rv;
 }
 
 /*
