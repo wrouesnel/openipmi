@@ -266,7 +266,6 @@ AC_SUBST([MARVELL_BMC_DIR])
 AM_PROG_CC_C_O
 AC_PROG_LIBTOOL
 AC_STDC_HEADERS
-AC_CHECK_FUNCS(getaddrinfo)
 
 AC_CHECK_HEADERS(execinfo.h)
 AC_CHECK_HEADERS([netinet/ether.h])
@@ -742,6 +741,9 @@ AC_SUBST(OPENSSLINCS)
 
 AC_CHECK_LIB(socket, bind, [SOCKETLIB=-lsocket], [SOCKETLIB=])
 AC_SUBST(SOCKETLIB)
+
+AC_CHECK_LIB(socket, getaddrinfo, [AC_DEFINE([HAVE_GETADDRINFO], 1)],
+             [AC_CHECK_FUNCS(getaddrinfo)])
 
 AC_HAVE_FUNCS(syslog)
 
