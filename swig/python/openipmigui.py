@@ -260,14 +260,20 @@ def run(args):
         if (verbosity >= 1):
             print "Creating separate OpenIPMI event driver thread"
             pass
-        OpenIPMI.init()
+        rv = OpenIPMI.init()
+        if (rv != 0):
+            print "Unable to initialize OpenIPMI"
+            return
         thread.start_new_thread(openipmi_driver, ())
         pass
     else:
         if (verbosity >= 1):
             print "Using TCL event loop, no threads"
             pass
-        OpenIPMI.init_tcl()
+        rv = OpenIPMI.init_tcl()
+        if (rv != 0):
+            print "Unable to initialize OpenIPMI, probably no TCL support"
+            return
         pass
 
     if (debug_rawmsg):

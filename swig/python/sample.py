@@ -970,7 +970,10 @@ class Handlers:
     pass
 
 OpenIPMI.enable_debug_malloc()
-OpenIPMI.init_posix()
+rv = OpenIPMI.init()
+if (rv != 0):
+    print "OpenIPMI init failed: " + str(rv)
+    sys.exit(1)
 
 main_handler = Handlers("hello")
 
