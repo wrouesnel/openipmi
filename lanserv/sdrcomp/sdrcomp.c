@@ -684,7 +684,7 @@ static struct sdr_field type8[] =
     { "container_entity_inst",	SDR_BITS,	 7, 0, 8, .required = 1 },
     { "entities_are_range",	SDR_BOOLBIT,	 8, 7, 1 },
     { "linked_ears",		SDR_BOOLBIT,	 8, 6, 1 },
-    { "presense_sensor_always_there",SDR_BOOLBIT, 8, 5, 1 },
+    { "presence_sensor_always_there",SDR_BOOLBIT, 8, 5, 1 },
 
     { "entity_1_id",		SDR_BITS,	 9, 0, 8, .required = 1,
       .strvals = entity_id_fields },
@@ -710,7 +710,7 @@ static struct sdr_field type9[] =
     { "container_entity_dev_chan", SDR_BITS,	 9, 0, 8, .required = 1 },
     { "entities_are_range",	SDR_BOOLBIT,	 10, 7, 1 },
     { "linked_ears",		SDR_BOOLBIT,	 10, 6, 1 },
-    { "presense_sensor_always_there",SDR_BOOLBIT, 10, 5, 1 },
+    { "presence_sensor_always_there",SDR_BOOLBIT, 10, 5, 1 },
     { "entity_1_dev_addr",	SDR_BITS,	 11, 0, 8, .required = 1 },
     { "entity_1_dev_chan",	SDR_BITS,	 12, 0, 8, .required = 1 },
     { "entity_1_id",		SDR_BITS,	 13, 0, 8, .required = 1,

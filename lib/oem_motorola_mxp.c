@@ -234,7 +234,7 @@ typedef struct mxp_sensor_header_s
     /* Depending on the sensor, this will hold:
        Power Supply - A pointer to mxp_power_supply_t
        Fan - A pointer to mxp_fan_t
-       Boards, switches, and AMC presense sensors  - A pointer
+       Boards, switches, and AMC presence sensors  - A pointer
        to the mxp_board_t structure for the board.
        Board/switch/AMC slot sensors - not used (NULL)
        Other AMC sensors - A pointer to amc_info_t for the AMC.

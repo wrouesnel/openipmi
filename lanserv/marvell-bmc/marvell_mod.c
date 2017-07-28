@@ -2797,7 +2797,7 @@ ipmi_sim_module_print_version(sys_data_t *sys, char *initstr)
 }
 
 /*
- * An emulator command for simulating a change in the board's presense.
+ * An emulator command for simulating a change in the board's presence.
  */
 static int simulate_board_presence(emu_out_t  *out,
 				   emu_data_t *emu,
@@ -3076,7 +3076,7 @@ ipmi_sim_module_init(sys_data_t *sys, const char *initstr_i)
 	    rv = get_uintval(trg_present[num], &rval);
 	    if (rv) {
 		sys->log(sys, OS_ERROR, NULL,
-			 "Unable to read board %u presense state: %s",
+			 "Unable to read board %u presence state: %s",
 			 num, strerror(rv));
 		return rv;
 	    }

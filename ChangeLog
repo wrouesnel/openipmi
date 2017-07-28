@@ -378,7 +378,7 @@
 	normal addresses.
 
 	* lanserv/marvell-bmc/marvell_mod.c: Fix an issue with setting
-	board presense in the wrong place.
+	board presence in the wrong place.
 
 2013-01-20 Corey Minyard <cminyard@mvista.com>
 

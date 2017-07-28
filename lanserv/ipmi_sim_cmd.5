@@ -162,7 +162,7 @@ meaning "C" conventions are used.
 .I initstate=value
 sets what the event state is initially set to.  This is useful
 for discrete sensors with bits that should normally be set to "1",
-like a presense bit, to keep the program from issuing an event every
+like a presence bit, to keep the program from issuing an event every
 time the program starts.
 
 .I raw
@@ -179,9 +179,9 @@ value is 4,and this is only used for raw data.
 
 .I depends=<mc_addr>,<lun>,<sensor_number>,<bit>
 specifies a discrete sensor bit that must be set to 1 for the sensor
-to be active.  Generally, you use the presense bit of a sensor to mark
+to be active.  Generally, you use the presence bit of a sensor to mark
 whether other sensors on the device are actually present.  Each of the
-other sensors would have one of these pointing to the presense bit.
+other sensors would have one of these pointing to the presence bit.
 
 .I event-only
 specifies that the sensor will not be readable, it will only generate

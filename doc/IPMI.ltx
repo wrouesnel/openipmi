@@ -5991,7 +5991,7 @@ entity is present.  Unfortunately, this algorithm is extremely
 complicated. The algorithm is given in stages:
 \begin{itemize}
 \item If the entity has a presence sensor attached (sensor type 25h)
-  or a bit in some sensor that is attached to it that shows presense
+  or a bit in some sensor that is attached to it that shows presence
   (sensor type 21h bit 02h, sensor type 08h bit 00h, or sensor type
   29h bit 02h), that sensor should always be present and will tell if
   the entity is present.  A presence sensor or bit will override all
@@ -6095,7 +6095,7 @@ device\_address & This is the \acs{IPMB} address for the entity.  It is
         section~\ref{chap-entities} for more details.
         & x & x & x & x\\
 \hline
-presense\_sensor \_always\_there & If this is true, then the entity has
+presence\_sensor \_always\_there & If this is true, then the entity has
         a presence sensor or a presence bit sensor and that sensor is
         always present.
         & x & x & x & x\\

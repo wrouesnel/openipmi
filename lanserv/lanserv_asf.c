@@ -116,7 +116,7 @@ handle_asf(lanserv_data_t *lan,
     rsp[2] = 0xff; /* No ack, the ack is not required, so we don't do it. */
     rsp[3] = 6; /* ASF class */
     rmcp_set_uint32(rsp+4, ASF_IANA);
-    rsp[8] = 0x40; /* Presense Pong */
+    rsp[8] = 0x40; /* Presence Pong */
     rsp[9] = data[9]; /* Message tag */
     rsp[10] = 0;
     rsp[11] = 16; /* Data length */

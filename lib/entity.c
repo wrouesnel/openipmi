@@ -3124,7 +3124,7 @@ is_presence_sensor(ipmi_sensor_t *sensor)
 	/* Don't know how to interpret an other reading type codes. */
 	return 0;
 
-    /* Presense sensors that don't generate events are kind of useless. */
+    /* Presence sensors that don't generate events are kind of useless. */
     if (ipmi_sensor_get_event_support(sensor) == IPMI_EVENT_SUPPORT_NONE)
 	return 0;
 
@@ -3170,7 +3170,7 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
 	return 0;
     }
 
-    /* Presense sensors that don't generate events are kind of useless. */
+    /* Presence sensors that don't generate events are kind of useless. */
     if (ipmi_sensor_get_event_support(sensor) == IPMI_EVENT_SUPPORT_NONE)
 	return 0;
 

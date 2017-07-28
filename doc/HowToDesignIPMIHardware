@@ -70,7 +70,7 @@ when buttons are pressed.  Slot sensor can detect when power is
 applied to a slot and when the user requests that the device be
 removed from the slot.
 
-Entity presense sensors are one very important type of discrete
+Entity presence sensors are one very important type of discrete
 sensor.  If an entity can be removed, you should have a presence
 sensor for it.  That way, it's easy and reliable to detect if the
 device is present or not.

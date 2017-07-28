@@ -72,7 +72,7 @@ lot of options for massaging the data from the file into the 256 byte
 value returned by an IPMI sensor.  It also lets you tie a dependency
 to a discrete sensor, so that the enabling of the sensor can be done
 based on a bit in the other discrete sensor.  For instance, a power
-supply sensor has a presense bit in it, the power supply voltage and
+supply sensor has a presence bit in it, the power supply voltage and
 current sensors can depend on that bit to be enabled or disabled.
 
 If you are writing custom code to handle a sensor, you still have to
@@ -82,7 +82,7 @@ this:
 
 ipmi_mc_sensor_set_enabled() will let you enable or disable a sensor
 directly.  Generally you would modify the sensor enable based upon the
-presense of the entity the sensor measures.
+presence of the entity the sensor measures.
 
 ipmi_mc_sensor_set_value() sets a threshold sensor's value.
 
