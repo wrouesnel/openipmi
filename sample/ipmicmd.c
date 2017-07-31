@@ -64,7 +64,7 @@ static int   interactive        = 1;
 static int   interactive_done   = 0;
 
 char *progname;
-selector_t *sel;
+struct selector_s *sel;
 os_handler_t *os_hnd;
 static ipmi_con_t *con;
 static int continue_operation = 1;

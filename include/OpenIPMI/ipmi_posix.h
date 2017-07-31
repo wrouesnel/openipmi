@@ -65,7 +65,7 @@ void posix_vlog(char *format,
 /* Allocate and configure an OS handler. */
 os_handler_t *ipmi_posix_setup_os_handler(void);
 /* Gets the selector associated with the OS handler. */
-selector_t *ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd);
+struct selector_s *ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd);
 
 
 /**********************************************************************
@@ -92,7 +92,8 @@ os_handler_t *ipmi_posix_get_os_handler(void);
 void ipmi_posix_free_os_handler(os_handler_t *os_hnd);
 /* You MUST set the SEL you alloc in the OS handler before you do
    anything else with the OS handler. */
-void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel);
+void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd,
+				   struct selector_s *sel);
 
 
 /**********************************************************************
@@ -106,7 +107,7 @@ void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel);
    it. */
 os_handler_t *ipmi_posix_thread_setup_os_handler(int wake_sig);
 /* Gets the selector associated with the OS handler. */
-selector_t *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
+struct selector_s *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
 
 /**********************************************************************
  * Special code, like the previous non-threaded ones.  Only needed
@@ -118,7 +119,7 @@ os_handler_t *ipmi_posix_thread_get_os_handler(void);
 os_handler_t *ipmi_posix_thread_get_os_handler2(int wake_sig);
 void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
-					  selector_t   *sel);
+					  struct selector_s *sel);
 
 /**********************************************************************
  * Cruft, do not use these function any more.

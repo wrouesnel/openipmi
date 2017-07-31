@@ -66,7 +66,7 @@ extern void posix_vlog(char                 *format,
 
 typedef struct pt_os_hnd_data_s
 {
-    selector_t       *sel;
+    struct selector_s *sel;
     os_vlog_t        log_handler;
     int              wake_sig;
     struct sigaction oldact;
@@ -120,7 +120,7 @@ add_fd(os_handler_t       *handler,
     os_hnd_fd_id_t   *fd_data;
     int              rv;
     pt_os_hnd_data_t *info = handler->internal_data;
-    selector_t       *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     fd_data = malloc(sizeof(*fd_data));
     if (!fd_data)
@@ -149,7 +149,7 @@ static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
     pt_os_hnd_data_t *info = handler->internal_data;
-    selector_t       *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
@@ -169,7 +169,7 @@ struct os_hnd_timer_id_s
 };
 
 static void
-timer_handler(selector_t  *sel,
+timer_handler(struct selector_s *sel,
 	      sel_timer_t *timer,
 	      void        *data)
 {
@@ -247,7 +247,7 @@ alloc_timer(os_handler_t      *handler,
     os_hnd_timer_id_t *timer_data;
     int               rv;
     pt_os_hnd_data_t  *info = handler->internal_data;
-    selector_t        *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     timer_data = malloc(sizeof(*timer_data));
     if (!timer_data)
@@ -624,14 +624,15 @@ ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd)
 }
 
 void
-ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
+ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
+				     struct selector_s *sel)
 {
     pt_os_hnd_data_t  *info = os_hnd->internal_data;
 
     info->sel = sel;
 }
 
-selector_t *
+struct selector_s *
 ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd)
 {
     pt_os_hnd_data_t  *info = os_hnd->internal_data;

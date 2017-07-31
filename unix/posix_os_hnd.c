@@ -59,7 +59,7 @@ extern void posix_vlog(char                 *format,
 
 typedef struct iposix_info_s
 {
-    selector_t *sel;
+    struct selector_s *sel;
     os_vlog_t  log_handler;
 #ifdef HAVE_GDBM
     char *gdbm_filename;
@@ -123,7 +123,7 @@ add_fd(os_handler_t       *handler,
     os_hnd_fd_id_t *fd_data;
     int            rv;
     iposix_info_t  *info = handler->internal_data;
-    selector_t     *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
 
     fd_data = malloc(sizeof(*fd_data));
@@ -154,7 +154,7 @@ static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
     iposix_info_t  *info = handler->internal_data;
-    selector_t     *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
@@ -177,7 +177,7 @@ set_fd_enables(os_handler_t *handler, os_hnd_fd_id_t *id,
 	       int read, int write, int except)
 {
     iposix_info_t  *info = handler->internal_data;
-    selector_t *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     if (read)
 	read = SEL_FD_HANDLER_ENABLED;
@@ -207,7 +207,7 @@ struct os_hnd_timer_id_s
 };
 
 static void
-timer_handler(selector_t  *sel,
+timer_handler(struct selector_s *sel,
 	      sel_timer_t *timer,
 	      void        *data)
 {
@@ -270,7 +270,7 @@ alloc_timer(os_handler_t      *handler,
     os_hnd_timer_id_t *timer_data;
     int               rv;
     iposix_info_t     *info = handler->internal_data;
-    selector_t        *posix_sel = info->sel;
+    struct selector_s *posix_sel = info->sel;
 
     timer_data = malloc(sizeof(*timer_data));
     if (!timer_data)
@@ -654,13 +654,13 @@ ipmi_posix_free_os_handler(os_handler_t *os_hnd)
 }
 
 void
-ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
+ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, struct selector_s *sel)
 {
     iposix_info_t *info = os_hnd->internal_data;
     info->sel = sel;
 }
 
-selector_t *
+struct selector_s *
 ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd)
 {
     iposix_info_t *info = os_hnd->internal_data;
@@ -671,7 +671,7 @@ os_handler_t *
 ipmi_posix_setup_os_handler(void)
 {
     os_handler_t  *os_hnd;
-    selector_t    *sel;
+    struct selector_s *sel;
     int           rv;
     iposix_info_t *info;
 

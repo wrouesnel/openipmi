@@ -75,7 +75,7 @@
 #endif
 
 extern os_handler_t ipmi_debug_os_handlers;
-selector_t *debug_sel;
+struct selector_s *debug_sel;
 
 os_hnd_fd_id_t *term_fd_id;
 

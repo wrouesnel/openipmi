@@ -62,7 +62,7 @@
 # endif
 #endif
 
-extern selector_t *ui_sel;
+extern struct selector_s *ui_sel;
 
 /* This is here because the POSIX library requires it, but we only
    pull the posix library to get the selector code, so this is not
