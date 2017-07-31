@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_FRU_INTERNAL_H
-#define _IPMI_FRU_INTERNAL_H
+#ifndef OPENIPMI_FRU_INTERNAL_H
+#define OPENIPMI_FRU_INTERNAL_H
 
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -726,4 +726,4 @@ int ipmi_mr_ip_get_field(ipmi_mr_getset_t          *getset,
 			 char                      **data,
 			 unsigned int              *data_len);
 
-#endif /* _IPMI_FRU_INTERNAL_H */
+#endif /* OPENIPMI_FRU_INTERNAL_H */

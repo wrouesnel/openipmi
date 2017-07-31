@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_LANPARM_H
-#define _IPMI_LANPARM_H
+#ifndef OPENIPMI_LANPARM_H
+#define OPENIPMI_LANPARM_H
 
 #include <OpenIPMI/ipmi_types.h>
 
@@ -517,4 +517,4 @@ int ipmi_lanconfig_set_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
 }
 #endif
 
-#endif /* _IPMI_LANPARM_H */
+#endif /* OPENIPMI_LANPARM_H */

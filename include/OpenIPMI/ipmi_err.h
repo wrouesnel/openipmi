@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_ERR_H
-#define _IPMI_ERR_H
+#ifndef OPENIPMI_ERR_H
+#define OPENIPMI_ERR_H
 
 /*
  * Error values
@@ -177,4 +177,4 @@ int ipmi_get_error_string_len(unsigned int err);
 
 #include <errno.h>
 
-#endif /* _IPMI_ERR_H */
+#endif /* OPENIPMI_ERR_H */

@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_SMI_H
-#define __IPMI_SMI_H
+#ifndef OPENIPMI_SMI_H
+#define OPENIPMI_SMI_H
 
 #include <OpenIPMI/ipmi_mc.h>
 #include <netinet/in.h>
@@ -59,4 +59,4 @@ int ipmi_smi_setup_con(int                if_num,
 }
 #endif
 
-#endif /* __IPMI_SMI_H */
+#endif /* OPENIPMI_SMI_H */

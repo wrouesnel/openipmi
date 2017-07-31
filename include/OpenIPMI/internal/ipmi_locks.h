@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_LOCKS_H
-#define _IPMI_LOCKS_H
+#ifndef OPENIPMI_LOCKS_H
+#define OPENIPMI_LOCKS_H
 
 #include <OpenIPMI/os_handler.h>
 
@@ -84,4 +84,4 @@ void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock);
 void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock);
 void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock);
 
-#endif /* _IPMI_LOCKS_H */
+#endif /* OPENIPMI_LOCKS_H */

@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef __IPMI_ADDR_H
-#define __IPMI_ADDR_H
+#ifndef OPENIPMI_ADDR_H
+#define OPENIPMI_ADDR_H
 
 /* To get a socket. */
 #include <netinet/in.h>
@@ -143,7 +143,7 @@ struct ipmi_lan_addr
 
 #define IPMI_NUM_CHANNELS 0x10
 
-#endif /* _LINUX_IPMI_H */
+#endif /* __LINUX_IPMI_H */
 
 /* RMCP+ address types are in this range.  These map to payloads.  Note
    that 0x100 is specially used; it would be IPMI if there was no
@@ -205,4 +205,4 @@ unsigned int ipmi_addr_get_slave_addr(const ipmi_addr_t *addr);
 }
 #endif
 
-#endif /* __IPMI_ADDR_H */
+#endif /* OPENIPMI_ADDR_H */

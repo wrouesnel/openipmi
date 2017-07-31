@@ -54,8 +54,8 @@
  */
 
 
-#ifndef _IPMI_AUTH_H
-#define _IPMI_AUTH_H
+#ifndef OPENIPMI_AUTH_H
+#define OPENIPMI_AUTH_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -143,4 +143,4 @@ int ipmi_cmd_permitted(unsigned char priv,
 }
 #endif
 
-#endif /* _IPMI_AUTH_H */
+#endif /* OPENIPMI_AUTH_H */

@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_ENTITY_H
-#define _IPMI_ENTITY_H
+#ifndef OPENIPMI_ENTITY_H
+#define OPENIPMI_ENTITY_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_fru.h>
@@ -428,4 +428,4 @@ int ipmi_entity_send_command(ipmi_entity_t         *entity,
 			     ipmi_entity_op_info_t *info,
 			     void                  *cb_data);
 
-#endif /* _IPMI_ENTITY_H */
+#endif /* OPENIPMI_ENTITY_H */

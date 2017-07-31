@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef __OS_HANDLER_H
-#define __OS_HANDLER_H
+#ifndef OS_HANDLER_H
+#define OS_HANDLER_H
 
 #include <stdarg.h>
 #include <sys/time.h>
@@ -446,4 +446,4 @@ void os_handler_global_shutdown(void);
 }
 #endif
 
-#endif /* __OS_HANDLER_H */
+#endif /* OS_HANDLER_H */

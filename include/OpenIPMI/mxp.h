@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _MXP_IPMI_H
-#define _MXP_IPMI_H
+#ifndef OPENIPMI_MXP_IPMI_H
+#define OPENIPMI_MXP_IPMI_H
 
 /* Set up a connection to an MXP.  addrs is the list of IP addresses
    for the AMC (one or two), num_addrs is the number of addresses
@@ -95,4 +95,4 @@ int mxp_lan_setup_con(struct in_addr            *ip_addrs,
 }
 #endif
 
-#endif /* _MXP_IPMI_H */
+#endif /* OPENIPMI_MXP_IPMI_H */

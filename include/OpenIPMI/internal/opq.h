@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _OPQ_H
-#define _OPQ_H
+#ifndef OPENIPMI_OPQ_H
+#define OPENIPMI_OPQ_H
 
 #include <OpenIPMI/os_handler.h>
 
@@ -112,4 +112,4 @@ void opq_op_done(opq_t *opq);
 /* Returns true if the queue has current working stuff, false if not. */
 int opq_stuff_in_progress(opq_t *opq);
 
-#endif /* _OPQ_H */
+#endif /* OPENIPMI_OPQ_H */

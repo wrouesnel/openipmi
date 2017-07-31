@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _IPMI_UTILS_H_
-#define _IPMI_UTILS_H_
+#ifndef OPENIPMI_UTILS_H_
+#define OPENIPMI_UTILS_H_
 
 /* Do a hash on a pointer value. */
 unsigned int ipmi_hash_pointer(void *);
@@ -55,4 +55,4 @@ int ipmi_fru_destroy_internal(ipmi_fru_t            *fru,
 			      ipmi_fru_idestroyed_cb handler,
 			      void                  *cb_data);
 
-#endif /* _IPMI_UTILS_H_ */
+#endif /* OPENIPMI_UTILS_H_ */

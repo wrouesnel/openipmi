@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_SENSOR_H
-#define _IPMI_SENSOR_H
+#ifndef OPENIPMI_SENSOR_H
+#define OPENIPMI_SENSOR_H
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_addr.h>
@@ -509,4 +509,4 @@ int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
 				 ipmi_sensor_ptr_cb handler,
 				 void               *cb_data);
 
-#endif /* _IPMI_SENSOR_H */
+#endif /* OPENIPMI_SENSOR_H */

@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_TCL_H
-#define __IPMI_TCL_H
+#ifndef OPENIPMI_TCL_H
+#define OPENIPMI_TCL_H
 
 #include <OpenIPMI/os_handler.h>
 
@@ -57,4 +57,4 @@ void ipmi_tcl_set_log_handler(void (*hndlr)(const char *domain,
 }
 #endif
 
-#endif /* __IPMI_TCL_H */
+#endif /* OPENIPMI_TCL_H */

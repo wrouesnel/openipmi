@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_INT_H
-#define _IPMI_INT_H
+#ifndef OPENIPMI_INT_H
+#define OPENIPMI_INT_H
 
 /* Stuff used internally in the IPMI code, and possibly by OEM code. */
 
@@ -211,4 +211,4 @@ void ipmi_check_lock(const ipmi_lock_t *lock, const char *str);
 #define ipmi_timeval_to_time(x) ((((ipmi_time_t) (x).tv_sec) * 1000000000) \
 				 + (((ipmi_time_t) (x).tv_usec) * 1000))
 
-#endif /* _IPMI_INT_H */
+#endif /* OPENIPMI_INT_H */

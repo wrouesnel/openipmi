@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_SEL_H
-#define _IPMI_SEL_H
+#ifndef OPENIPMI_SEL_H
+#define OPENIPMI_SEL_H
 #include <OpenIPMI/ipmi_types.h>
 
 
@@ -169,5 +169,5 @@ int ipmi_sel_add_event_to_sel(ipmi_sel_info_t          *sel,
 			      ipmi_sel_add_op_done_cb_t done,
 			      void                     *cb_data);
 
-#endif /* _IPMI_SEL_H */
+#endif /* OPENIPMI_SEL_H */
 

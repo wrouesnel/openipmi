@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_MSGBITS_H
-#define _IPMI_MSGBITS_H
+#ifndef OPENIPMI_MSGBITS_H
+#define OPENIPMI_MSGBITS_H
 
 #define MAX_IPMI_DATA_SIZE 36
 
@@ -287,4 +287,4 @@ char *ipmi_get_command_string(unsigned int netfn,
 }
 #endif
 
-#endif /* _IPMI_MSGBITS_H */
+#endif /* OPENIPMI_MSGBITS_H */

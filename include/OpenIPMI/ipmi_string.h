@@ -50,8 +50,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_STRING_H
-#define _IPMI_STRING_H
+#ifndef OPENIPMI_STRING_H
+#define OPENIPMI_STRING_H
 
 #include <OpenIPMI/ipmi_bits.h>
 
@@ -101,4 +101,4 @@ void ipmi_set_device_string2(const char           *input,
 			     unsigned int         *out_len,
 			     unsigned int         options);
 
-#endif /* _IPMI_STRING_H */
+#endif /* OPENIPMI_STRING_H */

@@ -54,8 +54,8 @@
  */
 
 
-#ifndef __IPMI_LOG_H_
-#define __IPMI_LOG_H_
+#ifndef OPENIPMI_LOG_H_
+#define OPENIPMI_LOG_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -101,4 +101,4 @@ enum ipmi_log_type_e
 }
 #endif
 
-#endif /* __IPMI_LOG_H_ */
+#endif /* OPENIPMI_LOG_H_ */

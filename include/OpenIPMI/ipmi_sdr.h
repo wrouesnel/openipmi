@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_SDR_H
-#define _IPMI_SDR_H
+#ifndef OPENIPMI_SDR_H
+#define OPENIPMI_SDR_H
 #include <OpenIPMI/ipmi_types.h>
 #include <stdint.h>
 
@@ -160,4 +160,4 @@ int ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
 }
 #endif
 
-#endif /* _IPMI_SDR_H */
+#endif /* OPENIPMI_SDR_H */

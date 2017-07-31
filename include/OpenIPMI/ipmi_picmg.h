@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_PICMG_H
-#define _IPMI_PICMG_H
+#ifndef OPENIPMI_PICMG_H
+#define OPENIPMI_PICMG_H
 
 /* The Group Extension defined for PICMG. */
 #define IPMI_PICMG_GRP_EXT		0
@@ -96,4 +96,4 @@
 #define IPMI_PICMG_CMD_GET_SHELF_MANAGER_IP_ADDRESSES	0x21
 #define IPMI_PICMG_CMD_SHELF_POWER_ALLOCATION           0x22
 
-#endif /* _IPMI_PICMG_H */
+#endif /* OPENIPMI_PICMG_H */

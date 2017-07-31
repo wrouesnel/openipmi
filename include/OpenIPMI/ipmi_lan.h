@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_LAN_H
-#define __IPMI_LAN_H
+#ifndef OPENIPMI_LAN_H
+#define OPENIPMI_LAN_H
 
 #include <OpenIPMI/ipmi_addr.h>
 #include <OpenIPMI/ipmi_conn.h>
@@ -570,4 +570,4 @@ void _ipmi_lan_con_change_unlock(ipmi_con_t *ipmi);
 }
 #endif
 
-#endif /* __IPMI_LAN_H */
+#endif /* OPENIPMI_LAN_H */

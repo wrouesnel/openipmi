@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _ILIST_H
-#define _ILIST_H
+#ifndef OPENIPMI_ILIST_H
+#define OPENIPMI_ILIST_H
 
 typedef struct ilist_s ilist_t;
 typedef struct ilist_iter_s ilist_iter_t;
@@ -193,4 +193,4 @@ struct ilist_iter_s
 void *ilist_mem_alloc(size_t size);
 void ilist_mem_free(void *data);
 
-#endif /* _ILIST_H */
+#endif /* OPENIPMI_ILIST_H */

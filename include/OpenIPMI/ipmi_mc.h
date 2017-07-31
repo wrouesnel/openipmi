@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_MC_H
-#define _IPMI_MC_H
+#ifndef OPENIPMI_MC_H
+#define OPENIPMI_MC_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_bits.h>
@@ -504,4 +504,4 @@ int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
 }
 #endif
 
-#endif /* _IPMI_MC_H */
+#endif /* OPENIPMI_MC_H */

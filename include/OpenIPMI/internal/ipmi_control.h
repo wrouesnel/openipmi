@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_CONTROL_H
-#define _IPMI_CONTROL_H
+#ifndef OPENIPMI_CONTROL_H
+#define OPENIPMI_CONTROL_H
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_addr.h>
@@ -317,4 +317,4 @@ int ipmi_control_pointer_noseq_cb(ipmi_control_id_t   id,
 				  ipmi_control_ptr_cb handler,
 				  void                *cb_data);
 
-#endif /* _IPMI_CONTROL_H */
+#endif /* OPENIPMI_CONTROL_H */

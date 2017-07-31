@@ -70,8 +70,8 @@
  *	include/OpenIPMI/include/ipmi_sol.h
  */
 
-#ifndef _IPMI_SOL_H
-#define _IPMI_SOL_H
+#ifndef OPENIPMI_SOL_H
+#define OPENIPMI_SOL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -739,4 +739,4 @@ int ipmi_sol_flush(ipmi_sol_conn_t *conn,
 }
 #endif
 
-#endif /* _IPMI_SOL_H */
+#endif /* OPENIPMI_SOL_H */

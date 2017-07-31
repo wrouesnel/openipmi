@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_CMDLANG_H
-#define __IPMI_CMDLANG_H
+#ifndef OPENIPMI_CMDLANG_H
+#define OPENIPMI_CMDLANG_H
 
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_bits.h>
@@ -365,4 +365,4 @@ ipmi_cmdlang_t *ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info);
 }
 #endif
 
-#endif /* __IPMI_CMDLANG_H */
+#endif /* OPENIPMI_CMDLANG_H */

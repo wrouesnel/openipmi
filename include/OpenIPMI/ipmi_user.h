@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_USER_H
-#define _IPMI_USER_H
+#ifndef OPENIPMI_USER_H
+#define OPENIPMI_USER_H
 
 #include <OpenIPMI/ipmi_mc.h>
 
@@ -160,4 +160,4 @@ int ipmi_user_set_all(ipmi_user_t *user);
 }
 #endif
 
-#endif /* _IPMI_USER_H */
+#endif /* OPENIPMI_USER_H */

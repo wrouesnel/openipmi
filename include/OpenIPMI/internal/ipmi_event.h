@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_EVENT_H
-#define __IPMI_EVENT_H
+#ifndef OPENIPMI_EVENT_H
+#define OPENIPMI_EVENT_H
 
 #include <OpenIPMI/ipmi_types.h>
 
@@ -72,4 +72,4 @@ ipmi_mc_t *_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
 					 ipmi_mc_t          *sel_mc,
 					 const ipmi_event_t *event);
 
-#endif /* __IPMI_EVENT_H */
+#endif /* OPENIPMI_EVENT_H */

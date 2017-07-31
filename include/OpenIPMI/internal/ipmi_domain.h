@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_DOMAIN_H
-#define _IPMI_DOMAIN_H
+#ifndef OPENIPMI_DOMAIN_H
+#define OPENIPMI_DOMAIN_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_sdr.h>
@@ -356,4 +356,4 @@ _call_new_sensor_handlers(ipmi_domain_t *domain,
                          ipmi_sensor_t *sensor);
 
 
-#endif /* _IPMI_DOMAIN_H */
+#endif /* OPENIPMI_DOMAIN_H */

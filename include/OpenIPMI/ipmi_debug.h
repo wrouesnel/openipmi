@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_DEBUG_H
-#define _IPMI_DEBUG_H
+#ifndef OPENIPMI_DEBUG_H
+#define OPENIPMI_DEBUG_H
 
 #include <OpenIPMI/os_handler.h>
 
@@ -120,4 +120,4 @@ extern int __ipmi_debug_locks;
 }
 #endif
 
-#endif /* _IPMI_DEBUG_H */
+#endif /* OPENIPMI_DEBUG_H */

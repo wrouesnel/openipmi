@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_BITS_H
-#define _IPMI_BITS_H
+#ifndef OPENIPMI_BITS_H
+#define OPENIPMI_BITS_H
 
 #include <limits.h>
 
@@ -504,4 +504,4 @@ enum ipmi_set_dest_e {
 }
 #endif
 
-#endif /* _IPMI_BITS_H */
+#endif /* OPENIPMI_BITS_H */

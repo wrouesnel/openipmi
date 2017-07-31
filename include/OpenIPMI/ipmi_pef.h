@@ -32,8 +32,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_PEF_H
-#define _IPMI_PEF_H
+#ifndef OPENIPMI_PEF_H
+#define OPENIPMI_PEF_H
 
 #include <OpenIPMI/ipmi_types.h>
 
@@ -593,4 +593,4 @@ int ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
 }
 #endif
 
-#endif /* _IPMI_PEF_H */
+#endif /* OPENIPMI_PEF_H */

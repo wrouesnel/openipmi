@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_SOLPARM_H
-#define _IPMI_SOLPARM_H
+#ifndef OPENIPMI_SOLPARM_H
+#define OPENIPMI_SOLPARM_H
 
 #include <OpenIPMI/ipmi_types.h>
 
@@ -307,4 +307,4 @@ ipmi_solconfig_get_payload_channel(ipmi_sol_config_t *solc,
 }
 #endif
 
-#endif /* _IPMI_SOLPARM_H */
+#endif /* OPENIPMI_SOLPARM_H */

@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_TYPES_H
-#define _IPMI_TYPES_H
+#ifndef OPENIPMI_TYPES_H
+#define OPENIPMI_TYPES_H
 
 #include <stdint.h>
 #include <OpenIPMI/ipmi_addr.h>
@@ -237,4 +237,4 @@ typedef struct ipmi_chan_info_s
 }
 #endif
 
-#endif /* _IPMI_TYPES_H */
+#endif /* OPENIPMI_TYPES_H */

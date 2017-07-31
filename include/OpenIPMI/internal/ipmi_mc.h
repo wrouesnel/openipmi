@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_MC_INTERNAL_H
-#define _IPMI_MC_INTERNAL_H
+#ifndef OPENIPMI_MC_INTERNAL_H
+#define OPENIPMI_MC_INTERNAL_H
 
 #include <OpenIPMI/ipmi_mc.h>
 
@@ -208,4 +208,4 @@ int _ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance);
 /* Generate a unique number for the MC. */
 unsigned int ipmi_mc_get_unique_nmu(ipmi_mc_t *mc);
 
-#endif /* _IPMI_MC_INTERNAL_H */
+#endif /* OPENIPMI_MC_INTERNAL_H */

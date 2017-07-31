@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _IPMI_MALLOC_H
-#define _IPMI_MALLOC_H
+#ifndef OPENIPMI_MALLOC_H
+#define OPENIPMI_MALLOC_H
 
 #include <OpenIPMI/ipmi_log.h>
 
@@ -86,4 +86,4 @@ extern void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type,
 #endif
 ;
 
-#endif /* _IPMI_MALLOC_H */
+#endif /* OPENIPMI_MALLOC_H */

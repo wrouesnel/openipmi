@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _LOCKED_LIST_H
-#define _LOCKED_LIST_H
+#ifndef OPENIPMI_LOCKED_LIST_H
+#define OPENIPMI_LOCKED_LIST_H
 
 /*
  * This is a locked list structure that is multi-thread safe.  You can
@@ -143,4 +143,4 @@ unsigned int locked_list_num_entries_nolock(locked_list_t *ll);
 void locked_list_lock(locked_list_t *ll);
 void locked_list_unlock(locked_list_t *ll);
 
-#endif /* _LOCKED_LIST_H */
+#endif /* OPENIPMI_LOCKED_LIST_H */

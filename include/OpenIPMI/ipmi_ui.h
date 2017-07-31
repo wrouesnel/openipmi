@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_UI_H
-#define _IPMI_UI_H
+#ifndef OPENIPMI_UI_H
+#define OPENIPMI_UI_H
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/os_handler.h>
@@ -60,4 +60,4 @@ void ipmi_ui_setup_done(ipmi_domain_t *mc,
 }
 #endif
 
-#endif /* _IPMI_UI_H */
+#endif /* OPENIPMI_UI_H */

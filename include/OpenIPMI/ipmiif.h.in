@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMIIF_H
-#define __IPMIIF_H
+#ifndef OPENIPMIIF_H
+#define OPENIPMIIF_H
 
 #include <time.h>
 #include <OpenIPMI/ipmi_types.h>
@@ -2783,4 +2783,4 @@ int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 }
 #endif
 
-#endif /* __IPMIIF_H */
+#endif /* OPENIPMIIF_H */

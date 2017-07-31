@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_DEPRECATOR_H
-#define __IPMI_DEPRECATOR_H
+#ifndef OPENIPMI_DEPRECATOR_H
+#define OPENIPMI_DEPRECATOR_H
 
 #if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
 # define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
@@ -44,4 +44,4 @@
 # define IPMI_VAR_DEPRECATED
 #endif
 
-#endif /* __IPMI_DEPRECATOR_H */
+#endif /* OPENIPMI_DEPRECATOR_H */

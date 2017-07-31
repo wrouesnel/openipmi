@@ -32,8 +32,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef _IPMI_PET_H
-#define _IPMI_PET_H
+#ifndef OPENIPMI_PET_H
+#define OPENIPMI_PET_H
 
 #include <OpenIPMI/ipmi_types.h>
 
@@ -145,4 +145,4 @@ unsigned int ipmi_pet_get_lan_dest_sel(ipmi_pet_t *pet);
 }
 #endif
 
-#endif /* _IPMI_PET_H */
+#endif /* OPENIPMI_PET_H */

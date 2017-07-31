@@ -31,8 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_POSIX_H
-#define __IPMI_POSIX_H
+#ifndef OPENIPMI_POSIX_H
+#define OPENIPMI_POSIX_H
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
@@ -165,4 +165,4 @@ void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd)
 }
 #endif
 
-#endif /* __IPMI_POSIX_H */
+#endif /* OPENIPMI_POSIX_H */

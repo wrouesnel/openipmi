@@ -53,8 +53,8 @@
  *      written permission.
  */
 
-#ifndef _MD2_H__
-#define _MD2_H__
+#ifndef OPENIPMI_MD2_H__
+#define OPENIPMI_MD2_H__
 
 #include <OpenIPMI/ipmi_auth.h>
 
@@ -71,4 +71,4 @@ int ipmi_md2_authcode_check(ipmi_authdata_t handle,
 			    void            *code);
 void ipmi_md2_authcode_cleanup(ipmi_authdata_t handle);
 
-#endif /* _MD2_H__ */
+#endif /* OPENIPMI_MD2_H__ */
