@@ -884,7 +884,6 @@ AC_OUTPUT(Makefile
 	  include/OpenIPMI/Makefile
 	  include/OpenIPMI/ipmiif.h
 	  include/OpenIPMI/internal/Makefile
-	  include/linux/Makefile
 	  OpenIPMI.spec
 	  OpenIPMIutils.pc
 	  OpenIPMI.pc
