@@ -64,6 +64,22 @@ extern void posix_vlog(char                 *format,
 		       va_list              ap);
 #pragma weak posix_vlog
 
+static void i_posix_lock(pthread_mutex_t *lock)
+{
+    int rv = pthread_mutex_lock(lock);
+
+    if (rv)
+	abort();
+}
+
+static void i_posix_unlock(pthread_mutex_t *lock)
+{
+    int rv = pthread_mutex_unlock(lock);
+
+    if (rv)
+	abort();
+}
+
 typedef struct pt_os_hnd_data_s
 {
     struct selector_s *sel;
@@ -180,11 +196,11 @@ timer_handler(struct selector_s *sel,
     os_timed_out_t    timed_out;
 
     /* Lock will create a memory barrier, which we really need here. */
-    pthread_mutex_lock(&timer_data->lock);
+    i_posix_lock(&timer_data->lock);
     timed_out = timer_data->timed_out;
     cb_data = timer_data->cb_data;
     timer_data->running = 0;
-    pthread_mutex_unlock(&timer_data->lock);
+    i_posix_unlock(&timer_data->lock);
     timed_out(cb_data, timer_data);
 }
 
@@ -198,7 +214,7 @@ start_timer(os_handler_t      *handler,
     struct timeval now;
     int rv;
 
-    pthread_mutex_lock(&id->lock);
+    i_posix_lock(&id->lock);
     if (id->running) {
 	rv = EBUSY;
 	goto out;
@@ -223,7 +239,7 @@ start_timer(os_handler_t      *handler,
     if (rv != 0)
 	id->running = 0;
   out:
-    pthread_mutex_unlock(&id->lock);
+    i_posix_unlock(&id->lock);
     return rv;
 }
 
@@ -232,11 +248,11 @@ stop_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
     int rv;
 
-    pthread_mutex_lock(&timer_data->lock);
+    i_posix_lock(&timer_data->lock);
     rv = sel_stop_timer(timer_data->timer);
     if (rv == 0)
 	timer_data->running = 0;
-    pthread_mutex_unlock(&timer_data->lock);
+    i_posix_unlock(&timer_data->lock);
     return rv;
 }
 
@@ -442,11 +458,7 @@ static int
 lock(os_handler_t  *handler,
      os_hnd_lock_t *id)
 {
-    int rv;
-
-    rv = pthread_mutex_lock(&id->mutex);
-    if (rv)
-	return rv;
+    i_posix_lock(&id->mutex);
     return 0;
 }
 
@@ -454,11 +466,7 @@ static int
 unlock(os_handler_t  *handler,
        os_hnd_lock_t *id)
 {
-    int rv;
-
-    rv = pthread_mutex_unlock(&id->mutex);
-    if (rv)
-	return rv;
+    i_posix_unlock(&id->mutex);
     return 0;
 }
 
@@ -734,11 +742,11 @@ database_store(os_handler_t  *handler,
     datum            gkey, gdata;
     int              rv;
 
-    pthread_mutex_lock(&info->gdbm_lock);
+    i_posix_lock(&info->gdbm_lock);
     if (!info->gdbmf) {
 	init_gdbm(info);
 	if (!info->gdbmf) {
-	    pthread_mutex_unlock(&info->gdbm_lock);
+	    i_posix_unlock(&info->gdbm_lock);
 	    return EINVAL;
 	}
     }
@@ -749,7 +757,7 @@ database_store(os_handler_t  *handler,
     gdata.dsize = data_len;
 
     rv = gdbm_store(info->gdbmf, gkey, gdata, GDBM_REPLACE);
-    pthread_mutex_unlock(&info->gdbm_lock);
+    i_posix_unlock(&info->gdbm_lock);
     if (rv)
 	return EINVAL;
     return 0;
@@ -770,11 +778,11 @@ database_find(os_handler_t  *handler,
     pt_os_hnd_data_t *info = handler->internal_data;
     datum            gkey, gdata;
 
-    pthread_mutex_lock(&info->gdbm_lock);
+    i_posix_lock(&info->gdbm_lock);
     if (!info->gdbmf) {
 	init_gdbm(info);
 	if (!info->gdbmf) {
-	    pthread_mutex_unlock(&info->gdbm_lock);
+	    i_posix_unlock(&info->gdbm_lock);
 	    return EINVAL;
 	}
     }
@@ -782,7 +790,7 @@ database_find(os_handler_t  *handler,
     gkey.dptr = key;
     gkey.dsize = strlen(key);
     gdata = gdbm_fetch(info->gdbmf, gkey);
-    pthread_mutex_unlock(&info->gdbm_lock);
+    i_posix_unlock(&info->gdbm_lock);
     if (!gdata.dptr)
 	return EINVAL;
     *data = (unsigned char *) gdata.dptr;
