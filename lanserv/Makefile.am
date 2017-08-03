@@ -68,8 +68,11 @@ install-data-local:
 
 noinst_DATA = ipmisim1.bsdr
 
-ipmisim1.bsdr: $(top_srcdir)/lanserv/ipmisim1.sdrs sdrcomp/sdrcomp_build
+SUFFIXES = .bsdr .sdrs
+.sdrs.bsdr:
 	sdrcomp/sdrcomp_build -o $@ $<
+
+ipmisim1.bsdr: $(top_srcdir)/lanserv/ipmisim1.sdrs sdrcomp/sdrcomp_build
 
 uninstall-local:
 	-rm -f "$(DESTDIR)$(sysconfdir)/ipmi/lan.conf"
