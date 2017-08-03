@@ -2758,10 +2758,18 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 			   ipmi_sensor_t      *sensor,
 			   void               *cb_data)
 {
-    atca_fru_t *finfo = cb_data;
-    int        lun;
-    int        num;
-    int        rv;
+    atca_fru_t   *finfo = ipmi_entity_get_oem_info(entity);
+    int          lun;
+    int          num;
+    int          rv;
+
+    if (!finfo) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_sensor_update_handler): "
+		 "Called but entity OEM info was not set",
+		 ENTITY_NAME(entity));
+	return;
+    }
 
     /* Only look for the hot-swap sensor for now */
     if (ipmi_sensor_get_sensor_type(sensor) != 0xf0)
@@ -2839,18 +2847,54 @@ any_fru_controls(atca_fru_t *finfo)
     return ((finfo->leds) || (finfo->cold_reset) || (finfo->power));
 }
 
+static atca_fru_t *atca_lookup_fru_info(atca_shelf_t *info,
+					ipmi_entity_t *entity)
+{
+    atca_fru_t *finfo;
+    enum ipmi_dlr_type_e etype = ipmi_entity_get_type(entity);
+
+    /* We only care about FRU and MC entities. */
+    if (etype == IPMI_ENTITY_FRU)
+	finfo = atca_find_fru_info(info, entity);
+    else if (etype == IPMI_ENTITY_MC) {
+	if (ipmi_entity_get_slave_address(entity) == 0x20)
+	    /* We ignore the floating IPMB address if it comes up. */
+	    return NULL;
+	finfo = atca_find_mc_fru_info(info, entity);
+    } else
+	return NULL;
+
+    if (!finfo) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_lookup_fru_info): "
+		 "Unable to find fru info",
+		 ENTITY_NAME(entity));
+	return NULL;
+    }
+
+    return finfo;
+}
+
 static int
 atca_entity_presence_handler(ipmi_entity_t *entity,
 			     int           present,
 			     void          *cb_data,
 			     ipmi_event_t  *event)
 {
-    atca_fru_t *finfo = cb_data;
+    atca_shelf_t *info = cb_data;
+    atca_fru_t *finfo = ipmi_entity_get_oem_info(entity);
 
-    if (present)
+    if (present) {
+	if (!finfo)
+	    finfo = atca_lookup_fru_info(info, entity);
+	if (!finfo)
+	    goto out;
+	ipmi_entity_set_oem_info(entity, finfo, NULL);
 	add_fru_controls(finfo);
-    else
+    } else if (finfo) {
 	destroy_fru_controls(finfo);
+    }
+ out:
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -2860,10 +2904,9 @@ atca_entity_update_handler(enum ipmi_update_e op,
 			   ipmi_entity_t      *entity,
 			   void               *cb_data)
 {
-    atca_shelf_t         *info = cb_data;
-    atca_fru_t           *finfo;
-    enum ipmi_dlr_type_e etype = ipmi_entity_get_type(entity);
-    int                  rv;
+    atca_shelf_t *info = cb_data;
+    atca_fru_t   *finfo;
+    int          rv;
 
     if (op == IPMI_ADDED) {
 	/* Set meaningful entity id strings. */
@@ -2886,24 +2929,9 @@ atca_entity_update_handler(enum ipmi_update_e op,
 	}
     }
 
-    /* We only care about FRU and MC entities. */
-    if (etype == IPMI_ENTITY_FRU)
-	finfo = atca_find_fru_info(info, entity);
-    else if (etype == IPMI_ENTITY_MC) {
-	if (ipmi_entity_get_slave_address(entity) == 0x20)
-	    /* We ignore the floating IPMB address if it comes up. */
-	    return;
-	finfo = atca_find_mc_fru_info(info, entity);
-    } else
+    finfo = atca_lookup_fru_info(info, entity);
+    if (!finfo)
 	return;
-
-    if (!finfo) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_entity_update_handler): "
-		 "Unable to find fru info",
-		 ENTITY_NAME(entity));
-	return;
-    }
 
     switch (op) {
     case IPMI_ADDED:
@@ -2938,7 +2966,7 @@ atca_entity_update_handler(enum ipmi_update_e op,
 	finfo->entity = entity;
 	rv = ipmi_entity_add_presence_handler(entity,
 					      atca_entity_presence_handler,
-					      finfo);
+					      info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%soem_atca.c(atca_entity_update_handler): "
@@ -2947,7 +2975,7 @@ atca_entity_update_handler(enum ipmi_update_e op,
 	}
 	rv = ipmi_entity_add_sensor_update_handler(entity,
 						   atca_sensor_update_handler,
-						   finfo);
+						   NULL);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%soem_atca.c(atca_entity_update_handler): "
@@ -2962,8 +2990,8 @@ atca_entity_update_handler(enum ipmi_update_e op,
 	break;
 
     case IPMI_DELETED:
-	finfo->entity = NULL;
 	destroy_fru_controls(finfo);
+	finfo->entity = NULL;
 	break;
 
     default:
@@ -3058,6 +3086,7 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 		if (rv)
 		    continue;
 		destroy_fru_controls(finfo);
+		ipmi_entity_set_oem_info(finfo->entity, NULL, NULL);
 		_ipmi_entity_put(finfo->entity);
 	    }
 	    /* We always leave FRU 0 around until we destroy the domain. */
