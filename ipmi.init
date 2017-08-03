@@ -11,8 +11,8 @@
 #
 ### BEGIN INIT INFO
 # Provides: ipmidrv
-# Required-Start: $local_fs $remote_fs $syslog
-# Required-Stop: $local_fs $remote_fs $syslog
+# Required-Start: $local_fs $remote_fs
+# Required-Stop: $local_fs $remote_fs
 # Default-Start:
 # Default-Stop:
 # Short-Description: OpenIPMI Driver init script
