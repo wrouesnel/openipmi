@@ -409,7 +409,7 @@ fi
 
 echo "checking for tcl... $havetcl"
    
-if test "x$havetcl" == "xyes"; then
+if test "x$havetcl" = "xyes"; then
    OLDLIBS="$LIBS"
    LIBS="$LIBS $TCL_LIBS"
    AC_LINK_IFELSE([AC_LANG_CALL(, Tcl_GetTime)], [echo "Have Tcl_GetTime"],
@@ -755,7 +755,7 @@ AC_PATH_PROG(diaprog, dia)
 if test "x$diaprog" != "x"; then
    diaver=`$diaprog --version 2>&1 | sed 's/Dia version \([[^,]]*\), .*$/\1/'`
    tmp=`echo $diaver | sed 's/^[[0-9.]]\+$//'`
-   if test "x$diaver" == "x" -o "x$tmp" != 'x'; then
+   if test "x$diaver" = "x" -o "x$tmp" != 'x'; then
       # Couldn't get the dia version, give up.
       echo "Couldn't determine the dia version from '$diaver'"
    else
@@ -778,7 +778,7 @@ DVIPDF=
 AC_PATH_PROG(LATEX, latex)
 AC_PATH_PROG(BIBTEX, bibtex)
 AC_PATH_PROG(DVIPDF, dvipdf)
-if test "x$DIA" == "x" -o "x$LATEX" == "x" -o "x$BIBTEX" == "x" -o "x$DVIPDF" == "x"; then
+if test "x$DIA" = "x" -o "x$LATEX" = "x" -o "x$BIBTEX" = "x" -o "x$DVIPDF" = "x"; then
    echo "dia, latex, bibtex, and/or dvipdf is not present or not valid, you cannot regenerate documentation"
    echo "The documentation comes already generated, so this is generally not a problem"
 fi
