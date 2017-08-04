@@ -204,11 +204,11 @@ struct ipmi_sdr_info_s
 	const char     *function;
 	long           time;
     } last[1000];
-#define DEBUG_INFO(info) do { struct timeval _tv;			\
-			      info->os_hnd->get_real_time(info->os_hnd, &_tv);\
+#define DEBUG_INFO(info) do { struct timeval i_tv;			\
+			      info->os_hnd->get_real_time(info->os_hnd, &i_tv);\
 			      memcpy(info->last, info->last+1,		\
 			             sizeof(info->last[0]) * 999);	\
-			      info->last[999].time = _tv.tv_sec;	\
+			      info->last[999].time = i_tv.tv_sec;	\
 			      info->last[999].filename = __FILE__;	\
 			      info->last[999].line = __LINE__;		\
 			      info->last[999].function = __FUNCTION__; }\

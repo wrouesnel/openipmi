@@ -38,7 +38,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/os_handler.h>
 
-os_handler_t *_ipmi_fru_get_os_handler(ipmi_fru_t *fru);
+os_handler_t *i_ipmi_fru_get_os_handler(ipmi_fru_t *fru);
 
 /* The callbacks for FRU multi-record OEM handler, to decode the multi-record 
    and get individual field.
@@ -92,25 +92,25 @@ typedef int (*ipmi_fru_oem_node_enum_val_cb)(ipmi_fru_node_t *node,
 					     int             *nextpos,
 					     const char      **data);
 
-ipmi_fru_node_t *_ipmi_fru_node_alloc(ipmi_fru_t *fru);
+ipmi_fru_node_t *i_ipmi_fru_node_alloc(ipmi_fru_t *fru);
 
-void *_ipmi_fru_node_get_data(ipmi_fru_node_t *node);
-void _ipmi_fru_node_set_data(ipmi_fru_node_t *node, void *data);
-void *_ipmi_fru_node_get_data2(ipmi_fru_node_t *node);
-void _ipmi_fru_node_set_data2(ipmi_fru_node_t *node, void *data2);
+void *i_ipmi_fru_node_get_data(ipmi_fru_node_t *node);
+void i_ipmi_fru_node_set_data(ipmi_fru_node_t *node, void *data);
+void *i_ipmi_fru_node_get_data2(ipmi_fru_node_t *node);
+void i_ipmi_fru_node_set_data2(ipmi_fru_node_t *node, void *data2);
 
-void _ipmi_fru_node_set_destructor(ipmi_fru_node_t      *node,
-				   ipmi_fru_oem_node_cb destroy);
-void _ipmi_fru_node_set_get_field(ipmi_fru_node_t                *node,
-				  ipmi_fru_oem_node_get_field_cb get_field);
-void _ipmi_fru_node_set_set_field(ipmi_fru_node_t                *node,
-				  ipmi_fru_oem_node_set_field_cb set_field);
-void _ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
-				 ipmi_fru_oem_node_settable_cb settable);
-void _ipmi_fru_node_set_get_subtype(ipmi_fru_node_t              *node,
-				    ipmi_fru_oem_node_subtype_cb get_subtype);
-void _ipmi_fru_node_set_get_enum(ipmi_fru_node_t               *node,
-				 ipmi_fru_oem_node_enum_val_cb get_enum);
+void i_ipmi_fru_node_set_destructor(ipmi_fru_node_t      *node,
+				    ipmi_fru_oem_node_cb destroy);
+void i_ipmi_fru_node_set_get_field(ipmi_fru_node_t                *node,
+				   ipmi_fru_oem_node_get_field_cb get_field);
+void i_ipmi_fru_node_set_set_field(ipmi_fru_node_t                *node,
+				   ipmi_fru_oem_node_set_field_cb set_field);
+void i_ipmi_fru_node_set_settable(ipmi_fru_node_t               *node,
+				  ipmi_fru_oem_node_settable_cb settable);
+void i_ipmi_fru_node_set_get_subtype(ipmi_fru_node_t              *node,
+				     ipmi_fru_oem_node_subtype_cb get_subtype);
+void i_ipmi_fru_node_set_get_enum(ipmi_fru_node_t               *node,
+				  ipmi_fru_oem_node_enum_val_cb get_enum);
 
 /* Get the root node of a multi-record.  Note that the root record
    must not be an array.  Note that you cannot keep a copy of the fru
@@ -130,21 +130,21 @@ typedef int (*ipmi_fru_oem_multi_record_get_root_node_cb)
 /* Register/deregister a multi-record handler.  Note that if the
    record type id is < 0xc0 (not OEM) then the manufacturer id does
    not matter. */
-int _ipmi_fru_register_multi_record_oem_handler
+int i_ipmi_fru_register_multi_record_oem_handler
 (unsigned int                               manufacturer_id,
  unsigned char                              record_type_id,
  ipmi_fru_oem_multi_record_get_root_node_cb get_root,
  void                                       *cb_data);
 
-int _ipmi_fru_deregister_multi_record_oem_handler
+int i_ipmi_fru_deregister_multi_record_oem_handler
 (unsigned int  manufacturer_id,
  unsigned char record_type_id);
 
-void _ipmi_fru_lock(ipmi_fru_t *fru);
-void _ipmi_fru_unlock(ipmi_fru_t *fru);
+void i_ipmi_fru_lock(ipmi_fru_t *fru);
+void i_ipmi_fru_unlock(ipmi_fru_t *fru);
 
 /* You must be holding the fru lock to call this. */
-void _ipmi_fru_ref_nolock(ipmi_fru_t *fru);
+void i_ipmi_fru_ref_nolock(ipmi_fru_t *fru);
 
 /*
  * Some specialized FRU data repositories have protection against
@@ -163,76 +163,76 @@ void _ipmi_fru_ref_nolock(ipmi_fru_t *fru);
  * this function will get the data as formatted for a normal FRU
  * write.
  */
-typedef void (*_ipmi_fru_timestamp_cb)(ipmi_fru_t    *fru,
-				       ipmi_domain_t *domain,
-				       int           err,
-				       uint32_t      timestamp);
-typedef void (*_ipmi_fru_op_cb)(ipmi_fru_t    *fru,
-				ipmi_domain_t *domain,
-				int           err);
+typedef void (*i_ipmi_fru_timestamp_cb)(ipmi_fru_t    *fru,
+					ipmi_domain_t *domain,
+					int           err,
+					uint32_t      timestamp);
+typedef void (*i_ipmi_fru_op_cb)(ipmi_fru_t    *fru,
+				 ipmi_domain_t *domain,
+				 int           err);
 
-typedef int (*_ipmi_fru_get_timestamp_cb)(ipmi_fru_t             *fru,
-					  ipmi_domain_t          *domain,
-					  _ipmi_fru_timestamp_cb handler);
-typedef int (*_ipmi_fru_prepare_write_cb)(ipmi_fru_t      *fru,
-					  ipmi_domain_t   *domain,
-					  uint32_t        timestamp,
-					  _ipmi_fru_op_cb done);
-typedef int (*_ipmi_fru_write_cb)(ipmi_fru_t      *fru,
-				  ipmi_domain_t   *domain,
-				  unsigned char   *data,
-				  unsigned int    data_len,
-				  _ipmi_fru_op_cb done);
-typedef int (*_ipmi_fru_complete_write_cb)(ipmi_fru_t      *fru,
+typedef int (*i_ipmi_fru_get_timestamp_cb)(ipmi_fru_t             *fru,
+					   ipmi_domain_t          *domain,
+					   i_ipmi_fru_timestamp_cb handler);
+typedef int (*i_ipmi_fru_prepare_write_cb)(ipmi_fru_t      *fru,
 					   ipmi_domain_t   *domain,
-					   int             abort,
 					   uint32_t        timestamp,
-					   _ipmi_fru_op_cb done);
+					   i_ipmi_fru_op_cb done);
+typedef int (*i_ipmi_fru_write_cb)(ipmi_fru_t      *fru,
+				   ipmi_domain_t   *domain,
+				   unsigned char   *data,
+				   unsigned int    data_len,
+				   i_ipmi_fru_op_cb done);
+typedef int (*i_ipmi_fru_complete_write_cb)(ipmi_fru_t      *fru,
+					    ipmi_domain_t   *domain,
+					    int             abort,
+					    uint32_t        timestamp,
+					    i_ipmi_fru_op_cb done);
 
-int _ipmi_fru_set_get_timestamp_handler(ipmi_fru_t                 *fru,
-					_ipmi_fru_get_timestamp_cb handler);
-int _ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
-					_ipmi_fru_prepare_write_cb handler);
-int _ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
-				_ipmi_fru_write_cb handler);
-int _ipmi_fru_set_complete_write_handler(ipmi_fru_t                  *fru,
-					 _ipmi_fru_complete_write_cb handler);
+int i_ipmi_fru_set_get_timestamp_handler(ipmi_fru_t                 *fru,
+					 i_ipmi_fru_get_timestamp_cb handler);
+int i_ipmi_fru_set_prepare_write_handler(ipmi_fru_t                 *fru,
+					 i_ipmi_fru_prepare_write_cb handler);
+int i_ipmi_fru_set_write_handler(ipmi_fru_t         *fru,
+				 i_ipmi_fru_write_cb handler);
+int i_ipmi_fru_set_complete_write_handler(ipmi_fru_t                  *fru,
+					  i_ipmi_fru_complete_write_cb handler);
 
-typedef void (*_ipmi_fru_setup_data_clean_cb)(ipmi_fru_t *fru, void *data);
-void _ipmi_fru_set_setup_data(ipmi_fru_t                    *fru,
-			      void                          *data,
-			      _ipmi_fru_setup_data_clean_cb cleanup);
-void *_ipmi_fru_get_setup_data(ipmi_fru_t *fru);
+typedef void (*i_ipmi_fru_setup_data_clean_cb)(ipmi_fru_t *fru, void *data);
+void i_ipmi_fru_set_setup_data(ipmi_fru_t                    *fru,
+			       void                          *data,
+			       i_ipmi_fru_setup_data_clean_cb cleanup);
+void *i_ipmi_fru_get_setup_data(ipmi_fru_t *fru);
 
-void _ipmi_fru_get_addr(ipmi_fru_t   *fru,
-			ipmi_addr_t  *addr,
-			unsigned int *addr_len);
+void i_ipmi_fru_get_addr(ipmi_fru_t   *fru,
+			 ipmi_addr_t  *addr,
+			 unsigned int *addr_len);
 
 
 /* Add a record telling that a specific area of the FRU data needs to
    be written.  Called from the write handler. */
-int _ipmi_fru_new_update_record(ipmi_fru_t   *fru,
-				unsigned int offset,
-				unsigned int length);
+int i_ipmi_fru_new_update_record(ipmi_fru_t   *fru,
+				 unsigned int offset,
+				 unsigned int length);
 
 /* Get/set the fru-type secific data.  Note that the cleanup_recs
    function will be called on any rec_data.  The right way to set this
    data is to set the rec data then set your ops. */
-void *_ipmi_fru_get_rec_data(ipmi_fru_t *fru);
-void _ipmi_fru_set_rec_data(ipmi_fru_t *fru, void *rec_data);
+void *i_ipmi_fru_get_rec_data(ipmi_fru_t *fru);
+void i_ipmi_fru_set_rec_data(ipmi_fru_t *fru, void *rec_data);
 
 /* Get a pointer to the fru data and the length.  Only valid during
    decoding and writing. */
-void *_ipmi_fru_get_data_ptr(ipmi_fru_t *fru);
-unsigned int _ipmi_fru_get_data_len(ipmi_fru_t *fru);
+void *i_ipmi_fru_get_data_ptr(ipmi_fru_t *fru);
+unsigned int i_ipmi_fru_get_data_len(ipmi_fru_t *fru);
 
 /* Get a debug name for the FRU */ 
-char *_ipmi_fru_get_iname(ipmi_fru_t *fru);
+char *i_ipmi_fru_get_iname(ipmi_fru_t *fru);
 
 /* Misc data about the FRU. */
-unsigned int _ipmi_fru_get_fetch_mask(ipmi_fru_t *fru);
-int _ipmi_fru_is_normal_fru(ipmi_fru_t *fru);
-void _ipmi_fru_set_is_normal_fru(ipmi_fru_t *fru, int val);
+unsigned int i_ipmi_fru_get_fetch_mask(ipmi_fru_t *fru);
+int i_ipmi_fru_is_normal_fru(ipmi_fru_t *fru);
+void i_ipmi_fru_set_is_normal_fru(ipmi_fru_t *fru, int val);
 
 /*
  * Interface between the generic FRU code and the specific FRU
@@ -247,26 +247,26 @@ typedef int (*ipmi_fru_get_root_node_op)(ipmi_fru_t      *fru,
 
 /* Add a function to cleanup the FRU record data (free all the memory)
    as the FRU is destroyed. */
-void _ipmi_fru_set_op_cleanup_recs(ipmi_fru_t *fru, ipmi_fru_void_op op);
+void i_ipmi_fru_set_op_cleanup_recs(ipmi_fru_t *fru, ipmi_fru_void_op op);
 
 /* Called when a write operations completes successfully, to clear out
    all the write information. */
-void _ipmi_fru_set_op_write_complete(ipmi_fru_t *fru, ipmi_fru_void_op op);
+void i_ipmi_fru_set_op_write_complete(ipmi_fru_t *fru, ipmi_fru_void_op op);
 
 /* Called to copy all the changed data into the FRU block of data and
    add update records for the changed data. */
-void _ipmi_fru_set_op_write(ipmi_fru_t *fru, ipmi_fru_err_op op);
+void i_ipmi_fru_set_op_write(ipmi_fru_t *fru, ipmi_fru_err_op op);
 
 /* Get the root node for the user to decode. */
-void _ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
+void i_ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
 				    ipmi_fru_get_root_node_op op);
 
 /* Register a decoder for FRU data.  The provided function should
    return success if the FRU is supported and can be decoded properly,
    ENOSYS if the FRU information doesn't match the format, or anything
    else for invalid FRU data.  It should register the nodes  */
-int _ipmi_fru_register_decoder(ipmi_fru_err_op op);
-int _ipmi_fru_deregister_decoder(ipmi_fru_err_op op);
+int i_ipmi_fru_register_decoder(ipmi_fru_err_op op);
+int i_ipmi_fru_deregister_decoder(ipmi_fru_err_op op);
 
 /***********************************************************************
  *

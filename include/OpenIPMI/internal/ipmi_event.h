@@ -68,8 +68,8 @@ void ipmi_event_set_is_old(ipmi_event_t *event, int val);
    from (fetched with ipmi_event_get_mcid()) and is only used for
    software ID based events.  You may pass in NULL if you don't care
    about software ID based events.  */
-ipmi_mc_t *_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
-					 ipmi_mc_t          *sel_mc,
-					 const ipmi_event_t *event);
+ipmi_mc_t *i_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
+					  ipmi_mc_t          *sel_mc,
+					  const ipmi_event_t *event);
 
 #endif /* OPENIPMI_EVENT_H */

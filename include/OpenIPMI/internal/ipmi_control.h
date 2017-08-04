@@ -46,11 +46,11 @@ int ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls);
 /* Destroy a control repository and all the controls in it. */
 int ipmi_controls_destroy(ipmi_control_info_t *controls);
 
-/* Must be called with the _ipmi_domain_entity_lock() held. */
-int _ipmi_control_get(ipmi_control_t *control);
+/* Must be called with the i_ipmi_domain_entity_lock() held. */
+int i_ipmi_control_get(ipmi_control_t *control);
 
 /* Must be called with no locks held. */
-void _ipmi_control_put(ipmi_control_t *control);
+void i_ipmi_control_put(ipmi_control_t *control);
 
 /* Return the number of controls in the data structure. */
 unsigned int ipmi_controls_get_count(ipmi_control_info_t *controls);

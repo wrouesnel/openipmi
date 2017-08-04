@@ -419,8 +419,8 @@ struct ipmi_con_s
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
 
 /* Initialization code for the initialization the connection code. */
-int _ipmi_conn_init(os_handler_t *os_hnd);
-void _ipmi_conn_shutdown(void);
+int i_ipmi_conn_init(os_handler_t *os_hnd);
+void i_ipmi_conn_shutdown(void);
 
 
 /* Address types for external addresses. */

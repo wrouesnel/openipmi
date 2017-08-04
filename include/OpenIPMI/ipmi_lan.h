@@ -558,13 +558,13 @@ int ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
    be used for OEM connection code that needs to manage its own
    connections.  Note that the OEM code must make sure this is
    single-threaded. */
-void _ipmi_lan_call_con_change_handlers(ipmi_con_t   *ipmi,
+void i_ipmi_lan_call_con_change_handlers(ipmi_con_t   *ipmi,
 					int          err,
 					unsigned int port);
 
-void _ipmi_lan_con_change_lock(ipmi_con_t *ipmi);
+void i_ipmi_lan_con_change_lock(ipmi_con_t *ipmi);
 
-void _ipmi_lan_con_change_unlock(ipmi_con_t *ipmi);
+void i_ipmi_lan_con_change_unlock(ipmi_con_t *ipmi);
 
 #ifdef __cplusplus
 }

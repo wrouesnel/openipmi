@@ -152,7 +152,7 @@ static void control_final_destroy(ipmi_control_t *control);
 
 /* Must be called with the domain entity lock held. */
 int
-_ipmi_control_get(ipmi_control_t *control)
+i_ipmi_control_get(ipmi_control_t *control)
 {
     if (control->destroyed)
 	return EINVAL;
@@ -161,28 +161,28 @@ _ipmi_control_get(ipmi_control_t *control)
 }
 
 void
-_ipmi_control_put(ipmi_control_t *control)
+i_ipmi_control_put(ipmi_control_t *control)
 {
-    _ipmi_domain_entity_lock(control->domain);
+    i_ipmi_domain_entity_lock(control->domain);
     if (control->usecount == 1) {
 	if (control->add_pending) {
 	    control->add_pending = 0;
-	    _ipmi_domain_entity_unlock(control->domain);
-	    _ipmi_entity_call_control_handlers(control->entity,
+	    i_ipmi_domain_entity_unlock(control->domain);
+	    i_ipmi_entity_call_control_handlers(control->entity,
 					       control, IPMI_ADDED);
-	    _ipmi_domain_entity_lock(control->domain);
+	    i_ipmi_domain_entity_lock(control->domain);
 	}
 	if (control->destroyed
 	    && (!control->waitq
 		|| (!opq_stuff_in_progress(control->waitq))))
 	{
-	    _ipmi_domain_entity_unlock(control->domain);
+	    i_ipmi_domain_entity_unlock(control->domain);
 	    control_final_destroy(control);
 	    return;
 	}
     }
     control->usecount--;
-    _ipmi_domain_entity_unlock(control->domain);
+    i_ipmi_domain_entity_unlock(control->domain);
 }
 
 ipmi_control_id_t
@@ -216,8 +216,8 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_control_t      *control;
     ipmi_entity_t       *entity = NULL;
     
-    controls = _ipmi_mc_get_controls(mc);
-    _ipmi_domain_entity_lock(domain);
+    controls = i_ipmi_mc_get_controls(mc);
+    i_ipmi_domain_entity_lock(domain);
     if (info->id.lun > 4) {
 	info->err = EINVAL;
 	goto out_unlock;
@@ -234,27 +234,27 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
 	goto out_unlock;
     }
 
-    info->err = _ipmi_entity_get(control->entity);
+    info->err = i_ipmi_entity_get(control->entity);
     if (info->err)
 	goto out_unlock;
     entity = control->entity;
 
-    info->err = _ipmi_control_get(control);
+    info->err = i_ipmi_control_get(control);
     if (info->err)
 	goto out_unlock;
 
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 
     info->handler(control, info->cb_data);
 
-    _ipmi_control_put(control);
-    _ipmi_entity_put(entity);
+    i_ipmi_control_put(control);
+    i_ipmi_entity_put(entity);
     return;
 
  out_unlock:
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
     if (entity)
-	_ipmi_entity_put(entity);
+	i_ipmi_entity_put(entity);
 }
 
 int
@@ -374,7 +374,7 @@ static int
 control_ok_to_use(ipmi_control_t *control)
 {
     return (   !control->destroyed
-	    && !_ipmi_domain_in_shutdown(control->domain));
+	    && !i_ipmi_domain_in_shutdown(control->domain));
 }
 
 typedef struct handler_cl_info_s
@@ -410,8 +410,8 @@ handler_list_cleanup(void *cb_data, void *item1, void *item2)
 static void
 control_final_destroy(ipmi_control_t *control)
 {
-    _ipmi_entity_get(control->entity);
-    _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
+    i_ipmi_entity_get(control->entity);
+    i_ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
 
     control->mc = NULL;
 
@@ -437,7 +437,7 @@ control_final_destroy(ipmi_control_t *control)
     if (control->oem_info_cleanup_handler)
 	control->oem_info_cleanup_handler(control, control->oem_info);
 
-    _ipmi_entity_put(control->entity);
+    i_ipmi_entity_put(control->entity);
     ipmi_mem_free(control);
 }
 
@@ -447,10 +447,10 @@ ipmi_control_destroy(ipmi_control_t *control)
     ipmi_control_info_t *controls;
     ipmi_mc_t           *mc = control->mc;
 
-    _ipmi_domain_mc_lock(control->domain);
-    _ipmi_mc_get(mc);
-    _ipmi_domain_mc_unlock(control->domain);
-    controls = _ipmi_mc_get_controls(control->mc);
+    i_ipmi_domain_mc_lock(control->domain);
+    i_ipmi_mc_get(mc);
+    i_ipmi_domain_mc_unlock(control->domain);
+    controls = i_ipmi_mc_get_controls(control->mc);
 
     ipmi_lock(controls->idx_lock);
     if (controls->controls_by_idx[control->num] == control) {
@@ -458,13 +458,13 @@ ipmi_control_destroy(ipmi_control_t *control)
 	controls->controls_by_idx[control->num] = NULL;
     }
 
-    _ipmi_control_get(control);
+    i_ipmi_control_get(control);
 
     ipmi_unlock(controls->idx_lock);
 
     control->destroyed = 1;
-    _ipmi_control_put(control);
-    _ipmi_mc_put(mc);
+    i_ipmi_control_put(control);
+    i_ipmi_mc_put(mc);
 
     return 0;
 }
@@ -487,7 +487,7 @@ control_set_name(ipmi_control_t *control)
 }
 
 const char *
-_ipmi_control_name(const ipmi_control_t *control)
+i_ipmi_control_name(const ipmi_control_t *control)
 {
     return control->name;
 }
@@ -606,11 +606,11 @@ control_rsp_handler(ipmi_mc_t  *mc,
     if (control->destroyed) {
 	ipmi_entity_t *entity = NULL;
 
-	_ipmi_domain_entity_lock(control->domain);
+	i_ipmi_domain_entity_lock(control->domain);
 	control->usecount++;
-	_ipmi_domain_entity_unlock(control->domain);
+	i_ipmi_domain_entity_unlock(control->domain);
 
-	rv = _ipmi_entity_get(control->entity);
+	rv = i_ipmi_entity_get(control->entity);
 	if (! rv)
 	    entity = control->entity;
 
@@ -621,9 +621,9 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 
-	_ipmi_control_put(control);
+	i_ipmi_control_put(control);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
 	return;
     }
 
@@ -632,20 +632,20 @@ control_rsp_handler(ipmi_mc_t  *mc,
 		 "control.c(control_rsp_handler): "
 		 "MC was destroyed while a control operation was in progress");
 
-	_ipmi_domain_entity_lock(control->domain);
+	i_ipmi_domain_entity_lock(control->domain);
 	control->usecount++;
-	_ipmi_domain_entity_unlock(control->domain);
+	i_ipmi_domain_entity_unlock(control->domain);
 
-	rv = _ipmi_entity_get(control->entity);
+	rv = i_ipmi_entity_get(control->entity);
 	if (! rv)
 	    entity = control->entity;
 
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 
-	_ipmi_control_put(control);
+	i_ipmi_control_put(control);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
 
 	return;
     }
@@ -662,20 +662,20 @@ control_rsp_handler(ipmi_mc_t  *mc,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Could not convert control id to a pointer",
 		 MC_NAME(mc));
-	_ipmi_domain_entity_lock(control->domain);
+	i_ipmi_domain_entity_lock(control->domain);
 	control->usecount++;
-	_ipmi_domain_entity_unlock(control->domain);
+	i_ipmi_domain_entity_unlock(control->domain);
 
-	nrv = _ipmi_entity_get(control->entity);
+	nrv = i_ipmi_entity_get(control->entity);
 	if (! nrv)
 	    entity = control->entity;
 
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
 
-	_ipmi_control_put(control);
+	i_ipmi_control_put(control);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
     }
 }
 			 
@@ -720,10 +720,10 @@ control_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 
-	_ipmi_domain_entity_lock(control->domain);
+	i_ipmi_domain_entity_lock(control->domain);
 	control->usecount++;
-	_ipmi_domain_entity_unlock(control->domain);
-	_ipmi_control_put(control);
+	i_ipmi_domain_entity_unlock(control->domain);
+	i_ipmi_control_put(control);
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
@@ -738,11 +738,11 @@ control_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "Could not convert control id to a pointer",
 		 DOMAIN_NAME(domain));
 	if (info->__rsp_handler) {
-	    _ipmi_domain_entity_lock(control->domain);
+	    i_ipmi_domain_entity_lock(control->domain);
 	    control->usecount++;
-	    _ipmi_domain_entity_unlock(control->domain);
+	    i_ipmi_domain_entity_unlock(control->domain);
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
-	    _ipmi_control_put(control);
+	    i_ipmi_control_put(control);
 	}
     }
     return IPMI_MSG_ITEM_NOT_USED;
@@ -840,7 +840,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 {
     ipmi_domain_t       *domain;
     os_handler_t        *os_hnd;
-    ipmi_control_info_t *controls = _ipmi_mc_get_controls(mc);
+    ipmi_control_info_t *controls = i_ipmi_mc_get_controls(mc);
     locked_list_entry_t *link;
     int                 err;
     unsigned int        i;
@@ -854,7 +854,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     if ((num >= 256) && (num != UINT_MAX))
 	return EINVAL;
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     ipmi_lock(controls->idx_lock);
 
     if (num == UINT_MAX){
@@ -947,7 +947,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
     ipmi_unlock(controls->idx_lock);
 
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 
     ipmi_entity_add_control(ent, control, link);
 
@@ -957,7 +957,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
  out_err:
     ipmi_unlock(controls->idx_lock);
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
     return err;
 }
 
@@ -2049,7 +2049,7 @@ ipmi_control_get_domain(ipmi_control_t *control)
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_control_lock(const ipmi_control_t *control)
+i__ipmi_check_control_lock(const ipmi_control_t *control)
 {
     if (!control)
 	return;

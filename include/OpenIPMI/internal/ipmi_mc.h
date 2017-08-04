@@ -41,8 +41,8 @@
 
 /* Allow entities to keep information that came from an MC in the MC
    itself so that when the MC is destroyed, it can be cleaned up. */
-void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
-void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
+void *i_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
+void i_ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
 
 /* Some stupid systems don't have some settings right, this lets the
    OEM code fix it. */
@@ -64,28 +64,28 @@ void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
 int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
 
 /* Used to refcount when the MC is completely up. */
-void _ipmi_mc_startup_get(ipmi_mc_t *mc, char *caller);
-void _ipmi_mc_startup_put(ipmi_mc_t *mc, char *caller);
+void i_ipmi_mc_startup_get(ipmi_mc_t *mc, char *caller);
+void i_ipmi_mc_startup_put(ipmi_mc_t *mc, char *caller);
 
 /* Force the MC to be active, do not report to the user.  DON'T USE
    THIS UNLESS YOU *REALLY* KNOW WHAT YOU ARE DOING.  It is used to
    handle certain startup conditions on connections, and that's really
    all it's for. */
-void _ipmi_mc_force_active(ipmi_mc_t *mc, int val);
+void i_ipmi_mc_force_active(ipmi_mc_t *mc, int val);
 
 /* Get the sensors that the given MC owns. */
-ipmi_sensor_info_t *_ipmi_mc_get_sensors(ipmi_mc_t *mc);
+ipmi_sensor_info_t *i_ipmi_mc_get_sensors(ipmi_mc_t *mc);
 
 /* Get the controls that the given MC owns. */
-ipmi_control_info_t *_ipmi_mc_get_controls(ipmi_mc_t *mc);
+ipmi_control_info_t *i_ipmi_mc_get_controls(ipmi_mc_t *mc);
 
-int _ipmi_create_mc(ipmi_domain_t *domain,
-		    ipmi_addr_t   *addr,
-		    unsigned int  addr_len,
-		    ipmi_mc_t     **new_mc);
+int i_ipmi_create_mc(ipmi_domain_t *domain,
+		     ipmi_addr_t   *addr,
+		     unsigned int  addr_len,
+		     ipmi_mc_t     **new_mc);
 
 /* Destroy an MC. */
-void _ipmi_cleanup_mc(ipmi_mc_t *mc);
+void i_ipmi_cleanup_mc(ipmi_mc_t *mc);
 
 /* Get the device SDRs for the given MC. */
 ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
@@ -93,8 +93,8 @@ ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
 /* These are called to claim and release the use of an MC.  An MC will
    not change while it has been gotten.  Must be holding the
    domain->mc_lock to call these. */
-int _ipmi_mc_get(ipmi_mc_t *mc);
-void _ipmi_mc_put(ipmi_mc_t *mc);
+int i_ipmi_mc_get(ipmi_mc_t *mc);
+void i_ipmi_mc_put(ipmi_mc_t *mc);
 
 
 #if 0
@@ -143,17 +143,17 @@ void ipmi_mc_set_sel_clear_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_del_event_cb handler);
 
 /* Check the event receiver for the MC. */
-void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
+void i_ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
 
 
-int _ipmi_mc_init(void);
-void _ipmi_mc_shutdown(void);
+int i_ipmi_mc_init(void);
+void i_ipmi_mc_shutdown(void);
 
 /* Returns EEXIST if the event is already there. */
-int _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
+int i_ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
 
-int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
+int i_ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
+int i_ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
@@ -165,45 +165,45 @@ void ipmi_mc_set_guid(ipmi_mc_t *mc, unsigned char *data);
 /* Used by the sensor code to report a new sensor to the MC.  The new
    sensor call should return 1 if the sensor code should not add the
    sensor to its database. */
-void _ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
-			   ipmi_sensor_t *sensor);
-int _ipmi_mc_new_sensor(ipmi_mc_t     *mc,
-			ipmi_entity_t *ent,
-			ipmi_sensor_t *sensor,
-			void          *link);
+void i_ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
+			    ipmi_sensor_t *sensor);
+int i_ipmi_mc_new_sensor(ipmi_mc_t     *mc,
+			 ipmi_entity_t *ent,
+			 ipmi_sensor_t *sensor,
+			 void          *link);
 
 /* This should be called with a new device id for an MC we don't have
    active in the system (it may be inactive). */
-int _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp);
+int i_ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp);
 
 /* Compares the data in a get device id response (in rsp) with the
    data in the MC, returns true if they are the same and false if
    not.  Must be called with an error-free message. */
-int _ipmi_mc_device_data_compares(ipmi_mc_t *mc, ipmi_msg_t *rsp);
+int i_ipmi_mc_device_data_compares(ipmi_mc_t *mc, ipmi_msg_t *rsp);
 
 /* Called when a new MC has been added to the system, to kick of
    processing it. */
-int _ipmi_mc_handle_new(ipmi_mc_t *mc);
+int i_ipmi_mc_handle_new(ipmi_mc_t *mc);
 
 /* Allow sensors to keep information that came from an MC in the MC
    itself so that when the MC is destroyed, it can be cleaned up. */
-void _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
-			      ipmi_sensor_t ***sensors,
-			      unsigned int  *count);
-void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
-			      ipmi_sensor_t **sensors,
-			      unsigned int  count);
+void i_ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
+			       ipmi_sensor_t ***sensors,
+			       unsigned int  *count);
+void i_ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
+			       ipmi_sensor_t **sensors,
+			       unsigned int  count);
 
 /* Used to create external references to an MC so it won't go away
    even if it is released. */
-void _ipmi_mc_use(ipmi_mc_t *mc);
-void _ipmi_mc_release(ipmi_mc_t *mc);
+void i_ipmi_mc_use(ipmi_mc_t *mc);
+void i_ipmi_mc_release(ipmi_mc_t *mc);
 
 /* Used to periodically check that the MC data is current and valid. */
-void _ipmi_mc_check_mc(ipmi_mc_t *mc);
+void i_ipmi_mc_check_mc(ipmi_mc_t *mc);
 
 /* Create chassis conrols for an MC. */
-int _ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance);
+int i_ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance);
 
 /* Generate a unique number for the MC. */
 unsigned int ipmi_mc_get_unique_nmu(ipmi_mc_t *mc);

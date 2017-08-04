@@ -426,7 +426,7 @@ struct lan_data_s
  * Authentication and encryption information and functions.
  *
  ***********************************************************************/
-extern ipmi_payload_t _ipmi_payload;
+extern ipmi_payload_t i_ipmi_payload;
 
 static int
 open_format_msg(ipmi_con_t        *ipmi,
@@ -509,7 +509,7 @@ static ipmi_payload_t open_payload =
 
 static ipmi_payload_t *payloads[64] =
 {
-    &_ipmi_payload,
+    &i_ipmi_payload,
     [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST] = &open_payload,
     [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE] = &open_payload
 };
@@ -2168,7 +2168,7 @@ call_con_change_handlers(lan_data_t *lan, int err, unsigned int port,
 }
 
 void
-_ipmi_lan_con_change_lock(ipmi_con_t *ipmi)
+i_ipmi_lan_con_change_lock(ipmi_con_t *ipmi)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     ipmi_lock(lan->ip_lock);
@@ -2177,14 +2177,14 @@ _ipmi_lan_con_change_lock(ipmi_con_t *ipmi)
 }
 
 void
-_ipmi_lan_con_change_unlock(ipmi_con_t *ipmi)
+i_ipmi_lan_con_change_unlock(ipmi_con_t *ipmi)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     ipmi_unlock(lan->con_change_lock);
 }
 
 void
-_ipmi_lan_call_con_change_handlers(ipmi_con_t   *ipmi,
+i_ipmi_lan_call_con_change_handlers(ipmi_con_t   *ipmi,
 				   int          err,
 				   unsigned int port)
 {
@@ -6060,7 +6060,7 @@ static ipmi_args_t *lan_con_alloc_args(void);
 static void
 lan_free_args(ipmi_args_t *args)
 {
-    lan_args_t *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t *largs = i_ipmi_args_get_extra_data(args);
 
     if (largs->str_addr[0])
 	ipmi_mem_free(largs->str_addr[0]);
@@ -6086,7 +6086,7 @@ get_startup_args(ipmi_con_t *ipmi)
     args = lan_con_alloc_args();
     if (! args)
 	return NULL;
-    largs = _ipmi_args_get_extra_data(args);
+    largs = i_ipmi_args_get_extra_data(args);
     lan = (lan_data_t *) ipmi->con_data;
     cparm = &lan->cparm;
     largs->str_addr[0] = ipmi_strdup(cparm->ip_addr_str[0]);
@@ -6141,7 +6141,7 @@ lan_connect_args(ipmi_args_t  *args,
 		 void         *user_data,
 		 ipmi_con_t   **con)
 {
-    lan_args_t       *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t       *largs = i_ipmi_args_get_extra_data(args);
     int              i;
     ipmi_lanp_parm_t parms[13];
     int              rv;
@@ -6309,7 +6309,7 @@ lan_args_get_val(ipmi_args_t  *args,
 		 char         **value,
 		 const char   ***range)
 {
-    lan_args_t *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t *largs = i_ipmi_args_get_extra_data(args);
     int        rv;
 
     switch(argnum) {
@@ -6495,7 +6495,7 @@ lan_args_set_val(ipmi_args_t  *args,
 		 const char   *name,
 		 const char   *value)
 {
-    lan_args_t   *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t   *largs = i_ipmi_args_get_extra_data(args);
     int          rv;
     char         *sval;
 
@@ -6611,13 +6611,13 @@ static ipmi_args_t *
 lan_args_copy(ipmi_args_t *args)
 {
     ipmi_args_t *nargs;
-    lan_args_t  *largs = _ipmi_args_get_extra_data(args);
+    lan_args_t  *largs = i_ipmi_args_get_extra_data(args);
     lan_args_t  *nlargs;
 
     nargs = lan_con_alloc_args();
     if (!nargs)
 	return NULL;
-    nlargs = _ipmi_args_get_extra_data(nargs);
+    nlargs = i_ipmi_args_get_extra_data(nargs);
     *nlargs = *largs;
 
     nlargs->str_addr[0] = NULL;
@@ -6683,7 +6683,7 @@ lan_parse_args(int         *curr_arg,
     if (!p)
 	return ENOMEM;
 
-    largs = _ipmi_args_get_extra_data(p);
+    largs = i_ipmi_args_get_extra_data(p);
     largs->num_addr = 1;
 
     while (*curr_arg < arg_count) {
@@ -6923,15 +6923,15 @@ lan_con_alloc_args(void)
 {
     ipmi_args_t *args;
     lan_args_t  *largs;
-    args = _ipmi_args_alloc(lan_free_args, lan_connect_args,
-			    lan_args_get_val, lan_args_set_val,
-			    lan_args_copy, lan_args_validate,
-			    lan_args_free_val, lan_args_get_type,
-			    sizeof(lan_args_t));
+    args = i_ipmi_args_alloc(lan_free_args, lan_connect_args,
+			     lan_args_get_val, lan_args_set_val,
+			     lan_args_copy, lan_args_validate,
+			     lan_args_free_val, lan_args_get_type,
+			     sizeof(lan_args_t));
     if (!args)
 	return NULL;
 
-    largs = _ipmi_args_get_extra_data(args);
+    largs = i_ipmi_args_get_extra_data(args);
 
     /* Set defaults */
     largs->authtype = IPMI_AUTHTYPE_DEFAULT;
@@ -6949,7 +6949,7 @@ lan_con_alloc_args(void)
 static ipmi_con_setup_t *lan_setup;
 
 int
-_ipmi_lan_init(os_handler_t *os_hnd)
+i_ipmi_lan_init(os_handler_t *os_hnd)
 {
     int rv;
     int i;
@@ -6993,12 +6993,12 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
-    lan_setup = _ipmi_alloc_con_setup(lan_parse_args, lan_parse_help,
-				      lan_con_alloc_args);
+    lan_setup = i_ipmi_alloc_con_setup(lan_parse_args, lan_parse_help,
+				       lan_con_alloc_args);
     if (! lan_setup)
 	return ENOMEM;
 
-    rv = _ipmi_register_con_type("lan", lan_setup);
+    rv = i_ipmi_register_con_type("lan", lan_setup);
     if (rv)
 	return rv;
 
@@ -7008,10 +7008,10 @@ _ipmi_lan_init(os_handler_t *os_hnd)
 }
 
 void
-_ipmi_lan_shutdown(void)
+i_ipmi_lan_shutdown(void)
 {
-    _ipmi_unregister_con_type("lan", lan_setup);
-    _ipmi_free_con_setup(lan_setup);
+    i_ipmi_unregister_con_type("lan", lan_setup);
+    i_ipmi_free_con_setup(lan_setup);
     lan_setup = NULL;
 
     if (lan_list_lock) {

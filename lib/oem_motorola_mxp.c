@@ -1421,7 +1421,7 @@ mxp_add_sensor(ipmi_mc_t     *mc,
 	*nsensor = NULL;
     }
 
-    _ipmi_sensor_put(sensor);
+    i_ipmi_sensor_put(sensor);
 
     return rv;
 }
@@ -1856,7 +1856,7 @@ mxp_add_control(ipmi_mc_t      *mc,
 	*ncontrol = NULL;
     }
 
-    _ipmi_control_put(control);
+    i_ipmi_control_put(control);
 
     return rv;
 }
@@ -1920,7 +1920,7 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
     } else 
 	*ncontrol = control;
 
-    _ipmi_control_put(control);
+    i_ipmi_control_put(control);
 
     return rv;
 }
@@ -4245,11 +4245,11 @@ mxpv1_board_presence_states_get_start(ipmi_sensor_t *sensor, int err,
 	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si.channel = i;
 	si.lun = 0;
-	mc = _ipmi_find_mc_by_addr(binfo->info->domain,
-				   (ipmi_addr_t *) &si, sizeof(si));
+	mc = i_ipmi_find_mc_by_addr(binfo->info->domain,
+				    (ipmi_addr_t *) &si, sizeof(si));
 	if (mc) {
 	    binfo->info->amc_present[i] = 1;
-	    _ipmi_mc_put(mc);
+	    i_ipmi_mc_put(mc);
 	} else 
 	    binfo->info->amc_present[i] = 0;
 
@@ -5359,18 +5359,18 @@ mxp_create_entities(ipmi_mc_t  *mc,
  out:
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
 	if (info->board[i].ent)
-	    _ipmi_entity_put(info->board[i].ent);
+	    i_ipmi_entity_put(info->board[i].ent);
     }
     for (i=0; i<info->num_power_supplies; i++) {
 	if (info->power_supply[i].ent)
-	    _ipmi_entity_put(info->power_supply[i].ent);
+	    i_ipmi_entity_put(info->power_supply[i].ent);
     }
     for (i=0; i<info->num_fans; i++) {
 	if (info->fan[i].fan_ent)
-	    _ipmi_entity_put(info->fan[i].fan_ent);
+	    i_ipmi_entity_put(info->fan[i].fan_ent);
     }
     if (info->chassis_ent)
-	_ipmi_entity_put(info->chassis_ent);
+	i_ipmi_entity_put(info->chassis_ent);
     return rv;
 }
 
@@ -6026,10 +6026,10 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
     ipmi_entity_t *entity;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     entity = sinfo->ent;
-    _ipmi_entity_get(entity);
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_entity_get(entity);
+    i_ipmi_domain_entity_unlock(domain);
 
     if (sinfo->slot)
 	ipmi_sensor_destroy(sinfo->slot);
@@ -6045,7 +6045,7 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 	ipmi_control_destroy(sinfo->power_config);
     if (sinfo->chassis_id)
 	ipmi_control_destroy(sinfo->chassis_id);
-    _ipmi_entity_put(entity);
+    i_ipmi_entity_put(entity);
 }
 
 /*
@@ -6584,10 +6584,10 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     amc_info_t    *info = cb_data;
     ipmi_entity_t *entity;
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     entity = info->ent;
-    _ipmi_entity_get(entity);
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_entity_get(entity);
+    i_ipmi_domain_entity_unlock(domain);
 
     if (info->slot)
 	ipmi_sensor_destroy(info->slot);
@@ -6618,7 +6618,7 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     if (info->chassis_id)
 	ipmi_control_destroy(info->chassis_id);
 
-    _ipmi_entity_put(entity);
+    i_ipmi_entity_put(entity);
 
     ipmi_mem_free(info);
 }
@@ -6927,7 +6927,7 @@ amc_board_handler(ipmi_mc_t *mc)
 
  out_err:
     if (info->ent)
-	_ipmi_entity_put(info->ent);
+	i_ipmi_entity_put(info->ent);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -7106,11 +7106,11 @@ timed_rescan_bus4(ipmi_sensor_t *sensor, void *cb_data)
     domain = ipmi_mc_get_domain(mc);
 
     /* Use the MC presence to know about the entity's presence. */
-    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
     if (mc) {
 	offset = 0; /* Board is present. */
 	deoffset = 1; /* Board is present. */
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
     } else {
 	offset = 1; /* Board is absent. */
 	deoffset = 0; /* Board is absent. */
@@ -7929,7 +7929,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	v1_switch = 1;
     }
 
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    bmc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
     if (bmc
 	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
 	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
@@ -7947,7 +7947,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	board_name = "MXP SWTCH";
     }
     if (bmc)
-	_ipmi_mc_put(bmc);
+	i_ipmi_mc_put(bmc);
 
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {
@@ -8094,7 +8094,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 
  out:
     if (ent)
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
     if (rv && sinfo)
 	zynx_destroyer(mc, sinfo);
     return rv;
@@ -8487,7 +8487,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 	return zynx_switch_handler(mc, cb_data);
     }
 
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    bmc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
     if (bmc
 	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
 	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
@@ -8507,7 +8507,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 	board_name = "MXP board";
     }
     if (bmc)
-	_ipmi_mc_put(bmc);
+	i_ipmi_mc_put(bmc);
     
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {
@@ -8558,7 +8558,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 
  out:
     if (ent)
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
     if (rv && sinfo)
 	mxp_genboard_removal_handler(domain, mc, sinfo);
     return rv;
@@ -8591,7 +8591,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 		 MC_NAME(src), msg->data[0]);
 	/* Destroy the MC so it will be detected again later and hopefully
 	   will work that time. */
-	_ipmi_cleanup_mc(src);
+	i_ipmi_cleanup_mc(src);
 	return;
     }
 
@@ -8673,18 +8673,18 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_entity_t *centity;
     ipmi_entity_t *entity;
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     centity = info->chassis_ent;
     if (centity)
-	_ipmi_entity_get(centity);
-    _ipmi_domain_entity_unlock(domain);
+	i_ipmi_entity_get(centity);
+    i_ipmi_domain_entity_unlock(domain);
 
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
-	_ipmi_domain_entity_lock(domain);
+	i_ipmi_domain_entity_lock(domain);
 	entity = info->power_supply[i].ent;
 	if (entity)
-	    _ipmi_entity_get(entity);
-	_ipmi_domain_entity_unlock(domain);
+	    i_ipmi_entity_get(entity);
+	i_ipmi_domain_entity_unlock(domain);
 
 	if ((info->chassis_ent) && (info->power_supply[i].ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
@@ -8706,15 +8706,15 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->power_supply[i].ps_i2c_isolate)
 	    ipmi_control_destroy(info->power_supply[i].ps_i2c_isolate);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
     }
 
     for (i=0; i<MXP_FANS; i++) {
-	_ipmi_domain_entity_lock(domain);
+	i_ipmi_domain_entity_lock(domain);
 	entity = info->fan[i].fan_ent;
 	if (entity)
-	    _ipmi_entity_get(entity);
-	_ipmi_domain_entity_unlock(domain);
+	    i_ipmi_entity_get(entity);
+	i_ipmi_domain_entity_unlock(domain);
 
 	if ((info->chassis_ent) && (info->fan[i].fan_ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
@@ -8734,15 +8734,15 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->fan[i].fan_inserv_led)
 	    ipmi_control_destroy(info->fan[i].fan_inserv_led);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
-	_ipmi_domain_entity_lock(domain);
+	i_ipmi_domain_entity_lock(domain);
 	entity = info->board[i].ent;
 	if (entity)
-	    _ipmi_entity_get(entity);
-	_ipmi_domain_entity_unlock(domain);
+	    i_ipmi_entity_get(entity);
+	i_ipmi_domain_entity_unlock(domain);
 
 	if ((info->chassis_ent) && (info->board[i].ent))
 	    ipmi_entity_remove_child(info->chassis_ent, info->board[i].ent);
@@ -8765,7 +8765,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->board[i].i2c_isolate)
 	    ipmi_control_destroy(info->board[i].i2c_isolate);
 	if (entity)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
     }
 
     if (info->chassis_type_control)
@@ -8789,7 +8789,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_domain_remove_mc_updated_handler(domain, mc_upd_handler, NULL);
 
     if (centity)
-	_ipmi_entity_put(centity);
+	i_ipmi_entity_put(centity);
 
     ipmi_mem_free(info);
 }

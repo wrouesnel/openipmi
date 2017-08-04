@@ -156,9 +156,9 @@ test_event_handler_0(ipmi_mc_t    *mc,
 	addr.slave_addr = data[4];
 
 	/* Find the MC. */
-	src_mc = _ipmi_find_mc_by_addr(domain,
-				       (ipmi_addr_t *) &addr,
-				       sizeof(addr));
+	src_mc = i_ipmi_find_mc_by_addr(domain,
+					(ipmi_addr_t *) &addr,
+					sizeof(addr));
 	if (!src_mc)
 	    return 0;
 
@@ -176,7 +176,7 @@ test_event_handler_0(ipmi_mc_t    *mc,
 	if (!rv)
 	    rv = info.err;
 
-	_ipmi_mc_put(src_mc);
+	i_ipmi_mc_put(src_mc);
 
 	if (!rv)
 	    return 1;
@@ -772,7 +772,7 @@ test_handler_0(ipmi_mc_t *mc,
 		 "Could not add the power control: %x",
 		 MC_NAME(mc), rv);
 	ipmi_control_destroy(control);
-	_ipmi_control_put(control);
+	i_ipmi_control_put(control);
 	goto out;
     }
 
@@ -785,15 +785,15 @@ test_handler_0(ipmi_mc_t *mc,
 		 "Could not add the power control removal handler: %x",
 		 MC_NAME(mc), rv);
 	ipmi_control_destroy(control);
-	_ipmi_control_put(control);
+	i_ipmi_control_put(control);
 	goto out;
     }
 
-    _ipmi_control_put(control);
+    i_ipmi_control_put(control);
 
  out:
     if (ent)
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
     return rv;
 }
 

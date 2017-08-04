@@ -569,15 +569,15 @@ static ipmi_mr_struct_layout_t fan_geog = {
  **********************************************************************/
 
 int
-_ipmi_atca_fru_get_mr_root(ipmi_fru_t      *fru,
-			   unsigned int    mr_rec_num,
-			   unsigned int    manufacturer_id,
-			   unsigned char   record_type_id,
-			   unsigned char   *mr_data,
-			   unsigned int    mr_data_len,
-			   void            *cb_data,
-			   const char      **name,
-			   ipmi_fru_node_t **node)
+i_ipmi_atca_fru_get_mr_root(ipmi_fru_t      *fru,
+			    unsigned int    mr_rec_num,
+			    unsigned int    manufacturer_id,
+			    unsigned char   record_type_id,
+			    unsigned char   *mr_data,
+			    unsigned int    mr_data_len,
+			    void            *cb_data,
+			    const char      **name,
+			    ipmi_fru_node_t **node)
 {
     /* A record type and version number. */
     if (mr_data_len < 5)

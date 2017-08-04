@@ -47,28 +47,28 @@ int ipmi_entity_info_alloc(ipmi_domain_t      *domain,
 			   ipmi_entity_info_t **new_ents);
 int ipmi_entity_info_destroy(ipmi_entity_info_t *ents);
 
-/* Must be called with the _ipmi_domain_entity_lock() held. */
-int _ipmi_entity_get(ipmi_entity_t *ent);
+/* Must be called with the i_ipmi_domain_entity_lock() held. */
+int i_ipmi_entity_get(ipmi_entity_t *ent);
 
 /* Must be called with no locks held. */
-void _ipmi_entity_put(ipmi_entity_t *ent);
+void i_ipmi_entity_put(ipmi_entity_t *ent);
 
 /* Called by the domain code when it finishes processing SDRs, so that
    the entity code can know when to report entities fully up. */
-void _ipmi_entities_report_sdrs_read(ipmi_entity_info_t *ents);
+void i_ipmi_entities_report_sdrs_read(ipmi_entity_info_t *ents);
 
 /* Called by the domain code when it finishes scanning MCs, so that
    the entity code can know when to report entities fully up. */
-void _ipmi_entities_report_mcs_scanned(ipmi_entity_info_t *ents);
+void i_ipmi_entities_report_mcs_scanned(ipmi_entity_info_t *ents);
 
 /* Used so entities can be forced to be kept around. */
-int _ipmi_entity_add_ref(ipmi_entity_t *ent);
-int _ipmi_entity_remove_ref(ipmi_entity_t *ent);
+int i_ipmi_entity_add_ref(ipmi_entity_t *ent);
+int i_ipmi_entity_remove_ref(ipmi_entity_t *ent);
 
 /* Find an entity in the domain's set of entities that has the given
    entity id and entity instance.  The MC is the mc the entity came
    from, or NULL if from the main SDR repository.  Entity will be
-   "gotten", so you must put it with _ipmi_entity_put() after getting
+   "gotten", so you must put it with i_ipmi_entity_put() after getting
    it with this call. */
 int ipmi_entity_find(ipmi_entity_info_t *ents,
 		     ipmi_mc_t          *mc,
@@ -79,7 +79,7 @@ int ipmi_entity_find(ipmi_entity_info_t *ents,
 /* Add an entity to the list of entities in the BMC.  You must
    register a "gen_output" handler, that will be called when the SDRs
    are output.  This is so an OEM entity can create their own SDRs.
-   Entity will be "gotten", so you must put it with _ipmi_entity_put()
+   Entity will be "gotten", so you must put it with i_ipmi_entity_put()
    after getting it with this call. */
 typedef int (*entity_sdr_add_cb)(ipmi_entity_t   *ent,
 				 ipmi_sdr_info_t *sdrs,
@@ -138,10 +138,10 @@ void ipmi_entity_remove_control(ipmi_entity_t  *ent,
 
 /* Used to report when a sensor is added to or removed from an
    entity. */
-void _ipmi_entity_call_sensor_handlers(ipmi_entity_t      *ent,
+void i_ipmi_entity_call_sensor_handlers(ipmi_entity_t      *ent,
 				       ipmi_sensor_t      *sensor, 
 				       enum ipmi_update_e op);
-void _ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
+void i_ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
 					ipmi_control_t     *control, 
 					enum ipmi_update_e op);
 
@@ -203,11 +203,11 @@ void ipmi_entity_set_physical_slot_num(ipmi_entity_t *ent,
 /* Set the FRU data for an entity and free any FRU data that exists
    already.  Note that this must be a notrack allocated FRU.  For
    internal use only. */ 
-void _ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru);
+void i_ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru);
 
 /* Call all the FRU handlers for an entity.  Should be done after
    setting FRU information. */
-void _ipmi_entity_call_fru_handlers(ipmi_entity_t *ent,
+void i_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent,
 				    enum ipmi_update_werr_e op,
 				    int err);
 

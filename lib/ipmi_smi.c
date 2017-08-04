@@ -1586,7 +1586,7 @@ get_startup_args(ipmi_con_t *ipmi)
     args = smi_con_alloc_args();
     if (! args)
 	return NULL;
-    sargs = _ipmi_args_get_extra_data(args);
+    sargs = i_ipmi_args_get_extra_data(args);
     smi = (smi_data_t *) ipmi->con_data;
     sargs->ifnum = smi->if_num;
     return args;
@@ -1598,7 +1598,7 @@ smi_connect_args(ipmi_args_t  *args,
 		 void         *user_data,
 		 ipmi_con_t   **new_con)
 {
-    smi_args_t *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t *sargs = i_ipmi_args_get_extra_data(args);
 
     return ipmi_smi_setup_con(sargs->ifnum, handler, user_data, new_con);
 }
@@ -1618,7 +1618,7 @@ smi_args_get_val(ipmi_args_t  *args,
 		 char         **value,
 		 const char   ***range)
 {
-    smi_args_t *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t *sargs = i_ipmi_args_get_extra_data(args);
     char       dummy[1];
     char       *sval;
 
@@ -1650,7 +1650,7 @@ smi_args_set_val(ipmi_args_t  *args,
 		 const char   *name,
 		 const char   *value)
 {
-    smi_args_t   *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t   *sargs = i_ipmi_args_get_extra_data(args);
     const char   *should_be_end;
     char         *end;
     unsigned int val;
@@ -1683,13 +1683,13 @@ static ipmi_args_t *
 smi_args_copy(ipmi_args_t *args)
 {
     ipmi_args_t *nargs;
-    smi_args_t  *sargs = _ipmi_args_get_extra_data(args);
+    smi_args_t  *sargs = i_ipmi_args_get_extra_data(args);
     smi_args_t  *nsargs;
 
     nargs = smi_con_alloc_args();
     if (!nargs)
 	return NULL;
-    nsargs = _ipmi_args_get_extra_data(nargs);
+    nsargs = i_ipmi_args_get_extra_data(nargs);
     *nsargs = *sargs;
     return nargs;
 }
@@ -1724,7 +1724,7 @@ smi_parse_args(int         *curr_arg,
     if (!p)
 	return ENOMEM;
 
-    sargs = _ipmi_args_get_extra_data(p);
+    sargs = i_ipmi_args_get_extra_data(p);
     sargs->ifnum = atoi(args[*curr_arg]);
     *iargs = p;
     (*curr_arg)++;
@@ -1754,17 +1754,17 @@ smi_parse_help(void)
 static ipmi_args_t *
 smi_con_alloc_args(void)
 {
-    return _ipmi_args_alloc(NULL, smi_connect_args,
-			    smi_args_get_val, smi_args_set_val,
-			    smi_args_copy, smi_args_validate,
-			    smi_args_free_val, smi_args_get_type,
-			    sizeof(smi_args_t));
+    return i_ipmi_args_alloc(NULL, smi_connect_args,
+			     smi_args_get_val, smi_args_set_val,
+			     smi_args_copy, smi_args_validate,
+			     smi_args_free_val, smi_args_get_type,
+			     sizeof(smi_args_t));
 }
 
 static ipmi_con_setup_t *smi_setup;
 
 int
-_ipmi_smi_init(os_handler_t *os_hnd)
+i_ipmi_smi_init(os_handler_t *os_hnd)
 {
     int rv;
 
@@ -1772,15 +1772,15 @@ _ipmi_smi_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
-    smi_setup = _ipmi_alloc_con_setup(smi_parse_args, smi_parse_help,
-				      smi_con_alloc_args);
+    smi_setup = i_ipmi_alloc_con_setup(smi_parse_args, smi_parse_help,
+				       smi_con_alloc_args);
     if (! smi_setup) {
 	ipmi_destroy_lock(smi_list_lock);
 	return ENOMEM;
     }
-    rv = _ipmi_register_con_type("smi", smi_setup);
+    rv = i_ipmi_register_con_type("smi", smi_setup);
     if (rv) {
-	_ipmi_free_con_setup(smi_setup);
+	i_ipmi_free_con_setup(smi_setup);
 	smi_setup = NULL;
 	ipmi_destroy_lock(smi_list_lock);
 	return rv;
@@ -1790,10 +1790,10 @@ _ipmi_smi_init(os_handler_t *os_hnd)
 }
 
 void
-_ipmi_smi_shutdown(void)
+i_ipmi_smi_shutdown(void)
 {
-    _ipmi_unregister_con_type("smi", smi_setup);
-    _ipmi_free_con_setup(smi_setup);
+    i_ipmi_unregister_con_type("smi", smi_setup);
+    i_ipmi_free_con_setup(smi_setup);
     smi_setup = NULL;
 
     if (smi_list_lock) {

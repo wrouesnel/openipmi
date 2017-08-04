@@ -68,7 +68,7 @@ dump_hex(const void *vdata, int len)
 #endif
 static os_handler_t *ipmi_os_handler;
 
-unsigned int __ipmi_log_mask = 0;
+unsigned int i__ipmi_log_mask = 0;
 
 os_handler_t *
 ipmi_get_global_os_handler(void)
@@ -426,32 +426,32 @@ int ipmi_oem_kontron_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 int ipmi_oem_atca_init(void);
 int init_oem_test(void);
-int _ipmi_smi_init(os_handler_t *os_hnd);
-int _ipmi_lan_init(os_handler_t *os_hnd);
+int i_ipmi_smi_init(os_handler_t *os_hnd);
+int i_ipmi_lan_init(os_handler_t *os_hnd);
 int ipmi_malloc_init(os_handler_t *os_hnd);
-int _ipmi_rakp_init(void);
-int _ipmi_aes_cbc_init(void);
-int _ipmi_hmac_init(void);
-int _ipmi_md5_init(void);
-int _ipmi_fru_init(void);
-int _ipmi_normal_fru_init(void);
-int _ipmi_fru_spd_decoder_init(void);
-void _ipmi_fru_shutdown(void);
-void _ipmi_normal_fru_shutdown(void);
-void _ipmi_fru_spd_decoder_shutdown(void);
-int _ipmi_sol_init(void);
+int i_ipmi_rakp_init(void);
+int i_ipmi_aes_cbc_init(void);
+int i_ipmi_hmac_init(void);
+int i_ipmi_md5_init(void);
+int i_ipmi_fru_init(void);
+int i_ipmi_normal_fru_init(void);
+int i_ipmi_fru_spd_decoder_init(void);
+void i_ipmi_fru_shutdown(void);
+void i_ipmi_normal_fru_shutdown(void);
+void i_ipmi_fru_spd_decoder_shutdown(void);
+int i_ipmi_sol_init(void);
 
-void _ipmi_rakp_shutdown(void);
-void _ipmi_aes_cbc_shutdown(void);
-void _ipmi_hmac_shutdown(void);
-void _ipmi_md5_shutdown(void);
+void i_ipmi_rakp_shutdown(void);
+void i_ipmi_aes_cbc_shutdown(void);
+void i_ipmi_hmac_shutdown(void);
+void i_ipmi_md5_shutdown(void);
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_kontron_conn_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
-int _ipmi_smi_shutdown(void);
-int _ipmi_lan_shutdown(void);
-void _ipmi_sol_shutdown(void);
+int i_ipmi_smi_shutdown(void);
+int i_ipmi_lan_shutdown(void);
+void i_ipmi_sol_shutdown(void);
 
 
 static locked_list_t *con_type_list;
@@ -475,7 +475,7 @@ ipmi_init(os_handler_t *handler)
 
     con_type_list = locked_list_alloc(handler);
 
-    rv = _ipmi_conn_init(handler);
+    rv = i_ipmi_conn_init(handler);
     if (rv)
 	return rv;
 
@@ -490,44 +490,44 @@ ipmi_init(os_handler_t *handler)
     }
 
 #ifdef HAVE_OPENIPMI_SMI
-    rv = _ipmi_smi_init(handler);
+    rv = i_ipmi_smi_init(handler);
     if (rv)
 	goto out_err;
 #endif
 
-    rv = _ipmi_lan_init(handler);
+    rv = i_ipmi_lan_init(handler);
     if (rv)
 	goto out_err;
 
-    _ipmi_domain_init();
-    _ipmi_mc_init();
+    i_ipmi_domain_init();
+    i_ipmi_mc_init();
 
-    rv = _ipmi_rakp_init();
+    rv = i_ipmi_rakp_init();
     if (rv)
 	goto out_err;
-    rv = _ipmi_aes_cbc_init();
+    rv = i_ipmi_aes_cbc_init();
     if (rv)
 	goto out_err;
-    rv = _ipmi_hmac_init();
+    rv = i_ipmi_hmac_init();
     if (rv)
 	goto out_err;
-    rv = _ipmi_md5_init();
-    if (rv)
-	goto out_err;
-
-    rv = _ipmi_fru_init();
+    rv = i_ipmi_md5_init();
     if (rv)
 	goto out_err;
 
-    rv = _ipmi_normal_fru_init();
+    rv = i_ipmi_fru_init();
     if (rv)
 	goto out_err;
 
-    rv = _ipmi_fru_spd_decoder_init();
+    rv = i_ipmi_normal_fru_init();
     if (rv)
 	goto out_err;
 
-    rv = _ipmi_sol_init();
+    rv = i_ipmi_fru_spd_decoder_init();
+    if (rv)
+	goto out_err;
+
+    rv = i_ipmi_sol_init();
     if (rv)
 	goto out_err;
 
@@ -553,25 +553,25 @@ ipmi_shutdown(void)
     if (! ipmi_initialized)
 	return;
 
-    _ipmi_rakp_shutdown();
-    _ipmi_aes_cbc_shutdown();
-    _ipmi_hmac_shutdown();
-    _ipmi_md5_shutdown();
-    _ipmi_sol_shutdown();
-    _ipmi_lan_shutdown();
+    i_ipmi_rakp_shutdown();
+    i_ipmi_aes_cbc_shutdown();
+    i_ipmi_hmac_shutdown();
+    i_ipmi_md5_shutdown();
+    i_ipmi_sol_shutdown();
+    i_ipmi_lan_shutdown();
 #ifdef HAVE_OPENIPMI_SMI
-    _ipmi_smi_shutdown();
+    i_ipmi_smi_shutdown();
 #endif
     ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
     ipmi_oem_intel_shutdown();
     ipmi_oem_kontron_conn_shutdown();
-    _ipmi_mc_shutdown();
-    _ipmi_domain_shutdown();
-    _ipmi_fru_spd_decoder_shutdown();
-    _ipmi_conn_shutdown();
-    _ipmi_normal_fru_shutdown();
-    _ipmi_fru_shutdown();
+    i_ipmi_mc_shutdown();
+    i_ipmi_domain_shutdown();
+    i_ipmi_fru_spd_decoder_shutdown();
+    i_ipmi_conn_shutdown();
+    i_ipmi_normal_fru_shutdown();
+    i_ipmi_fru_shutdown();
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     if (con_type_list)
@@ -696,9 +696,9 @@ struct ipmi_con_setup_s
     ipmi_con_alloc_args_cb alloc;
 };
 ipmi_con_setup_t *
-_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
-		      ipmi_con_get_help_cb   help,
-		      ipmi_con_alloc_args_cb alloc)
+i_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
+		       ipmi_con_get_help_cb   help,
+		       ipmi_con_alloc_args_cb alloc)
 {
     ipmi_con_setup_t *rv;
 
@@ -713,7 +713,7 @@ _ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
 }
 
 void
-_ipmi_free_con_setup(ipmi_con_setup_t *v)
+i_ipmi_free_con_setup(ipmi_con_setup_t *v)
 {
     ipmi_mem_free(v);
 }
@@ -898,7 +898,7 @@ ipmi_args_validate(ipmi_args_t *args, int *argnum)
 }
 
 ipmi_args_t *
-_ipmi_args_alloc(ipmi_args_free_cb     free,
+i_ipmi_args_alloc(ipmi_args_free_cb     free,
 		 ipmi_args_connect_cb  connect,
 		 ipmi_args_get_val_cb  get_val,
 		 ipmi_args_set_val_cb  set_val,
@@ -926,13 +926,13 @@ _ipmi_args_alloc(ipmi_args_free_cb     free,
 }
 
 void *
-_ipmi_args_get_extra_data(ipmi_args_t *args)
+i_ipmi_args_get_extra_data(ipmi_args_t *args)
 {
     return ((char *) args) + sizeof(*args);
 }
 
 int
-_ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup)
+i_ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup)
 {
     if (locked_list_add(con_type_list, (void *) name, setup))
 	return 0;
@@ -960,7 +960,7 @@ con_type_check_remove(void *cb_data, void *item1, void *item2)
 }
 
 int
-_ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup)
+i_ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup)
 {
     con_type_check_remover_t data;
 

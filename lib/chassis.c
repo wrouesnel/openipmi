@@ -367,15 +367,15 @@ chassis_mc_control_active_handler(ipmi_mc_t *mc,
     ipmi_mc_remove_active_handler(mc,
 				  chassis_mc_control_active_handler,
 				  control);
-    _ipmi_domain_entity_lock(domain);
-    _ipmi_entity_get(entity);
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_lock(domain);
+    i_ipmi_entity_get(entity);
+    i_ipmi_domain_entity_unlock(domain);
     ipmi_control_destroy(control);
-    _ipmi_entity_put(entity);
+    i_ipmi_entity_put(entity);
 }
 
 int
-_ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance)
+i_ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance)
 {
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
@@ -392,7 +392,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance)
 			 NULL, &chassis_ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%schassis.c(_ipmi_chassis_create_controls): "
+		 "%schassis.c(i_ipmi_chassis_create_controls): "
 		 "Could not add chassis entity: %x",
 		 DOMAIN_NAME(domain), rv);
 	goto out;
@@ -475,10 +475,10 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc, unsigned char instance)
 
  out:
     if (power_control)
-	_ipmi_control_put(power_control);
+	i_ipmi_control_put(power_control);
     if (reset_control)
-	_ipmi_control_put(reset_control);
+	i_ipmi_control_put(reset_control);
     if (chassis_ent)
-	_ipmi_entity_put(chassis_ent);
+	i_ipmi_entity_put(chassis_ent);
     return rv;
 }

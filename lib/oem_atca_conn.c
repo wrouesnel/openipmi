@@ -202,7 +202,7 @@ fd_sock_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	unsigned int i;
 
 	ipmi_lock(tinfo->lock);
-	_ipmi_lan_con_change_lock(tinfo->ipmi);
+	i_ipmi_lan_con_change_lock(tinfo->ipmi);
 	for (i=1; i<tinfo->num_ip_addr; i++) {
 	    atca_ip_addr_info_t *ainfo = &(tinfo->ip_addrs[i]);
 	    os_handler_t        *os_hnd = ipmi_get_global_os_handler();
@@ -225,10 +225,10 @@ fd_sock_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
 	    atca_ip_addr_info_t *ainfo = &(addrs[i]);
 	    if (ainfo->changed) {
 		ainfo->changed = 0;
-		_ipmi_lan_call_con_change_handlers(tinfo->ipmi, 0, i);
+		i_ipmi_lan_call_con_change_handlers(tinfo->ipmi, 0, i);
 	    }
 	}
-	_ipmi_lan_con_change_unlock(tinfo->ipmi);
+	i_ipmi_lan_con_change_unlock(tinfo->ipmi);
 
 	ipmi_lock(tinfo->lock);
 	addrs[0].usecount--;
@@ -346,7 +346,7 @@ atca_check_and_ping(ipmi_con_t *ipmi, atca_conn_info_t *info)
 	    struct timeval t = ainfo->last_pong_time;
 	    t.tv_sec += ainfo->max_unavailable_time;
 	    if ((t.tv_sec < now.tv_sec) && (ainfo->dropped_pings > 2)) {
-		_ipmi_lan_call_con_change_handlers(ipmi, EAGAIN, i);
+		i_ipmi_lan_call_con_change_handlers(ipmi, EAGAIN, i);
 		ainfo->connected = 0;
 	    }
 	}
@@ -419,7 +419,7 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
     info->working_ip_addrs = NULL;
     info->last_ip_change_time = info->working_ip_change_time;
 
-    _ipmi_lan_con_change_lock(info->ipmi);
+    i_ipmi_lan_con_change_lock(info->ipmi);
     w[0].usecount++;
     ipmi_unlock(info->lock);
 
@@ -430,12 +430,12 @@ atca_addr_fetch_done(ipmi_con_t *ipmi, atca_conn_info_t *info, int err)
 	w[i].changed = 0;
 	if (! w[i].connected)
 	    err = EAGAIN;
-	_ipmi_lan_call_con_change_handlers(ipmi, err, i);
+	i_ipmi_lan_call_con_change_handlers(ipmi, err, i);
     }
 
     for (; i<cc; i++)
-	_ipmi_lan_call_con_change_handlers(ipmi, ENOENT, i);
-    _ipmi_lan_con_change_unlock(info->ipmi);
+	i_ipmi_lan_call_con_change_handlers(ipmi, ENOENT, i);
+    i_ipmi_lan_con_change_unlock(info->ipmi);
 
     ipmi_lock(info->lock);
     w[0].usecount--;

@@ -67,7 +67,7 @@ struct ipmi_lock_s
     os_handler_t  *os_hnd;
 };
 
-int __ipmi_debug_locks = 0;
+int i__ipmi_debug_locks = 0;
 
 int
 ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)

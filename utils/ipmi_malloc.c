@@ -80,7 +80,7 @@ void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, const char *format, ...)
 #define FREE_SIGNATURE 0xb981cef1
 #define BYTE_SIGNATURE 0x74
 
-int __ipmi_debug_malloc = 0;
+int i__ipmi_debug_malloc = 0;
 
 static os_handler_t *malloc_os_hnd = NULL;
 

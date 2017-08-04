@@ -299,7 +299,7 @@ atca_add_control(ipmi_mc_t      *mc,
 	*ncontrol = NULL;
     }
 
-    _ipmi_control_put(control);
+    i_ipmi_control_put(control);
 
     return rv;
 }
@@ -924,7 +924,7 @@ atca_event_scan_mc_done(ipmi_domain_t *domain, int err, void *cb_data)
 	return;
 
     ipmi_detect_entity_presence_change(entity, 1);
-    _ipmi_entity_put(entity);
+    i_ipmi_entity_put(entity);
 }
 
 static int
@@ -966,12 +966,12 @@ hot_swap_state_changed(ipmi_sensor_t         *sensor,
 	unsigned char ipmb_addr = finfo->minfo->ipmb_address;
 	int           rv;
 
-	_ipmi_entity_get(entity);
+	i_ipmi_entity_get(entity);
 	rv = ipmi_start_ipmb_mc_scan(ipmi_entity_get_domain(entity),
 				     0, ipmb_addr, ipmb_addr,
 				     atca_event_scan_mc_done, entity);
 	if (rv)
-	    _ipmi_entity_put(entity);
+	    i_ipmi_entity_put(entity);
     }
 
     return handled;
@@ -1422,12 +1422,12 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     finfo = l->fru;
 
     domain = ipmi_mc_get_domain(mc);
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     if (!finfo->entity)
 	rv = EINVAL;
     else
-	rv = _ipmi_entity_get(finfo->entity);
-    _ipmi_domain_entity_unlock(domain);
+	rv = i_ipmi_entity_get(finfo->entity);
+    i_ipmi_domain_entity_unlock(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_cap_rsp): "
@@ -1456,7 +1456,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		 "%soem_atca.c(fru_led_cap_rsp): "
 		 "Could not create LED control: 0x%x",
 		 MC_NAME(mc), rv);
-	_ipmi_entity_put(finfo->entity);
+	i_ipmi_entity_put(finfo->entity);
 	goto out;
     }
     for (i=1; i<=6; i++) {
@@ -1473,7 +1473,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 			  &l->control,
 			  UINT_MAX, /* Let the control code pick the number */
 			  finfo->entity);
-    _ipmi_entity_put(finfo->entity);
+    i_ipmi_entity_put(finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_cap_rsp): "
@@ -1901,12 +1901,12 @@ fru_control_capabilities_rsp(ipmi_mc_t  *mc,
        support the query, but still must support at least cold
        reset. */
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     if (!finfo->entity) {
 	rv = EINVAL;
     } else
-	rv = _ipmi_entity_get(finfo->entity);
-    _ipmi_domain_entity_unlock(domain);
+	rv = i_ipmi_entity_get(finfo->entity);
+    i_ipmi_domain_entity_unlock(domain);
     if (rv)
 	/* The entity was destroyed while the message was in progress. */
 	goto out;
@@ -1928,7 +1928,7 @@ fru_control_capabilities_rsp(ipmi_mc_t  *mc,
 			     IPMI_CONTROL_ONE_SHOT_RESET,
 			     set_diagnostic_interrupt,
 			     &finfo->diagnostic_interrupt);
-    _ipmi_entity_put(finfo->entity);
+    i_ipmi_entity_put(finfo->entity);
 
  out:
     return;
@@ -2415,7 +2415,7 @@ add_power_feed_control(atca_shelf_t *info)
     si.channel = 0xf;
     si.lun = 0;
 
-    si_mc = _ipmi_find_mc_by_addr(info->domain,
+    si_mc = i_ipmi_find_mc_by_addr(info->domain,
 				  (ipmi_addr_t *) &si,
 				  sizeof(si));
     if (!si_mc) {
@@ -2458,7 +2458,7 @@ add_power_feed_control(atca_shelf_t *info)
     }
 
  out:
-    _ipmi_mc_put(si_mc);
+    i_ipmi_mc_put(si_mc);
 }
 
 static void
@@ -2474,7 +2474,7 @@ destroy_power_feed_control(atca_shelf_t *info)
 	si.channel = 0xf;
 	si.lun = 0;
 
-	si_mc = _ipmi_find_mc_by_addr(info->domain,
+	si_mc = i_ipmi_find_mc_by_addr(info->domain,
 				      (ipmi_addr_t *) &si,
 				      sizeof(si));
 	if (!si_mc) {
@@ -2491,7 +2491,7 @@ destroy_power_feed_control(atca_shelf_t *info)
 	   ipmi_control_destroy(). */
 	info->power_feed_control = NULL;
 	ipmi_control_destroy(control);
-	_ipmi_mc_put(si_mc);
+	i_ipmi_mc_put(si_mc);
     }
 }
 
@@ -2542,7 +2542,7 @@ add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
     si.channel = 0xf;
     si.lun = 0;
 
-    si_mc = _ipmi_find_mc_by_addr(ipmc->shelf->domain,
+    si_mc = i_ipmi_find_mc_by_addr(ipmc->shelf->domain,
 				  (ipmi_addr_t *) &si,
 				  sizeof(si));
     if (!si_mc) {
@@ -2590,7 +2590,7 @@ add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
     info->next_address_control_num++;
 
  out:
-    _ipmi_mc_put(si_mc);
+    i_ipmi_mc_put(si_mc);
 }
 
 static void
@@ -2606,7 +2606,7 @@ destroy_address_control(atca_ipmc_t *ipmc)
 	si.channel = 0xf;
 	si.lun = 0;
 
-	si_mc = _ipmi_find_mc_by_addr(ipmc->shelf->domain,
+	si_mc = i_ipmi_find_mc_by_addr(ipmc->shelf->domain,
 				      (ipmi_addr_t *) &si,
 				      sizeof(si));
 	if (!si_mc) {
@@ -2623,7 +2623,7 @@ destroy_address_control(atca_ipmc_t *ipmc)
 	   ipmi_control_destroy(). */
 	ipmc->address_control = NULL;
 	ipmi_control_destroy(control);
-	_ipmi_mc_put(si_mc);
+	i_ipmi_mc_put(si_mc);
     }
 }
 
@@ -2832,13 +2832,13 @@ destroy_fru_controls(atca_fru_t *finfo)
     if (!finfo->minfo->mc)
 	return;
 
-    _ipmi_mc_get(finfo->minfo->mc);
+    i_ipmi_mc_get(finfo->minfo->mc);
     destroy_fru_leds(finfo);
     destroy_fru_control_handling(finfo);
 #ifdef POWER_CONTROL_AVAILABLE
     destroy_power_handling(finfo);
 #endif
-    _ipmi_mc_put(finfo->minfo->mc);
+    i_ipmi_mc_put(finfo->minfo->mc);
 }
 
 static int
@@ -3077,17 +3077,17 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 		continue;
 
 	    if (any_fru_controls(finfo)) {
-		_ipmi_domain_entity_lock(domain);
+		i_ipmi_domain_entity_lock(domain);
 		if (! finfo->entity)
 		    rv = ENOENT;
 		else
-		    rv = _ipmi_entity_get(finfo->entity);
-		_ipmi_domain_entity_unlock(domain);
+		    rv = i_ipmi_entity_get(finfo->entity);
+		i_ipmi_domain_entity_unlock(domain);
 		if (rv)
 		    continue;
 		destroy_fru_controls(finfo);
 		ipmi_entity_set_oem_info(finfo->entity, NULL, NULL);
-		_ipmi_entity_put(finfo->entity);
+		i_ipmi_entity_put(finfo->entity);
 	    }
 	    /* We always leave FRU 0 around until we destroy the domain. */
 	    if (i != 0) {
@@ -3239,7 +3239,7 @@ static int
 atca_fru_254_get_timestamp_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
     ipmi_fru_t             *fru = rspi->data1;
-    _ipmi_fru_timestamp_cb handler = rspi->data2;
+    i_ipmi_fru_timestamp_cb handler = rspi->data2;
     ipmi_msg_t             *msg = &rspi->msg;
     unsigned char          *data = msg->data;
 
@@ -3274,14 +3274,14 @@ atca_fru_254_get_timestamp_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 static int
 atca_fru_254_get_timestamp(ipmi_fru_t             *fru,
 			   ipmi_domain_t          *domain,
-			   _ipmi_fru_timestamp_cb handler)
+			   i_ipmi_fru_timestamp_cb handler)
 {
     ipmi_addr_t   addr;
     unsigned int  addr_len;
     ipmi_msg_t    msg;
     unsigned char data[5];
 
-    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+    i_ipmi_fru_get_addr(fru, &addr, &addr_len);
 
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
@@ -3305,7 +3305,7 @@ static int
 atca_fru_254_prepare_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
     ipmi_fru_t          *fru = rspi->data1;
-    _ipmi_fru_op_cb     handler = rspi->data2;
+    i_ipmi_fru_op_cb     handler = rspi->data2;
     ipmi_msg_t          *msg = &rspi->msg;
     unsigned char       *data = msg->data;
     atca_fru_254_info_t *info;
@@ -3332,7 +3332,7 @@ atca_fru_254_prepare_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	handler(fru, domain, EINVAL);
     }
 
-    info = _ipmi_fru_get_setup_data(fru);
+    info = i_ipmi_fru_get_setup_data(fru);
     info->lock_id = ipmi_get_uint16(data+2);
 
     handler(fru, domain, 0);
@@ -3342,17 +3342,17 @@ atca_fru_254_prepare_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-atca_fru_254_prepare_write(ipmi_fru_t      *fru,
-			   ipmi_domain_t   *domain,
-			   uint32_t        timestamp,
-			   _ipmi_fru_op_cb done)
+atca_fru_254_prepare_write(ipmi_fru_t       *fru,
+			   ipmi_domain_t    *domain,
+			   uint32_t         timestamp,
+			   i_ipmi_fru_op_cb done)
 {
     ipmi_addr_t   addr;
     unsigned int  addr_len;
     ipmi_msg_t    msg;
     unsigned char data[5];
 
-    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+    i_ipmi_fru_get_addr(fru, &addr, &addr_len);
 
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
@@ -3376,7 +3376,7 @@ static int
 atca_fru_254_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
     ipmi_fru_t      *fru = rspi->data1;
-    _ipmi_fru_op_cb handler = rspi->data2;
+    i_ipmi_fru_op_cb handler = rspi->data2;
     ipmi_msg_t      *msg = &rspi->msg;
     unsigned char   *data = msg->data;
 
@@ -3409,11 +3409,11 @@ atca_fru_254_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-atca_fru_254_write(ipmi_fru_t      *fru,
-		   ipmi_domain_t   *domain,
-		   unsigned char   *idata,
-		   unsigned int    idata_len,
-		   _ipmi_fru_op_cb done)
+atca_fru_254_write(ipmi_fru_t       *fru,
+		   ipmi_domain_t    *domain,
+		   unsigned char    *idata,
+		   unsigned int     idata_len,
+		   i_ipmi_fru_op_cb done)
 {
     ipmi_addr_t         addr;
     unsigned int        addr_len;
@@ -3426,9 +3426,9 @@ atca_fru_254_write(ipmi_fru_t      *fru,
     if ((idata_len + 3) > sizeof(data))
 	return E2BIG;
 
-    info = _ipmi_fru_get_setup_data(fru);
+    info = i_ipmi_fru_get_setup_data(fru);
 
-    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+    i_ipmi_fru_get_addr(fru, &addr, &addr_len);
 
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_WRITE;
@@ -3451,7 +3451,7 @@ static int
 atca_fru_254_complete_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
     ipmi_fru_t      *fru = rspi->data1;
-    _ipmi_fru_op_cb handler = rspi->data2;
+    i_ipmi_fru_op_cb handler = rspi->data2;
     ipmi_msg_t      *msg = &rspi->msg;
     unsigned char   *data = msg->data;
 
@@ -3485,11 +3485,11 @@ atca_fru_254_complete_write_done(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-atca_fru_254_complete_write(ipmi_fru_t      *fru,
-			    ipmi_domain_t   *domain,
-			    int             err,
-			    uint32_t        timestamp,
-			    _ipmi_fru_op_cb done)
+atca_fru_254_complete_write(ipmi_fru_t       *fru,
+			    ipmi_domain_t    *domain,
+			    int              err,
+			    uint32_t         timestamp,
+			    i_ipmi_fru_op_cb done)
 {
     ipmi_addr_t         addr;
     unsigned int        addr_len;
@@ -3498,9 +3498,9 @@ atca_fru_254_complete_write(ipmi_fru_t      *fru,
     atca_fru_254_info_t *info;
 
 
-    _ipmi_fru_get_addr(fru, &addr, &addr_len);
+    i_ipmi_fru_get_addr(fru, &addr, &addr_len);
 
-    info = _ipmi_fru_get_setup_data(fru);
+    info = i_ipmi_fru_get_setup_data(fru);
 
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_FRU_INVENTORY_DEVICE_LOCK_CONTROL;
@@ -3542,9 +3542,9 @@ atca_fru_254_setup(ipmi_domain_t *domain,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
-    _ipmi_fru_set_setup_data(fru, info, atca_fru_254_info_cleanup);
+    i_ipmi_fru_set_setup_data(fru, info, atca_fru_254_info_cleanup);
 
-    rv = _ipmi_fru_set_get_timestamp_handler(fru, atca_fru_254_get_timestamp);
+    rv = i_ipmi_fru_set_get_timestamp_handler(fru, atca_fru_254_get_timestamp);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_fru_254_setup): "
@@ -3553,7 +3553,7 @@ atca_fru_254_setup(ipmi_domain_t *domain,
 	return rv;
     }
 
-    rv = _ipmi_fru_set_prepare_write_handler(fru, atca_fru_254_prepare_write);
+    rv = i_ipmi_fru_set_prepare_write_handler(fru, atca_fru_254_prepare_write);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_fru_254_setup): "
@@ -3562,7 +3562,7 @@ atca_fru_254_setup(ipmi_domain_t *domain,
 	return rv;
     }
 
-    rv = _ipmi_fru_set_write_handler(fru, atca_fru_254_write);
+    rv = i_ipmi_fru_set_write_handler(fru, atca_fru_254_write);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_fru_254_setup): "
@@ -3571,7 +3571,7 @@ atca_fru_254_setup(ipmi_domain_t *domain,
 	return rv;
     }
 
-    rv = _ipmi_fru_set_complete_write_handler(fru,
+    rv = i_ipmi_fru_set_complete_write_handler(fru,
 					      atca_fru_254_complete_write);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -3642,18 +3642,18 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	ipmi_entity_set_lun(info->shelf_entity, 0);
 	ipmi_entity_set_private_bus_id(info->shelf_entity, 0);
 	ipmi_entity_set_channel(info->shelf_entity, 0);
-	_ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
+	i_ipmi_entity_set_fru(info->shelf_entity, info->shelf_fru);
 	info->shelf_fru = NULL;
     }
 
     /* Make sure the shelf entity is reported first. */
     if (info->shelf_entity) {
-	_ipmi_entity_add_ref(info->shelf_entity);
-	_ipmi_entity_put(info->shelf_entity);
-	_ipmi_entity_get(info->shelf_entity);
+	i_ipmi_entity_add_ref(info->shelf_entity);
+	i_ipmi_entity_put(info->shelf_entity);
+	i_ipmi_entity_get(info->shelf_entity);
 
 	/* We added FRU info, report it. */
-	_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED, 0);
+	i_ipmi_entity_call_fru_handlers(info->shelf_entity, IPMI_ADDED, 0);
     }
 
     add_power_feed_control(info);
@@ -3682,9 +3682,9 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	b->site_num = info->addresses[i].site_num;
 	ipmi_mc_id_set_invalid(&b->mcid);
 
-	_ipmi_domain_mc_lock(domain);
-	_ipmi_start_mc_scan_one(domain, 0, b->ipmb_address, b->ipmb_address);
-	_ipmi_domain_mc_unlock(domain);
+	i_ipmi_domain_mc_lock(domain);
+	i_ipmi_start_mc_scan_one(domain, 0, b->ipmb_address, b->ipmb_address);
+	i_ipmi_domain_mc_unlock(domain);
 
 	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
 	if (rv) {
@@ -3752,7 +3752,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
 	}
-	_ipmi_entity_add_ref(b->frus[0]->entity);
+	i_ipmi_entity_add_ref(b->frus[0]->entity);
 
 	/* Store the site_num as the physical slot number */
 	ipmi_entity_set_physical_slot_num(b->frus[0]->entity, 1,
@@ -3765,20 +3765,20 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 			 "%soem_atca.c(setup_from_shelf_fru): "
 			 "Could not add child ipmc: %x",
 			 DOMAIN_NAME(domain), rv);
-		_ipmi_entity_put(b->frus[0]->entity);
+		i_ipmi_entity_put(b->frus[0]->entity);
 		goto out;
 	    }
 	}
 
 	add_address_control(info, b);
-	_ipmi_entity_put(b->frus[0]->entity);
+	i_ipmi_entity_put(b->frus[0]->entity);
     }
 
     info->setup = 1;
 
  out:
     if (info->shelf_entity)
-	_ipmi_entity_put(info->shelf_entity);
+	i_ipmi_entity_put(info->shelf_entity);
 }
 
 static int
@@ -4124,32 +4124,32 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 
     /* Remove all the parent/child relationships we previously
        defined. */
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     if (info->shelf_entity)
-	_ipmi_entity_get(info->shelf_entity);
-    _ipmi_domain_entity_unlock(domain);
+	i_ipmi_entity_get(info->shelf_entity);
+    i_ipmi_domain_entity_unlock(domain);
     if (info->ipmcs) {
 	unsigned int i;
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
 	    if (b->frus[0]->entity) {
-		_ipmi_entity_get(b->frus[0]->entity);
+		i_ipmi_entity_get(b->frus[0]->entity);
 		destroy_address_control(b);
 		destroy_fru_controls(b->frus[0]);
 
 		if (info->shelf_entity)
 		    ipmi_entity_remove_child(info->shelf_entity,
 					     b->frus[0]->entity);
-		_ipmi_entity_remove_ref(b->frus[0]->entity);
-		_ipmi_entity_put(b->frus[0]->entity);
+		i_ipmi_entity_remove_ref(b->frus[0]->entity);
+		i_ipmi_entity_put(b->frus[0]->entity);
 	    }
 	}
     }
     destroy_power_feed_control(info);
     if (info->shelf_entity) {
-	_ipmi_entity_remove_ref(info->shelf_entity);
-	_ipmi_entity_put(info->shelf_entity);
+	i_ipmi_entity_remove_ref(info->shelf_entity);
+	i_ipmi_entity_put(info->shelf_entity);
     }
 }
 
@@ -4227,11 +4227,11 @@ atca_event_handler(ipmi_domain_t *domain,
 		addr.slave_addr = data[4];
 		addr.lun = 0;
 
-		mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr,
+		mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr,
 					   sizeof(addr));
 		if (mc) {
 		    ipmi_mc_reread_sensors(mc, NULL, NULL);
-		    _ipmi_mc_put(mc);
+		    i_ipmi_mc_put(mc);
 		}
 	    }
 	} else {
@@ -4247,11 +4247,11 @@ atca_event_handler(ipmi_domain_t *domain,
     case IPMI_SENSOR_TYPE_VERSION_CHANGE:
 	if ((data[10] != 1) && (data[10] != 7))
 	    break;
-	mc = _ipmi_event_get_generating_mc(domain, NULL, event);
+	mc = i_ipmi_event_get_generating_mc(domain, NULL, event);
 	if (!mc)
 	    break;
 	ipmi_mc_reread_sensors(mc, NULL, NULL);
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
 	/* FIXME - what about FRU data? */
 	break;
     }
@@ -4313,7 +4313,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 
     saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     saddr.channel = IPMI_BMC_CHANNEL;
-    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
+    mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
     if (!mc) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(set_up_atca_domain): "
@@ -4327,7 +4327,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 	    /* info->shelf_address_only_on_bmc = 1; */
 	    /* info->allow_sel_on_any = 1; */
 	}
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
     }
 
     info->startup_done = done;
@@ -4351,7 +4351,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     }
 
     if (info->atca_version >= 0x22) {
-	rv = _ipmi_domain_fru_set_special_setup(domain, atca_fru_254_setup,
+	rv = i_ipmi_domain_fru_set_special_setup(domain, atca_fru_254_setup,
 						NULL);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
@@ -4535,7 +4535,7 @@ set_up_atca_blade(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 
     saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     saddr.channel = IPMI_BMC_CHANNEL;
-    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
+    mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
     if (!mc) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(set_up_atca_blade): "
@@ -4545,7 +4545,7 @@ set_up_atca_blade(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     } else {
 	info->mfg_id = ipmi_mc_manufacturer_id(mc);
 	info->prod_id = ipmi_mc_product_id(mc);
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
     }
 
     info->startup_done = done;
@@ -4887,11 +4887,11 @@ check_if_local(ipmi_domain_t *domain, int conn, void *cb_data)
 {
     ipmi_con_t *con;
 
-    if (_ipmi_domain_get_connection(domain, conn, &con))
+    if (i_ipmi_domain_get_connection(domain, conn, &con))
 	return;
     if (con->con_type && (strcmp(con->con_type, "smi") == 0))
 	/* It's a system management interface. */
-	_ipmi_option_set_local_only_if_not_specified(domain, 1);
+	i_ipmi_option_set_local_only_if_not_specified(domain, 1);
 }
 
 static int
@@ -4946,15 +4946,15 @@ check_if_atca(ipmi_domain_t              *domain,
 				  check_if_atca_cb, done, cb_data);
 }
 
-int _ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
-			       unsigned int        mr_rec_num,
-			       unsigned int        manufacturer_id,
-			       unsigned char       record_type_id,
-			       unsigned char       *mr_data,
-			       unsigned int        mr_data_len,
-			       void                *cb_data,
-			       const char          **name,
-			       ipmi_fru_node_t     **node);
+int i_ipmi_atca_fru_get_mr_root(ipmi_fru_t          *fru,
+				unsigned int        mr_rec_num,
+				unsigned int        manufacturer_id,
+				unsigned char       record_type_id,
+				unsigned char       *mr_data,
+				unsigned int        mr_data_len,
+				void                *cb_data,
+				const char          **name,
+				ipmi_fru_node_t     **node);
 
 static int atca_initialized;
 
@@ -4970,10 +4970,10 @@ ipmi_oem_atca_init(void)
     if (rv)
         return rv;
 
-    rv = _ipmi_fru_register_multi_record_oem_handler(PICMG_MFG_ID,
-						     0xc0,
-						     _ipmi_atca_fru_get_mr_root,
-						     NULL);
+    rv = i_ipmi_fru_register_multi_record_oem_handler(PICMG_MFG_ID,
+						0xc0,
+						i_ipmi_atca_fru_get_mr_root,
+						NULL);
     if (rv) {
 	ipmi_deregister_domain_oem_check(check_if_atca, NULL);
         return rv;
@@ -4991,7 +4991,7 @@ ipmi_oem_atca_shutdown(void)
 {
     if (atca_initialized) {
 	ipmi_deregister_domain_oem_check(check_if_atca, NULL);
-	_ipmi_fru_deregister_multi_record_oem_handler(PICMG_MFG_ID, 0xc0);
+	i_ipmi_fru_deregister_multi_record_oem_handler(PICMG_MFG_ID, 0xc0);
 	atca_initialized = 0;
     }
 }

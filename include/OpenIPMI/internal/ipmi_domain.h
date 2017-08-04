@@ -44,8 +44,8 @@
 #include <OpenIPMI/internal/ipmi_control.h>
 
 /* Handle validation and usecounts on domains. */
-int _ipmi_domain_get(ipmi_domain_t *domain);
-void _ipmi_domain_put(ipmi_domain_t *domain);
+int i_ipmi_domain_get(ipmi_domain_t *domain);
+void i_ipmi_domain_put(ipmi_domain_t *domain);
 
 /* Return the OS handler used by the mc. */
 os_handler_t *ipmi_domain_get_os_hnd(ipmi_domain_t *domain);
@@ -66,40 +66,40 @@ int ipmi_create_mc(ipmi_domain_t     *domain,
 		   unsigned int      addr_len,
 		   ipmi_mc_t         **new_mc);
 
-int _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
+int i_ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
 /* Attempt to find the MC, and if it doesn't exist create it and
    return it. */
-int _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
-					  unsigned int  channel,
-					  unsigned int  slave_addr,
-					  ipmi_mc_t     **mc);
+int i_ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
+					   unsigned int  channel,
+					   unsigned int  slave_addr,
+					   ipmi_mc_t     **mc);
 
 /* Find the MC with the given IPMI address, or return NULL if not
    found. */
-ipmi_mc_t *_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
-				 const ipmi_addr_t *addr,
-				 unsigned int      addr_len);
+ipmi_mc_t *i_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
+				  const ipmi_addr_t *addr,
+				  unsigned int      addr_len);
 
 /* Return the SDRs for the given MC, or the main set of SDRs if the MC
    is NULL. */
-void _ipmi_get_sdr_sensors(ipmi_domain_t *domain,
-			   ipmi_mc_t     *mc,
-			   ipmi_sensor_t ***sensors,
-			   unsigned int  *count);
+void i_ipmi_get_sdr_sensors(ipmi_domain_t *domain,
+			    ipmi_mc_t     *mc,
+			    ipmi_sensor_t ***sensors,
+			    unsigned int  *count);
 
 /* Set the SDRs for the given MC, or the main set of SDRs if the MC is
    NULL. */
-void _ipmi_set_sdr_sensors(ipmi_domain_t *domain,
-			   ipmi_mc_t     *mc,
-			   ipmi_sensor_t **sensors,
-			   unsigned int  count);
+void i_ipmi_set_sdr_sensors(ipmi_domain_t *domain,
+			    ipmi_mc_t     *mc,
+			    ipmi_sensor_t **sensors,
+			    unsigned int  count);
 
 /* Returns/set the SDRs entity info for the given MC, or the main set
    of SDRs if the MC is NULL. */
-void *_ipmi_get_sdr_entities(ipmi_domain_t *domain,
+void *i_ipmi_get_sdr_entities(ipmi_domain_t *domain,
 			     ipmi_mc_t     *mc);
-void _ipmi_set_sdr_entities(ipmi_domain_t *domain,
+void i_ipmi_set_sdr_entities(ipmi_domain_t *domain,
 			    ipmi_mc_t     *mc,
 			    void          *entities);
 
@@ -123,7 +123,7 @@ void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
      IPMI_FUNC_DEPRECATED;
 
 /* Call any OEM handlers for the given MC. */
-int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
+int i_ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
 /* Scan a system interface address for an MC. */
 int ipmi_start_si_scan(ipmi_domain_t *domain,
@@ -148,7 +148,7 @@ int ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
 void ipmi_handle_unhandled_event(ipmi_domain_t *domain, ipmi_event_t *event);
 
 /* Handle a new event from something, usually from an SEL. */
-void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
+void i_ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 				       ipmi_mc_t     *mc,
 				       ipmi_event_t  *event);
 
@@ -210,57 +210,57 @@ void ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
 
 /* Used to implement special handling of FRU data for locking,
    timestamps, etc. */
-typedef int (*_ipmi_domain_fru_setup_cb)(ipmi_domain_t *domain,
+typedef int (*i_ipmi_domain_fru_setup_cb)(ipmi_domain_t *domain,
+					  unsigned char is_logical,
+					  unsigned char device_address,
+					  unsigned char device_id,
+					  unsigned char lun,
+					  unsigned char private_bus,
+					  unsigned char channel,
+					  ipmi_fru_t    *fru,
+					  void          *cb_data);
+int i_ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
+					i_ipmi_domain_fru_setup_cb setup,
+					void                      *cb_data);
+int i_ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
 					 unsigned char is_logical,
 					 unsigned char device_address,
 					 unsigned char device_id,
 					 unsigned char lun,
 					 unsigned char private_bus,
 					 unsigned char channel,
-					 ipmi_fru_t    *fru,
-					 void          *cb_data);
-int _ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
-				       _ipmi_domain_fru_setup_cb setup,
-				       void                      *cb_data);
-int _ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
-					unsigned char is_logical,
-					unsigned char device_address,
-					unsigned char device_id,
-					unsigned char lun,
-					unsigned char private_bus,
-					unsigned char channel,
-					ipmi_fru_t    *fru);
+					 ipmi_fru_t    *fru);
 
 /* Set the domain type for a domain. */
 void ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype);
 
 /* OEM code can call this to do its own bus scanning to speed things
-   up. Must be holding the domain MC lock (_ipmi_domain_mc_lock()) to
+   up. Must be holding the domain MC lock (i_ipmi_domain_mc_lock()) to
    call this. */
-void _ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan,
-			     int first, int last);
+void i_ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan,
+			      int first, int last);
 
 /* Can be used to generate unique numbers for a domain. */
 unsigned int ipmi_domain_get_unique_num(ipmi_domain_t *domain);
 
 /* Initialize the domain code, called only once at init time. */
-int _ipmi_domain_init(void);
+int i_ipmi_domain_init(void);
 
 /* Clean up the global domain memory. */
-void _ipmi_domain_shutdown(void);
+void i_ipmi_domain_shutdown(void);
 
 /* Is the domain currently in shutdown? */
-int _ipmi_domain_in_shutdown(ipmi_domain_t *domain);
+int i_ipmi_domain_in_shutdown(ipmi_domain_t *domain);
 
 /* Used as a refcount to know when the domain is completely
    operational. */
-void _ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name);
-void _ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name);
+void i_ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name);
+void i_ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name);
 
 /* Return connections for a domain. */
-int _ipmi_domain_get_connection(ipmi_domain_t *domain,
-				int           con_num,
-				ipmi_con_t    **con);
+int i_ipmi_domain_get_connection(ipmi_domain_t *domain,
+				 int           con_num,
+				 ipmi_con_t    **con);
 
 /* Option settings. */
 int ipmi_option_SDRs(ipmi_domain_t *domain);
@@ -274,8 +274,8 @@ int ipmi_option_activate_if_possible(ipmi_domain_t *domain);
 int ipmi_option_local_only(ipmi_domain_t *domain);
 int ipmi_option_use_cache(ipmi_domain_t *domain);
 
-void _ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain,
-						  int           val);
+void i_ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain,
+						   int           val);
 
 /*
  * Domain attribute handling.
@@ -352,7 +352,7 @@ ipmi_domain_remove_new_sensor_handler(ipmi_domain_t        *domain,
                                       void                *cb_data);
 
 int
-_call_new_sensor_handlers(ipmi_domain_t *domain,
+i_call_new_sensor_handlers(ipmi_domain_t *domain,
                          ipmi_sensor_t *sensor);
 
 

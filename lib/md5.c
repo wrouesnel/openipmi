@@ -211,7 +211,7 @@ static ipmi_rmcpp_integrity_t md5_integ =
 #endif /* HAVE_OPENSSL */
 
 int
-_ipmi_md5_init(void)
+i_ipmi_md5_init(void)
 {
 #ifdef HAVE_OPENSSL
     int rv = 0;
@@ -226,7 +226,7 @@ _ipmi_md5_init(void)
 }
 
 void
-_ipmi_md5_shutdown(void)
+i_ipmi_md5_shutdown(void)
 {
 #ifdef HAVE_OPENSSL
     ipmi_rmcpp_register_integrity

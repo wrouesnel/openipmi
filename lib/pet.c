@@ -1139,13 +1139,13 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     si.channel = connection;
     si.lun = 0;
 
-    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &si, sizeof(si));
+    mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &si, sizeof(si));
     if ((!mc)  && (connection == 0)) {
 	/* If the specific connection doesn't exist and the connection
 	   is 0, use the BMC channel. */
 	si.channel = IPMI_BMC_CHANNEL;
-	mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &si,
-				   sizeof(si));
+	mc = i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &si,
+				    sizeof(si));
     }
 
     if (!mc)
@@ -1162,7 +1162,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
 			    done,
 			    cb_data,
 			    ret_pet);
-    _ipmi_mc_put(mc);
+    i_ipmi_mc_put(mc);
 
     return rv;
 }

@@ -3589,7 +3589,7 @@ static ipmi_payload_t ipmi_sol_payload =
   sol_handle_recv_async, NULL /*sol_get_msg_tag*/ };
 
 int
-_ipmi_sol_init()
+i_ipmi_sol_init()
 {
     int rv;
 
@@ -3609,7 +3609,7 @@ _ipmi_sol_init()
 }
 
 void
-_ipmi_sol_shutdown(void)
+i_ipmi_sol_shutdown(void)
 {
     if (conn_lock) {
 	ipmi_destroy_lock(conn_lock);

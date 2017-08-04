@@ -83,7 +83,7 @@ static const struct valstr spd_voltage_vals[] =
     {0x00, NULL},
 };
 
-typedef struct _SPDInfo
+typedef struct i_SPDInfo
 {
     int           size;
     const char    *memoryType;
@@ -98,7 +98,7 @@ typedef struct _SPDInfo
 static void
 fru_node_destroy (ipmi_fru_node_t *node)
 {
-    ipmi_fru_t *fru = _ipmi_fru_node_get_data(node);
+    ipmi_fru_t *fru = i_ipmi_fru_node_get_data(node);
     ipmi_fru_deref(fru);
 }
 
@@ -144,8 +144,8 @@ fru_node_get_field (ipmi_fru_node_t           *pnode,
 		    unsigned int              *data_len,
 		    ipmi_fru_node_t           **sub_node)
 {
-    ipmi_fru_t *fru = _ipmi_fru_node_get_data(pnode);
-    SPD_info_t *spd_info = _ipmi_fru_get_rec_data(fru);
+    ipmi_fru_t *fru = i_ipmi_fru_node_get_data(pnode);
+    SPD_info_t *spd_info = i_ipmi_fru_get_rec_data(fru);
     int        rv;
 
     switch (index) {
@@ -200,12 +200,12 @@ fru_get_root_node (ipmi_fru_t *fru, const char **name, ipmi_fru_node_t **rnode)
     if (name)
 	*name = "SPD FRU";
     if (rnode) {
-	node = _ipmi_fru_node_alloc(fru);
+	node = i_ipmi_fru_node_alloc(fru);
 	if (!node)
 	    return ENOMEM;
-	_ipmi_fru_node_set_data(node, fru);
-	_ipmi_fru_node_set_get_field(node, fru_node_get_field);
-	_ipmi_fru_node_set_destructor(node, fru_node_destroy);
+	i_ipmi_fru_node_set_data(node, fru);
+	i_ipmi_fru_node_set_get_field(node, fru_node_get_field);
+	i_ipmi_fru_node_set_destructor(node, fru_node_destroy);
 	ipmi_fru_ref(fru);
 	*rnode = node;
     }
@@ -215,7 +215,7 @@ fru_get_root_node (ipmi_fru_t *fru, const char **name, ipmi_fru_node_t **rnode)
 static void
 fru_cleanup_recs (ipmi_fru_t *fru)
 {
-    SPD_info_t *spd_info = (SPD_info_t *) _ipmi_fru_get_rec_data (fru);
+    SPD_info_t *spd_info = (SPD_info_t *) i_ipmi_fru_get_rec_data (fru);
 
     if (!spd_info)
 	return;
@@ -282,7 +282,7 @@ loadInfo(SPD_info_t *spd_info, unsigned char *spd_data)
 static int
 process_fru_spd_info(ipmi_fru_t *fru)
 {
-    unsigned char *data = _ipmi_fru_get_data_ptr(fru);
+    unsigned char *data = i_ipmi_fru_get_data_ptr(fru);
     SPD_info_t    *spd_info;
 
     /*
@@ -293,14 +293,14 @@ process_fru_spd_info(ipmi_fru_t *fru)
      *  to start with
      */
     if (data[0] == 0x80) {
-	_ipmi_fru_set_op_get_root_node(fru, fru_get_root_node);
+	i_ipmi_fru_set_op_get_root_node(fru, fru_get_root_node);
 	spd_info = ipmi_mem_alloc(sizeof (*spd_info));
 	if (!spd_info)
 	    return ENOMEM;
 	memset(spd_info, 0, sizeof(*spd_info));
 	loadInfo(spd_info, data);
-	_ipmi_fru_set_rec_data(fru, spd_info);
-	_ipmi_fru_set_op_cleanup_recs(fru, fru_cleanup_recs);
+	i_ipmi_fru_set_rec_data(fru, spd_info);
+	i_ipmi_fru_set_op_cleanup_recs(fru, fru_cleanup_recs);
 	return 0;
     }
     return EBADF;
@@ -315,24 +315,24 @@ process_fru_spd_info(ipmi_fru_t *fru)
 static int spd_initialized;
 
 int
-_ipmi_fru_spd_decoder_init (void)
+i_ipmi_fru_spd_decoder_init (void)
 {
     int rv;
 
     if (spd_initialized)
 	return 0;
 
-    rv = _ipmi_fru_register_decoder (process_fru_spd_info);
+    rv = i_ipmi_fru_register_decoder (process_fru_spd_info);
     if (!rv)
 	spd_initialized = 1;
     return rv;
 }
 
 void
-_ipmi_fru_spd_decoder_shutdown (void)
+i_ipmi_fru_spd_decoder_shutdown (void)
 {
     if (!spd_initialized)
 	return;
-    _ipmi_fru_deregister_decoder (process_fru_spd_info);
+    i_ipmi_fru_deregister_decoder (process_fru_spd_info);
     spd_initialized = 0;
 }

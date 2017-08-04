@@ -243,9 +243,9 @@ ipmi_event_delete(ipmi_event_t   *event,
 }
 
 ipmi_mc_t *
-_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
-			      ipmi_mc_t          *sel_mc,
-			      const ipmi_event_t *event)
+i_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
+			       ipmi_mc_t          *sel_mc,
+			       const ipmi_event_t *event)
 {
     ipmi_ipmb_addr_t    addr;
     const unsigned char *data;
@@ -279,7 +279,7 @@ _ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
     }
     addr.lun = 0;
 
-    return _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    return i_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
 }
 
 ipmi_sensor_id_t
@@ -297,7 +297,7 @@ ipmi_event_get_generating_sensor_id(ipmi_domain_t       *domain,
 	/* It's not a standard IPMI event. */
 	goto out_invalid;
 
-    mc = _ipmi_event_get_generating_mc(domain, sel_mc, event);
+    mc = i_ipmi_event_get_generating_mc(domain, sel_mc, event);
     if (!mc)
 	goto out_invalid;
 
@@ -306,7 +306,7 @@ ipmi_event_get_generating_sensor_id(ipmi_domain_t       *domain,
     id.lun = data[5] & 0x3;
     id.sensor_num = data[8];
 
-    _ipmi_mc_put(mc);
+    i_ipmi_mc_put(mc);
 
     return id;
 

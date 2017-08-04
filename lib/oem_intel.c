@@ -349,8 +349,8 @@ add_tig_alarm_handler(ipmi_mc_t *mc, intel_tig_info_t *info)
             goto out;
     }
 
-    _ipmi_control_put(info->alarm);
-    _ipmi_entity_put(ent);
+    i_ipmi_control_put(info->alarm);
+    i_ipmi_entity_put(ent);
 
 out:
     return;
@@ -376,7 +376,7 @@ tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 		     MC_NAME(mc));
 	} else {
 	    ipmi_control_destroy(info->alarm);
-	    _ipmi_entity_put(ent);
+	    i_ipmi_entity_put(ent);
 	}
     }
     ipmi_mem_free(info);

@@ -464,6 +464,6 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
     }
 }
 
-ipmi_payload_t _ipmi_payload =
+ipmi_payload_t i_ipmi_payload =
 { ipmi_format_msg, ipmi_get_recv_seq, ipmi_handle_recv,
   ipmi_handle_recv_async };

@@ -73,9 +73,9 @@ char *ipmi_strndup(const char *str, int n);
    turned off. */
 void ipmi_debug_malloc_cleanup(void);
 
-extern int __ipmi_debug_malloc;
-#define DEBUG_MALLOC	(__ipmi_debug_malloc)
-#define DEBUG_MALLOC_ENABLE() __ipmi_debug_malloc = 1
+extern int i__ipmi_debug_malloc;
+#define DEBUG_MALLOC	(i__ipmi_debug_malloc)
+#define DEBUG_MALLOC_ENABLE() i__ipmi_debug_malloc = 1
 
 /* Used by the malloc code to generate logs.  If not set, logs will go
    nowhere. */

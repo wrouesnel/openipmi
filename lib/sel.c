@@ -351,40 +351,40 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 	}
     } else {
 	ipmi_domain_stat_register(domain, "sel_good_scans",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_good_scans);
 	ipmi_domain_stat_register(domain, "sel_scan_lost_reservation",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_scan_lost_reservation);
 	ipmi_domain_stat_register(domain, "sel_fail_scan_lost_reservation",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_fail_scan_lost_reservation);
 	ipmi_domain_stat_register(domain, "sel_received_events",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_received_events);
 	ipmi_domain_stat_register(domain, "sel_fetch_errors",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_fetch_errors);
 	ipmi_domain_stat_register(domain, "sel_good_clears",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_good_clears);
 	ipmi_domain_stat_register(domain, "sel_clear_lost_reservation",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_clear_lost_reservation);
 	ipmi_domain_stat_register(domain, "sel_clear_errors",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_clear_errors);
 	ipmi_domain_stat_register(domain, "sel_good_deletes",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_good_deletes);
 	ipmi_domain_stat_register(domain, "sel_delete_lost_reservation",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_delete_lost_reservation);
 	ipmi_domain_stat_register(domain, "sel_fail_delete_lost_reservation",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_fail_delete_lost_reservation);
 	ipmi_domain_stat_register(domain, "sel_delete_errors",
-				  _ipmi_mc_name(mc),
+				  i_ipmi_mc_name(mc),
 				  &sel->sel_delete_errors);
 	*new_sel = sel;
     }

@@ -311,7 +311,7 @@ struct ipmi_domain_s
     ipmi_domain_close_done_cb close_done;
     void                      *close_done_cb_data;
 
-    _ipmi_domain_fru_setup_cb fru_setup_cb;
+    i_ipmi_domain_fru_setup_cb fru_setup_cb;
     void                      *fru_setup_cb_data;
 
     /* Anonymous attributes for the domain. */
@@ -444,7 +444,7 @@ deliver_rsp(ipmi_domain_t                *domain,
  *
  **********************************************************************/
 void
-_ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name)
+i_ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name)
 {
     ipmi_lock(domain->domain_lock);
     domain->fully_up_count++;
@@ -452,7 +452,7 @@ _ipmi_get_domain_fully_up(ipmi_domain_t *domain, const char *name)
 }
 
 void
-_ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name)
+i_ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name)
 {
     ipmi_lock(domain->domain_lock);
     domain->fully_up_count--;
@@ -464,7 +464,7 @@ _ipmi_put_domain_fully_up(ipmi_domain_t *domain, const char *name)
 	domain_fully_up_cb_data = domain->domain_fully_up_cb_data;
 	domain->domain_fully_up = NULL;
 	ipmi_unlock(domain->domain_lock);
-	_ipmi_entities_report_mcs_scanned(domain->entities);
+	i_ipmi_entities_report_mcs_scanned(domain->entities);
 	if (domain_fully_up)
 	    domain_fully_up(domain, domain_fully_up_cb_data);
 	return;
@@ -531,7 +531,7 @@ call_domain_change(ipmi_domain_t      *domain,
 }
 
 int
-_ipmi_domain_in_shutdown(ipmi_domain_t *domain)
+i_ipmi_domain_in_shutdown(ipmi_domain_t *domain)
 {
     return domain->in_shutdown;
 }
@@ -539,7 +539,7 @@ _ipmi_domain_in_shutdown(ipmi_domain_t *domain)
 static void
 iterate_cleanup_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    _ipmi_cleanup_mc(mc);
+    i_ipmi_cleanup_mc(mc);
 }
 
 void
@@ -645,23 +645,23 @@ cleanup_domain(ipmi_domain_t *domain)
     /* Delete the sensors from the main SDR repository. */
     if (domain->sensors_in_main_sdr) {
 	for (i=0; i<domain->sensors_in_main_sdr_count; i++) {
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 	    if (domain->sensors_in_main_sdr[i]) {
 		ipmi_sensor_t *sensor = domain->sensors_in_main_sdr[i];
 		ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
 		ipmi_mc_t     *mc = ipmi_sensor_get_mc(sensor);
-		_ipmi_entity_get(entity);
-		_ipmi_sensor_get(sensor);
-		_ipmi_domain_entity_unlock(domain);
-		_ipmi_domain_mc_lock(domain);
-		_ipmi_mc_get(mc);
-		_ipmi_domain_mc_unlock(domain);
+		i_ipmi_entity_get(entity);
+		i_ipmi_sensor_get(sensor);
+		i_ipmi_domain_entity_unlock(domain);
+		i_ipmi_domain_mc_lock(domain);
+		i_ipmi_mc_get(mc);
+		i_ipmi_domain_mc_unlock(domain);
 		ipmi_sensor_destroy(domain->sensors_in_main_sdr[i]);
-		_ipmi_sensor_put(sensor);
-		_ipmi_mc_put(mc);
-		_ipmi_entity_put(entity);
+		i_ipmi_sensor_put(sensor);
+		i_ipmi_mc_put(mc);
+		i_ipmi_entity_put(entity);
 	    } else
-		_ipmi_domain_entity_unlock(domain);
+		i_ipmi_domain_entity_unlock(domain);
 	}
 	ipmi_mem_free(domain->sensors_in_main_sdr);
     }
@@ -711,10 +711,10 @@ cleanup_domain(ipmi_domain_t *domain)
     ipmi_domain_iterate_mcs(domain, iterate_cleanup_mc, NULL);
 
     if (domain->si_mc) {
-	_ipmi_mc_get(domain->si_mc);
-	_ipmi_mc_release(domain->si_mc);
-	_ipmi_cleanup_mc(domain->si_mc);
-	_ipmi_mc_put(domain->si_mc);
+	i_ipmi_mc_get(domain->si_mc);
+	i_ipmi_mc_release(domain->si_mc);
+	i_ipmi_cleanup_mc(domain->si_mc);
+	i_ipmi_mc_put(domain->si_mc);
     }
 
     /* Destroy the main SDR repository, if it exists. */
@@ -1087,17 +1087,17 @@ setup_domain(const char         *name,
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = IPMI_BMC_CHANNEL;
     si.lun = 0;
-    rv = _ipmi_create_mc(domain,
-			 (ipmi_addr_t *) &si, sizeof(si),
-			 &domain->si_mc);
+    rv = i_ipmi_create_mc(domain,
+			  (ipmi_addr_t *) &si, sizeof(si),
+			  &domain->si_mc);
     if (rv)
 	goto out_err;
-    _ipmi_mc_use(domain->si_mc);
+    i_ipmi_mc_use(domain->si_mc);
 
     /* Force this one to always be active, so anything that uses it is
        always ready to go.  Since it represents the connection, it
        really can't ever go inactive. */
-    _ipmi_mc_force_active(domain->si_mc, 1);
+    i_ipmi_mc_force_active(domain->si_mc, 1);
 
     rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);
     if (rv)
@@ -1190,7 +1190,7 @@ setup_domain(const char         *name,
 
  out_err:
     if (domain->si_mc)
-	_ipmi_mc_put(domain->si_mc);
+	i_ipmi_mc_put(domain->si_mc);
 
     if (rv) {
 	for (i=0; i<num_con; i++) {
@@ -1213,7 +1213,7 @@ setup_domain(const char         *name,
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_domain_lock(const ipmi_domain_t *domain)
+i__ipmi_check_domain_lock(const ipmi_domain_t *domain)
 {
     if (!domain)
 	return;
@@ -1228,7 +1228,7 @@ __ipmi_check_domain_lock(const ipmi_domain_t *domain)
 #endif
 
 void
-_ipmi_domain_entity_lock(ipmi_domain_t *domain)
+i_ipmi_domain_entity_lock(ipmi_domain_t *domain)
 {
 
     CHECK_DOMAIN_LOCK(domain);
@@ -1236,14 +1236,14 @@ _ipmi_domain_entity_lock(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_domain_entity_unlock(ipmi_domain_t *domain)
+i_ipmi_domain_entity_unlock(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     ipmi_unlock(domain->entities_lock);
 }
 
 void
-_ipmi_domain_mc_lock(ipmi_domain_t *domain)
+i_ipmi_domain_mc_lock(ipmi_domain_t *domain)
 {
 
     CHECK_DOMAIN_LOCK(domain);
@@ -1251,7 +1251,7 @@ _ipmi_domain_mc_lock(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_domain_mc_unlock(ipmi_domain_t *domain)
+i_ipmi_domain_mc_unlock(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     ipmi_unlock(domain->mc_lock);
@@ -1305,7 +1305,7 @@ remove_known_domain(ipmi_domain_t *domain)
 /* Validate that the domain and it's underlying connection is valid
    and increment its use count. */
 int
-_ipmi_domain_get(ipmi_domain_t *domain)
+i_ipmi_domain_get(ipmi_domain_t *domain)
 {
     unsigned int  hash = ipmi_hash_pointer(domain) % DOMAIN_HASH_SIZE;
     ipmi_domain_t *c;
@@ -1343,7 +1343,7 @@ _ipmi_domain_get(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_domain_put(ipmi_domain_t *domain)
+i_ipmi_domain_put(ipmi_domain_t *domain)
 {
     ipmi_lock(domains_lock);
 
@@ -1585,23 +1585,23 @@ cancel_domain_oem_check(ipmi_domain_t *domain)
  * FRU data handling
  *
  **********************************************************************/
-int _ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
-				       _ipmi_domain_fru_setup_cb setup,
-				       void                      *cb_data)
+int i_ipmi_domain_fru_set_special_setup(ipmi_domain_t             *domain,
+					i_ipmi_domain_fru_setup_cb setup,
+					void                      *cb_data)
 {
     domain->fru_setup_cb = setup;
     domain->fru_setup_cb_data = cb_data;
     return 0;
 }
 
-int _ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
-					unsigned char is_logical,
-					unsigned char device_address,
-					unsigned char device_id,
-					unsigned char lun,
-					unsigned char private_bus,
-					unsigned char channel,
-					ipmi_fru_t    *fru)
+int i_ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
+					 unsigned char is_logical,
+					 unsigned char device_address,
+					 unsigned char device_id,
+					 unsigned char lun,
+					 unsigned char private_bus,
+					 unsigned char channel,
+					 ipmi_fru_t    *fru)
 {
     if (!domain->fru_setup_cb)
 	return 0;
@@ -1619,9 +1619,9 @@ int _ipmi_domain_fru_call_special_setup(ipmi_domain_t *domain,
 #define HASH_SLAVE_ADDR(x) (((x) >> 1) & (IPMB_HASH-1))
 
 ipmi_mc_t *
-_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
-		      const ipmi_addr_t *addr,
-		      unsigned int      addr_len)
+i_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
+		       const ipmi_addr_t *addr,
+		       unsigned int      addr_len)
 {
     ipmi_mc_t     *mc = NULL;
 
@@ -1662,7 +1662,7 @@ _ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
 
     /* If we cannot get the MC, it has been destroyed. */
     if (mc) {
-	if (_ipmi_mc_get(mc))
+	if (i_ipmi_mc_get(mc))
 	    mc = NULL;
     }
     ipmi_unlock(domain->mc_lock);
@@ -1898,7 +1898,7 @@ ipmi_domain_remove_mc_updated_handler_cl(ipmi_domain_t            *domain,
 /* Must be called with the domain MC lock held.  It will be
    released. */
 int
-_ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
+i_ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
     char         addr_data[sizeof(ipmi_addr_t)];
     ipmi_addr_t  *addr = (ipmi_addr_t *) addr_data;
@@ -1941,10 +1941,10 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 }
 
 int
-_ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
-				      unsigned int  channel,
-				      unsigned int  slave_addr,
-				      ipmi_mc_t     **new_mc)
+i_ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
+				       unsigned int  channel,
+				       unsigned int  slave_addr,
+				       ipmi_mc_t     **new_mc)
 {
     ipmi_mc_t   *mc;
     char        addr_data[sizeof(ipmi_addr_t)];
@@ -1967,14 +1967,14 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 	addr_size = sizeof(*iaddr);
     }
 
-    mc = _ipmi_find_mc_by_addr(domain, addr, addr_size);
+    mc = i_ipmi_find_mc_by_addr(domain, addr, addr_size);
     if (mc) {
 	if (new_mc)
 	    *new_mc = mc;
 	return 0;
     }
 
-    rv = _ipmi_create_mc(domain, addr, addr_size, &mc);
+    rv = i_ipmi_create_mc(domain, addr, addr_size, &mc);
     if (rv)
 	return rv;
 
@@ -1986,8 +1986,8 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
-	_ipmi_cleanup_mc(mc);
-	_ipmi_mc_put(mc);
+	i_ipmi_cleanup_mc(mc);
+	i_ipmi_mc_put(mc);
 	return rv;
     }
     call_mc_upd_handlers(domain, mc, IPMI_ADDED);
@@ -2041,7 +2041,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     long          conn_seq = (long) orspi->data4;
     int           rv;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	/* No need to report these to the upper layer, they have
 	   already been delivered in the cleanup code. */
@@ -2070,7 +2070,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	ipmi_free_msg_item(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -2084,7 +2084,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 
     rspi = nmsg->rsp_item;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv) {
 	/* Note that since we don't track SI messages, we must report
 	   them to the upper layer through this interface when the
@@ -2102,7 +2102,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 	ipmi_free_msg_item(rspi);
     ipmi_mem_free(nmsg);
 
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -2510,7 +2510,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_unlock(info->lock);
 
     domain = info->domain;
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "%sdomain.c(rescan_timeout_handler): "
@@ -2550,7 +2550,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
 	goto next_addr_nolock;
 
  out:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 }
 
 static int
@@ -2567,7 +2567,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     int                 mc_changed = 0;
 
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "%sdomain.c(devid_bc_rsp_handler): "
@@ -2576,16 +2576,16 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
-    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
+    mc = i_ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (msg->data[0] == 0) {
 	if (mc && ipmi_mc_is_active(mc)
-	    && !_ipmi_mc_device_data_compares(mc, msg))
+	    && !i_ipmi_mc_device_data_compares(mc, msg))
 	{
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
-	    _ipmi_cleanup_mc(mc);
-	    _ipmi_mc_put(mc);
-	    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
+	    i_ipmi_cleanup_mc(mc);
+	    i_ipmi_mc_put(mc);
+	    mc = i_ipmi_find_mc_by_addr(domain, addr, addr_len);
 	}
 	if (!mc || !ipmi_mc_is_active(mc)) {
 	    /* It doesn't already exist, or it's inactive, so add
@@ -2593,7 +2593,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	    if (!mc) {
 		/* If it's not there, then add it.  If it's just not
                    active, reuse the same data. */
-		rv = _ipmi_create_mc(domain, addr, addr_len, &mc);
+		rv = i_ipmi_create_mc(domain, addr, addr_len, &mc);
 		if (rv) {
 		    /* Out of memory, just give up for now. */
 		    if (info->done_handler)
@@ -2607,15 +2607,15 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
 		rv = add_mc_to_domain(domain, mc);
 		if (rv) {
-		    _ipmi_cleanup_mc(mc);
+		    i_ipmi_cleanup_mc(mc);
 		    goto next_addr;
 		}
 
-		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		rv = i_ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv) {
 		    /* If we couldn't handle the device data, just clean
 		       it up */
-		    _ipmi_cleanup_mc(mc);
+		    i_ipmi_cleanup_mc(mc);
 		    goto out;
 		}
 
@@ -2625,10 +2625,10 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		   check. */
 
 		mc_added = 1;
-		_ipmi_mc_handle_new(mc);
+		i_ipmi_mc_handle_new(mc);
 	    } else {
 		/* It was inactive, activate it. */
-		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		rv = i_ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv == EAGAIN) {
 		    /* The MC is in use, so we cannot handle it right
 		       now.  We wait until the MC is released to do
@@ -2637,15 +2637,15 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		} else if (rv) {
 		    /* If we couldn't handle the device data, just clean
 		       it up. */
-		    _ipmi_cleanup_mc(mc);
+		    i_ipmi_cleanup_mc(mc);
 		} else {
 		    mc_changed = 1;
-		    _ipmi_mc_handle_new(mc);
+		    i_ipmi_mc_handle_new(mc);
 		}
 	    }
 	} else {
 	    /* Periodically check the MCs. */
-	    _ipmi_mc_check_mc(mc);
+	    i_ipmi_mc_check_mc(mc);
 	}
     } else if (mc && ipmi_mc_is_active(mc)) {
 	/* Didn't get a response.  Maybe the MC has gone away? */
@@ -2656,7 +2656,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	    || (info->missed_responses >= MAX_MC_MISSED_RESPONSES))
 	{
-	    _ipmi_cleanup_mc(mc);
+	    i_ipmi_cleanup_mc(mc);
 	    goto next_addr;
 	} else {
 	    /* Try again after a second. */
@@ -2717,8 +2717,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
  out:
     if (mc)
-	_ipmi_mc_put(mc);
-    _ipmi_domain_put(domain);
+	i_ipmi_mc_put(mc);
+    i_ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -2880,7 +2880,7 @@ mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
     ipmi_lock(domain->mc_lock);
     domain->scanning_bus_count--;
     if (domain->scanning_bus_count) {
-	_ipmi_put_domain_fully_up(domain, "mc_scan_done");
+	i_ipmi_put_domain_fully_up(domain, "mc_scan_done");
 	ipmi_unlock(domain->mc_lock);
 	return;
     }
@@ -2891,21 +2891,21 @@ mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
     if (bus_scan_handler)
 	bus_scan_handler(domain, 0,
 			 bus_scan_handler_cb_data);
-    _ipmi_put_domain_fully_up(domain, "mc_scan_done");
+    i_ipmi_put_domain_fully_up(domain, "mc_scan_done");
 }
 
 void
-_ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan, int first, int last)
+i_ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan, int first, int last)
 {
     int rv;
 
-    _ipmi_get_domain_fully_up(domain, "_ipmi_start_mc_scan_one");
+    i_ipmi_get_domain_fully_up(domain, "i_ipmi_start_mc_scan_one");
     domain->scanning_bus_count++;
     rv = ipmi_start_ipmb_mc_scan(domain, chan, first, last,
 				 mc_scan_done, NULL);
     if (rv) {
 	domain->scanning_bus_count--;
-	_ipmi_put_domain_fully_up(domain, "_ipmi_start_mc_scan_one");
+	i_ipmi_put_domain_fully_up(domain, "i_ipmi_start_mc_scan_one");
     }
 }
 
@@ -2941,16 +2941,16 @@ ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain)
 	    for (j=0; j<MAX_IPMI_USED_CHANNELS; j++) {
 		if (domain->chan[j].medium != IPMI_CHANNEL_MEDIUM_IPMB)
 		    continue;
-		_ipmi_start_mc_scan_one(domain, j,
-					domain->con_ipmb_addr[i][j],
-					domain->con_ipmb_addr[i][j]);
+		i_ipmi_start_mc_scan_one(domain, j,
+					 domain->con_ipmb_addr[i][j],
+					 domain->con_ipmb_addr[i][j]);
 		break;
 	    }
 	    if (j == MAX_IPMI_USED_CHANNELS) {
 		/* Didn't find a valid channel, just scan 0 to get one. */
-		_ipmi_start_mc_scan_one(domain, 0,
-					domain->con_ipmb_addr[i][0],
-					domain->con_ipmb_addr[i][0]);
+		i_ipmi_start_mc_scan_one(domain, 0,
+					 domain->con_ipmb_addr[i][0],
+					 domain->con_ipmb_addr[i][0]);
 	    }
 	}
 	ipmi_unlock(domain->mc_lock);
@@ -2966,14 +2966,14 @@ ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain)
        system address for that connection. */
     for (i=0; i<MAX_CONS; i++) {
 	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
-	    _ipmi_get_domain_fully_up(domain,
-				      "ipmi_domain_start_full_ipmb_scan");
+	    i_ipmi_get_domain_fully_up(domain,
+				       "ipmi_domain_start_full_ipmb_scan");
 	    domain->scanning_bus_count++;
 	    rv = ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
 	    if (rv) {
 		domain->scanning_bus_count--;
-		_ipmi_put_domain_fully_up(domain,
-					  "ipmi_domain_start_full_ipmb_scan");
+		i_ipmi_put_domain_fully_up(domain,
+					   "ipmi_domain_start_full_ipmb_scan");
 	    }
 	}
     }
@@ -2984,8 +2984,8 @@ ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain)
 	    if (!got_bmc) {
 		got_bmc = 1;
 		/* Always scan the normal BMC first. */
-		_ipmi_start_mc_scan_one(domain, i, 0x20, 0x20);
-		_ipmi_start_mc_scan_one(domain, i, 0x10, 0xf0);
+		i_ipmi_start_mc_scan_one(domain, i, 0x20, 0x20);
+		i_ipmi_start_mc_scan_one(domain, i, 0x10, 0xf0);
 	    } else {
 		/* This is unfortunately complicated.  We only want
 		   the BMC to show up in one place, so we only scan
@@ -3005,12 +3005,12 @@ ipmi_domain_start_full_ipmb_scan(ipmi_domain_t *domain)
 		}
 		qsort(ignore_addr, num_ignore, sizeof(int), cmp_int);
 		for (j=0; j<num_ignore; j++) {
-		    _ipmi_start_mc_scan_one(domain, i,
-					    cstart, ignore_addr[j]-1);
+		    i_ipmi_start_mc_scan_one(domain, i,
+					     cstart, ignore_addr[j]-1);
 		    cstart = ignore_addr[j]+1;
 		}
 		if (cstart <= 0xf0)
-		    _ipmi_start_mc_scan_one(domain, i, cstart, 0xf0);
+		    i_ipmi_start_mc_scan_one(domain, i, cstart, 0xf0);
 	    }
 	}
     }
@@ -3031,7 +3031,7 @@ refetch_sdr_handler(ipmi_sdr_info_t *sdrs,
 			      domain->entities, domain->main_sdrs);
 	ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
 	ipmi_detect_ents_presence_changes(domain->entities, 1);
-	_ipmi_entities_report_sdrs_read(domain->entities);
+	i_ipmi_entities_report_sdrs_read(domain->entities);
     }
 }
 
@@ -3059,7 +3059,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	goto out;
 
@@ -3089,7 +3089,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 				&timeout,
 				domain_audit,
 				info);
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
  out:
     ipmi_unlock(info->lock);
 }
@@ -3116,9 +3116,9 @@ event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 }
 
 void
-_ipmi_domain_system_event_handler(ipmi_domain_t *domain,
-				  ipmi_mc_t     *ev_mc,
-				  ipmi_event_t  *event)
+i_ipmi_domain_system_event_handler(ipmi_domain_t *domain,
+				   ipmi_mc_t     *ev_mc,
+				   ipmi_event_t  *event)
 {
     int          rv = 1;
     ipmi_time_t  timestamp = ipmi_event_get_timestamp(event);
@@ -3149,7 +3149,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     /* Let the OEM handler for the MC that the message came from have
        a go at it first.  Note that OEM handlers must look at the time
        themselves. */
-    if (_ipmi_mc_check_sel_oem_event_handler(ev_mc, event))
+    if (i_ipmi_mc_check_sel_oem_event_handler(ev_mc, event))
 	return;
 
     /* It's a system event record from an MC, and the timestamp is
@@ -3161,14 +3161,14 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	event_sensor_info_t info;
 	const unsigned char *data;
 
-	mc = _ipmi_event_get_generating_mc(domain, ev_mc, event);
+	mc = i_ipmi_event_get_generating_mc(domain, ev_mc, event);
 	if (!mc)
 	    goto out;
 
 	/* Let the OEM handler for the MC that sent the event try
 	   next. */
-	if (_ipmi_mc_check_oem_event_handler(mc, event)) {
-	    _ipmi_mc_put(mc);
+	if (i_ipmi_mc_check_oem_event_handler(mc, event)) {
+	    i_ipmi_mc_put(mc);
 	    return;
 	}
 
@@ -3184,7 +3184,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	if (!rv)
 	    rv = info.err;
 
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
     }
 
  out:
@@ -3205,7 +3205,7 @@ ll_event_handler(ipmi_con_t        *ipmi,
     int                          rv;
     ipmi_system_interface_addr_t si;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	return;
 
@@ -3228,7 +3228,7 @@ ll_event_handler(ipmi_con_t        *ipmi,
     }
 
     /* It came from an MC, so find the MC. */
-    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
+    mc = i_ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (!mc)
 	goto out;
     ipmi_event_set_mcid(event, ipmi_mc_convert_to_id(mc));
@@ -3239,16 +3239,16 @@ ll_event_handler(ipmi_con_t        *ipmi,
 	ipmi_mc_reread_sel(mc, NULL, NULL);
     } else {
 	/* Add it to the mc's event log. */
-	rv = _ipmi_mc_sel_event_add(mc, event);
+	rv = i_ipmi_mc_sel_event_add(mc, event);
 
 	if (rv != EEXIST)
 	    /* Call the handler on it if it wasn't already in there. */
-	    _ipmi_domain_system_event_handler(domain, mc, event);
+	    i_ipmi_domain_system_event_handler(domain, mc, event);
     }
-    _ipmi_mc_put(mc);
+    i_ipmi_mc_put(mc);
 
  out:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 }
 
 typedef struct call_event_handler_s
@@ -3621,7 +3621,7 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 	/* We were the last one, call the main handler. */
 
 	/* First validate the domain. */
-	rv = _ipmi_domain_get(info->domain);
+	rv = i_ipmi_domain_get(info->domain);
 	if (rv)
 	    info->domain = NULL;
 
@@ -3629,7 +3629,7 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 	    info->handler(info->domain, info->err, info->cb_data);
 	ipmi_destroy_lock(info->lock);
 	if (info->domain)
-	    _ipmi_domain_put(info->domain);
+	    i_ipmi_domain_put(info->domain);
 	ipmi_mem_free(info);
     }
 }
@@ -3737,13 +3737,13 @@ ipmi_domain_get_entities(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_get_sdr_sensors(ipmi_domain_t *domain,
-		      ipmi_mc_t     *mc,
-		      ipmi_sensor_t ***sensors,
-		      unsigned int  *count)
+i_ipmi_get_sdr_sensors(ipmi_domain_t *domain,
+		       ipmi_mc_t     *mc,
+		       ipmi_sensor_t ***sensors,
+		       unsigned int  *count)
 {
     if (mc) {
-	_ipmi_mc_get_sdr_sensors(mc, sensors, count);
+	i_ipmi_mc_get_sdr_sensors(mc, sensors, count);
     } else {
 	CHECK_DOMAIN_LOCK(domain);
 	*sensors = domain->sensors_in_main_sdr;
@@ -3752,13 +3752,13 @@ _ipmi_get_sdr_sensors(ipmi_domain_t *domain,
 }
 
 void
-_ipmi_set_sdr_sensors(ipmi_domain_t *domain,
-		     ipmi_mc_t     *mc,
-		     ipmi_sensor_t **sensors,
-		     unsigned int  count)
+i_ipmi_set_sdr_sensors(ipmi_domain_t *domain,
+		       ipmi_mc_t     *mc,
+		       ipmi_sensor_t **sensors,
+		       unsigned int  count)
 {
     if (mc) {
-	_ipmi_mc_set_sdr_sensors(mc, sensors, count);
+	i_ipmi_mc_set_sdr_sensors(mc, sensors, count);
     } else {
 	CHECK_DOMAIN_LOCK(domain);
 	domain->sensors_in_main_sdr = sensors;
@@ -3767,11 +3767,11 @@ _ipmi_set_sdr_sensors(ipmi_domain_t *domain,
 }
 
 void *
-_ipmi_get_sdr_entities(ipmi_domain_t *domain,
-		       ipmi_mc_t     *mc)
+i_ipmi_get_sdr_entities(ipmi_domain_t *domain,
+			ipmi_mc_t     *mc)
 {
     if (mc) {
-	return _ipmi_mc_get_sdr_entities(mc);
+	return i_ipmi_mc_get_sdr_entities(mc);
     } else {
 	CHECK_DOMAIN_LOCK(domain);
 	return domain->entities_in_main_sdr;
@@ -3779,12 +3779,12 @@ _ipmi_get_sdr_entities(ipmi_domain_t *domain,
 }
 
 void
-_ipmi_set_sdr_entities(ipmi_domain_t *domain,
-		       ipmi_mc_t     *mc,
-		       void          *entities)
+i_ipmi_set_sdr_entities(ipmi_domain_t *domain,
+			ipmi_mc_t     *mc,
+			void          *entities)
 {
     if (mc) {
-	_ipmi_mc_set_sdr_entities(mc, entities);
+	i_ipmi_mc_set_sdr_entities(mc, entities);
     } else {
 	CHECK_DOMAIN_LOCK(domain);
 	domain->entities_in_main_sdr = entities;
@@ -3862,10 +3862,10 @@ ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
     ipmi_lock(domain->mc_lock);
     for (i=0; i<MAX_CONS; i++) {
 	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
-	if (mc && !_ipmi_mc_get(mc)) {
+	if (mc && !i_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);
 	    handler(domain, mc, cb_data);
-	    _ipmi_mc_put(mc);
+	    i_ipmi_mc_put(mc);
 	    ipmi_lock(domain->mc_lock);
 	}
     }
@@ -3874,10 +3874,10 @@ ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
 
 	for (j=0; j<tab->size; j++) {
 	    ipmi_mc_t *mc = tab->mcs[j];
-	    if (mc && !_ipmi_mc_get(mc)) {
+	    if (mc && !i_ipmi_mc_get(mc)) {
 		ipmi_unlock(domain->mc_lock);
 		handler(domain, mc, cb_data);
-		_ipmi_mc_put(mc);
+		i_ipmi_mc_put(mc);
 		ipmi_lock(domain->mc_lock);
 	    }
 	}
@@ -3901,20 +3901,20 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 
 	for (j=tab->size-1; j>=0; j--) {
 	    ipmi_mc_t *mc = tab->mcs[j];
-	    if (mc && !_ipmi_mc_get(mc)) {
+	    if (mc && !i_ipmi_mc_get(mc)) {
 		ipmi_unlock(domain->mc_lock);
 		handler(domain, mc, cb_data);
-		_ipmi_mc_put(mc);
+		i_ipmi_mc_put(mc);
 		ipmi_lock(domain->mc_lock);
 	    }
 	}
     }
     for (i=MAX_CONS-1; i>=0; i--) {
 	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
-	if (mc && !_ipmi_mc_get(mc)) {
+	if (mc && !i_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);
 	    handler(domain, mc, cb_data);
-	    _ipmi_mc_put(mc);
+	    i_ipmi_mc_put(mc);
 	    ipmi_lock(domain->mc_lock);
 	}
     }
@@ -4035,10 +4035,10 @@ ipmi_domain_pointer_cb(ipmi_domain_id_t   id,
 
     domain = id.domain;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (!rv) {
 	handler(domain, cb_data);
-	_ipmi_domain_put(domain);
+	i_ipmi_domain_put(domain);
     }
 
     return rv;
@@ -4094,7 +4094,7 @@ ipmi_domain_register_oem_handler(unsigned int                 manufacturer_id,
     int               rv;
 
     /* This might be called before initialization, so be 100% sure. */
-    rv = _ipmi_domain_init();
+    rv = i_ipmi_domain_init();
     if (rv)
 	return rv;
 
@@ -4129,7 +4129,7 @@ ipmi_domain_register_oem_handler_range(unsigned int           manufacturer_id,
     int               rv;
 
     /* This might be called before initialization, so be 100% sure. */
-    rv = _ipmi_mc_init();
+    rv = i_ipmi_mc_init();
     if (rv)
 	return rv;
 
@@ -4578,8 +4578,8 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_unlock(domain->domain_lock);
     if (SDRs_read_handler)
 	SDRs_read_handler(domain, 0, SDRs_read_handler_cb_data);
-    _ipmi_entities_report_sdrs_read(domain->entities);
-    _ipmi_put_domain_fully_up(domain, "con_up_complete");
+    i_ipmi_entities_report_sdrs_read(domain->entities);
+    i_ipmi_put_domain_fully_up(domain, "con_up_complete");
 }
 
 static void
@@ -4674,10 +4674,10 @@ get_channels(ipmi_domain_t *domain)
 	cmd_msg.data_len = 1;
 	cmd_data[0] = 0;
 
-	_ipmi_mc_get(domain->si_mc);
+	i_ipmi_mc_get(domain->si_mc);
 	rv = ipmi_mc_send_command(domain->si_mc, 0, &cmd_msg,
 				  chan_info_rsp_handler, (void *) 0);
-	_ipmi_mc_put(domain->si_mc);
+	i_ipmi_mc_put(domain->si_mc);
     } else {
 	ipmi_sdr_t sdr;
 
@@ -4793,9 +4793,9 @@ domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
     msg.data_len = 0;
     msg.data = NULL;
 
-    _ipmi_mc_get(domain->si_mc);
+    i_ipmi_mc_get(domain->si_mc);
     rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_guid, domain);
-    _ipmi_mc_put(domain->si_mc);
+    i_ipmi_mc_put(domain->si_mc);
     if (rv)
 	call_con_fails(domain, rv, 0, 0, 0);
 }
@@ -4811,7 +4811,7 @@ got_dev_id(ipmi_mc_t  *mc,
     if (!mc)
 	return; /* domain went away while processing. */
 
-    rv = _ipmi_mc_get_device_id_data_from_rsp(mc, rsp);
+    rv = i_ipmi_mc_get_device_id_data_from_rsp(mc, rsp);
     if (rv) {
 	/* At least the get device id has to work. */
 	if ((rsp->data[0] == 0) && (rsp->data_len >= 6)) {
@@ -4893,9 +4893,9 @@ domain_send_mc_id(ipmi_domain_t *domain)
     msg.data_len = 0;
     msg.data = NULL;
 
-    _ipmi_mc_get(domain->si_mc);
+    i_ipmi_mc_get(domain->si_mc);
     rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
-    _ipmi_mc_put(domain->si_mc);
+    i_ipmi_mc_put(domain->si_mc);
 
     return rv;
 }
@@ -4929,7 +4929,7 @@ initial_ipmb_addr_cb(ipmi_con_t    *ipmi,
     int           u;
     int           rv;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -4959,7 +4959,7 @@ initial_ipmb_addr_cb(ipmi_con_t    *ipmi,
     }
 
  out_unlock:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 }
 
 static void
@@ -4981,7 +4981,7 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     }
     info->running = 0;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	/* Domain is gone, just give up. */
 	goto out_unlock;
@@ -5017,7 +5017,7 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
 	    domain);
     }
 
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 
  out_unlock:
     ipmi_unlock(info->lock);
@@ -5147,9 +5147,9 @@ ipmi_domain_get_port_info(ipmi_domain_t *domain,
 }
 
 int
-_ipmi_domain_get_connection(ipmi_domain_t *domain,
-			    int           con_num,
-			    ipmi_con_t    **con)
+i_ipmi_domain_get_connection(ipmi_domain_t *domain,
+			     int           con_num,
+			     ipmi_con_t    **con)
 {
     if (con_num >= MAX_CONS)
 	return EINVAL;
@@ -5267,7 +5267,7 @@ ll_addr_changed(ipmi_con_t    *ipmi,
     unsigned char old_addr[MAX_IPMI_USED_CHANNELS];
     unsigned int  i;
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -5362,7 +5362,7 @@ ll_addr_changed(ipmi_con_t    *ipmi,
     }
 
  out_unlock:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 }
 
 static void
@@ -5384,7 +5384,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -5455,7 +5455,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
     }
 
  out_unlock:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
 }
 
 int
@@ -5523,7 +5523,7 @@ ipmi_option_local_only(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain, int val)
+i_ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain, int val)
 {
     if (domain->option_local_only_set)
 	return;
@@ -5606,7 +5606,7 @@ ipmi_open_domain(const char         *name,
 
     call_domain_change(domain, IPMI_ADDED);
 
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
     return rv;
 
  out_err:
@@ -5641,10 +5641,10 @@ iterate_domains(void *cb_data, void *item1, void *item2)
     ipmi_domain_t  *domain = item1;
     int            rv;
     
-    rv = _ipmi_domain_get(domain);
+    rv = i_ipmi_domain_get(domain);
     if (!rv) {
 	info->handler(item1, info->cb_data);
-	_ipmi_domain_put(domain);
+	i_ipmi_domain_put(domain);
     }
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -5698,9 +5698,9 @@ int
 ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
 {
     int rv;
-    _ipmi_mc_get(domain->si_mc);
+    i_ipmi_mc_get(domain->si_mc);
     rv = ipmi_mc_get_guid(domain->si_mc, guid);
-    _ipmi_mc_put(domain->si_mc);
+    i_ipmi_mc_put(domain->si_mc);
     return rv;
 }
 
@@ -5734,7 +5734,7 @@ ipmi_domain_get_event_rcvr(ipmi_domain_t *domain)
 }
 
 const char *
-_ipmi_domain_name(const ipmi_domain_t *domain)
+i_ipmi_domain_name(const ipmi_domain_t *domain)
 {
     return domain->name;
 }
@@ -5848,8 +5848,8 @@ call_new_sensor_handler(void *cb_data, void *item1, void *item2)
 }
 
 int
-_call_new_sensor_handlers(ipmi_domain_t *domain,
-                         ipmi_sensor_t *sensor)
+i_call_new_sensor_handlers(ipmi_domain_t *domain,
+			   ipmi_sensor_t *sensor)
 {
     new_sensor_handler_info_t info;
 
@@ -6339,7 +6339,7 @@ ipmi_domain_stat_iterate(ipmi_domain_t *domain,
  **********************************************************************/
 
 int
-_ipmi_domain_init(void)
+i_ipmi_domain_init(void)
 {
     int rv;
 
@@ -6384,7 +6384,7 @@ _ipmi_domain_init(void)
 }
 
 void
-_ipmi_domain_shutdown(void)
+i_ipmi_domain_shutdown(void)
 {
     domains_initialized = 0;
 
@@ -6637,7 +6637,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
     }
 
  out:
-    _ipmi_domain_put(domain);
+    i_ipmi_domain_put(domain);
     return rv;
 
  out_err:

@@ -407,14 +407,14 @@ static void
 entities_lock(void *cb_data)
 {
     ipmi_domain_t *domain = cb_data;
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
 }
 
 static void
 entities_unlock(void *cb_data)
 {
     ipmi_domain_t *domain = cb_data;
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 }
 
 static int
@@ -422,7 +422,7 @@ iterate_entity_prefunc(void *cb_data, void *item1, void *item2)
 {
     ipmi_entity_t *ent = item1;
 
-    _ipmi_entity_get(ent);
+    i_ipmi_entity_get(ent);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -754,12 +754,12 @@ destroy_entity(void *cb_data, void *item1, void *item2)
     entity_destroy_timer(ent->hot_swap_deact_info);
 
     if (ent->frudev_present) {
-	_ipmi_domain_mc_lock(ent->domain);
-	_ipmi_mc_get(ent->frudev_mc);
-	_ipmi_domain_mc_unlock(ent->domain);
+	i_ipmi_domain_mc_lock(ent->domain);
+	i_ipmi_mc_get(ent->frudev_mc);
+	i_ipmi_domain_mc_unlock(ent->domain);
 	ipmi_mc_remove_active_handler(ent->frudev_mc, entity_mc_active, ent);
-	_ipmi_mc_release(ent->frudev_mc);
-	_ipmi_mc_put(ent->frudev_mc);
+	i_ipmi_mc_release(ent->frudev_mc);
+	i_ipmi_mc_put(ent->frudev_mc);
     }
 
     if (ent->oem_info_cleanup_handler)
@@ -895,13 +895,13 @@ cleanup_entity(ipmi_entity_t *ent)
 
     ent->destroyed = 1;
 
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
 
     /* Tell the user I was destroyed. */
     /* Call the update handler list. */
     call_entity_update_handlers(ent, IPMI_DELETED);
 
-    _ipmi_domain_entity_lock(ent->domain);
+    i_ipmi_domain_entity_lock(ent->domain);
 
     if (ent->destroyed) {
 	/* The entity could have been resurrected, so don't do this
@@ -966,7 +966,7 @@ entity_set_name(ipmi_entity_t *entity)
 }
 
 const char *
-_ipmi_entity_name(const ipmi_entity_t *entity)
+i_ipmi_entity_name(const ipmi_entity_t *entity)
 {
     return entity->name;
 }
@@ -979,7 +979,7 @@ entity_get_name_cb(ipmi_entity_t *entity, void *cb_data)
 }
 
 const char *
-_ipmi_entity_id_name(ipmi_entity_id_t entity_id)
+i_ipmi_entity_id_name(ipmi_entity_id_t entity_id)
 {
     char *name = "";
     ipmi_entity_pointer_cb(entity_id, entity_get_name_cb, &name);
@@ -1038,22 +1038,22 @@ internal_fru_fetch_done(ipmi_entity_t *ent, void *cb_data)
     ent_unlock(ent);
 }
 
-/* Must be called with the _ipmi_domain_entity_lock() held. */
+/* Must be called with the i_ipmi_domain_entity_lock() held. */
 int
-_ipmi_entity_get(ipmi_entity_t *ent)
+i_ipmi_entity_get(ipmi_entity_t *ent)
 {
     ent->usecount++;
     return 0;
 }
 
 void
-_ipmi_entity_put(ipmi_entity_t *ent)
+i_ipmi_entity_put(ipmi_entity_t *ent)
 {
     ipmi_domain_t      *domain = ent->domain;
     int                entity_fru_fetch = 0;
     int                report_fully_up = 0;
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
  retry:
     if (ent->usecount == 1) {
 	if (ent->pending_info_ready) {
@@ -1069,9 +1069,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	if (ent->add_pending) {
 	    ent->add_pending = 0;
 	    ent->changed = 0;
-	    _ipmi_domain_entity_unlock(domain);
+	    i_ipmi_domain_entity_unlock(domain);
 	    call_entity_update_handlers(ent, IPMI_ADDED);
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 
 	    /* Something grabbed the entity while the lock wasn't
 	       held, don't attempt the cleanup. */
@@ -1082,9 +1082,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	/* If the entity has changed, report it to the user. */
 	if (ent->changed) {
 	    ent->changed = 0;
-	    _ipmi_domain_entity_unlock(domain);
+	    i_ipmi_domain_entity_unlock(domain);
 	    call_entity_update_handlers(ent, IPMI_CHANGED);
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 
 	    /* Something grabbed the entity while the lock wasn't
 	       held, don't attempt the cleanup. */
@@ -1093,9 +1093,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	}
 
 	if (ent->presence_possibly_changed) {
-	    _ipmi_domain_entity_unlock(domain);
+	    i_ipmi_domain_entity_unlock(domain);
 	    ipmi_detect_entity_presence_change(ent, 0);
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 
 	    if (ent->usecount != 1)
 		goto out;
@@ -1106,9 +1106,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    ent->present = !ent->present;
 	    present = ent->present;
 	    ent->present_change_count--;
-	    _ipmi_domain_entity_unlock(domain);
+	    i_ipmi_domain_entity_unlock(domain);
 	    call_presence_handlers(ent, present);
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 
             if (ipmi_entity_get_is_fru(ent) && ent->present)
 		entity_fru_fetch = 1;
@@ -1160,9 +1160,9 @@ _ipmi_entity_put(ipmi_entity_t *ent)
     ent_unlock(ent);
 
     if (report_fully_up) {
-	_ipmi_domain_entity_unlock(domain);
+	i_ipmi_domain_entity_unlock(domain);
 	call_fully_up_handlers(ent);
-	_ipmi_domain_entity_lock(domain);
+	i_ipmi_domain_entity_lock(domain);
 	if (ent->usecount != 1)
 	    goto retry;
     }
@@ -1170,11 +1170,11 @@ _ipmi_entity_put(ipmi_entity_t *ent)
     ent->usecount--;
 
  out2:
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 }
 
 int
-_ipmi_entity_add_ref(ipmi_entity_t *ent)
+i_ipmi_entity_add_ref(ipmi_entity_t *ent)
 {
     ent_lock(ent);
     ent->ref_count++;
@@ -1183,7 +1183,7 @@ _ipmi_entity_add_ref(ipmi_entity_t *ent)
 }
 
 int
-_ipmi_entity_remove_ref(ipmi_entity_t *ent)
+i_ipmi_entity_remove_ref(ipmi_entity_t *ent)
 {
     ent_lock(ent);
     ent->ref_count--;
@@ -1300,7 +1300,7 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
 	device_num.channel = 0;
 	device_num.address = 0;
     }
-    _ipmi_domain_entity_lock(ents->domain);
+    i_ipmi_domain_entity_lock(ents->domain);
     rv = entity_find(ents, device_num, entity_id, entity_instance, &ent);
     if (!rv) {
 	if (ent->destroyed)
@@ -1308,11 +1308,11 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
 	else
 	    *found_ent = ent;
     }
-    _ipmi_domain_entity_unlock(ents->domain);
+    i_ipmi_domain_entity_unlock(ents->domain);
     return rv;
 }
 
-/* Must be called with _ipmi_domain_entity_lock(), this will release
+/* Must be called with i_ipmi_domain_entity_lock(), this will release
    the lock.  */
 static int
 entity_add(ipmi_entity_info_t *ents,
@@ -1335,7 +1335,7 @@ entity_add(ipmi_entity_info_t *ents,
 	    ent->destroyed = 0;
 	    ent->add_pending = 1;
 	}
-	_ipmi_domain_entity_unlock(ents->domain);
+	i_ipmi_domain_entity_unlock(ents->domain);
 	if (sdr_gen_output != NULL) {
 	    ent->sdr_gen_output = sdr_gen_output;
 	    ent->sdr_gen_cb_data = sdr_gen_cb_data;
@@ -1472,7 +1472,7 @@ entity_add(ipmi_entity_info_t *ents,
     if (! locked_list_add_nolock(ents->entities, ent, NULL))
 	goto out_err;
 
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
 
     /* Report the add when the entity is put. */
     ent->add_pending = 1;
@@ -1483,7 +1483,7 @@ entity_add(ipmi_entity_info_t *ents,
     return 0;
 
  out_err:
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
     if (ent->hot_swap_act_info)
 	entity_destroy_timer(ent->hot_swap_act_info);
     if (ent->hot_swap_deact_info)
@@ -1561,7 +1561,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 	device_num.address = 0;
     }
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
 
     /* This will release the lock. */
     rv = entity_add(ents, device_num, entity_id, entity_instance,
@@ -1604,7 +1604,7 @@ ipmi_entity_add_child(ipmi_entity_t       *ent,
     CHECK_ENTITY_LOCK(ent);
     CHECK_ENTITY_LOCK(child);
 
-    _ipmi_domain_entity_lock(ent->domain);
+    i_ipmi_domain_entity_lock(ent->domain);
 
     entry1 = locked_list_alloc_entry();
     if (!entry1) {
@@ -1623,12 +1623,12 @@ ipmi_entity_add_child(ipmi_entity_t       *ent,
     ent->changed = 1;
     child->changed = 1;
 
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
 
     return 0;
 
  out_unlock:
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
     return rv;
 }
 
@@ -1664,7 +1664,7 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
     CHECK_ENTITY_LOCK(ent);
     CHECK_ENTITY_LOCK(child);
 
-    _ipmi_domain_entity_lock(ent->domain);
+    i_ipmi_domain_entity_lock(ent->domain);
 
     if (! locked_list_remove_nolock(ent->child_entities, child, NULL))
 	rv = EINVAL;
@@ -1672,7 +1672,7 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 
     ent->presence_possibly_changed = 1;
 
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
 
     if (!rv) {
 	ent->changed = 1;
@@ -1696,7 +1696,7 @@ iterate_child_handler(void *cb_data, void *item1, void *item2)
     ipmi_entity_t         *ent = item1;
 
     info->handler(info->ent, item1, info->cb_data);
-    _ipmi_entity_put(ent);
+    i_ipmi_entity_put(ent);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -1725,7 +1725,7 @@ iterate_parent_handler(void *cb_data, void *item1, void *item2)
     ipmi_entity_t         *ent = item1;
 
     info->handler(info->ent, item1, info->cb_data);
-    _ipmi_entity_put(ent);
+    i_ipmi_entity_put(ent);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -1879,26 +1879,26 @@ presence_changed(ipmi_entity_t *ent, int present)
 		ent->fru = NULL;
 		ipmi_fru_destroy_internal(fru, NULL, NULL);
 
-		_ipmi_entity_call_fru_handlers(ent, IPMI_DELETED, 0);
+		i_ipmi_entity_call_fru_handlers(ent, IPMI_DELETED, 0);
 	    }
 	}
 
 	/* Subtle stuff, we only report presence if no one else is
 	   using the entity.  If someone else is, we save it for
 	   later. */
-	_ipmi_domain_entity_lock(domain);
+	i_ipmi_domain_entity_lock(domain);
 	if (ent->usecount == 1) {
 	    ent->present = !ent->present;
-	    _ipmi_domain_entity_unlock(domain);
+	    i_ipmi_domain_entity_unlock(domain);
 	    call_presence_handlers(ent, present);
-	    _ipmi_domain_entity_lock(domain);
+	    i_ipmi_domain_entity_lock(domain);
 	    while ((ent->usecount == 1) && (ent->present_change_count)) {
 		ent->present = !ent->present;
 		present = ent->present;
 		ent->present_change_count--;
-		_ipmi_domain_entity_unlock(domain);
+		i_ipmi_domain_entity_unlock(domain);
 		call_presence_handlers(ent, present);
-		_ipmi_domain_entity_lock(domain);
+		i_ipmi_domain_entity_lock(domain);
 	    }
 	} else {
 	    ent->present_change_count++;
@@ -1923,7 +1923,7 @@ presence_changed(ipmi_entity_t *ent, int present)
 	    ent_unlock(ent);
 	}
 
-	_ipmi_domain_entity_unlock(domain);
+	i_ipmi_domain_entity_unlock(domain);
 
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
@@ -2015,7 +2015,7 @@ detect_cleanup(ent_active_detect_t *info, ipmi_entity_t *ent,
 	ent->in_presence_check = 0;
 	ent_unlock(ent);
     }
-    _ipmi_put_domain_fully_up(domain, "detect_cleanup");
+    i_ipmi_put_domain_fully_up(domain, "detect_cleanup");
 }
 
 static void
@@ -2024,7 +2024,7 @@ presence_finalize(ipmi_entity_t *ent, const char *source)
     ent_lock(ent);
     ent->in_presence_check = 0;
     ent_unlock(ent);
-    _ipmi_put_domain_fully_up(ent->domain, source);
+    i_ipmi_put_domain_fully_up(ent->domain, source);
 }
 
 static void
@@ -2100,12 +2100,12 @@ try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
 
     /* Send a message to the FRU device and see if we can get some
        data. */
-    _ipmi_domain_mc_lock(ent->domain);
-    _ipmi_mc_get(ent->frudev_mc);
-    _ipmi_domain_mc_unlock(ent->domain);
+    i_ipmi_domain_mc_lock(ent->domain);
+    i_ipmi_mc_get(ent->frudev_mc);
+    i_ipmi_domain_mc_unlock(ent->domain);
     rv = ipmi_mc_send_command(ent->frudev_mc, ent->info.lun, &msg,
 			      detect_frudev, info);
-    _ipmi_mc_put(ent->frudev_mc);
+    i_ipmi_mc_put(ent->frudev_mc);
     if (rv)
 	detect_done(ent, info);
     else
@@ -2462,11 +2462,11 @@ states_read(ipmi_sensor_t *sensor,
     int           rv;
 
     if (err) {
-	_ipmi_domain_entity_lock(ent->domain);
-	_ipmi_entity_get(ent);
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_lock(ent->domain);
+	i_ipmi_entity_get(ent);
+	i_ipmi_domain_entity_unlock(ent->domain);
 	detect_no_presence_sensor_presence(ent);
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2500,11 +2500,11 @@ states_bit_read(ipmi_sensor_t *sensor,
     ipmi_entity_t *ent = cb_data;
 
     if (err) {
-	_ipmi_domain_entity_lock(ent->domain);
-	_ipmi_entity_get(ent);
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_lock(ent->domain);
+	i_ipmi_entity_get(ent);
+	i_ipmi_domain_entity_unlock(ent->domain);
 	detect_no_presence_sensor_presence(ent);
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
 	return;
     }
 
@@ -2555,7 +2555,7 @@ ent_detect_presence_nolock(ipmi_entity_t *ent, void *cb_data)
 	ent_lock(ent);
     }
 
-    _ipmi_get_domain_fully_up(ent->domain, "ent_detect_presence");
+    i_ipmi_get_domain_fully_up(ent->domain, "ent_detect_presence");
     if (ent->detect_presence) {
 	ent_unlock(ent);
 	rv = ent->detect_presence(ent, ent->detect_presence_data);
@@ -2619,10 +2619,10 @@ entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
     ipmi_entity_t *ent = cb_data;
     int           rv;
 
-    _ipmi_domain_entity_lock(ent->domain);
-    rv = _ipmi_entity_get(ent);
+    i_ipmi_domain_entity_lock(ent->domain);
+    rv = i_ipmi_entity_get(ent);
     if (rv) {
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_unlock(ent->domain);
 	return;
     }
 
@@ -2636,16 +2636,16 @@ entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 	    ent_detect_info_t info;
 
 	    ent_unlock(ent);
-	    _ipmi_domain_entity_unlock(ent->domain);
+	    i_ipmi_domain_entity_unlock(ent->domain);
 	    info.force = 1;
 	    ent_detect_presence(ent, &info);
 	    goto do_put;
 	}
     }
     ent_unlock(ent);
-    _ipmi_domain_entity_unlock(ent->domain);
+    i_ipmi_domain_entity_unlock(ent->domain);
  do_put:
-    _ipmi_entity_put(ent);
+    i_ipmi_entity_put(ent);
 }
 
 /* Must be called with the entity lock held.  May release and reclaim it. */
@@ -2861,7 +2861,7 @@ report_sdrs_read_check(ipmi_entity_t *ent, void *cb_data)
 }
 
 void
-_ipmi_entities_report_sdrs_read(ipmi_entity_info_t *ents)
+i_ipmi_entities_report_sdrs_read(ipmi_entity_info_t *ents)
 {
     ipmi_entities_iterate_entities(ents, report_sdrs_read_check, NULL);
 }
@@ -2875,7 +2875,7 @@ report_mcs_scanned_check(ipmi_entity_t *ent, void *cb_data)
 }
 
 void
-_ipmi_entities_report_mcs_scanned(ipmi_entity_info_t *ents)
+i_ipmi_entities_report_mcs_scanned(ipmi_entity_info_t *ents)
 {
     ipmi_entities_iterate_entities(ents, report_mcs_scanned_check, NULL);
 }
@@ -2952,20 +2952,20 @@ call_sensor_handler(void *cb_data, void *item1, void *item2)
 }
 
 void
-_ipmi_entity_call_sensor_handlers(ipmi_entity_t *ent, ipmi_sensor_t *sensor, 
+i_ipmi_entity_call_sensor_handlers(ipmi_entity_t *ent, ipmi_sensor_t *sensor, 
 				  enum ipmi_update_e op)
 {
     sensor_handler_t info;
 
     /* If we are reporting things, make sure the entity they are attached
        to is already reported. */
-    _ipmi_domain_entity_lock(ent->domain);
+    i_ipmi_domain_entity_lock(ent->domain);
     if (ent->add_pending) {
 	ent->add_pending = 0;
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_unlock(ent->domain);
 	call_entity_update_handlers(ent, IPMI_ADDED);
     } else {
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_unlock(ent->domain);
     }
 
     info.op = op;
@@ -3040,7 +3040,7 @@ call_control_handler(void *cb_data, void *item1, void *item2)
 }
 
 void
-_ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
+i_ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
 				   ipmi_control_t     *control, 
 				   enum ipmi_update_e op)
 {
@@ -3049,13 +3049,13 @@ _ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
 
     /* If we are reporting things, make sure the entity they are attached
        to is already reported. */
-    _ipmi_domain_entity_lock(ent->domain);
+    i_ipmi_domain_entity_lock(ent->domain);
     if (ent->add_pending) {
 	ent->add_pending = 0;
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_unlock(ent->domain);
 	call_entity_update_handlers(ent, IPMI_ADDED);
     } else {
-	_ipmi_domain_entity_unlock(ent->domain);
+	i_ipmi_domain_entity_unlock(ent->domain);
     }
 
     info.op = op;
@@ -3391,14 +3391,14 @@ iterate_sensor_prefunc(void *cb_data, void *item1, void *item2)
     if (!mc)
 	goto out_err;
     domain = ipmi_mc_get_domain(mc);
-    _ipmi_domain_mc_lock(domain);
-    rv = _ipmi_mc_get(mc);
-    _ipmi_domain_mc_unlock(domain);
+    i_ipmi_domain_mc_lock(domain);
+    rv = i_ipmi_mc_get(mc);
+    i_ipmi_domain_mc_unlock(domain);
     if (rv)
 	goto out_err;
-    rv = _ipmi_sensor_get(sensor);
+    rv = i_ipmi_sensor_get(sensor);
     if (rv) {
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
 	goto out_err;
     }
     info->got_failed = 0;
@@ -3419,8 +3419,8 @@ iterate_sensor_handler(void *cb_data, void *item1, void *item2)
     if (info->got_failed)
 	goto out;
     info->handler(info->ent, item1, info->cb_data);
-    _ipmi_sensor_put(sensor);
-    _ipmi_mc_put(mc);
+    i_ipmi_sensor_put(sensor);
+    i_ipmi_mc_put(mc);
  out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -3458,14 +3458,14 @@ iterate_control_prefunc(void *cb_data, void *item1, void *item2)
 
     if (!mc)
 	goto out_err;
-    _ipmi_domain_mc_lock(domain);
-    rv = _ipmi_mc_get(mc);
-    _ipmi_domain_mc_unlock(domain);
+    i_ipmi_domain_mc_lock(domain);
+    rv = i_ipmi_mc_get(mc);
+    i_ipmi_domain_mc_unlock(domain);
     if (rv)
 	goto out_err;
-    rv = _ipmi_control_get(control);
+    rv = i_ipmi_control_get(control);
     if (rv) {
-	_ipmi_mc_put(mc);
+	i_ipmi_mc_put(mc);
 	goto out_err;
     }
     info->got_failed = 0;
@@ -3486,8 +3486,8 @@ iterate_control_handler(void *cb_data, void *item1, void *item2)
     if (info->got_failed)
 	goto out;
     info->handler(info->ent, item1, info->cb_data);
-    _ipmi_control_put(control);
-    _ipmi_mc_put(mc);
+    i_ipmi_control_put(control);
+    i_ipmi_mc_put(mc);
  out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -4005,7 +4005,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	    continue;
 
 	if (infos->dlrs[i]->entity_id) {
-	    _ipmi_domain_entity_lock(ents->domain);
+	    i_ipmi_domain_entity_lock(ents->domain);
 	    rv = entity_add(ents, infos->dlrs[i]->device_num,
 			    infos->dlrs[i]->entity_id,
 			    infos->dlrs[i]->entity_instance,
@@ -4056,7 +4056,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		if (cent1->entity_id == 0)
 		    continue;
 		for (k=cent1->entity_instance; k<=cent2->entity_instance; k++){
-		    _ipmi_domain_entity_lock(ents->domain);
+		    i_ipmi_domain_entity_lock(ents->domain);
 		    rv = entity_add(ents, cent1->device_num,
 				    cent1->entity_id, k,
 				    NULL, NULL, &child);
@@ -4064,7 +4064,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 			goto out_err;
 		    rv = add_child_ent_to_found(found, child);
 		    if (rv) {
-			_ipmi_entity_put(child);
+			i_ipmi_entity_put(child);
 			goto out_err;
 		    }
 		}
@@ -4074,7 +4074,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		dlr_ref_t *cent = infos->dlrs[i]->contained_entities+j;
 		if (cent->entity_id == 0)
 		    continue;
-		_ipmi_domain_entity_lock(ents->domain);
+		i_ipmi_domain_entity_lock(ents->domain);
 		rv = entity_add(ents, cent->device_num,
 				cent->entity_id, cent->entity_instance,
 				NULL, NULL, &child);
@@ -4082,7 +4082,7 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 		    return rv;
 		rv = add_child_ent_to_found(found, child);
 		if (rv) {
-		    _ipmi_entity_put(child);
+		    i_ipmi_entity_put(child);
 		    goto out_err;
 		}
 	    }
@@ -4105,7 +4105,7 @@ put_entities(entity_sdr_info_t *infos)
 	found = infos->found+i;
 
 	if (found->ent)
-	    _ipmi_entity_put(found->ent);
+	    i_ipmi_entity_put(found->ent);
 
 	/* Still put the entity even if found, as it was refcounted by
 	   looking it up. */
@@ -4113,7 +4113,7 @@ put_entities(entity_sdr_info_t *infos)
 	    continue;
 
 	for (j=0; j<found->cent_next; j++)
-	    _ipmi_entity_put(found->cent[j]);
+	    i_ipmi_entity_put(found->cent[j]);
     }
 }
 
@@ -4217,7 +4217,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
        locks while we are filling in the entities, as they may add
        entities and cause added callbacks. */
 
-    old_infos = _ipmi_get_sdr_entities(domain, mc);
+    old_infos = i_ipmi_get_sdr_entities(domain, mc);
     if (!old_infos) {
 	old_infos = ipmi_mem_alloc(sizeof(*old_infos));
 	if (!old_infos) {
@@ -4226,7 +4226,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	}
 	memset(old_infos, 0, sizeof(*old_infos));
 	old_infos->ents = ents;
-	_ipmi_set_sdr_entities(domain, mc, old_infos);
+	i_ipmi_set_sdr_entities(domain, mc, old_infos);
     }
 
     /* Clear out all the temporary found information we use for
@@ -4290,7 +4290,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
        the objects we need and we have allocated enough entries for
        the parent and child lists. */
 
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     rv = 0;
 
     /* Destroy all the old information that was not in the new version
@@ -4386,7 +4386,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    } else if ((channel != -1) && (infos.dlrs[i]->entity_id)) {
 		ipmi_mc_t *mc;
 		/* Attempt to create the MC. */
-		rv = _ipmi_find_or_create_mc_by_slave_addr
+		rv = i_ipmi_find_or_create_mc_by_slave_addr
 		    (domain, channel, ipmb, &mc);
 		if (rv) {
 		    ipmi_log(IPMI_LOG_SEVERE,
@@ -4404,7 +4404,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 				 MC_NAME(found->ent->frudev_mc),
 				 MC_NAME(mc));
 		    }
-		    _ipmi_mc_put(mc);
+		    i_ipmi_mc_put(mc);
 		} else {
 		    rv = ipmi_mc_add_active_handler(mc,
 						    entity_mc_active,
@@ -4416,13 +4416,13 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 				 " MCDLR or FRUDLR,"
 				 " error %x", ENTITY_NAME(found->ent), rv);
 		    } else {
-			_ipmi_mc_use(mc);
+			i_ipmi_mc_use(mc);
 			found->ent->frudev_present = 1;
 			found->ent->frudev_active = ipmi_mc_is_active(mc);
 			found->ent->frudev_mc = mc;
 			found->ent->presence_possibly_changed = 1;
 		    }
-		    _ipmi_mc_put(mc);
+		    i_ipmi_mc_put(mc);
 		}
 	    }
 	} else {
@@ -4439,7 +4439,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
     infos.ents = ents;
 
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 
     put_entities(&infos);
     put_entities(old_infos);
@@ -4461,7 +4461,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     put_entities(old_infos);
 
  out_err_unlock_nocleaninfos:
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 
  out_err:
     destroy_sdr_info(&infos);
@@ -4477,12 +4477,12 @@ ipmi_sdr_entity_destroy(void *info)
     ipmi_entity_t       *ent, *child;
 
     for (i=0; i<infos->next; i++) {
-	_ipmi_domain_entity_lock(infos->ents->domain);
+	i_ipmi_domain_entity_lock(infos->ents->domain);
 	rv = entity_find(infos->ents, infos->dlrs[i]->device_num,
 			 infos->dlrs[i]->entity_id,
 			 infos->dlrs[i]->entity_instance,
 			 &ent);
-	_ipmi_domain_entity_unlock(infos->ents->domain);
+	i_ipmi_domain_entity_unlock(infos->ents->domain);
 	if (rv)
 	    continue;
 
@@ -4491,13 +4491,13 @@ ipmi_sdr_entity_destroy(void *info)
 	{
 	    if (ent->frudev_present) {
 		ipmi_mc_t *mc = ent->frudev_mc;
-		_ipmi_domain_mc_lock(infos->ents->domain);
-		_ipmi_mc_get(mc);
-		_ipmi_domain_mc_unlock(infos->ents->domain);
+		i_ipmi_domain_mc_lock(infos->ents->domain);
+		i_ipmi_mc_get(mc);
+		i_ipmi_domain_mc_unlock(infos->ents->domain);
 		ipmi_mc_remove_active_handler(ent->frudev_mc,
 					      entity_mc_active, ent);
-		_ipmi_mc_release(ent->frudev_mc);
-		_ipmi_mc_put(mc);
+		i_ipmi_mc_release(ent->frudev_mc);
+		i_ipmi_mc_put(mc);
 		ent->frudev_mc = NULL;
 		ent->frudev_present = 0;
 	    }
@@ -4515,16 +4515,16 @@ ipmi_sdr_entity_destroy(void *info)
 			 k<=cent2->entity_instance;
 			 k++)
 		    {
-			_ipmi_domain_entity_lock(infos->ents->domain);
+			i_ipmi_domain_entity_lock(infos->ents->domain);
 			rv = entity_find(infos->ents, cent1->device_num,
 					 cent1->entity_id, k,
 					 &child);
-			_ipmi_domain_entity_unlock(infos->ents->domain);
+			i_ipmi_domain_entity_unlock(infos->ents->domain);
 			if (rv)
 			    continue;
 
 			ipmi_entity_remove_child(ent, child);
-			_ipmi_entity_put(child);
+			i_ipmi_entity_put(child);
 		    }
 		}
 	    } else {
@@ -4532,20 +4532,20 @@ ipmi_sdr_entity_destroy(void *info)
 		    dlr_ref_t *cent = infos->dlrs[i]->contained_entities+j;
 		    if (cent->entity_id == 0)
 			continue;
-		    _ipmi_domain_entity_lock(infos->ents->domain);
+		    i_ipmi_domain_entity_lock(infos->ents->domain);
 		    rv = entity_find(infos->ents, cent->device_num,
 				     cent->entity_id, cent->entity_instance,
 				     &child);
-		    _ipmi_domain_entity_unlock(infos->ents->domain);
+		    i_ipmi_domain_entity_unlock(infos->ents->domain);
 		    if (rv)
 			continue;
 		    ipmi_entity_remove_child(ent, child);
-		    _ipmi_entity_put(child);
+		    i_ipmi_entity_put(child);
 		}
 	    }
 	    ipmi_detect_entity_presence_change(ent, 0);
 	}
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
     }
 
     destroy_sdr_info(info);
@@ -4873,12 +4873,12 @@ ipmi_entity_get_mc_id(ipmi_entity_t *ent, ipmi_mcid_t *mc_id)
     sa.slave_addr = ent->info.slave_address;
     sa.lun = ent->info.lun;
 
-    mc = _ipmi_find_mc_by_addr(ent->domain, (ipmi_addr_t *) &sa, sizeof(sa));
+    mc = i_ipmi_find_mc_by_addr(ent->domain, (ipmi_addr_t *) &sa, sizeof(sa));
     if (!mc)
 	return ENODEV;
 
     *mc_id = ipmi_mc_convert_to_id(mc);
-    _ipmi_mc_put(mc);
+    i_ipmi_mc_put(mc);
 
     return 0;
 }
@@ -5454,7 +5454,7 @@ iterate_entity_handler(void *cb_data, void *item1, void *item2)
     ipmi_entity_t         *ent = item1;
 
     info->handler(ent, info->cb_data);
-    _ipmi_entity_put(ent);
+    i_ipmi_entity_put(ent);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -5503,23 +5503,23 @@ domain_cb(ipmi_domain_t *domain, void *cb_data)
 
     device_num.channel = info->id.channel;
     device_num.address = info->id.address;
-    _ipmi_domain_entity_lock(domain);
+    i_ipmi_domain_entity_lock(domain);
     info->err = entity_find(ipmi_domain_get_entities(domain),
 			    device_num,
 			    info->id.entity_id,
 			    info->id.entity_instance,
 			    &ent); 
-    _ipmi_domain_entity_unlock(domain);
+    i_ipmi_domain_entity_unlock(domain);
 
     if (!info->ignore_seq && !info->err) {
 	if (ent->seq != info->id.seq) {
 	    info->err = EINVAL;
-	    _ipmi_entity_put(ent);
+	    i_ipmi_entity_put(ent);
 	}
     }
     if (!info->err) {
 	info->handler(ent, info->cb_data);
-	_ipmi_entity_put(ent);
+	i_ipmi_entity_put(ent);
     }
 }
 
@@ -5643,7 +5643,7 @@ ipmi_entity_id_is_invalid(const ipmi_entity_id_t *id)
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_entity_lock(const ipmi_entity_t *entity)
+i__ipmi_check_entity_lock(const ipmi_entity_t *entity)
 {
     if (!entity)
 	return;
@@ -5787,7 +5787,7 @@ call_fru_handler_werr(void *cb_data, void *item1, void *item2)
 }
 
 void
-_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_werr_e op,
+i_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_werr_e op,
 			       int err)
 {
     fru_handler_t info;
@@ -5827,7 +5827,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    op = IPMIE_ADDED;
 	}
 
-	_ipmi_entity_call_fru_handlers(ent, op, 0);
+	i_ipmi_entity_call_fru_handlers(ent, op, 0);
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
@@ -5841,7 +5841,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    /* Keep it if we got it, it might have some useful
 	       information. */
 	    ent->fru = info->fru;
-	_ipmi_entity_call_fru_handlers(ent, IPMIE_ERROR, info->err);
+	i_ipmi_entity_call_fru_handlers(ent, IPMIE_ERROR, info->err);
     }
 
     if (info->done)
@@ -5868,7 +5868,7 @@ fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
 
     ipmi_mem_free(info);
     if (domain)
-	_ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
+	i_ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
 }
 
 int
@@ -5891,7 +5891,7 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
     info->cb_data = cb_data;
 
     /* fetch the FRU information. */
-    _ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
+    i_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
     rv = ipmi_fru_alloc_notrack(ent->domain,
 				ent->info.is_logical_fru,
 				ent->info.access_address,
@@ -5909,7 +5909,7 @@ ipmi_entity_fetch_frus_cb(ipmi_entity_t      *ent,
 		 "%sentity.c(ipmi_entity_fetch_frus_cb):"
 		 " Unable to allocate the FRU: %x",
 		 ENTITY_NAME(ent), rv);
-	_ipmi_put_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
+	i_ipmi_put_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus_cb");
     }
 
     return rv;
@@ -5930,7 +5930,7 @@ ipmi_entity_get_fru(ipmi_entity_t *ent)
 }
 
 void
-_ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru)
+i_ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru)
 {
     CHECK_ENTITY_LOCK(ent);
 
@@ -7799,11 +7799,11 @@ entity_rsp_handler(ipmi_mc_t  *mc,
 		 " probably destroyed while operation was in progress",
 		 MC_NAME(mc));
 	if (info->__rsp_handler) {
-	    _ipmi_domain_entity_lock(info->__entity->domain);
+	    i_ipmi_domain_entity_lock(info->__entity->domain);
 	    info->__entity->usecount++;
-	    _ipmi_domain_entity_unlock(info->__entity->domain);
+	    i_ipmi_domain_entity_unlock(info->__entity->domain);
 	    info->__rsp_handler(info->__entity, rv, NULL, info->__cb_data);
-	    _ipmi_entity_put(info->__entity);
+	    i_ipmi_entity_put(info->__entity);
 	}
     }
 }

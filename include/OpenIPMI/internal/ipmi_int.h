@@ -120,13 +120,13 @@ typedef int (*ipmi_con_parse_args_cb)(int         *curr_arg,
 				      ipmi_args_t **iargs);
 typedef const char *(*ipmi_con_get_help_cb)(void);
 typedef ipmi_args_t *(*ipmi_con_alloc_args_cb)(void);
-ipmi_con_setup_t *_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
+ipmi_con_setup_t *i_ipmi_alloc_con_setup(ipmi_con_parse_args_cb parse,
 					ipmi_con_get_help_cb   help,
 					ipmi_con_alloc_args_cb alloc);
-void _ipmi_free_con_setup(ipmi_con_setup_t *v);
+void i_ipmi_free_con_setup(ipmi_con_setup_t *v);
 
-int _ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup);
-int _ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup);
+int i_ipmi_register_con_type(const char *name, ipmi_con_setup_t *setup);
+int i_ipmi_unregister_con_type(const char *name, ipmi_con_setup_t *setup);
 
 typedef void (*ipmi_args_free_cb)(ipmi_args_t *args);
 typedef int (*ipmi_args_connect_cb)(ipmi_args_t  *args,
@@ -148,54 +148,54 @@ typedef ipmi_args_t *(*ipmi_args_copy_cb)(ipmi_args_t *args);
 typedef int (*ipmi_args_validate_cb)(ipmi_args_t *args, int *argnum);
 typedef void (*ipmi_args_free_val_cb)(ipmi_args_t *args, char *value);
 typedef const char *(*ipmi_args_get_type_cb)(ipmi_args_t *args);
-ipmi_args_t *_ipmi_args_alloc(ipmi_args_free_cb     free,
-			      ipmi_args_connect_cb  connect,
-			      ipmi_args_get_val_cb  get_val,
-			      ipmi_args_set_val_cb  set_val,
-			      ipmi_args_copy_cb     copy,
-			      ipmi_args_validate_cb validate,
-			      ipmi_args_free_val_cb free_val,
-			      ipmi_args_get_type_cb get_type,
-			      unsigned int          extra_data_len);
-void *_ipmi_args_get_extra_data(ipmi_args_t *args);
+ipmi_args_t *i_ipmi_args_alloc(ipmi_args_free_cb     free,
+			       ipmi_args_connect_cb  connect,
+			       ipmi_args_get_val_cb  get_val,
+			       ipmi_args_set_val_cb  set_val,
+			       ipmi_args_copy_cb     copy,
+			       ipmi_args_validate_cb validate,
+			       ipmi_args_free_val_cb free_val,
+			       ipmi_args_get_type_cb get_type,
+			       unsigned int          extra_data_len);
+void *i_ipmi_args_get_extra_data(ipmi_args_t *args);
 
 
 /* Internal function to get the name of a domain. */
-const char *_ipmi_domain_name(const ipmi_domain_t *domain);
-const char *_ipmi_mc_name(const ipmi_mc_t *mc);
-const char *_ipmi_sensor_name(const ipmi_sensor_t *sensor);
-const char *_ipmi_control_name(const ipmi_control_t *control);
-const char *_ipmi_entity_name(const ipmi_entity_t *entity);
-const char *_ipmi_entity_id_name(const ipmi_entity_id_t entity_id);
-#define DOMAIN_NAME(d) ((d) ? _ipmi_domain_name(d) : "")
-#define MC_NAME(m) ((m) ? _ipmi_mc_name(m) : "")
-#define ENTITY_NAME(e) ((e) ? _ipmi_entity_name(e) : "")
-#define ENTITY_ID_NAME(e) (_ipmi_entity_id_name(e))
-#define SENSOR_NAME(s) ((s) ? _ipmi_sensor_name(s) : "")
-#define CONTROL_NAME(c) ((c) ? _ipmi_control_name(c) : "")
+const char *i_ipmi_domain_name(const ipmi_domain_t *domain);
+const char *i_ipmi_mc_name(const ipmi_mc_t *mc);
+const char *i_ipmi_sensor_name(const ipmi_sensor_t *sensor);
+const char *i_ipmi_control_name(const ipmi_control_t *control);
+const char *i_ipmi_entity_name(const ipmi_entity_t *entity);
+const char *i_ipmi_entity_id_name(const ipmi_entity_id_t entity_id);
+#define DOMAIN_NAME(d) ((d) ? i_ipmi_domain_name(d) : "")
+#define MC_NAME(m) ((m) ? i_ipmi_mc_name(m) : "")
+#define ENTITY_NAME(e) ((e) ? i_ipmi_entity_name(e) : "")
+#define ENTITY_ID_NAME(e) (i_ipmi_entity_id_name(e))
+#define SENSOR_NAME(s) ((s) ? i_ipmi_sensor_name(s) : "")
+#define CONTROL_NAME(c) ((c) ? i_ipmi_control_name(c) : "")
 
 #include <OpenIPMI/ipmi_debug.h>
 
 /* Lock/unlock the entities/mcs for the given domain. */
-void _ipmi_domain_entity_lock(ipmi_domain_t *domain);
-void _ipmi_domain_entity_unlock(ipmi_domain_t *domain);
-void _ipmi_domain_mc_lock(ipmi_domain_t *domain);
-void _ipmi_domain_mc_unlock(ipmi_domain_t *domain);
+void i_ipmi_domain_entity_lock(ipmi_domain_t *domain);
+void i_ipmi_domain_entity_unlock(ipmi_domain_t *domain);
+void i_ipmi_domain_mc_lock(ipmi_domain_t *domain);
+void i_ipmi_domain_mc_unlock(ipmi_domain_t *domain);
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
 /* Nothing for now. */
-void __ipmi_check_mc_lock(const ipmi_mc_t *mc);
-#define CHECK_MC_LOCK(mc) __ipmi_check_mc_lock(mc)
+void i__ipmi_check_mc_lock(const ipmi_mc_t *mc);
+#define CHECK_MC_LOCK(mc) i__ipmi_check_mc_lock(mc)
 
-void __ipmi_check_domain_lock(const ipmi_domain_t *domain);
-#define CHECK_DOMAIN_LOCK(domain) __ipmi_check_domain_lock(domain)
-void __ipmi_check_entity_lock(const ipmi_entity_t *entity);
-#define CHECK_ENTITY_LOCK(entity) __ipmi_check_entity_lock(entity)
-void __ipmi_check_sensor_lock(const ipmi_sensor_t *sensor);
-#define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
-void __ipmi_check_control_lock(const ipmi_control_t *control);
-#define CHECK_CONTROL_LOCK(control) __ipmi_check_control_lock(control)
+void i__ipmi_check_domain_lock(const ipmi_domain_t *domain);
+#define CHECK_DOMAIN_LOCK(domain) i__ipmi_check_domain_lock(domain)
+void i__ipmi_check_entity_lock(const ipmi_entity_t *entity);
+#define CHECK_ENTITY_LOCK(entity) i__ipmi_check_entity_lock(entity)
+void i__ipmi_check_sensor_lock(const ipmi_sensor_t *sensor);
+#define CHECK_SENSOR_LOCK(sensor) i__ipmi_check_sensor_lock(sensor)
+void i__ipmi_check_control_lock(const ipmi_control_t *control);
+#define CHECK_CONTROL_LOCK(control) i__ipmi_check_control_lock(control)
 
 void ipmi_check_lock(const ipmi_lock_t *lock, const char *str);
 #else

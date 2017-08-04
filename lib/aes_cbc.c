@@ -255,7 +255,7 @@ static ipmi_rmcpp_confidentiality_t aes_conf =
 #endif /* HAVE_OPENSSL */
 
 int
-_ipmi_aes_cbc_init(void)
+i_ipmi_aes_cbc_init(void)
 {
 #ifdef HAVE_OPENSSL
     int rv = 0;
@@ -270,7 +270,7 @@ _ipmi_aes_cbc_init(void)
 }
 
 void
-_ipmi_aes_cbc_shutdown(void)
+i_ipmi_aes_cbc_shutdown(void)
 {
 #ifdef HAVE_OPENSSL
     ipmi_rmcpp_register_confidentiality

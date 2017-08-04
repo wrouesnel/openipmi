@@ -82,7 +82,7 @@ ipmi_register_oem_conn_handler(unsigned int             manufacturer_id,
     int                 rv;
 
     /* This might be called before initialization, so be 100% sure.. */
-    rv = _ipmi_conn_init(ipmi_get_global_os_handler());
+    rv = i_ipmi_conn_init(ipmi_get_global_os_handler());
     if (rv)
 	return rv;
 
@@ -579,7 +579,7 @@ ipmi_ll_con_stat_get_user_data(ipmi_ll_stat_info_t *info)
  *
  **********************************************************************/
 int
-_ipmi_conn_init(os_handler_t *os_hnd)
+i_ipmi_conn_init(os_handler_t *os_hnd)
 {
     int rv;
 
@@ -603,7 +603,7 @@ _ipmi_conn_init(os_handler_t *os_hnd)
 }
 
 void
-_ipmi_conn_shutdown(void)
+i_ipmi_conn_shutdown(void)
 {
     if (oem_conn_handlers) {
 	cleanup_oem_conn_handlers();
