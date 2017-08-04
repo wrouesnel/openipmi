@@ -30,7 +30,7 @@ OpenIPMI.so: libOpenIPMI.la
 CLEANFILES = OpenIPMI.so OpenIPMI.pm OpenIPMI_wrap.c
 
 clean-local:
-	rm -rf tmppersist
+	rm -rf tmppersist auto
 
 install-exec-local: OpenIPMI.so OpenIPMI.pm
 	$(INSTALL) -d "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
@@ -42,7 +42,7 @@ uninstall-local:
 	rm -f "$(DESTDIR)$(PERL_INSTALL_DIR)/OpenIPMI.pm"
 	-rmdir "$(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI"
 
-AM_TESTS_ENVIRONMENT = mkdir -p tmppersist && TEST_LD_PRELOAD="$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/perl/.libs/libdummystuff.so" LD_LIBRARY_PATH=$(top_builddir)/glib/.libs PERLLIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
+AM_TESTS_ENVIRONMENT = mkdir -p tmppersist && mkdir -p auto/OpenIPMI && cp OpenIPMI.so auto/OpenIPMI && TEST_LD_PRELOAD="$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/perl/.libs/libdummystuff.so" LD_LIBRARY_PATH=$(top_builddir)/glib/.libs PERLLIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
 TESTS = test_fru test_chan test_lanparm test_pet test_pef
 
 EXTRA_DIST = OpenIPMI_perl.c OpenIPMI_lang.i OpenIPMI.h \
