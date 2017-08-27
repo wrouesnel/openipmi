@@ -607,8 +607,8 @@ isim_log(sys_data_t *sys, int logtype, msg_t *msg, const char *format,
 
     con = data->consoles;
     while (con) {
-	con->out.printf(&con->out, "%s", str);
-	con->out.printf(&con->out, "\n");
+	con->out.eprintf(&con->out, "%s", str);
+	con->out.eprintf(&con->out, "\n");
 	con = con->next;
     }
 #if HAVE_SYSLOG
@@ -956,7 +956,7 @@ console_bind_ready(int fd, void *cb_data, os_hnd_fd_id_t *id)
     newcon->shutdown_on_close = 0;
     newcon->telnet = 1;
     newcon->tn_pos = 0;
-    newcon->out.printf = emu_printf;
+    newcon->out.eprintf = emu_printf;
     newcon->out.data = newcon;
 
     setsockopt(rv, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
@@ -1463,10 +1463,10 @@ main(int argc, const char *argv[])
     stdio_console.telnet = 0;
     stdio_console.tn_pos = 0;
     if (nostdio) {
-	stdio_console.out.printf = dummy_printf;
+	stdio_console.out.eprintf = dummy_printf;
 	stdio_console.out.data = &stdio_console;
     } else {
-	stdio_console.out.printf = emu_printf;
+	stdio_console.out.eprintf = emu_printf;
 	stdio_console.out.data = &stdio_console;
     }
     stdio_console.next = NULL;

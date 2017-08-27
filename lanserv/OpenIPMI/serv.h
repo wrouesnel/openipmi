@@ -522,7 +522,7 @@ uint8_t ipmb_checksum(uint8_t *data, int size, uint8_t start);
 typedef struct emu_data_s emu_data_t;
 typedef struct emu_out_s
 {
-    void (*printf)(struct emu_out_s *out, char *format, ...);
+    void (*eprintf)(struct emu_out_s *out, char *format, ...);
     void *data;
 } emu_out_t;
 
