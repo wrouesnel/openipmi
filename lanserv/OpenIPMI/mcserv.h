@@ -118,7 +118,7 @@ void ipmi_mc_destroy(lmc_data_t *mc);
 void ipmi_mc_disable(lmc_data_t *mc);
 void ipmi_mc_enable(lmc_data_t *mc);
 
-msg_t *ipmi_mc_get_next_recv_q(lmc_data_t *mc);
+msg_t *ipmi_mc_get_next_recv_q(channel_t *chan);
 
 int ipmi_emu_set_mc_guid(lmc_data_t *mc,
 			 unsigned char guid[16],

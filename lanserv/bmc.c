@@ -300,6 +300,11 @@ ipmi_emu_tick(emu_data_t *emu, unsigned int seconds)
     }
 }
 
+#define IPMI_SEND_MSG_NO_TRACK 0x0
+#define IPMI_SEND_MSG_TRACK_REQUEST 0x01
+#define IPMI_SEND_MSG_SEND_RAW 0x2
+#define IPMI_SEND_MSG_GET_TRACKING(v) ((v >> 6) & 0x3)
+
 void
 ipmi_emu_handle_msg(emu_data_t    *emu,
 		    lmc_data_t    *srcmc,
@@ -313,6 +318,7 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
     unsigned char *data = NULL;
     unsigned char *rdata;
     unsigned int  *rdata_len;
+    channel_t *rchan = omsg->orig_channel;
 
     if (emu->sysinfo->debug & DEBUG_MSG)
 	emu->sysinfo->log(emu->sysinfo, DEBUG, omsg, "Receive message:");
@@ -324,6 +330,18 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	if (check_msg_length(omsg, 8, ordata, ordata_len))
 	    return;
 	if ((omsg->data[0] & 0x3f) != 0) {
+	    ordata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *ordata_len = 1;
+	    return;
+	}
+
+	switch (IPMI_SEND_MSG_GET_TRACKING(omsg->data[0])) {
+	case IPMI_SEND_MSG_NO_TRACK:
+	    rchan = srcmc->channels[15];
+	    break;
+	case IPMI_SEND_MSG_TRACK_REQUEST:
+	    break;
+	default:
 	    ordata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	    *ordata_len = 1;
 	    return;
@@ -413,10 +431,9 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 
     if (omsg->netfn == IPMI_APP_NETFN && omsg->cmd == IPMI_SEND_MSG_CMD) {
 	/* An encapsulated command, put the response into the receive q. */
-	channel_t *bchan = srcmc->channels[15];
 
-	if (bchan->recv_in_q) {
-	    if (bchan->recv_in_q(srcmc->channels[15], rmsg))
+	if (rchan->recv_in_q) {
+	    if (rchan->recv_in_q(srcmc->channels[15], rmsg))
 		return;
 	}
 
@@ -427,20 +444,26 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 	    debug_log_raw_msg(emu->sysinfo, rdata, *rdata_len,
 			      "Response message:");
 
+	if (!rchan->has_recv_q) {
+	    free(rmsg);
+	    return;
+	}
+
 	rmsg->len += 6;
 	rmsg->data[rmsg->len] = -ipmb_checksum(rmsg->data, rmsg->len, 0);
 	rmsg->len += 1;
-	if (srcmc->recv_q_tail) {
-	    rmsg->next = srcmc->recv_q_tail;
-	    srcmc->recv_q_tail = rmsg;
+	if (rchan->recv_q_tail) {
+	    rmsg->next = rchan->recv_q_tail;
+	    rchan->recv_q_tail = rmsg;
 	} else {
-	    channel_t *bchan = srcmc->channels[15];
-
 	    rmsg->next = NULL;
-	    srcmc->recv_q_head = rmsg;
-	    srcmc->recv_q_tail = rmsg;
-	    if (bchan->set_atn)
-		bchan->set_atn(bchan, 1, IPMI_MC_MSG_INTS_ON(mc));
+	    rchan->recv_q_head = rmsg;
+	    rchan->recv_q_tail = rmsg;
+	    if (rchan->channel_num == 15) {
+		srcmc->msg_flags |= IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE;
+		if (rchan->set_atn)
+		    rchan->set_atn(rchan, 1, IPMI_MC_MSG_INTS_ON(mc));
+	    }
 	}
     } else if (emu->sysinfo->debug & DEBUG_MSG)
 	debug_log_raw_msg(emu->sysinfo, ordata, *ordata_len,
@@ -448,16 +471,16 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 }
 
 msg_t *
-ipmi_mc_get_next_recv_q(lmc_data_t *mc)
+ipmi_mc_get_next_recv_q(channel_t *chan)
 {
     msg_t *rv;
 
-    if (!mc->recv_q_head)
+    if (!chan->recv_q_head)
 	return NULL;
-    rv = mc->recv_q_head;
-    mc->recv_q_head = rv->next;
-    if (!mc->recv_q_head) {
-	mc->recv_q_tail = NULL;
+    rv = chan->recv_q_head;
+    chan->recv_q_head = rv->next;
+    if (!chan->recv_q_head) {
+	chan->recv_q_tail = NULL;
     }
     return rv;
 }
@@ -924,6 +947,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 	    mc->channels[15] = &mc->sys_channel;
 	}
 
+	mc->channels[15]->has_recv_q = 1;
 	mc->sysinfo = emu->sysinfo;
 	rv = init_mc(emu, mc, flags & IPMI_MC_PERSIST_SDR);
 	if (rv) {

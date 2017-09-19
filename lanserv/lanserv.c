@@ -612,7 +612,7 @@ sys_start_cmd(sys_data_t *sys)
 }
 
 msg_t *
-ipmi_mc_get_next_recv_q(lmc_data_t *mc)
+ipmi_mc_get_next_recv_q(channel_t *chan)
 {
     return NULL;
 }

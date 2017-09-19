@@ -148,6 +148,10 @@ struct channel_s
 
     unsigned int channel_num;
 
+    int has_recv_q;
+    msg_t *recv_q_head;
+    msg_t *recv_q_tail;
+
     /* Used by channel code. */
     void (*log)(channel_t *chan, int logtype, msg_t *msg,
 		const char *format, ...)

@@ -265,9 +265,6 @@ struct lmc_data_s
 
     sys_data_t *sysinfo;
 
-    msg_t *recv_q_head;
-    msg_t *recv_q_tail;
-
     sel_t sel;
 
     sdrs_t main_sdrs;

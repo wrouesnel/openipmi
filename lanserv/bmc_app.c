@@ -545,7 +545,7 @@ handle_set_global_enables(lmc_data_t    *mc,
 	bchan->hw_op(bchan, HW_OP_IRQ_DISABLE);
 
     if ((!old_evint && IPMI_MC_EVBUF_FULL_INT_ENABLED(mc) && mc->ev_in_q) ||
-	(old_int && !IPMI_MC_MSG_INTS_ON(mc) && mc->recv_q_tail))
+	(old_int && !IPMI_MC_MSG_INTS_ON(mc) && mc->channels[15]->recv_q_tail))
 	bchan->set_atn(bchan, 1, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
@@ -909,7 +909,8 @@ handle_read_event_msg_buffer(lmc_data_t    *mc,
     mc->ev_in_q = 0;
     mc->msg_flags &= ~IPMI_MC_MSG_FLAG_EVT_BUF_FULL;
     if (chan->set_atn)
-	chan->set_atn(chan, 0, IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
+	chan->set_atn(chan, !!mc->msg_flags,
+		      IPMI_MC_EVBUF_FULL_INT_ENABLED(mc));
 }
 
 static void
@@ -931,10 +932,29 @@ handle_clear_msg_flags(lmc_data_t    *mc,
 		       unsigned int  *rdata_len,
 		       void          *cb_data)
 {
+    channel_t *chan = mc->channels[15];
+
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
 
     mc->msg_flags &= ~msg->data[0];
+
+    if (msg->data[0] & IPMI_MC_MSG_FLAG_EVT_BUF_FULL)
+	mc->ev_in_q = 0;
+
+    if (msg->data[0] & IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE) {
+	while (chan->recv_q_head) {
+	    msg_t *qmsg = chan->recv_q_head;
+
+	    chan->recv_q_head = qmsg->next;
+	    free(qmsg);
+	}
+	chan->recv_q_tail = NULL;
+    }
+
+    if (chan->set_atn)
+	chan->set_atn(chan, !!mc->msg_flags, IPMI_MC_MSG_INTS_ON(mc));
+
     rdata[0] = 0;
     *rdata_len = 1;
 }
@@ -947,6 +967,7 @@ handle_get_msg(lmc_data_t    *mc,
 	       void          *cb_data)
 {
     msg_t *qmsg;
+    channel_t *chan = mc->channels[15];
 
     if (!mc->sysinfo) {
 	rdata[0] = IPMI_INVALID_CMD_CC;
@@ -954,7 +975,7 @@ handle_get_msg(lmc_data_t    *mc,
 	return;
     }
 
-    qmsg = mc->recv_q_head;
+    qmsg = chan->recv_q_head;
     if (!qmsg) {
 	rdata[0] = 0x80;
 	*rdata_len = 1;
@@ -967,12 +988,12 @@ handle_get_msg(lmc_data_t    *mc,
 	return;
     }
 
-    mc->recv_q_head = qmsg->next;
+    chan->recv_q_head = qmsg->next;
     if (!qmsg->next) {
-	channel_t *bchan = mc->channels[15];
-	mc->recv_q_tail = NULL;
-	if (bchan->set_atn)
-	    bchan->set_atn(bchan, 0, IPMI_MC_MSG_INTS_ON(mc));
+	chan->recv_q_tail = NULL;
+	mc->msg_flags &= ~IPMI_MC_MSG_FLAG_RCV_MSG_QUEUE;
+	if (chan->set_atn)
+	    chan->set_atn(chan, !!mc->msg_flags, IPMI_MC_MSG_INTS_ON(mc));
     }
 
     rdata[0] = 0;

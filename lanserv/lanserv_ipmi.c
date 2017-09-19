@@ -510,7 +510,7 @@ lan_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 
     return_rsp(lan, msg, NULL, rsp);
 
-    msg = ipmi_mc_get_next_recv_q(chan->mc);
+    msg = ipmi_mc_get_next_recv_q(chan);
     if (!msg)
 	return;
     while (msg) {
@@ -529,7 +529,7 @@ lan_return_rsp(channel_t *chan, msg_t *msg, rsp_msg_t *rsp)
 
 	chan->free(chan, msg);
 
-	msg = ipmi_mc_get_next_recv_q(chan->mc);
+	msg = ipmi_mc_get_next_recv_q(chan);
     }
     if (chan->recv_in_q)
 	chan->recv_in_q(chan, 0);
@@ -3175,6 +3175,8 @@ ipmi_lan_init(lanserv_data_t *lan)
     lan->channel.set_chan_access = set_channel_access;
     lan->channel.set_associated_mc = set_associated_mc;
     lan->channel.get_associated_mc = get_associated_mc;
+
+    lan->channel.has_recv_q = 1;
 
     /* Force user 1 to be a null user. */
     memset(lan->users[1].username, 0, 16);
