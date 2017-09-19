@@ -470,6 +470,15 @@ ipmi_emu_handle_msg(emu_data_t    *emu,
 			  "Response message:");
 }
 
+void
+ipmi_resend_atn(channel_t *chan)
+{
+    lmc_data_t *mc = chan->mc;
+
+    if (chan->set_atn)
+	chan->set_atn(chan, !!mc->msg_flags, IPMI_MC_MSG_INTS_ON(mc));
+}
+
 msg_t *
 ipmi_mc_get_next_recv_q(channel_t *chan)
 {

@@ -1006,6 +1006,7 @@ vm_connected(serserv_data_t *si)
     c[len++] = VM_CMD_CHAR;
     raw_send(si, c, len);
     si->connected = 1;
+    ipmi_resend_atn(&si->channel);
 }
 
 static void
