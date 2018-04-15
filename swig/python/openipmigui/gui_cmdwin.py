@@ -30,7 +30,12 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
+
 import xml.dom
 import xml.dom.minidom
 import OpenIPMI
@@ -40,11 +45,8 @@ import os
 import stat
 import sys
 
-init_history = [ ]
-
 class CommandWindow(Tix.ScrolledText):
     def __init__(self, parent, ui):
-        global init_history
         Tix.ScrolledText.__init__(self, parent)
         self.ui = ui
         self.currow = 0
@@ -55,12 +57,12 @@ class CommandWindow(Tix.ScrolledText):
         self.text.insert("end", "> ")
         self.history = [ ]
         self.lasthist = 0
-        for cmd in init_history:
+        for cmd in self.ui.mainhandler.init_history:
             self.history.append(cmd[1])
             self.lasthist += 1
             pass
         self.history.append("")
-        init_history = None
+        self.ui.mainhandler.init_history = None
         self.currhist = self.lasthist
 
         self.cmdlang = OpenIPMI.alloc_cmdlang(self)
@@ -276,15 +278,15 @@ class CommandWindow(Tix.ScrolledText):
 
 def cmphist(a, b):
     return cmp(a[0], b[0])
-    
-def _HistorySave(file):
-    if (not init_history):
+
+def _HistorySave(mainhandler, file):
+    if (not mainhandler.init_history):
         return
     domimpl = xml.dom.getDOMImplementation()
     doc = domimpl.createDocument(None, "IPMIHistory", None)
     main = doc.documentElement
     i = 0
-    for cmd in init_history:
+    for cmd in mainhandler.init_history:
         if (cmd != ""):
             helem = doc.createElement("hval")
             helem.setAttribute("idx", str(i))
@@ -314,7 +316,7 @@ def _HistorySave(file):
         pass
     return
 
-def _HistoryRestore(file):
+def _HistoryRestore(mainhandler, file):
     info = None
     try:
         info = os.stat(file)
@@ -337,11 +339,10 @@ def _HistoryRestore(file):
             try:
                 idx = int(c.getAttribute("idx"))
                 val = c.getAttribute("val")
-                init_history.append( (idx, val) )
+                mainhandler.init_history.append( (idx, val) )
                 pass
             except:
                 pass
             pass
         pass
-    init_history.sort(cmphist)
     return

@@ -30,7 +30,12 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import OpenIPMI
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
+
 import gui_setdialog
 import gui_term
 import gui_errstr
@@ -457,7 +462,7 @@ class SoL(Tix.Toplevel):
             return 1
         try:
             self.term.ProcessInput(string)
-        except Exception, e:
+        except Exception as e:
             import sys
             t, v, b = sys.exc_info()
             sys.excepthook(t, v, b)

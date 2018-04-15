@@ -308,7 +308,7 @@ class DomainSaver:
 class Domain:
     def __init__(self, mainhandler, domain):
         name = domain.get_name()
-        if (mainhandler.domains.has_key(name)):
+        if (name in mainhandler.domains):
             domain.close()
             raise InvalidDomainError("Domain name already exists")
         self.name = name
@@ -418,7 +418,7 @@ class Domain:
             return
         self.connections[connum].SetPortUp(domain, portnum, err)
         any_con_up = False
-        for c in self.connections.itervalues():
+        for c in self.connections.values():
             any_con_up = c.IsUp() or any_con_up
             pass
         if (any_con_up):
@@ -507,13 +507,11 @@ class Domain:
             pass
         del self.mainhandler.domains[self.name]
         self.ui.remove_domain(self)
-        for c in self.connections.itervalues():
+        for c in self.connections.values():
             c.remove()
             pass
         self.ui = None
         return
-
-defaultDomains = [ ]
 
 # Catch new and removed domains here
 class DomainWatcher:
@@ -552,7 +550,7 @@ class DomainInfoSetup:
         return
 
 def RestoreDomains(mainhandler):
-    for i in defaultDomains:
+    for i in mainhandler.defaultDomains:
         name = i[0]
         attrhashes = i[1]
         other = i[2]
@@ -584,11 +582,11 @@ def RestoreDomains(mainhandler):
 
 
 class _DomainRestore(_saveprefs.RestoreHandler):
-    def __init__(self):
-        _saveprefs.RestoreHandler.__init__(self, "domain")
+    def __init__(self, mainhandler):
+        _saveprefs.RestoreHandler.__init__(self, mainhandler, "domain")
         return
 
-    def restore(self, node):
+    def restore(self, mainhandler, node):
         name = str(node.getAttribute("name"));
         if (name == ""):
             return
@@ -622,8 +620,6 @@ class _DomainRestore(_saveprefs.RestoreHandler):
                     pass
                 pass
             pass
-        defaultDomains.append([name, connects, other])
+        mainhandler.defaultDomains.append([name, connects, other])
         return
     pass
-
-_DomainRestore()

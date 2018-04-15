@@ -29,7 +29,12 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
+
 import OpenIPMI
 import _domain
 import gui_errstr
@@ -240,7 +245,7 @@ class ConnInfo(Tix.ScrolledWindow):
             self.coninfos.append(cti)
             pass
 
-        self.contype.invoke(self.contypes.keys()[0])
+        self.contype.invoke(list(self.contypes.keys())[0])
 
         return
 
@@ -330,7 +335,7 @@ class OpenDomainDialog(Tix.Toplevel):
                 args.append(arg);
                 pass
             pass
-        except Exception, e:
+        except Exception as e:
             self.status.SetError("Error handling connection arguments")
             import sys, traceback
             t, v, b = sys.exc_info()

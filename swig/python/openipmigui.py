@@ -59,7 +59,12 @@
 #  c - Control
 
 import os
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
+
 import sys
 import OpenIPMI
 from openipmigui import _domain
@@ -104,7 +109,10 @@ class TopHandler(Tix.Tk):
 
         Tix.Tk.__init__(self)
         
-        self.domains = { };
+        self.init_history = [ ]
+        self.defaultDomains = [ ]
+        self.pref_taghash = { }
+        self.domains = { }
         self.preffile = preffile
         self.log_file = log_file
         self.histfile = histfile
@@ -123,7 +131,7 @@ class TopHandler(Tix.Tk):
         return
 
     def savePrefs(self):
-        objs = self.domains.values()
+        objs = list(self.domains.values())
         objs.append(self.ui)
         _saveprefs.save(objs, self.preffile)
         return
@@ -136,15 +144,15 @@ class TopHandler(Tix.Tk):
 
     def quit(self):
         global shutdown_thread
-        shutdown_thread = True;
-        gui_cmdwin._HistorySave(self.histfile)
+        shutdown_thread = True
+        gui_cmdwin._HistorySave(self.ui.mainhandler, self.histfile)
 
         OpenIPMI.set_log_handler(DummyLogHandler())
         OpenIPMI.shutdown_everything()
         if (self.debug_mem):
-            print "OpenIPMI is shutdown, memory problems (SEGVs) after this"
-            print " are likely due to OpenIPMI data not being freed until"
-            print " after this point due to the python garbage collector"
+            print("OpenIPMI is shutdown, memory problems (SEGVs) after this")
+            print(" are likely due to OpenIPMI data not being freed until")
+            print(" after this point due to the python garbage collector")
             pass
         sys.exit()
         return
@@ -181,8 +189,8 @@ class CmdlangEventHandler:
     pass
 
 def trace(frame, event, arg):
-    print (event + ": " + frame.f_code.co_name +
-           "(" + frame.f_code.co_filename + ":" + str(frame.f_lineno) + ")")
+    print(event + ": " + frame.f_code.co_name +
+          "(" + frame.f_code.co_filename + ":" + str(frame.f_lineno) + ")")
     return trace
 
 def run(args):
@@ -222,12 +230,12 @@ def run(args):
             read_preffile = False
         elif (arg == '-p'):
             if (len(args) == 0):
-                print "No argument given for -p";
+                print("No argument given for -p")
                 return
             preffile = args[carg]
             carg += 1
         else:
-            print "Unknown argument: " + arg
+            print("Unknown argument: " + arg)
             return
         pass
 
@@ -258,21 +266,21 @@ def run(args):
 
     if (need_separate_openipmi_thread):
         if (verbosity >= 1):
-            print "Creating separate OpenIPMI event driver thread"
+            print("Creating separate OpenIPMI event driver thread")
             pass
         rv = OpenIPMI.init()
         if (rv != 0):
-            print "Unable to initialize OpenIPMI"
+            print("Unable to initialize OpenIPMI")
             return
         thread.start_new_thread(openipmi_driver, ())
         pass
     else:
         if (verbosity >= 1):
-            print "Using TCL event loop, no threads"
+            print("Using TCL event loop, no threads")
             pass
         rv = OpenIPMI.init_tcl()
         if (rv != 0):
-            print "Unable to initialize OpenIPMI, probably no TCL support"
+            print("Unable to initialize OpenIPMI, probably no TCL support")
             return
         pass
 
@@ -286,11 +294,14 @@ def run(args):
         sys.settrace(trace)
         pass
 
-    if (read_preffile):
-        _saveprefs.restore(preffile)
-    gui_cmdwin._HistoryRestore(histfile)
-    
     mainhandler = top
+    _domain._DomainRestore(mainhandler)
+    gui._GUIRestore(mainhandler)
+
+    if (read_preffile):
+        _saveprefs.restore(mainhandler, preffile)
+    
+    gui_cmdwin._HistoryRestore(mainhandler, histfile)
 
     OpenIPMI.add_domain_change_handler(_domain.DomainWatcher(mainhandler))
 

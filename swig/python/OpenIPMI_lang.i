@@ -118,12 +118,12 @@
 	    PyErr_SetString(PyExc_ValueError, "Expecting a sequence of strings");
 	    return NULL;
 	}
-	if (!PyString_Check(o)) {
+	if (!OI_PyString_Check(o)) {
 	    PyErr_SetString(PyExc_ValueError,"Expecting a sequence of strings");
 	    Py_DECREF(o);
 	    return NULL;
 	}
-	$1->val[i] = PyString_AS_STRING(o);
+	$1->val[i] = OI_PI_AS_STRING(o);
 	Py_DECREF(o);
     }
 };
@@ -313,12 +313,12 @@
 	PyErr_SetString(PyExc_ValueError, "Expecting a string");
 	return NULL;
     }
-    if (!PyString_Check(o)) {
+    if (!OI_PyString_Check(o)) {
 	Py_DECREF(o);
 	PyErr_SetString(PyExc_ValueError, "expected a string");
 	return NULL;
     }
-    svalue = PyString_AS_STRING(o);
+    svalue = OI_PI_AS_STRING(o);
     Py_DECREF(o);
     $1 = &svalue;
 }
@@ -411,11 +411,11 @@
 }
 
 %typemap(in) charbuf {
-    if (!PyString_Check($input)) {
+    if (!OI_PyString_Check($input)) {
 	PyErr_SetString(PyExc_ValueError, "Expecting a string");
 	return NULL;
     }
-    PyString_AsStringAndSize($input, &$1.val, &$1.len);
+    OI_PI_AsStringAndSize($input, &$1.val, &$1.len);
 }
 
 %typemap(out) charbuf {
@@ -423,6 +423,37 @@
 };
 
 %{
+
+#if PY_VERSION_HEX >= 0x03000000
+#define OI_PI_FromStringAndSize PyUnicode_FromStringAndSize
+#define OI_PI_AsStringAndSize(o, val, len)	\
+  {						\
+    PyObject *b = PyUnicode_AsUTF8String(o);	\
+    Py_ssize_t nlen;				\
+    PyBytes_AsStringAndSize(b, val, &nlen);	\
+    Py_DECREF(b);				\
+    *len = nlen;				\
+  }
+static char *OI_PI_AS_STRING(PyObject *o)
+{
+  PyObject *b = PyUnicode_AsUTF8String(o);
+  char *s = PyBytes_AS_STRING(b);
+  Py_DECREF(b);
+  return s;
+}
+#define PyInt_AS_LONG PyLong_AS_LONG
+#define OI_PyString_Check PyUnicode_Check
+#else
+#define OI_PI_FromStringAndSize PyString_FromStringAndSize
+#define OI_PI_AsStringAndSize(o, val, len)	\
+  {						\
+    Py_ssize_t nlen;				\
+    PyString_AsStringAndSize(o, val, &nlen);	\
+    *len = nlen;				\
+  }
+#define OI_PI_AS_STRING PyString_AS_STRING
+#define OI_PyString_Check PyString_Check
+#endif
 
 #if PYTHON_HAS_POSIX_THREADS
 #define USE_POSIX_THREADS
@@ -787,7 +818,7 @@ vswig_call_cb_rv(char rv_type, void *rv,
 		   include nuls */
 		len = va_arg(ap, size_t);
 		data = va_arg(ap, void *);
-		o = PyString_FromStringAndSize(data, len);
+		o = OI_PI_FromStringAndSize(data, len);
 		break;
 
 	    case 'p':

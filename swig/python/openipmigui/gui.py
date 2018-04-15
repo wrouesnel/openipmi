@@ -29,7 +29,12 @@
 #  License along with this program; if not, write to the Free
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
+
 import OpenIPMI
 import _saveprefs
 import _oi_logging
@@ -77,7 +82,7 @@ class IPMICloser:
         while (self.count > 0):
             OpenIPMI.wait_io(1000)
             pass
-        gui_cmdwin.init_history = self.ui.cmdwindow.history
+        self.ui.mainhandler.init_history = self.ui.cmdwindow.history
         return
     
     pass
@@ -268,7 +273,7 @@ class IPMIGUI(Tix.Frame):
         return
 
     def Wheel(self, event):
-        self.tree.hlist.yview("scroll", -(event.delta / 20), "units")
+        self.tree.hlist.yview("scroll", -int(event.delta / 20), "units")
         return
     
     def ButtonUp(self, event):
@@ -407,7 +412,7 @@ class IPMIGUI(Tix.Frame):
         self.in_destroy = True
         self.closecount = len(self.mainhandler.domains)
         closer = IPMICloser(self, self.closecount)
-        ds = self.mainhandler.domains.values()
+        ds = list(self.mainhandler.domains.values())
         for v in ds:
             v.domain_id.to_domain(closer)
             pass
@@ -449,11 +454,11 @@ class IPMIGUI(Tix.Frame):
         
     def EnableEvents(self, event=None):
         self.logevents = self.logeventsv.get() != 0
-        print "logevents = " + str(self.logevents)
+        print("logevents = " + str(self.logevents))
         return
     
     def FullEventInfo(self, event=None):
-        print "fullevents = " + str(self.fulleventsv.get())
+        print("fullevents = " + str(self.fulleventsv.get()))
         OpenIPMI.cmdlang_set_evinfo(self.fulleventsv.get())
         return
     
@@ -1046,8 +1051,8 @@ class IPMIGUI(Tix.Frame):
         #elem.setAttribute("treenamewidth", str(self.tree.GetColumnWidth(0)))
         elem.setAttribute("logevents", str(self.logevents))
         elem.setAttribute("fullevents", str(self.fulleventsv != 0))
-        for i in self.impt_objs.values():
-            for j in i.values():
+        for i in list(self.impt_objs.values()):
+            for j in list(i.values()):
                 o = doc.createElement("watch")
                 o.setAttribute("type", j.type)
                 o.setAttribute("name", j.name)
@@ -1060,7 +1065,7 @@ class IPMIGUI(Tix.Frame):
 def GetAttrInt(attr, default):
     try:
         return int(attr.nodeValue)
-    except Exception, e:
+    except Exception as e:
         _oi_logging.error("Error getting init parm " + attr.nodeName +
                           ": " + str(e))
         return default
@@ -1076,11 +1081,11 @@ def GetAttrBool(attr, default):
     return default
 
 class _GUIRestore(_saveprefs.RestoreHandler):
-    def __init__(self):
-        _saveprefs.RestoreHandler.__init__(self, "guiparms")
+    def __init__(self, mainhandler):
+        _saveprefs.RestoreHandler.__init__(self, mainhandler, "guiparms")
         return
 
-    def restore(self, node):
+    def restore(self, mainhandler, node):
         global init_windowheight
         global init_windowwidth
         global init_sashposition
@@ -1131,5 +1136,4 @@ class _GUIRestore(_saveprefs.RestoreHandler):
     
     pass
 
-_GUIRestore()
     

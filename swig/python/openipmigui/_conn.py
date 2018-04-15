@@ -136,7 +136,7 @@ class Connection:
 
     def remove(self):
         self.ui = None
-        for p in self.ports.itervalues():
+        for p in self.ports.values():
             p.remove()
             pass
         self.ports = None
@@ -161,7 +161,7 @@ class Connection:
         
         self.ports[port].SetUp(domain, err == 0)
         conup = False
-        for p in self.ports.itervalues():
+        for p in self.ports.values():
             conup = p.IsUp() or conup
             pass
         if (conup):

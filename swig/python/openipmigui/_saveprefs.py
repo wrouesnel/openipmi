@@ -37,11 +37,9 @@ import os
 import stat
 import sys
 
-taghash = { }
-
 class RestoreHandler:
-    def __init__(self, tag):
-        taghash[tag] = self
+    def __init__(self, mainhandler, tag):
+        mainhandler.pref_taghash[tag] = self
         return
 
     def restore(self, attrlist):
@@ -82,7 +80,7 @@ def save(objlist, file):
         pass
     return
 
-def restore(file):
+def restore(mainhandler, file):
     info = None
     try:
         info = os.stat(file)
@@ -104,8 +102,8 @@ def restore(file):
         for child in doc.childNodes:
             if (child.nodeType == child.ELEMENT_NODE):
                 tag = child.nodeName
-                if (tag in taghash):
-                    taghash[tag].restore(child)
+                if (tag in mainhandler.pref_taghash):
+                    mainhandler.pref_taghash[tag].restore(mainhandler, child)
                     child = child.nextSibling
                     pass
                 pass

@@ -30,7 +30,11 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import Tix
+try:
+    import Tix
+except:
+    import tkinter
+    from tkinter import tix as Tix
 
 class EnumHolder:
     def __init__(self):
@@ -139,8 +143,8 @@ class LightSet(Tix.Toplevel):
 
             self.handler.ok(val)
             pass
-        except Exception, e:
-            print str(e)
+        except Exception as e:
+            print(str(e))
             return
         self.destroy()
         return

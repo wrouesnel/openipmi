@@ -531,7 +531,7 @@ if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
    if test "x$pythonprog" != "x"; then
       # Now find a proper installation location.
       if test "x$pythoninstalldir" = "x"; then
-	 pythoninstalldir=`$pythonprog -c 'import distutils.sysconfig; print distutils.sysconfig.get_python_lib();'`
+	 pythoninstalldir=`$pythonprog -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_lib());'`
 	 if test "x$pythoninstalldir" = "x" -o ! -d "$pythoninstalldir"; then
 	    pythoninstalldir=
 	 fi
@@ -539,7 +539,7 @@ if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
    fi
 
    if test "x$pythoncflags" = "x"; then
-      pythoninc=`$pythonprog -c 'import distutils.sysconfig; print distutils.sysconfig.get_python_inc();'`
+      pythoninc=`$pythonprog -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc());'`
       if test "x$pythoninc" != "x"; then
          pythoncflags="-I$pythoninc"
       else
@@ -579,9 +579,9 @@ if test "x$pythonprog" != "x"; then
       cat - <<_ACEOF >conftest.py
 try:
   import thread
-  print 'yes'
+  print('yes')
 except:
-  print 'no'
+  print('no')
 _ACEOF
       pythonusepthreads=`python conftest.py`
       rm -f conftest.py
@@ -611,9 +611,9 @@ if test "x$tkinter" = "x"; then
       cat - <<_ACEOF >conftest.py
 try:
   import Tix
-  print 'yes'
+  print('yes')
 except:
-  print 'no'
+  print('no')
 _ACEOF
       tkinter=`python conftest.py`
       rm -f conftest.py

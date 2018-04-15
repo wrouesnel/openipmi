@@ -31,10 +31,10 @@
 #
 
 def _error(e):
-    print "ERROR: " + e
+    print("ERROR: " + e)
 
 def _warning(e):
-    print "WARNING: " + e
+    print("WARNING: " + e)
 
 try:
     import logging
