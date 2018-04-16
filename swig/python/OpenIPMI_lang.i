@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-%typemap(in) swig_cb {
+%typemap(in) swig_cb * {
     if ($input == Py_None)
 	$1 = NULL;
     else
@@ -609,15 +609,15 @@ swig_free_ref(swig_ref ref)
     OI_PY_STATE_PUT(gstate);
 }
 
-static swig_cb_val
-get_swig_cb_i(swig_cb cb)
+static swig_cb_val *
+get_swig_cb_i(swig_cb *cb)
 {
     return cb;
 }
 #define get_swig_cb(cb, func) get_swig_cb_i(cb)
 
-static swig_cb_val
-ref_swig_cb_i(swig_cb cb)
+static swig_cb_val *
+ref_swig_cb_i(swig_cb *cb)
 {
     OI_PY_STATE gstate;
 
@@ -630,8 +630,8 @@ ref_swig_cb_i(swig_cb cb)
 #define ref_swig_2cb(cb, func, func2) ref_swig_cb_i(cb)
 #define ref_swig_gencb(cb) ref_swig_cb_i(cb)
 
-static swig_cb_val
-deref_swig_cb(swig_cb cb)
+static swig_cb_val *
+deref_swig_cb(swig_cb *cb)
 {
     OI_PY_STATE gstate;
 
@@ -641,8 +641,8 @@ deref_swig_cb(swig_cb cb)
     return cb;
 }
 
-static swig_cb_val
-deref_swig_cb_val(swig_cb_val cb)
+static swig_cb_val *
+deref_swig_cb_val(swig_cb_val *cb)
 {
     OI_PY_STATE gstate;
 
@@ -653,7 +653,7 @@ deref_swig_cb_val(swig_cb_val cb)
 }
 
 static int
-valid_swig_cb_i(swig_cb cb, char *func)
+valid_swig_cb_i(swig_cb *cb, char *func)
 {
     PyObject    *meth;
     OI_PY_STATE gstate;
@@ -733,13 +733,13 @@ swig_count_format(char *format)
     return count;
 }
 
-static void swig_call_cb(swig_cb_val cb, char *method_name, char *format, ...)
+static void swig_call_cb(swig_cb_val *cb, char *method_name, char *format, ...)
 #ifdef __GNUC__
      __attribute__ ((__format__ (__printf__, 3, 4)))
 #endif
 ;
 static void swig_call_cb_rv(char rv_type, void *rv,
-			    swig_cb_val cb, char *method_name,
+			    swig_cb_val *cb, char *method_name,
 			    char *format, ...)
 #ifdef __GNUC__
      __attribute__ ((__format__ (__printf__, 5, 6)))
@@ -747,7 +747,7 @@ static void swig_call_cb_rv(char rv_type, void *rv,
 ;
 static void
 vswig_call_cb_rv(char rv_type, void *rv,
-		 swig_cb_val cb, char *method_name,
+		 swig_cb_val *cb, char *method_name,
 		 char *format, va_list ap)
 {
     int           len;
@@ -949,7 +949,7 @@ vswig_call_cb_rv(char rv_type, void *rv,
 }
 
 static void
-swig_call_cb(swig_cb_val cb, char *method_name,
+swig_call_cb(swig_cb_val *cb, char *method_name,
 	     char *format, ...)
 {
     va_list ap;
@@ -961,7 +961,7 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 
 static void
 swig_call_cb_rv(char rv_type, void *rv,
-		swig_cb_val cb, char *method_name,
+		swig_cb_val *cb, char *method_name,
 		char *format, ...)
 {
     va_list ap;

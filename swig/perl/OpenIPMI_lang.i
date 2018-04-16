@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-%typemap(in) swig_cb {
+%typemap(in) swig_cb * {
     if (!SvROK($input))
 	croak("Argument $argnum is not a reference.");
     $1 = $input;
@@ -341,19 +341,19 @@ swig_make_ref_i(void *item, swig_type_info *class)
 	} while(0)
 
 /* Get the underlying callback object reference. */
-static swig_cb_val
-get_swig_cb_i(swig_cb cb)
+static swig_cb_val *
+get_swig_cb_i(swig_cb *cb)
 {
-    swig_cb_val rv = SvRV(cb);
+    swig_cb_val *rv = SvRV(cb);
     return rv;
 }
 #define get_swig_cb(cb, func) get_swig_cb_i(cb)
 
 /* Get the underlying callback object reference and increment its refcount. */
-static swig_cb_val
-ref_swig_cb_i(swig_cb cb)
+static swig_cb_val *
+ref_swig_cb_i(swig_cb *cb)
 {
-    swig_cb_val rv = SvRV(cb);
+    swig_cb_val *rv = SvRV(cb);
 
     SvREFCNT_inc(rv);
     return rv;
@@ -363,18 +363,18 @@ ref_swig_cb_i(swig_cb cb)
 #define ref_swig_gencb(cb) ref_swig_cb_i(cb)
 
 /* Get the underlying callback object reference and decrement its refcount. */
-static swig_cb_val
-deref_swig_cb(swig_cb cb)
+static swig_cb_val *
+deref_swig_cb(swig_cb *cb)
 {
-    swig_cb_val rv = SvRV(cb);
+    swig_cb_val *rv = SvRV(cb);
 
     SvREFCNT_dec(rv);
     return rv;
 }
 
 /* Decrement the underlying callback object refcount. */
-static swig_cb_val
-deref_swig_cb_val(swig_cb_val cb)
+static swig_cb_val *
+deref_swig_cb_val(swig_cb_val *cb)
 {
     SvREFCNT_dec(cb);
     return cb;

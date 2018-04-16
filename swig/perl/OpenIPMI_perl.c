@@ -41,7 +41,7 @@
 
 static void
 vswig_call_cb_rv(char rv_type, void *rv,
-		 swig_cb_val cb, char *method_name,
+		 swig_cb_val *cb, char *method_name,
 		 char *format, va_list ap)
 {
     SV            *ref = newRV_inc(cb);
@@ -192,7 +192,7 @@ vswig_call_cb_rv(char rv_type, void *rv,
 }
 
 void
-swig_call_cb(swig_cb_val cb, char *method_name,
+swig_call_cb(swig_cb_val *cb, char *method_name,
 	     char *format, ...)
 {
     va_list ap;
@@ -204,7 +204,7 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 
 void
 swig_call_cb_rv(char rv_type, void *rv,
-		swig_cb_val cb, char *method_name,
+		swig_cb_val *cb, char *method_name,
 		char *format, ...)
 {
     va_list ap;

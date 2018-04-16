@@ -37,11 +37,11 @@
 /* A callback object.  Note that this is the one that will be passed
    in by the user.  For Perl, we want the real reference, which is a
    swig_cb_val. */
-typedef SV *swig_cb;
+typedef SV swig_cb;
 
 /* The real underlying reference to the callback object.  This should
    always be a pointer. */
-typedef SV *swig_cb_val;
+typedef SV swig_cb_val;
 
 /* Used to validate the CB values passed in by the user.  No cb func
    check yet. */
@@ -51,13 +51,13 @@ typedef SV *swig_cb_val;
 #define invalidate_swig_cb(v) ((v) = NULL)
 
 
-void swig_call_cb(swig_cb_val cb, char *method_name, char *format, ...)
+void swig_call_cb(swig_cb_val *cb, char *method_name, char *format, ...)
 #ifdef __GNUC__
      __attribute__ ((__format__ (__printf__, 3, 4)))
 #endif
 ;
 void swig_call_cb_rv(char rv_type, void *rv,
-		     swig_cb_val cb, char *method_name, char *format, ...)
+		     swig_cb_val *cb, char *method_name, char *format, ...)
 #ifdef __GNUC__
      __attribute__ ((__format__ (__printf__, 5, 6)))
 #endif

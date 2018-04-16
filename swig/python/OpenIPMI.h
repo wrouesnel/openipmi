@@ -37,14 +37,14 @@
 /* A callback object.  Note that this is the one that will be passed
    in by the user.  For Python, we want the real reference, which is a
    swig_cb_val. */
-typedef PyObject *swig_cb;
+typedef PyObject swig_cb;
 
 /* The real underlying reference to the callback object.  This should
    always be a pointer. */
-typedef PyObject *swig_cb_val;
+typedef PyObject swig_cb_val;
 
 /* Used to validate the CB values passed in by the user. */
-#define nil_swig_cb(v) (v == NULL)
+#define nil_swig_cb(v) ((v) == NULL)
 #define invalidate_swig_cb(v) ((v) = NULL)
 
 typedef struct swig_ref

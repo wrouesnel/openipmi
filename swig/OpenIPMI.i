@@ -378,7 +378,7 @@ typedef struct iargarray
 %nodefault;
 
 %{
-swig_cb_val swig_log_handler;
+swig_cb_val *swig_log_handler;
 
 void
 openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
@@ -387,7 +387,7 @@ openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
     char *pfx = "";
     static char log[1024];
     static int curr = 0;
-    swig_cb_val handler = swig_log_handler;
+    swig_cb_val *handler = swig_log_handler;
 
     if (! handler)
 	return;
@@ -441,7 +441,7 @@ openipmi_swig_vlog(os_handler_t *os_handler, const char *format,
 static void
 handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -457,7 +457,7 @@ domain_connect_change_handler(ipmi_domain_t *domain,
 			      int           still_connected,
 			      void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -473,7 +473,7 @@ domain_connect_change_handler_cl(ipmi_domain_con_cb handler,
 {
     if (handler != domain_connect_change_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -481,7 +481,7 @@ static void
 domain_iterate_connections_handler(ipmi_domain_t *domain, int conn,
 				   void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -492,7 +492,7 @@ domain_iterate_connections_handler(ipmi_domain_t *domain, int conn,
 static void
 domain_event_handler(ipmi_domain_t *domain, ipmi_event_t *event, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    event_ref;
 
@@ -510,7 +510,7 @@ domain_event_handler_cl(ipmi_event_handler_cb handler,
 {
     if (handler != domain_event_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -518,7 +518,7 @@ static void
 domain_mc_updated_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 			  ipmi_mc_t *mc, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    mc_ref;
 
@@ -537,7 +537,7 @@ domain_mc_updated_handler_cl(ipmi_domain_mc_upd_cb handler,
 {
     if (handler != domain_mc_updated_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -545,7 +545,7 @@ static void
 domain_entity_update_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
 			      ipmi_entity_t *entity, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    entity_ref;
 
@@ -564,14 +564,14 @@ domain_entity_update_handler_cl(ipmi_domain_entity_cb handler,
 {
     if (handler != domain_entity_update_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
 static void
 domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -584,7 +584,7 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 static void
 parse_args_iter_help_hnd(const char *name, const char *help, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
 
     swig_call_cb(cb, "parse_args_iter_help_cb", "%s%s", name, help);
 }
@@ -592,7 +592,7 @@ parse_args_iter_help_hnd(const char *name, const char *help, void *cb_data)
 static void
 domain_close_done(void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
 
     swig_call_cb(cb, "domain_close_done_cb", " ");
     /* One-time call, get rid of the CB. */
@@ -602,7 +602,7 @@ domain_close_done(void *cb_data)
 static void
 domain_iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    entity_ref;
 
@@ -617,7 +617,7 @@ domain_iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
 static void
 ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -630,7 +630,7 @@ ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
 static void
 domain_reread_sels_handler(ipmi_domain_t *domain, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -641,7 +641,7 @@ domain_reread_sels_handler(ipmi_domain_t *domain, int err, void *cb_data)
 static int
 domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    swig_cb_val   cb = rspi->data1;
+    swig_cb_val   *cb = rspi->data1;
     swig_ref      domain_ref;
     ipmi_msg_t    *msg = &rspi->msg;
     ipmi_addr_t   *addr = &rspi->addr;
@@ -664,7 +664,7 @@ domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 static void
 domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    mc_ref;
 
@@ -679,7 +679,7 @@ static void
 fru_written_done(ipmi_domain_t *domain, ipmi_fru_t *fru,
 		 int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    fru_ref;
 
@@ -697,7 +697,7 @@ fru_written_done(ipmi_domain_t *domain, ipmi_fru_t *fru,
 static void
 fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     swig_ref    fru_ref;
 
@@ -715,7 +715,7 @@ fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err, void *cb_data)
 static void
 handle_entity_cb(ipmi_entity_t *entity, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
@@ -728,7 +728,7 @@ entity_iterate_entities_handler(ipmi_entity_t *ent1,
 				ipmi_entity_t *ent2,
 				void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    ent1_ref;
     swig_ref    ent2_ref;
 
@@ -744,7 +744,7 @@ entity_iterate_sensors_handler(ipmi_entity_t *entity,
 			       ipmi_sensor_t *sensor,
 			       void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    sensor_ref;
 
@@ -761,7 +761,7 @@ entity_iterate_controls_handler(ipmi_entity_t  *entity,
 				ipmi_control_t *control,
 				void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    control_ref;
 
@@ -779,7 +779,7 @@ entity_presence_handler(ipmi_entity_t *entity,
 			void          *cb_data,
 			ipmi_event_t  *event)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    event_ref;
     int         rv = IPMI_EVENT_NOT_HANDLED;
@@ -800,7 +800,7 @@ entity_presence_handler_cl(ipmi_entity_presence_change_cb handler,
 {
     if (handler != entity_presence_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -810,7 +810,7 @@ entity_sensor_update_handler(enum ipmi_update_e op,
 			     ipmi_sensor_t      *sensor,
 			     void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    sensor_ref;
 
@@ -829,7 +829,7 @@ entity_sensor_update_handler_cl(ipmi_entity_sensor_cb handler,
 {
     if (handler != entity_sensor_update_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -839,7 +839,7 @@ entity_control_update_handler(enum ipmi_update_e op,
 			      ipmi_control_t     *control,
 			      void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    control_ref;
 
@@ -858,7 +858,7 @@ entity_control_update_handler_cl(ipmi_entity_control_cb handler,
 {
     if (handler != entity_control_update_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -867,7 +867,7 @@ entity_fru_update_handler(enum ipmi_update_e op,
 			  ipmi_entity_t      *entity,
 			  void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    fru_ref;
     ipmi_fru_t  *fru;
@@ -889,7 +889,7 @@ entity_fru_update_werr_handler(enum ipmi_update_werr_e op,
 			       ipmi_entity_t           *entity,
 			       void                    *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    fru_ref;
     ipmi_fru_t  *fru;
@@ -912,7 +912,7 @@ entity_fru_update_handler_cl(ipmi_entity_fru_cb handler,
 {
     if (handler != entity_fru_update_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -923,7 +923,7 @@ entity_fru_update_werr_handler_cl(ipmi_entity_fru_werr_cb handler,
 {
     if (handler != entity_fru_update_werr_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -934,7 +934,7 @@ entity_hot_swap_handler(ipmi_entity_t             *entity,
 			void                      *cb_data,
 			ipmi_event_t              *event)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    event_ref;
     int         rv = IPMI_EVENT_NOT_HANDLED;
@@ -958,7 +958,7 @@ entity_hot_swap_handler_cl(ipmi_entity_hot_swap_cb handler,
 {
     if (handler != entity_hot_swap_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -968,7 +968,7 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
 			    enum ipmi_hot_swap_states state,
 			    void                      *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
@@ -985,7 +985,7 @@ entity_get_hot_swap_time_handler(ipmi_entity_t  *entity,
 				 ipmi_timeout_t time,
 				 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
@@ -1001,7 +1001,7 @@ entity_set_hot_swap_time_handler(ipmi_entity_t  *entity,
 				 int            err,
 				 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
@@ -1016,7 +1016,7 @@ entity_activate_handler(ipmi_entity_t  *entity,
 			int            err,
 			void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, ipmi_entity_t);
@@ -1029,7 +1029,7 @@ entity_activate_handler(ipmi_entity_t  *entity,
 static void
 handle_mc_cb(ipmi_mc_t *mc, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1042,7 +1042,7 @@ mc_active_handler(ipmi_mc_t  *mc,
 		  int        active,
 		  void       *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1057,14 +1057,14 @@ mc_active_handler_cl(ipmi_mc_active_cb handler,
 {
     if (handler != mc_active_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
 static void
 mc_fully_up_handler(ipmi_mc_t *mc, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1079,7 +1079,7 @@ mc_fully_up_handler_cl(ipmi_mc_ptr_cb handler,
 {
     if (handler != mc_fully_up_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -1088,7 +1088,7 @@ mc_msg_cb(ipmi_mc_t  *mc,
 	  ipmi_msg_t *msg,
 	  void       *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1102,7 +1102,7 @@ mc_msg_cb(ipmi_mc_t  *mc,
 static void
 mc_reset_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1115,7 +1115,7 @@ mc_reset_handler(ipmi_mc_t *mc, int err, void *cb_data)
 static void
 mc_events_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1128,7 +1128,7 @@ mc_events_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
 static void
 mc_get_event_log_enable_handler(ipmi_mc_t *mc, int err, int val, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1142,7 +1142,7 @@ mc_get_event_log_enable_handler(ipmi_mc_t *mc, int err, int val, void *cb_data)
 static void
 mc_set_event_log_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1155,7 +1155,7 @@ mc_set_event_log_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
 static void
 mc_reread_sensors_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1168,7 +1168,7 @@ mc_reread_sensors_handler(ipmi_mc_t *mc, int err, void *cb_data)
 static void
 mc_reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1184,7 +1184,7 @@ mc_sel_get_time_cb(ipmi_mc_t     *mc,
 		   unsigned long time,
 		   void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1200,7 +1200,7 @@ mc_channel_get_info(ipmi_mc_t           *mc,
 		    ipmi_channel_info_t *info,
 		    void                *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
@@ -1221,7 +1221,7 @@ mc_channel_get_access(ipmi_mc_t             *mc,
 		      ipmi_channel_access_t *info,
 		      void                  *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
@@ -1241,7 +1241,7 @@ mc_channel_set_access(ipmi_mc_t *mc,
 		      int       err,
 		      void      *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1257,7 +1257,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
 		     ipmi_user_list_t *info,
 		     void             *cb_data)
 {
-    swig_cb_val  cb = cb_data;
+    swig_cb_val  *cb = cb_data;
     swig_ref     mc_ref;
     swig_ref     *info_ref;
     int          count;
@@ -1300,7 +1300,7 @@ mc_channel_set_user(ipmi_mc_t *mc,
 		    int       err,
 		    void      *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, ipmi_mc_t);
@@ -1313,7 +1313,7 @@ mc_channel_set_user(ipmi_mc_t *mc,
 static void
 handle_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -1893,7 +1893,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       void                        *cb_data,
 			       ipmi_event_t                *event)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     char        eventstr[5];
     int         raw_set = 0;
@@ -1926,7 +1926,7 @@ sensor_threshold_event_handler_cl(ipmi_sensor_threshold_event_cb handler,
 {
     if (handler != sensor_threshold_event_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -1939,7 +1939,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      void                  *cb_data,
 			      ipmi_event_t          *event)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     char        eventstr[5];
     swig_ref    event_ref;
@@ -1963,7 +1963,7 @@ sensor_discrete_event_handler_cl(ipmi_sensor_discrete_event_cb handler,
 {
     if (handler != sensor_discrete_event_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -1973,7 +1973,7 @@ sensor_discrete_event_handler_cl(ipmi_sensor_discrete_event_cb handler,
 typedef struct event_call_handler_data_s
 {
     ipmi_event_t          *event;
-    swig_cb_val           handlers_val;
+    swig_cb_val           *handlers_val;
     ipmi_event_handlers_t *handlers;
     int                   rv;
 } event_call_handler_data_t;
@@ -1993,7 +1993,7 @@ sensor_event_enable_handler(ipmi_sensor_t *sensor,
 			    int           err,
 			    void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -2009,7 +2009,7 @@ sensor_get_event_enables_handler(ipmi_sensor_t      *sensor,
 				 ipmi_event_state_t *states,
 				 void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     char        *st;
 
@@ -2035,7 +2035,7 @@ sensor_rearm_handler(ipmi_sensor_t      *sensor,
 		     int                err,
 		     void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -2052,7 +2052,7 @@ sensor_get_hysteresis_handler(ipmi_sensor_t *sensor,
 			      unsigned int  negative_hysteresis,
 			      void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -2068,7 +2068,7 @@ sensor_set_hysteresis_handler(ipmi_sensor_t      *sensor,
 			      int                err,
 			      void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -2083,7 +2083,7 @@ sensor_set_thresholds_handler(ipmi_sensor_t      *sensor,
 			      int                err,
 			      void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
 
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
@@ -2098,7 +2098,7 @@ static void sensor_get_thresholds_handler(ipmi_sensor_t     *sensor,
 					  ipmi_thresholds_t *th,
 					  void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     char        *thstr = thresholds_to_str(th);
 
@@ -2120,7 +2120,7 @@ sensor_get_reading_handler(ipmi_sensor_t             *sensor,
 			   ipmi_states_t             *states,
 			   void                      *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     int         raw_set = 0;
     int         value_set = 0;
@@ -2148,7 +2148,7 @@ sensor_get_states_handler(ipmi_sensor_t *sensor,
 			  ipmi_states_t *states,
 			  void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    sensor_ref;
     char        *statestr;
 
@@ -2348,7 +2348,7 @@ light_setting_to_str(ipmi_light_setting_t *e)
 static void
 handle_control_cb(ipmi_control_t *control, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
@@ -2359,7 +2359,7 @@ handle_control_cb(ipmi_control_t *control, void *cb_data)
 static void
 control_val_set_handler(ipmi_control_t *control, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
@@ -2373,7 +2373,7 @@ static void
 control_val_get_handler(ipmi_control_t *control, int err, int *val,
 			void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
@@ -2396,7 +2396,7 @@ control_val_get_light_handler(ipmi_control_t *control, int err,
 			      ipmi_light_setting_t *val,
 			      void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
     char        *str;
 
@@ -2415,7 +2415,7 @@ control_val_get_id_handler(ipmi_control_t *control, int err,
 			   unsigned char *val, int length,
 			   void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
@@ -2430,7 +2430,7 @@ static int
 control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
 			  void *cb_data, ipmi_event_t *event)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    control_ref;
     swig_ref    event_ref;
     int         rv = IPMI_EVENT_NOT_HANDLED;
@@ -2454,7 +2454,7 @@ control_val_event_handler_cl(ipmi_control_val_event_cb handler,
 {
     if (handler != control_val_event_handler)
 	return;
-    swig_cb_val handler_val = handler_data;
+    swig_cb_val *handler_val = handler_data;
     deref_swig_cb_val(handler_val);
 }
 
@@ -2465,7 +2465,7 @@ lanparm_get_parm(ipmi_lanparm_t *lanparm,
 		 unsigned int   data_len,
 		 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    lanparm_ref;
 
     lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
@@ -2481,7 +2481,7 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
 		 int            err,
 		 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    lanparm_ref;
 
     if (cb) {
@@ -2499,7 +2499,7 @@ lanparm_get_config(ipmi_lanparm_t    *lanparm,
 		   ipmi_lan_config_t *config,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    lanparm_ref;
     swig_ref    config_ref;
 
@@ -2518,7 +2518,7 @@ lanparm_set_config(ipmi_lanparm_t    *lanparm,
 		   int               err,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    lanparm_ref;
 
     if (cb) {
@@ -2535,7 +2535,7 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
 		   int               err,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    lanparm_ref;
 
     if (cb) {
@@ -2550,7 +2550,7 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
 static void
 get_pef(ipmi_pef_t *pef, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
 
     pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
@@ -2568,7 +2568,7 @@ pef_get_parm(ipmi_pef_t    *pef,
 	     unsigned int  data_len,
 	     void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
 
     pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
@@ -2584,7 +2584,7 @@ pef_set_parm(ipmi_pef_t *pef,
 	     int        err,
 	     void       *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
 
     if (cb) {
@@ -2602,7 +2602,7 @@ pef_get_config(ipmi_pef_t        *pef,
 	       ipmi_pef_config_t *config,
 	       void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
     swig_ref    config_ref;
 
@@ -2621,7 +2621,7 @@ pef_set_config(ipmi_pef_t    *pef,
 	       int           err,
 	       void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
 
     if (cb) {
@@ -2638,7 +2638,7 @@ pef_clear_lock(ipmi_pef_t    *pef,
 	       int           err,
 	       void          *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pef_ref;
 
     if (cb) {
@@ -2653,7 +2653,7 @@ pef_clear_lock(ipmi_pef_t    *pef,
 static void
 get_pet(ipmi_pet_t *pet, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    pet_ref;
 
     pet_ref = swig_make_ref_destruct(pet, ipmi_pet_t);
@@ -2667,7 +2667,7 @@ get_pet(ipmi_pet_t *pet, int err, void *cb_data)
 static void
 event_deleted_handler(ipmi_domain_t *domain, int err, void *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
@@ -2683,7 +2683,7 @@ sol_connection_state_change_cb(ipmi_sol_conn_t *conn,
 			       int             error,
 			       void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2699,7 +2699,7 @@ sol_data_received_cb(ipmi_sol_conn_t *conn,
 		     size_t          count,
 		     void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
     int         rv = 0;
 
@@ -2714,7 +2714,7 @@ static void
 sol_break_detected_cb(ipmi_sol_conn_t *conn,
 		      void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2726,7 +2726,7 @@ static void
 sol_bmc_transmit_overrun_cb(ipmi_sol_conn_t *conn,
 			    void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2739,7 +2739,7 @@ sol_write_complete_cb(ipmi_sol_conn_t *conn,
 		      int             error,
 		      void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2754,7 +2754,7 @@ sol_send_break_cb(ipmi_sol_conn_t *conn,
 		  int             error,
 		  void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2769,7 +2769,7 @@ sol_set_CTS_assertable_cb(ipmi_sol_conn_t *conn,
 			  int             error,
 			  void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2784,7 +2784,7 @@ sol_set_DCD_DSR_asserted_cb(ipmi_sol_conn_t *conn,
 			    int             error,
 			    void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2799,7 +2799,7 @@ sol_set_RI_asserted_cb(ipmi_sol_conn_t *conn,
 		       int             error,
 		       void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2815,7 +2815,7 @@ sol_flush_complete_cb(ipmi_sol_conn_t *conn,
 		      int             queue_selectors_flushed,
 		      void            *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    conn_ref;
 
     conn_ref = swig_make_ref(conn, ipmi_sol_conn_t);
@@ -2833,7 +2833,7 @@ solparm_get_parm(ipmi_solparm_t *solparm,
 		 unsigned int   data_len,
 		 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    solparm_ref;
 
     solparm_ref = swig_make_ref_destruct(solparm, ipmi_solparm_t);
@@ -2849,7 +2849,7 @@ solparm_set_parm(ipmi_solparm_t *solparm,
 		 int            err,
 		 void           *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    solparm_ref;
 
     if (cb) {
@@ -2867,7 +2867,7 @@ solparm_get_config(ipmi_solparm_t    *solparm,
 		   ipmi_sol_config_t *config,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    solparm_ref;
     swig_ref    config_ref;
 
@@ -2886,7 +2886,7 @@ solparm_set_config(ipmi_solparm_t    *solparm,
 		   int               err,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    solparm_ref;
 
     if (cb) {
@@ -2903,7 +2903,7 @@ solparm_clear_lock(ipmi_solparm_t    *solparm,
 		   int               err,
 		   void              *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    solparm_ref;
 
     if (cb) {
@@ -2922,7 +2922,7 @@ glib_handle_log(const char *domain,
 		const char *pfx,
 		const char *message)
 {
-    swig_cb_val handler = swig_log_handler;
+    swig_cb_val *handler = swig_log_handler;
 
     if (! handler)
 	return;
@@ -3262,7 +3262,7 @@ wait_io(int timeout)
    with the info is <type>_<name>_handler. */
 #define cb_add(type, name, func) \
 	int         rv;							\
-	swig_cb_val handler_val;					\
+	swig_cb_val *handler_val;					\
 	IPMI_SWIG_C_CB_ENTRY						\
 	if (! valid_swig_cb(handler, func))				\
 	    rv = EINVAL;						\
@@ -3277,7 +3277,7 @@ wait_io(int timeout)
 	return rv;
 #define cb_rm(type, name, func) \
 	int         rv;							\
-	swig_cb_val handler_val;					\
+	swig_cb_val *handler_val;					\
 	IPMI_SWIG_C_CB_ENTRY						\
 	if (! valid_swig_cb(handler, func))				\
 	    rv = EINVAL;						\
@@ -3305,7 +3305,7 @@ domain_cleanup_add(ipmi_domain_t *domain, void *cb_data)
 }
 
 static ipmi_domain_id_t *
-open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
+open_domain(char *name, argarray *args, swig_cb *done, swig_cb *up)
 {
     int                i, j;
     int                num_options = 0;
@@ -3315,8 +3315,8 @@ open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
     ipmi_con_t         *con[2];
     ipmi_domain_id_t   *nd;
     int                rv;
-    swig_cb_val        done_val = NULL;
-    swig_cb_val        up_val = NULL;
+    swig_cb_val        *done_val = NULL;
+    swig_cb_val        *up_val = NULL;
     ipmi_domain_con_cb con_change = NULL;
     ipmi_domain_ptr_cb domain_up = NULL;
 
@@ -3418,7 +3418,7 @@ open_domain(char *name, argarray *args, swig_cb done, swig_cb up)
 }
 
 static ipmi_domain_id_t *
-open_domain2(char *name, argarray *args, swig_cb done, swig_cb up)
+open_domain2(char *name, argarray *args, swig_cb *done, swig_cb *up)
 {
     int                i, j;
     int                num_options = 0;
@@ -3428,8 +3428,8 @@ open_domain2(char *name, argarray *args, swig_cb done, swig_cb up)
     ipmi_con_t         *con[2];
     ipmi_domain_id_t   *nd;
     int                rv;
-    swig_cb_val        done_val = NULL;
-    swig_cb_val        up_val = NULL;
+    swig_cb_val        *done_val = NULL;
+    swig_cb_val        *up_val = NULL;
     ipmi_domain_con_cb con_change = NULL;
     ipmi_domain_ptr_cb domain_up = NULL;
 
@@ -3532,7 +3532,7 @@ open_domain2(char *name, argarray *args, swig_cb done, swig_cb up)
 
 static ipmi_domain_id_t *
 open_domain3(char *name, argarray *ioptions, iargarray *args,
-	     swig_cb done, swig_cb up)
+	     swig_cb *done, swig_cb *up)
 {
     int                i, j;
     int                num_options = 0;
@@ -3541,8 +3541,8 @@ open_domain3(char *name, argarray *ioptions, iargarray *args,
     ipmi_con_t         *con[2];
     ipmi_domain_id_t   *nd;
     int                rv;
-    swig_cb_val        done_val = NULL;
-    swig_cb_val        up_val = NULL;
+    swig_cb_val        *done_val = NULL;
+    swig_cb_val        *up_val = NULL;
     ipmi_domain_con_cb con_change = NULL;
     ipmi_domain_ptr_cb domain_up = NULL;
 
@@ -3624,9 +3624,9 @@ open_domain3(char *name, argarray *ioptions, iargarray *args,
 }
 
 static void
-set_log_handler(swig_cb handler)
+set_log_handler(swig_cb *handler)
 {
-    swig_cb_val old_handler = swig_log_handler;
+    swig_cb_val *old_handler = swig_log_handler;
     IPMI_SWIG_C_CB_ENTRY
     if (valid_swig_cb(handler, log))
 	swig_log_handler = ref_swig_cb(handler, log);
@@ -3789,7 +3789,7 @@ domain_change_handler(ipmi_domain_t      *domain,
 		      enum ipmi_update_e op,
 		      void               *cb_data)
 {
-    swig_cb_val cb = cb_data;
+    swig_cb_val *cb = cb_data;
     swig_ref    domain_ref;
     domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_change_cb", "%s%p",
@@ -3798,10 +3798,10 @@ domain_change_handler(ipmi_domain_t      *domain,
 }
 
 int
-add_domain_change_handler(swig_cb handler)
+add_domain_change_handler(swig_cb *handler)
 {
     int rv;
-    swig_cb_val handler_val;
+    swig_cb_val *handler_val;
     IPMI_SWIG_C_CB_ENTRY
     if (! valid_swig_cb(handler, domain_change_cb)) {
 	rv = EINVAL;
@@ -3818,10 +3818,10 @@ out_err:
 }
 
 int
-remove_domain_change_handler(swig_cb handler)
+remove_domain_change_handler(swig_cb *handler)
 {
     int rv;
-    swig_cb_val handler_val;
+    swig_cb_val *handler_val;
     IPMI_SWIG_C_CB_ENTRY
     if (! valid_swig_cb(handler, domain_change_cb)) {
 	rv = EINVAL;
@@ -3868,21 +3868,21 @@ out_err:
  * OpenIPMI does, such as scanning SDRs, fetching the SEL, etc.
  */
 ipmi_domain_id_t *open_domain(char *name, argarray *args,
-			      swig_cb done = NULL, swig_cb up = NULL);
+			      swig_cb *done = NULL, swig_cb *up = NULL);
 
 /*
  * Like open_domain, but takes the new parameter types and is more
  * flexible.  This is required for RMCP+.
  */
 ipmi_domain_id_t *open_domain2(char *name, argarray *args,
-			       swig_cb done = NULL, swig_cb up = NULL);
+			       swig_cb *done = NULL, swig_cb *up = NULL);
 
 /*
  * Like open_domain2, but takes ipmi_args_t.  Works with RMCP+.
  */
 ipmi_domain_id_t *open_domain3(char *name, argarray *options,
 			       iargarray *args,
-			       swig_cb done = NULL, swig_cb up = NULL);
+			       swig_cb *done = NULL, swig_cb *up = NULL);
 
 /*
  * Iterate through the help for the various connection types used with
@@ -3892,12 +3892,12 @@ ipmi_domain_id_t *open_domain3(char *name, argarray *options,
  * parameters are <self> <name> <help>.  This can also be used to find
  * the names of all registered connections.
  */
-void parse_args_iter_help(swig_cb help_cb);
+void parse_args_iter_help(swig_cb *help_cb);
 %{
-    static void parse_args_iter_help(swig_cb help_cb)
+    static void parse_args_iter_help(swig_cb *help_cb)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (! valid_swig_cb(help_cb, parse_args_iter_help_cb))
@@ -3923,13 +3923,13 @@ const char *parse_option_help();
  * a domain is added or removed.  The handler will be called with the
  * following parameters: <self> added|deleted|changed <domain>
  */
-int add_domain_change_handler(swig_cb handler);
+int add_domain_change_handler(swig_cb *handler);
 
 /*
  * Remove a previously registered domain handler.
  */
 int
-remove_domain_change_handler(swig_cb handler);
+remove_domain_change_handler(swig_cb *handler);
 
 /*
  * Set the handler for OpenIPMI logs.  This is a global value and
@@ -3939,7 +3939,7 @@ remove_domain_change_handler(swig_cb handler);
  * string)>, and <log (a string)>.  If the log method is undefined or
  * not provided, the current log handler will be removed.
  */
-void set_log_handler(swig_cb handler = NULL);
+void set_log_handler(swig_cb *handler = NULL);
 
 
 /*
@@ -4011,7 +4011,7 @@ char *get_error_string(unsigned int val);
      * will be called on the first parameter with the following parameters:
      * <self> <domain>
      */
-    int to_domain(swig_cb handler)
+    int to_domain(swig_cb *handler)
     {
 	int rv;
 	IPMI_SWIG_C_CB_ENTRY
@@ -4081,10 +4081,10 @@ char *get_error_string(unsigned int val);
      * domain_close_done_cb method for the handler object will be
      * called with the following parameters: <self>
      */
-    int close(swig_cb handler)
+    int close(swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (! valid_swig_cb(handler, domain_close_done_cb))
@@ -4106,7 +4106,7 @@ char *get_error_string(unsigned int val);
      * parameters: <self>, <domain>, <errorval>, <connection_number>,
      * <port_number>, <anything_still_connected>.
      */
-    int add_connect_change_handler(swig_cb handler)
+    int add_connect_change_handler(swig_cb *handler)
     {
 	/* cleanup handler is added when the domain is added. */
 	cb_add(domain, connect_change, conn_change_cb);
@@ -4115,7 +4115,7 @@ char *get_error_string(unsigned int val);
     /*
      * Remove the connection change handler.
      */
-    int remove_connect_change_handler(swig_cb handler)
+    int remove_connect_change_handler(swig_cb *handler)
     {
 	cb_rm(domain, connect_change, conn_change_cb);
     }
@@ -4126,9 +4126,9 @@ char *get_error_string(unsigned int val);
      * parameter for each connection in the domain.  The parameters it
      * receives will be: <self>, <domain>, <connection (integer)>.
      */
-    int iterate_connections(swig_cb handler)
+    int iterate_connections(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4229,7 +4229,7 @@ char *get_error_string(unsigned int val);
      * method on the first parameter will be called with the following
      * parameters: <self>, added|deleted|changed <domain>, <entity>.
      */
-    int add_entity_update_handler(swig_cb handler)
+    int add_entity_update_handler(swig_cb *handler)
     {
 	ipmi_domain_add_entity_update_handler_cl
 	    (self, domain_entity_update_handler_cl, NULL);
@@ -4239,7 +4239,7 @@ char *get_error_string(unsigned int val);
     /*
      * Remove the entity change handler.
      */
-    int remove_entity_update_handler(swig_cb handler)
+    int remove_entity_update_handler(swig_cb *handler)
     {
 	cb_rm(domain, entity_update, entity_update_cb);
     }
@@ -4250,9 +4250,9 @@ char *get_error_string(unsigned int val);
      * parameter for each entity in the domain.  The parameters it
      * receives will be: <self> <domain> <entity>.
      */
-    int iterate_entities(swig_cb handler)
+    int iterate_entities(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4273,7 +4273,7 @@ char *get_error_string(unsigned int val);
      * first parameter will be called with the following parameters:
      * <self>, added|deleted|changed <domain>, <mc>.
      */
-    int add_mc_update_handler(swig_cb handler)
+    int add_mc_update_handler(swig_cb *handler)
     {
 	ipmi_domain_add_mc_updated_handler_cl
 	    (self, domain_mc_updated_handler_cl, NULL);
@@ -4283,7 +4283,7 @@ char *get_error_string(unsigned int val);
     /*
      * Remove the mc change handler.
      */
-    int remove_mc_update_handler(swig_cb handler)
+    int remove_mc_update_handler(swig_cb *handler)
     {
 	cb_rm(domain, mc_updated, mc_update_cb);
     }
@@ -4294,9 +4294,9 @@ char *get_error_string(unsigned int val);
      * each mc in the domain.  The parameters it receives will be:
      * <self> <domain> <mc>.
      */
-    int iterate_mcs(swig_cb handler)
+    int iterate_mcs(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4328,10 +4328,10 @@ char *get_error_string(unsigned int val);
      * <self>, <domain>, <error val>
      */
     int start_ipmb_mc_scan(int channel, int start_addr, int end_addr,
-			   swig_cb handler = NULL)
+			   swig_cb *handler = NULL)
     {
 	int            rv;
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_domain_cb domain_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4368,10 +4368,10 @@ char *get_error_string(unsigned int val);
      * <response data>
      */
     int send_command_addr(char *addr, int lun, int netfn, int cmd,
-			  intarray msg_data, swig_cb handler = NULL)
+			  intarray msg_data, swig_cb *handler = NULL)
     {
 	int                          rv;
-	swig_cb_val                  handler_val = NULL;
+	swig_cb_val                  *handler_val = NULL;
 	ipmi_addr_response_handler_t msg_cb = NULL;
 	ipmi_addr_t                  iaddr;
 	unsigned int                 addr_len;
@@ -4460,7 +4460,7 @@ char *get_error_string(unsigned int val);
      * on the first parameter will be called with the following
      * parameters: <self>, <domain>, <event>
      */
-    int add_event_handler(swig_cb handler)
+    int add_event_handler(swig_cb *handler)
     {
 	ipmi_domain_add_event_handler_cl
 	    (self, domain_event_handler_cl, NULL);
@@ -4470,7 +4470,7 @@ char *get_error_string(unsigned int val);
     /*
      * Remove the event handler.
      */
-    int remove_event_handler(swig_cb handler)
+    int remove_event_handler(swig_cb *handler)
     {
 	cb_rm(domain, event, event_cb);
     }
@@ -4547,10 +4547,10 @@ char *get_error_string(unsigned int val);
      * method on the first parameter (if supplied) will be called with
      * the following values: <domain> <error value>
      */
-    int reread_sels(swig_cb handler = NULL)
+    int reread_sels(swig_cb *handler = NULL)
     {
 	int            rv;
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_domain_cb domain_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4588,11 +4588,11 @@ char *get_error_string(unsigned int val);
     %newobject fru_alloc;
     ipmi_fru_t *fru_alloc(int is_logical, int device_address, int device_id,
 			  int lun, int private_bus, int channel,
-			  swig_cb handler = NULL)
+			  swig_cb *handler = NULL)
     {
 	ipmi_fru_t *fru = NULL;
 	int         rv;
-	swig_cb_val handler_val = NULL;
+	swig_cb_val *handler_val = NULL;
 	ipmi_fru_cb cb_handler = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -4651,11 +4651,11 @@ char *get_error_string(unsigned int val);
 			int     policy_num,
 			int     apt_sel,
 			int     lan_dest_sel,
-			swig_cb handler = NULL)
+			swig_cb *handler = NULL)
     {
 	int              rv;
 	ipmi_pet_t       *pet = NULL;
-	swig_cb_val      handler_val = NULL;
+	swig_cb_val      *handler_val = NULL;
 	struct in_addr   ip;
 	unsigned char    mac[6];
 	ipmi_pet_done_cb done = NULL;
@@ -4699,12 +4699,12 @@ char *get_error_string(unsigned int val);
      *  sol_bmc_transmit_overrun <self> <conn>
      */
     %newobject create_sol;
-    ipmi_sol_conn_t *create_sol(int connection, swig_cb handler)
+    ipmi_sol_conn_t *create_sol(int connection, swig_cb *handler)
     {
 	ipmi_con_t      *con;
 	ipmi_sol_conn_t *scon;
 	int             rv;
-	swig_cb_val     handler_val;
+	swig_cb_val     *handler_val;
 
 	if (nil_swig_cb(handler))
 	    return NULL;
@@ -4898,7 +4898,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * will be called on the first parameter with the following parameters:
      * <self> <entity>
      */
-    int to_entity(swig_cb handler)
+    int to_entity(swig_cb *handler)
     {
 	int rv;
 
@@ -5009,9 +5009,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameter for each child entity of the parent.  The parameters
      * it receives will be: <self> <parent> <child>.
      */
-    int iterate_children(swig_cb handler)
+    int iterate_children(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5032,9 +5032,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameter for each parent entity of the child.  The parameters
      * it receives will be: <self> <child> <parent>.
      */
-    int iterate_parents(swig_cb handler)
+    int iterate_parents(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5055,9 +5055,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameter for each sensor of the entity.  The parameters
      * it receives will be: <self> <entity> <sensor>.
      */
-    int iterate_sensors(swig_cb handler)
+    int iterate_sensors(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5078,9 +5078,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameter for each control of the entity.  The parameters
      * it receives will be: <self> <entity> <control>.
      */
-    int iterate_controls(swig_cb handler)
+    int iterate_controls(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv = 0;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5102,7 +5102,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameters: <self> <entity> <present (boolean integer)> <event>.
      * The event is optional and may not be present.
      */
-    int add_presence_handler(swig_cb handler)
+    int add_presence_handler(swig_cb *handler)
     {
 	ipmi_entity_add_presence_handler_cl
 	    (self, entity_presence_handler_cl, NULL);
@@ -5112,7 +5112,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the presence handler.
      */
-    int remove_presence_handler(swig_cb handler)
+    int remove_presence_handler(swig_cb *handler)
     {
 	cb_rm(entity, presence, entity_presence_cb);
     }
@@ -5124,7 +5124,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called with the following parameters: <self>
      * added|deleted|changed <entity> <sensor>.
      */
-    int add_sensor_update_handler(swig_cb handler)
+    int add_sensor_update_handler(swig_cb *handler)
     {
 	ipmi_entity_add_sensor_update_handler_cl
 	    (self, entity_sensor_update_handler_cl, NULL);
@@ -5134,7 +5134,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the sensor update handler.
      */
-    int remove_sensor_update_handler(swig_cb handler)
+    int remove_sensor_update_handler(swig_cb *handler)
     {
 	cb_rm(entity, sensor_update, entity_sensor_update_cb);
     }
@@ -5146,7 +5146,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called with the following parameters: <self>
      * added|deleted|changed <entity> <control>.
      */
-    int add_control_update_handler(swig_cb handler)
+    int add_control_update_handler(swig_cb *handler)
     {
 	ipmi_entity_add_control_update_handler_cl
 	    (self, entity_control_update_handler_cl, NULL);
@@ -5156,7 +5156,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the control update handler.
      */
-    int remove_control_update_handler(swig_cb handler)
+    int remove_control_update_handler(swig_cb *handler)
     {
 	cb_rm(entity, control_update, entity_control_update_cb);
     }
@@ -5171,7 +5171,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * Deprecated, use the werr version below so you can get errors
      * reported.
      */
-    int add_fru_update_handler(swig_cb handler)
+    int add_fru_update_handler(swig_cb *handler)
     {
 	ipmi_entity_add_fru_update_handler_cl
 	    (self, entity_fru_update_handler_cl, NULL);
@@ -5181,7 +5181,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the FRU data update handler.
      */
-    int remove_fru_update_handler(swig_cb handler)
+    int remove_fru_update_handler(swig_cb *handler)
     {
 	cb_rm(entity, fru_update, entity_fru_update_cb);
     }
@@ -5193,7 +5193,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called with the following parameters: <self>
      * added|deleted|changed|error <errnum> <entity> <fru>.
      */
-    int add_fru_update_werr_handler(swig_cb handler)
+    int add_fru_update_werr_handler(swig_cb *handler)
     {
 	ipmi_entity_add_fru_update_werr_handler_cl
 	    (self, entity_fru_update_werr_handler_cl, NULL);
@@ -5203,7 +5203,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the FRU data update handler.
      */
-    int remove_fru_update_werr_handler(swig_cb handler)
+    int remove_fru_update_werr_handler(swig_cb *handler)
     {
 	cb_rm(entity, fru_update_werr, entity_fru_update_werr_cb);
     }
@@ -5610,7 +5610,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * state> <new state> <event>.  The event is optional and may not
      * be present.
      */
-    int add_hot_swap_handler(swig_cb handler)
+    int add_hot_swap_handler(swig_cb *handler)
     {
 	ipmi_entity_add_hot_swap_handler_cl
 	    (self, entity_hot_swap_handler_cl, NULL);
@@ -5620,7 +5620,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the hot-swap update handler.
      */
-    int remove_hot_swap_handler(swig_cb handler)
+    int remove_hot_swap_handler(swig_cb *handler)
     {
 	cb_rm(entity, hot_swap, entity_hot_swap_update_cb);
     }
@@ -5630,9 +5630,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * entity_hot_swap_cb handler will be called with the following
      * parameters: <self> <entity> <err> <state>
      */
-    int get_hot_swap_state(swig_cb handler)
+    int get_hot_swap_state(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5661,9 +5661,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
-    int get_auto_activate_time(swig_cb handler)
+    int get_auto_activate_time(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5688,9 +5688,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_activate_time(ipmi_timeout_t auto_act,
-			       swig_cb        handler = NULL)
+			       swig_cb *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
@@ -5723,9 +5723,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * entity_hot_swap_get_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
-    int get_auto_deactivate_time(swig_cb handler)
+    int get_auto_deactivate_time(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -5750,9 +5750,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_deactivate_time(ipmi_timeout_t auto_act,
-				 swig_cb        handler = NULL)
+				 swig_cb        *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
@@ -5783,9 +5783,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called with the following parameters (if it is supplied):
      * <self> <entity> <err>
      */
-    int set_activation_requested(swig_cb handler = NULL)
+    int set_activation_requested(swig_cb *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
@@ -5814,9 +5814,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * entity_activate_cb handler will be called with the following
      * parameters (if it is supplied): <self> <entity> <err>
      */
-    int activate(swig_cb handler = NULL)
+    int activate(swig_cb *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
@@ -5844,9 +5844,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called with the following parameters (if it is supplied):
      * <self> <entity> <err>
      */
-    int deactivate(swig_cb handler = NULL)
+    int deactivate(swig_cb *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
@@ -5900,7 +5900,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * will be called on the first parameter with the following parameters:
      * <self> <mc>
      */
-    int to_mc(swig_cb handler)
+    int to_mc(swig_cb *handler)
     {
 	int rv;
 
@@ -6169,7 +6169,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * method on the first parameter will be called with the following
      * parameters: <self> <mc> <active (boolean integer)>.
      */
-    int add_active_handler(swig_cb handler)
+    int add_active_handler(swig_cb *handler)
     {
 	ipmi_mc_add_active_handler_cl
 	    (self, mc_active_handler_cl, NULL);
@@ -6179,7 +6179,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the presence handler.
      */
-    int remove_active_handler(swig_cb handler)
+    int remove_active_handler(swig_cb *handler)
     {
 	cb_rm(mc, active, mc_active_cb);
     }
@@ -6190,7 +6190,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * method on the first parameter will be called with the following
      * parameters: <self> <mc>.
      */
-    int add_fully_up_handler(swig_cb handler)
+    int add_fully_up_handler(swig_cb *handler)
     {
 	ipmi_mc_add_fully_up_handler_cl
 	    (self, mc_fully_up_handler_cl, NULL);
@@ -6200,7 +6200,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the presence handler.
      */
-    int remove_fully_up_handler(swig_cb handler)
+    int remove_fully_up_handler(swig_cb *handler)
     {
 	cb_rm(mc, fully_up, mc_fully_up_cb);
     }
@@ -6217,10 +6217,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 		     int       netfn,
 		     int       cmd,
 		     intarray  msg_data,
-		     swig_cb   handler = NULL)
+		     swig_cb   *handler = NULL)
     {
 	int                        rv;
-	swig_cb_val                handler_val = NULL;
+	swig_cb_val                *handler_val = NULL;
 	ipmi_mc_response_handler_t msg_cb = NULL;
 	ipmi_msg_t                 msg;
 	unsigned char              data[MAX_IPMI_DATA_SIZE];
@@ -6265,9 +6265,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * supplied) with the following parameters: <self> <mc> <err>
      */
     int reset(int     reset_type,
-	      swig_cb handler = NULL)
+	      swig_cb *handler = NULL)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
@@ -6305,9 +6305,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * <err>.
      */
     int set_events_enable(int     val,
-			  swig_cb handler = NULL)
+			  swig_cb *handler = NULL)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
@@ -6333,9 +6333,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * mc_get_event_log_enable_cb will be called on the supplied
      * handler with the following parms: <self> <mc> <err> <val>
      */
-    int get_event_log_enable(swig_cb handler)
+    int get_event_log_enable(swig_cb *handler)
     {
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 	int         rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -6359,9 +6359,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * will be called on the supplied handler with the following
      * parms: <self> <mc> <err>
      */
-    int set_event_log_enable(int val, swig_cb handler = NULL)
+    int set_event_log_enable(int val, swig_cb *handler = NULL)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
@@ -6389,9 +6389,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * mc_reread_sensors_cb on the first parameter (if supplied) will
      * be called with the following parms: <self> <mc> <err>.
      */
-    int reread_sensors(swig_cb handler = NULL)
+    int reread_sensors(swig_cb *handler = NULL)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
@@ -6438,9 +6438,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * on the handler (parm 1, if it is supplied) with the parameters:
      * <self> <mc> <err>.
      */
-    int reread_sel(swig_cb handler = NULL)
+    int reread_sel(swig_cb *handler = NULL)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
@@ -6467,9 +6467,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * first parameter (if it is supplied) with the following
      * values: <self> <mc> <err> <time>
      */
-    int get_current_sel_time(swig_cb handler)
+    int get_current_sel_time(swig_cb *handler)
     {
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	sel_get_time_cb done = NULL;
 	int             rv;
 
@@ -6642,10 +6642,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * following parameters: <self> <mc> <err> <chan_info>
      * where chan_info is ipmi_channel_info_t.
      */
-    int channel_get_info(int channel, swig_cb handler)
+    int channel_get_info(int channel, swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val = NULL;
+	swig_cb_val *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, mc_channel_got_info_cb))
@@ -6669,10 +6669,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * called on it with the following parameters: <self> <mc> <err>
      * <access_info> where access_info is ipmi_channel_access_t.
      */
-    int channel_get_access(int channel, char *type, swig_cb handler)
+    int channel_get_access(int channel, char *type, swig_cb *handler)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	enum ipmi_set_dest_e dest;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -6711,10 +6711,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     int channel_set_access(ipmi_channel_access_t *access,
 			   int                   channel,
 			   char                  *type,
-			   swig_cb               handler = NULL)
+			   swig_cb               *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	ipmi_mc_done_cb      done = NULL;
 	enum ipmi_set_dest_e dest;
 
@@ -6756,10 +6756,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * <enabled users> <fixed users> <user1> [<user2> ...]
      * where the users are ipmi_user_t objects.
      */
-    int get_users(int channel, int user, swig_cb handler)
+    int get_users(int channel, int user, swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, mc_channel_got_users_cb)) 
@@ -6788,10 +6788,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     int set_user(ipmi_user_t *userinfo,
 		 int         channel,
 		 int         usernum,
-		 swig_cb     handler = NULL)
+		 swig_cb     *handler = NULL)
     {
 	int             rv;
-	swig_cb_val     handler_val = NULL;
+	swig_cb_val     *handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -6837,11 +6837,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * complete.
      */
     %newobject get_pef;
-    ipmi_pef_t *get_pef(swig_cb handler = NULL)
+    ipmi_pef_t *get_pef(swig_cb *handler = NULL)
     {
 	int              rv;
 	ipmi_pef_t       *pef = NULL;
-	swig_cb_val      handler_val = NULL;
+	swig_cb_val      *handler_val = NULL;
 	ipmi_pef_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -6886,11 +6886,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
 			int     policy_num,
 			int     apt_sel,
 			int     lan_dest_sel,
-			swig_cb handler = NULL)
+			swig_cb *handler = NULL)
     {
 	int              rv;
 	ipmi_pet_t       *pet = NULL;
-	swig_cb_val      handler_val = NULL;
+	swig_cb_val      *handler_val = NULL;
 	struct in_addr   ip;
 	unsigned char    mac[6];
 	ipmi_pet_done_cb done = NULL;
@@ -7326,7 +7326,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * will be called on the first parameter with the following parameters:
      * <self> <sensor>
      */
-    int to_sensor(swig_cb handler)
+    int to_sensor(swig_cb *handler)
     {
 	int rv;
 
@@ -7397,7 +7397,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * The discrete_event_cb method takes the following parameters:
      * <self> <sensor> <event spec> <severity> <old_severity> <event>
      */
-    int add_event_handler(swig_cb handler)
+    int add_event_handler(swig_cb *handler)
     {
 	if (ipmi_sensor_get_event_reading_type(self)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
@@ -7415,7 +7415,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove the event handler from the sensor
      */
-    int remove_event_handler(swig_cb handler)
+    int remove_event_handler(swig_cb *handler)
     {
 	if (ipmi_sensor_get_event_reading_type(self)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
@@ -7434,10 +7434,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * it is supplied) will be called with the following parameters:
      * <self> <sensor> <err>
      */
-    int set_event_enables(char *states, swig_cb handler = NULL)
+    int set_event_enables(char *states, swig_cb *handler = NULL)
     {
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 	ipmi_event_state_t  *st;
 
@@ -7478,10 +7478,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * supplied) will be called with the following parameters: <self>
      * <sensor> <err>
      */
-    int enable_events(char *states, swig_cb handler = NULL)
+    int enable_events(char *states, swig_cb *handler = NULL)
     {
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 	ipmi_event_state_t  *st;
 
@@ -7522,10 +7522,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * supplied) will be called with the following parameters: <self>
      * <sensor> <err>
      */
-    int disable_events(char *states, swig_cb handler = NULL)
+    int disable_events(char *states, swig_cb *handler = NULL)
     {
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 	ipmi_event_state_t  *st;
 
@@ -7563,10 +7563,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * be called with the following parameters: <self> <sensor> <err>
      * <event states>
      */
-    int get_event_enables(swig_cb handler)
+    int get_event_enables(swig_cb *handler)
     {
 	int                          rv;
-	swig_cb_val                  handler_val = NULL;
+	swig_cb_val                  *handler_val = NULL;
 	ipmi_sensor_event_enables_cb sensor_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -7597,10 +7597,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int rearm(int     global_enable,
 	      char    *states,
-	      swig_cb handler = NULL)
+	      swig_cb *handler = NULL)
     {
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 	ipmi_event_state_t  *st = NULL;
 
@@ -7647,10 +7647,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parameters are: <self> <sensor> <err> <positive hysteresis>
      * <negative hysteresis>
      */
-    int get_hysteresis(swig_cb handler)
+    int get_hysteresis(swig_cb *handler)
     {
 	int                       rv;
-	swig_cb_val               handler_val = NULL;
+	swig_cb_val               *handler_val = NULL;
 	ipmi_sensor_hysteresis_cb sensor_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -7678,10 +7678,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      */
     int set_hysteresis(unsigned int positive_hysteresis,
 		       unsigned int negative_hysteresis,
-		       swig_cb      handler = NULL)
+		       swig_cb      *handler = NULL)
     {
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -7729,11 +7729,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * <self> <sensor> <err>
      */
     int set_thresholds(char    *thresholds,
-		       swig_cb handler = NULL)
+		       swig_cb *handler = NULL)
     {
 	ipmi_thresholds_t   *th = NULL;
 	int                 rv;
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -7765,10 +7765,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * parm will be called with the following parameters: <self>
      * <sensor> <err> <thresholds>
      */
-    int get_thresholds(swig_cb handler)
+    int get_thresholds(swig_cb *handler)
     {
 	int                       rv;
-	swig_cb_val               handler_val = NULL;
+	swig_cb_val               *handler_val = NULL;
 	ipmi_sensor_thresholds_cb sensor_cb = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -7792,10 +7792,10 @@ ipmi_args_t *alloc_parse_args(argarray *args);
        threshold_reading_cb method of the first parameter will be
        called with the following parameters: <self> <sensor> <err>
        <raw_set> <raw> <value_set> <value> <states>. */
-    int get_value(swig_cb handler)
+    int get_value(swig_cb *handler)
     {
 	int                    rv;
-	swig_cb_val            handler_val = NULL;
+	swig_cb_val            *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, threshold_reading_cb))
@@ -8529,7 +8529,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * will be called on the first parameter with the following parameters:
      * <self> <control>
      */
-    int to_control(swig_cb handler)
+    int to_control(swig_cb *handler)
     {
 	int rv;
 	IPMI_SWIG_C_CB_ENTRY
@@ -8689,9 +8689,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * It will be called with the following parameters: <self>
      * <control> <err>
      */
-    int set_val(intarray val, swig_cb handler = NULL)
+    int set_val(intarray val, swig_cb *handler = NULL)
     {
-	swig_cb_val        handler_val = NULL;
+	swig_cb_val        *handler_val = NULL;
 	ipmi_control_op_cb done = NULL;
 	int                rv;
 
@@ -8724,9 +8724,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * number of values passed to the handler will be the number of
      * values the control supports.
      */
-    int get_val(swig_cb handler)
+    int get_val(swig_cb *handler)
     {
-	swig_cb_val         handler_val = NULL;
+	swig_cb_val         *handler_val = NULL;
 	ipmi_control_val_cb done = NULL;
 	int                 rv;
 
@@ -8757,7 +8757,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * the val fields are the actual values, the value is valid only
      * if the valid field corresponding to it is true.
      */
-    int add_event_handler(swig_cb handler)
+    int add_event_handler(swig_cb *handler)
     {
 	ipmi_control_add_val_event_handler_cl
 	    (self, control_val_event_handler_cl, NULL);
@@ -8767,7 +8767,7 @@ ipmi_args_t *alloc_parse_args(argarray *args);
     /*
      * Remove a control event handler.
      */
-    int remove_event_handler(swig_cb handler)
+    int remove_event_handler(swig_cb *handler)
     {
 	cb_rm(control, val_event, control_event_val_cb);
     }
@@ -8831,11 +8831,11 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * second parameter (if it is supplied) will be called with the
      * following parameters: <self> <control> <err>.
      */
-    int set_light(char *settings, swig_cb handler = NULL)
+    int set_light(char *settings, swig_cb *handler = NULL)
     {
 	ipmi_light_setting_t *s;
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	ipmi_control_op_cb   done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -8877,9 +8877,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * off time like this:
      * "[lc] <color> <on_time> <off time>[:[lc] <color>...]"
      */
-    int get_light(swig_cb handler)
+    int get_light(swig_cb *handler)
     {
-	swig_cb_val            handler_val = NULL;
+	swig_cb_val            *handler_val = NULL;
 	ipmi_light_settings_cb done = NULL;
 	int                    rv;
 
@@ -8949,9 +8949,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * the second parameter (if it is supplied) will be called with
      * the following parameters: <self> <control> <err>.
      */
-    int identifier_set_val(intarray val, swig_cb handler = NULL)
+    int identifier_set_val(intarray val, swig_cb *handler = NULL)
     {
-	swig_cb_val        handler_val = NULL;
+	swig_cb_val        *handler_val = NULL;
 	ipmi_control_op_cb done = NULL;
 	int                rv;
 	unsigned char      *data;
@@ -8992,9 +8992,9 @@ ipmi_args_t *alloc_parse_args(argarray *args);
      * <self> <control> <err> byte1 [<byte2> ...].
      * The id value is all the bytes after the error value.
      */
-    int identifier_get_val(swig_cb handler)
+    int identifier_get_val(swig_cb *handler)
     {
-	swig_cb_val                    handler_val = NULL;
+	swig_cb_val                    *handler_val = NULL;
 	ipmi_control_identifier_val_cb done = NULL;
 	int                            rv;
 
@@ -9543,10 +9543,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * parameter, the FRU as the second parameter and the error value
      * for the write as the third parameter.
      */
-    int write(swig_cb handler = NULL)
+    int write(swig_cb *handler = NULL)
     {
 	int         rv;
-	swig_cb_val handler_val = NULL;
+	swig_cb_val *handler_val = NULL;
 	ipmi_fru_cb cb_handler = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -9875,9 +9875,9 @@ extern int ipmi_fru_str_to_index(char *name);
     /* When you are done with an event, you should delete it.  This
        removes the event from the local event queue and removes it
        from the external system event log. */
-    int delete(swig_cb handler = NULL)
+    int delete(swig_cb *handler = NULL)
     {
-	swig_cb_val    handler_val = NULL;
+	swig_cb_val    *handler_val = NULL;
 	ipmi_domain_cb done = NULL;
 	int            rv;
 
@@ -9969,7 +9969,7 @@ extern int ipmi_fru_str_to_index(char *name);
      *
      * Note: In the future, this may take control callbacks, too.
      */
-    int call_handler(swig_cb handler)
+    int call_handler(swig_cb *handler)
     {
 	event_call_handler_data_t info;
 	int                       rv;
@@ -10058,10 +10058,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * will be called when the the operation completes with the
      * following parms: <self> <lanparm> <err> <parm_rev> <data1> [<data2> ...]
      */
-    int get_parm(int parm, int set, int block, swig_cb handler)
+    int get_parm(int parm, int set, int block, swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, lanparm_got_parm_cb))
@@ -10090,10 +10090,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    int set_parm(int parm, char *value, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	unsigned char        *data;
 	unsigned int         length;
 
@@ -10137,10 +10137,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
+    int set_parm_array(int parm, intarray value, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	unsigned char        *data;
 	unsigned int         length = value.len;
 
@@ -10185,10 +10185,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * <err> <lanconfig>.  The lanconfig will be an object of type
      * ipmi_lan_config_t.
      */
-    int get_config(swig_cb handler)
+    int get_config(swig_cb *handler)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, lanparm_got_config_cb))
@@ -10215,10 +10215,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * handler (second parm) with the following parms: <self>
      * <lanparm> <err>.
      */
-    int set_config(ipmi_lan_config_t *config, swig_cb handler = NULL)
+    int set_config(ipmi_lan_config_t *config, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!nil_swig_cb(handler)) {
@@ -10250,10 +10250,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * the lanparm_clear_lock_cb method will be called on the handler
      * (second parm) with the following parms: <self> <lanparm> <err>.
      */
-    int clear_lock(ipmi_lan_config_t *config = NULL, swig_cb handler = NULL)
+    int clear_lock(ipmi_lan_config_t *config = NULL, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!nil_swig_cb(handler)) {
@@ -10521,10 +10521,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * will be called when the the operation completes with the
      * following parms: <self> <pef> <err> <parm_rev> <data1> [<data2> ...]
      */
-    int get_parm(int parm, int set, int block, swig_cb handler)
+    int get_parm(int parm, int set, int block, swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, pef_got_parm_cb))
@@ -10553,10 +10553,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    int set_parm(int parm, char *value, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	unsigned char        *data;
 	unsigned int         length;
 
@@ -10600,10 +10600,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
+    int set_parm_array(int parm, intarray value, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	unsigned char        *data;
 	unsigned int         length = value.len;
 
@@ -10648,10 +10648,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * <err> <pefconfig>.  The pefconfig will be an object of type
      * ipmi_pef_config_t.
      */
-    int get_config(swig_cb handler)
+    int get_config(swig_cb *handler)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, pef_got_config_cb))
@@ -10678,10 +10678,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * handler (second parm) with the following parms: <self>
      * <pef> <err>.
      */
-    int set_config(ipmi_pef_config_t *config, swig_cb handler = NULL)
+    int set_config(ipmi_pef_config_t *config, swig_cb *handler = NULL)
     {
 	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	swig_cb_val          *handler_val = NULL;
 	ipmi_pef_done_cb done = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -10714,10 +10714,10 @@ extern int ipmi_fru_str_to_index(char *name);
      * the pef_clear_lock_cb method will be called on the handler
      * (second parm) with the following parms: <self> <pef> <err>.
      */
-    int clear_lock(ipmi_pef_config_t *config = NULL, swig_cb handler = NULL)
+    int clear_lock(ipmi_pef_config_t *config = NULL, swig_cb *handler = NULL)
     {
 	int         rv;
-	swig_cb_val handler_val = NULL;
+	swig_cb_val *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!nil_swig_cb(handler)) {
@@ -11018,7 +11018,7 @@ extern int ipmi_fru_str_to_index(char *name);
  * when a new command can be entered..  Takes the following
  * parameters: <self> <cmdlang>.
  */
-ipmi_cmdlang_t *alloc_cmdlang(swig_cb handler);
+ipmi_cmdlang_t *alloc_cmdlang(swig_cb *handler);
 
 /*
  * Enable or disable full information for events registers with
@@ -11046,7 +11046,7 @@ int cmdlang_get_evinfo(void);
  * <errstr> - The error string generated.
  * <errval> - an integer value for the error.
  */
-void set_cmdlang_global_err_handler(swig_cb handler);
+void set_cmdlang_global_err_handler(swig_cb *handler);
 
 /*
  * Handle event from the cmdlang interface.  These are basically
@@ -11055,7 +11055,7 @@ void set_cmdlang_global_err_handler(swig_cb handler);
  * will be called with the following parameters: <self> <event>.  The
  * event is of the type ipmi_cmdlang_event_t.
  */
-void set_cmdlang_event_handler(swig_cb handler);
+void set_cmdlang_event_handler(swig_cb *handler);
 
 
 %{
@@ -11071,7 +11071,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 
     static void cmdlang_down(ipmi_cmdlang_t *info)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	swig_call_cb(cb, "cmdlang_down", "%p", &ref);
@@ -11080,7 +11080,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 
     static void cmdlang_up(ipmi_cmdlang_t *info)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	swig_call_cb(cb, "cmdlang_up", "%p", &ref);
@@ -11089,7 +11089,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 
     static void cmdlang_done(ipmi_cmdlang_t *info)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	swig_call_cb(cb, "cmdlang_done", "%p", &ref);
@@ -11108,7 +11108,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 			    const char     *name,
 			    const char     *value)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	if (!value)
@@ -11122,7 +11122,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 				   const char     *value,
 				   unsigned int   len)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	swig_call_cb(cb, "cmdlang_out_binary", "%p%s%*s", &ref, name,
@@ -11135,7 +11135,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 				    const char     *value,
 				    unsigned int   len)
     {
-	swig_cb_val cb = info->user_data;
+	swig_cb_val *cb = info->user_data;
 	swig_ref    ref = swig_make_ref(info, ipmi_cmdlang_t);
 
 	swig_call_cb(cb, "cmdlang_out_unicode", "%p%s%*s", &ref, name,
@@ -11144,7 +11144,7 @@ void set_cmdlang_event_handler(swig_cb handler);
     }
 
     static ipmi_cmdlang_t *
-    alloc_cmdlang(swig_cb handler)
+    alloc_cmdlang(swig_cb *handler)
     {
 	ipmi_cmdlang_t *cmdlang = NULL;
 
@@ -11195,14 +11195,14 @@ void set_cmdlang_event_handler(swig_cb handler);
 	return cmdlang;
     }
 
-    swig_cb_val cmdlang_global_err_handler = NULL;
+    swig_cb_val *cmdlang_global_err_handler = NULL;
 
     void ipmi_cmdlang_global_err(char *objstr,
 				 char *location,
 				 char *errstr,
 				 int  errval)
     {
-	swig_cb_val handler = cmdlang_global_err_handler;
+	swig_cb_val *handler = cmdlang_global_err_handler;
 
 	if (!objstr)
 	    objstr = "";
@@ -11218,12 +11218,12 @@ void set_cmdlang_event_handler(swig_cb handler);
 	}
     }
 
-    swig_cb_val cmdlang_event_handler = NULL;
+    swig_cb_val *cmdlang_event_handler = NULL;
 
     void ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
     {
 	swig_ref event_ref;
-	swig_cb_val handler = cmdlang_event_handler;
+	swig_cb_val *handler = cmdlang_event_handler;
 
 	if (! handler)
 	    return;
@@ -11234,9 +11234,9 @@ void set_cmdlang_event_handler(swig_cb handler);
 	swig_free_ref_check(event_ref, ipmi_cmdlang_event_t);
     }
 
-    void set_cmdlang_global_err_handler(swig_cb handler)
+    void set_cmdlang_global_err_handler(swig_cb *handler)
     {
-	swig_cb_val old_handler = cmdlang_global_err_handler;
+	swig_cb_val *old_handler = cmdlang_global_err_handler;
 	IPMI_SWIG_C_CB_ENTRY
 	if (valid_swig_cb(handler, global_cmdlang_err))
 	    cmdlang_global_err_handler = ref_swig_cb(handler,
@@ -11248,9 +11248,9 @@ void set_cmdlang_event_handler(swig_cb handler);
 	IPMI_SWIG_C_CB_EXIT
     }
 
-    void set_cmdlang_event_handler(swig_cb handler)
+    void set_cmdlang_event_handler(swig_cb *handler)
     {
-	swig_cb_val old_handler = cmdlang_event_handler;
+	swig_cb_val *old_handler = cmdlang_event_handler;
 	IPMI_SWIG_C_CB_ENTRY
 	if (valid_swig_cb(handler, cmdlang_event))
 	    cmdlang_event_handler = ref_swig_cb(handler, cmdlang_event);
@@ -11266,7 +11266,7 @@ void set_cmdlang_event_handler(swig_cb handler);
 %extend ipmi_cmdlang_t {
     ~ipmi_cmdlang_t()
     {
-	swig_cb_val handler_val = self->user_data;
+	swig_cb_val *handler_val = self->user_data;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (handler_val)
@@ -11583,10 +11583,10 @@ char *sol_state_string(int val);
      * sol_write_complete method of the handler will be called with
      * the following parameters: <self> <conn> <error>
      */
-    int write(charbuf buf, swig_cb handler = NULL)
+    int write(charbuf buf, swig_cb *handler = NULL)
     {
 	ipmi_sol_transmit_complete_cb cb = NULL;
-	swig_cb_val                   handler_val = NULL;
+	swig_cb_val                   *handler_val = NULL;
 	int                           rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11624,10 +11624,10 @@ char *sol_state_string(int val);
      * sol_send_break method of the handler will be called with
      * the following parameters: <self> <conn> <error>
      */
-    int send_break(swig_cb handler = NULL)
+    int send_break(swig_cb *handler = NULL)
     {
 	ipmi_sol_transmit_complete_cb cb = NULL;
-	swig_cb_val                   handler_val = NULL;
+	swig_cb_val                   *handler_val = NULL;
 	int                           rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11652,10 +11652,10 @@ char *sol_state_string(int val);
      * complete, the sol_set_CTS_assertable method of the handler will
      * be called with the following parameters: <self> <conn> <error>
      */
-    int set_CTS_assertable(int asserted, swig_cb handler = NULL)
+    int set_CTS_assertable(int asserted, swig_cb *handler = NULL)
     {
 	ipmi_sol_transmit_complete_cb cb = NULL;
-	swig_cb_val                   handler_val = NULL;
+	swig_cb_val                   *handler_val = NULL;
 	int                           rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11681,10 +11681,10 @@ char *sol_state_string(int val);
      * will be called with the following parameters: <self> <conn>
      * <error>
      */
-    int set_DCD_DSR_asserted(int asserted, swig_cb handler = NULL)
+    int set_DCD_DSR_asserted(int asserted, swig_cb *handler = NULL)
     {
 	ipmi_sol_transmit_complete_cb cb = NULL;
-	swig_cb_val                   handler_val = NULL;
+	swig_cb_val                   *handler_val = NULL;
 	int                           rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11709,10 +11709,10 @@ char *sol_state_string(int val);
      * sol_set_RI_asserted method of the handler will be called with
      * the following parameters: <self> <conn> <error>
      */
-    int set_RI_asserted(int asserted, swig_cb handler = NULL)
+    int set_RI_asserted(int asserted, swig_cb *handler = NULL)
     {
 	ipmi_sol_transmit_complete_cb cb = NULL;
-	swig_cb_val                   handler_val = NULL;
+	swig_cb_val                   *handler_val = NULL;
 	int                           rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11747,10 +11747,10 @@ char *sol_state_string(int val);
      * handler will be called with the following parameters: <self>
      * <conn> <queue selectors> <error>
      */
-    int flush(int queue_selectors, swig_cb handler = NULL)
+    int flush(int queue_selectors, swig_cb *handler = NULL)
     {
 	ipmi_sol_flush_complete_cb cb = NULL;
-	swig_cb_val                handler_val = NULL;
+	swig_cb_val                *handler_val = NULL;
 	int                        rv;
 
 	IPMI_SWIG_C_CB_ENTRY
@@ -11809,10 +11809,10 @@ char *sol_state_string(int val);
      * will be called when the the operation completes with the
      * following parms: <self> <solparm> <err> <parm_rev> <data1> [<data2> ...]
      */
-    int get_parm(int parm, int set, int block, swig_cb handler)
+    int get_parm(int parm, int set, int block, swig_cb *handler)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val *handler_val;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, solparm_got_parm_cb))
@@ -11841,12 +11841,12 @@ char *sol_state_string(int val);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    int set_parm(int parm, char *value, swig_cb *handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
-	unsigned char        *data;
-	unsigned int         length;
+	int           rv;
+	swig_cb_val   *handler_val = NULL;
+	unsigned char *data;
+	unsigned int  length;
 
 	IPMI_SWIG_C_CB_ENTRY
 	data = parse_raw_str_data(value, &length);
@@ -11888,12 +11888,12 @@ char *sol_state_string(int val);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
+    int set_parm_array(int parm, intarray value, swig_cb *handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
-	unsigned char        *data;
-	unsigned int         length = value.len;
+	int           rv;
+	swig_cb_val   *handler_val = NULL;
+	unsigned char *data;
+	unsigned int  length = value.len;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (length == 0)
@@ -11936,10 +11936,10 @@ char *sol_state_string(int val);
      * <err> <solconfig>.  The solconfig will be an object of type
      * ipmi_sol_config_t.
      */
-    int get_config(swig_cb handler)
+    int get_config(swig_cb *handler)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	int         rv;
+	swig_cb_val *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!valid_swig_cb(handler, solparm_got_config_cb))
@@ -11966,10 +11966,10 @@ char *sol_state_string(int val);
      * handler (second parm) with the following parms: <self>
      * <solparm> <err>.
      */
-    int set_config(ipmi_sol_config_t *config, swig_cb handler = NULL)
+    int set_config(ipmi_sol_config_t *config, swig_cb *handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	int         rv;
+	swig_cb_val *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!nil_swig_cb(handler)) {
@@ -12001,10 +12001,10 @@ char *sol_state_string(int val);
      * the solparm_clear_lock_cb method will be called on the handler
      * (second parm) with the following parms: <self> <solparm> <err>.
      */
-    int clear_lock(ipmi_sol_config_t *config = NULL, swig_cb handler = NULL)
+    int clear_lock(ipmi_sol_config_t *config = NULL, swig_cb *handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	int         rv;
+	swig_cb_val *handler_val = NULL;
 
 	IPMI_SWIG_C_CB_ENTRY
 	if (!nil_swig_cb(handler)) {
