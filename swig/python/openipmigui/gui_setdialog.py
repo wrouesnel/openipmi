@@ -35,7 +35,7 @@ try:
 except:
     import tkinter
     from tkinter import tix as Tix
-import gui_errstr
+from openipmigui import gui_errstr
 
 def isbool(v):
     return type(v) == type(True)

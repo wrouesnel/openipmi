@@ -31,10 +31,10 @@
 #
 
 import OpenIPMI
-import _oi_logging
-import gui_treelist
-import gui_popup
-import gui_setdialog
+from openipmigui import _oi_logging
+from openipmigui import gui_treelist
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
 
 class ReinitOnAny:
     def __init__(self, glist):

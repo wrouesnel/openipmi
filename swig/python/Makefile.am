@@ -9,7 +9,7 @@ AM_CFLAGS = $(PYTHON_CPPFLAGS) \
 	    -DPYTHON_HAS_POSIX_THREADS=@PYTHON_HAS_POSIX_THREADS@
 
 pythonlibdir=$(PYTHON_INSTALL_LIB_DIR)
-PYPATH=$(top_builddir)/swig/python:$(top_builddir)/swig/python/.libs:$(srcdir)/openipmigui
+PYPATH=$(top_builddir)/swig/python:$(top_builddir)/swig/python/.libs
 
 pythonlib_LTLIBRARIES = _OpenIPMI.la
 

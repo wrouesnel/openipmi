@@ -39,8 +39,8 @@ except:
 import xml.dom
 import xml.dom.minidom
 import OpenIPMI
-import _saveprefs
-import _misc
+from openipmigui import _saveprefs
+from openipmigui import _misc
 import os
 import stat
 import sys

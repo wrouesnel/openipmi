@@ -35,7 +35,7 @@ try:
 except:
     import tkinter
     from tkinter import tix as Tix
-import _term
+from openipmigui import _term
 
 def gpos(x, y):
     return str(y+1) + "." + str(x)

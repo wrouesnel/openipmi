@@ -35,8 +35,8 @@ try:
 except:
     import tkinter
     from tkinter import tix as Tix
-import gui_errstr
-import gui_winsys
+from openipmigui import gui_errstr
+from openipmigui import gui_winsys
 
 # A list widget that can be embedded in something else
 class SubList(Tix.ScrolledHList):

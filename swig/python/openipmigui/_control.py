@@ -31,9 +31,9 @@
 #
 
 import OpenIPMI
-import gui_popup
-import gui_setdialog
-import gui_lightset
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
+from openipmigui import gui_lightset
 
 class ControlRefreshData:
     def __init__(self, c):

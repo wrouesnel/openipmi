@@ -36,14 +36,14 @@ except:
     from tkinter import tix as Tix
 
 import OpenIPMI
-import _saveprefs
-import _oi_logging
-import gui_domainDialog
-import gui_errstr
-import gui_cmdwin
-import gui_list
-import gui_popup
-import gui_winsys
+from openipmigui import _saveprefs
+from openipmigui import _oi_logging
+from openipmigui import gui_domainDialog
+from openipmigui import gui_errstr
+from openipmigui import gui_cmdwin
+from openipmigui import gui_list
+from openipmigui import gui_popup
+from openipmigui import gui_winsys
 
 init_treenamewidth = 150
 init_sashposition = 400

@@ -31,11 +31,11 @@
 #
 
 import OpenIPMI
-import gui_popup
-import gui_treelist
-import gui_setdialog
-import _oi_logging
-import _mc_lanparm
+from openipmigui import gui_popup
+from openipmigui import gui_treelist
+from openipmigui import gui_setdialog
+from openipmigui import _oi_logging
+from openipmigui import _mc_lanparm
 
 class BoolSetter:
     def __init__(self, mcusers, user, setter):

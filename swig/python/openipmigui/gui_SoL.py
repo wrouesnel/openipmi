@@ -36,9 +36,9 @@ except:
     import tkinter
     from tkinter import tix as Tix
 
-import gui_setdialog
-import gui_term
-import gui_errstr
+from openipmigui import gui_setdialog
+from openipmigui import gui_term
+from openipmigui import gui_errstr
 
 # Note in this file SoL refers to the main SoL object and sol refers
 # to the connection.

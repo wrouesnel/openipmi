@@ -32,7 +32,7 @@
 
 import xml.dom
 import xml.dom.minidom
-import _oi_logging
+from openipmigui import _oi_logging
 import os
 import stat
 import sys

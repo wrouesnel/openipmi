@@ -31,12 +31,12 @@
 #
 
 import OpenIPMI
-import gui_popup
-import gui_treelist
-import _oi_logging
-import _mc_lanparm
-import _mc_solparm
-import _mc_user
+from openipmigui import gui_popup
+from openipmigui import gui_treelist
+from openipmigui import _oi_logging
+from openipmigui import _mc_lanparm
+from openipmigui import _mc_solparm
+from openipmigui import _mc_user
 
 # Collect all the info for the channels of an MC.  For each channel
 # all the info is requested using the types immediately below.  If the

@@ -30,16 +30,16 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-import gui_popup
-import gui_setdialog
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
 import OpenIPMI
-import _entity
-import _mc
-import _saveprefs
-import _sel
-import _fru
-import _conn
-import _oi_logging
+from openipmigui import _entity
+from openipmigui import _mc
+from openipmigui import _saveprefs
+from openipmigui import _sel
+from openipmigui import _fru
+from openipmigui import _conn
+from openipmigui import _oi_logging
 
 class InvalidDomainError(Exception):
     def __init__(self, value):

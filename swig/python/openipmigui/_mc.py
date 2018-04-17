@@ -30,12 +30,12 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import OpenIPMI
-import gui_popup
-import gui_setdialog
-import _oi_logging
-import _sel
-import _mc_chan
-import _mc_pefparm
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
+from openipmigui import _oi_logging
+from openipmigui import _sel
+from openipmigui import _mc_chan
+from openipmigui import _mc_pefparm
 
 class MCOpHandler:
     def __init__(self, m, func, handler=None, boolval=None):

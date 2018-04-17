@@ -30,9 +30,9 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 import OpenIPMI
-import gui_popup
-import gui_setdialog
-import _oi_logging
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
+from openipmigui import _oi_logging
 
 class SensorRefreshData:
     def __init__(self, s):

@@ -36,8 +36,8 @@ except:
     from tkinter import tix as Tix
 
 import OpenIPMI
-import _domain
-import gui_errstr
+from openipmigui import _domain
+from openipmigui import gui_errstr
 
 class EnumHolder:
     def __init__(self):

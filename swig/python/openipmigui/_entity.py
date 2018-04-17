@@ -31,12 +31,12 @@
 #
 
 import OpenIPMI
-import _oi_logging
-import _sensor
-import _control
-import _fru
-import gui_popup
-import gui_setdialog
+from openipmigui import _oi_logging
+from openipmigui import _sensor
+from openipmigui import _control
+from openipmigui import _fru
+from openipmigui import gui_popup
+from openipmigui import gui_setdialog
 
 class EntityOp:
     def __init__(self, e, func):

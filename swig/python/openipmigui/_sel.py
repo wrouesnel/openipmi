@@ -32,9 +32,9 @@
 
 import OpenIPMI
 import sys
-import gui_list
-import gui_popup
-import _misc
+from openipmigui import gui_list
+from openipmigui import gui_popup
+from openipmigui import _misc
 
 class EventData:
     def __init__(self, slist, ev, has_second_data):
