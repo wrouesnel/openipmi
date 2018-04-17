@@ -344,33 +344,22 @@ if test "x$haveglib" = "xyes"; then
    GLIB_SO='$(top_builddir)/glib/.libs/libOpenIPMIglib.so'
    GLIB_PKGCONF=OpenIPMIglib.pc
    GLIB_TARGET=libOpenIPMIglib.la
+   GLIB_DIR=glib
 else
    GLIB_LIB=
    GLIB_SO=
    GLIB_PKGCONF=
    GLIB_TARGET=
+   GLIB_DIR=
 fi
 AC_SUBST(GLIB_VERSION)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
-
 AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_SO)
 AC_SUBST(GLIB_PKGCONF)
 AC_SUBST(GLIB_TARGET)
-
-if test "x$haveglib" = "xyes"; then
-   GLIB_DIR=glib
-   GLIB_SINGLE_LIB=$GLIB_LIB
-   GLIB_SINGLE_SO=$GLIB_SO
-else
-   GLIB_DIR=
-   GLIB_SINGLE_LIB=
-   GLIB_SINGLE_SO=
-fi
 AC_SUBST(GLIB_DIR)
-AC_SUBST(GLIB_SINGLE_LIB)
-AC_SUBST(GLIB_SINGLE_SO)
 
 # Handle TCL support
 TCL_LIBS=
@@ -762,8 +751,8 @@ AC_SUBST(LATEX)
 AC_SUBST(BIBTEX)
 AC_SUBST(DVIPDF)
 
-OPENIPMI_SWIG_LIBS="${PYTHON_POSIX_LIB} \$(top_builddir)/lib/libOpenIPMI.la \$(top_builddir)/utils/libOpenIPMIutils.la \$(top_builddir)/cmdlang/libOpenIPMIcmdlang.la ${GLIB_SINGLE_LIB} ${TCL_LIB}"
-OPENIPMI_SWIG_SO="${PYTHON_POSIX_SO}:\$(top_builddir)/lib/.libs/libOpenIPMI.so:\$(top_builddir)/utils/.libs/libOpenIPMIutils.so:\$(top_builddir)/cmdlang/.libs/libOpenIPMIcmdlang.so:${GLIB_SINGLE_SO}:${TCL_SO}"
+OPENIPMI_SWIG_LIBS="${PYTHON_POSIX_LIB} \$(top_builddir)/lib/libOpenIPMI.la \$(top_builddir)/utils/libOpenIPMIutils.la \$(top_builddir)/cmdlang/libOpenIPMIcmdlang.la ${GLIB_LIB} ${TCL_LIB}"
+OPENIPMI_SWIG_SO="${PYTHON_POSIX_SO}:\$(top_builddir)/lib/.libs/libOpenIPMI.so:\$(top_builddir)/utils/.libs/libOpenIPMIutils.so:\$(top_builddir)/cmdlang/.libs/libOpenIPMIcmdlang.so:${GLIB_SO}:${TCL_SO}"
 AC_SUBST(OPENIPMI_SWIG_LIBS)
 AC_SUBST(OPENIPMI_SWIG_SO)
 
