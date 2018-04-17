@@ -44,6 +44,8 @@ uninstall-local:
 
 AM_TESTS_ENVIRONMENT = mkdir -p tmppersist && mkdir -p auto/OpenIPMI && cp OpenIPMI.so auto/OpenIPMI && TEST_LD_PRELOAD="$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/perl/.libs/libdummystuff.so" LD_LIBRARY_PATH=$(top_builddir)/glib/.libs PERL5LIB="$(top_builddir)/swig/perl:$(srcdir)" top_builddir="$(top_builddir)" srcdir="$(srcdir)"
 TESTS = test_fru test_chan test_lanparm test_pet test_pef
+REAL_TESTS = test_fru.p test_chan.p test_lanparm.p test_pet.p test_pef.p
 
 EXTRA_DIST = OpenIPMI_perl.c OpenIPMI_lang.i OpenIPMI.h \
-	sample ipmi_powerctl $(TESTS) Lanserv.pm lan.conf dummystuff.c
+	sample ipmi_powerctl $(TESTS) $(REAL_TESTS) \
+	Lanserv.pm lan.conf dummystuff.c
