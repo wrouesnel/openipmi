@@ -1,7 +1,7 @@
 
 SUBDIRS = . @PYTHON_GUI_DIR@
 
-AM_CFLAGS = $(PYTHON_CFLAGS) \
+AM_CFLAGS = $(PYTHON_CPPFLAGS) \
 	    -I $(top_builddir) \
 	    -I $(top_builddir)/include \
 	    -I $(top_srcdir)/include \
@@ -20,9 +20,13 @@ _OpenIPMI_la_LIBADD = $(OPENIPMI_SWIG_LIBS) $(PYTHON_POSIX_LIB)
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py sample.py sample2.py
 
 OpenIPMI_wrap.c OpenIPMI.py: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
-	$(SWIG) $(DEFS) -python -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/python $<
+	$(SWIG) $(DEFS) -python $(PYTHON_SWIG_FLAGS) -o OpenIPMI_wrap.c \
+		-I$(top_srcdir)/swig/python $<
 
 CLEANFILES = OpenIPMI_wrap.c OpenIPMI.py OpenIPMI.pyo OpenIPMI.pyc
+
+clean-local:
+	rm -rf __pycache__
 
 install-exec-local: _OpenIPMI.la OpenIPMI.py
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
@@ -38,4 +42,4 @@ uninstall-local:
 	rm -f "$(DESTDIR)$(bindir)/openipmigui"
 
 rungui:
-	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/.libs/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(pythonprog) $(top_srcdir)/swig/python/openipmigui.py
+	LD_LIBRARY_PATH=$(top_builddir)/glib/.libs LD_PRELOAD=$(OPENIPMI_SWIG_SO):$(top_builddir)/swig/python/.libs/_OpenIPMI.so PYTHONPATH=$(PYPATH) $(PYTHON) $(top_srcdir)/swig/python/openipmigui.py

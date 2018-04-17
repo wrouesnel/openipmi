@@ -187,14 +187,18 @@ AC_ARG_WITH(perlusepthreads,
    fi,
 )
 
+pythonprog=
 trypython=yes
 AC_ARG_WITH(python,
 [  --with-python[[=yes|no|PATH]]     Look for python, with the optional path.],
-    if test "x$withval" = "xyes"; then
+    if test "x$withval" = "x"; then
+      trypython=yes
+    elif test "x$withval" = "xyes"; then
       trypython=yes
     elif test "x$withval" = "xno"; then
       trypython=no
-    elif test -d "$withval"; then
+    else
+      pythonprog="$withval"
       trypython=yes
     fi,
 )
@@ -523,58 +527,34 @@ AC_SUBST(PERL_POSIX_LIB)
 AC_SUBST(PERL_POSIX_SO)
 
 # Handle PYTHON support
-if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
-   pythonprog=
-   if test "x$trypython" != "xno"; then
-      AC_PATH_PROG(pythonprog, python)
-   fi
+PYTHON_DIR=
+PYTHON_INSTALL_DIR=
+PYTHON_INSTALL_LIB_DIR=
+PYTHON_SWIG_FLAGS=
+if test "x$trypython" = "xyes"; then
    if test "x$pythonprog" != "x"; then
-      # Now find a proper installation location.
-      if test "x$pythoninstalldir" = "x"; then
-	 pythoninstalldir=`$pythonprog -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_lib());'`
-	 if test "x$pythoninstalldir" = "x" -o ! -d "$pythoninstalldir"; then
-	    pythoninstalldir=
-	 fi
-      fi
+      PYTHON="$pythonprog"
    fi
-
-   if test "x$pythoncflags" = "x"; then
-      pythoninc=`$pythonprog -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc());'`
-      if test "x$pythoninc" != "x"; then
-         pythoncflags="-I$pythoninc"
-      else
-         pythoncflags=""
-      fi
-   else
-      PYTHON_CFLAGS="$pythoncflags"
+   if test "x$pythoncflags" != "x"; then
+      PYTHON_CPPFLAGS="$pythoncflags"
    fi
-
-   if test "x$pythoninstalldir" != "x"; then
-      if test "x$pythoninstalllibdir" = "x"; then
-	 pythoninstalllibdir=$pythoninstalldir
-      fi
-      AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
-      PYTHON_DIR=python
-      PYTHON_CFLAGS="$pythoncflags"
-      PYTHON_INSTALL_DIR="$pythoninstalldir"
-      PYTHON_INSTALL_LIB_DIR="$pythoninstalllibdir"
-   else
-      PYTHON_DIR=
-      PYTHON_CFLAGS=
-      PYTHON_INSTALL_DIR=
-      PYTHON_INSTALL_LIB_DIR=
-   fi
-else
-   if test "x$pythoninstalllibdir" = "x"; then
-      pythoninstalllibdir=$pythoninstalldir
-   fi
+   AX_PYTHON_DEVEL
+fi
+if test "x$PYTHON" != "x"; then
+   AX_PROG_PYTHON_VERSION([3.0.0], [PYTHON_SWIG_FLAGS=-py3], [])
    AC_DEFINE([HAVE_PYTHON], [], [Have Python installed])
    PYTHON_DIR=python
-   PYTHON_CFLAGS="$pythoncflags"
-   PYTHON_INSTALL_DIR="$pythoninstalldir"
-   PYTHON_INSTALL_LIB_DIR="$pythoninstalllibdir"
-fi
-if test "x$pythonprog" != "x"; then
+   if test "x$pythoninstalldir" = "x"; then
+      PYTHON_INSTALL_DIR="$PYTHON_SITE_PKG"
+   else
+      PYTHON_INSTALL_DIR="$pythoninstalldir"
+   fi
+   if test "x$pythoninstalllibdir" = "x"; then
+      PYTHON_INSTALL_LIB_DIR="$PYTHON_INSTALL_DIR"
+   else
+      PYTHON_INSTALL_LIB_DIR="$pythoninstalllibdir"
+   fi
+
    if test "x$pythonusepthreads" = "x"; then
       cat - <<_ACEOF >conftest.py
 try:
@@ -583,27 +563,29 @@ try:
 except:
   print('no')
 _ACEOF
-      pythonusepthreads=`python conftest.py`
+      pythonusepthreads=`$PYTHON conftest.py`
       rm -f conftest.py
    fi
    echo "checking for python threads... $pythonusepthreads"
+
+   if test "x$pythonusepthreads" = "xyes"; then
+      PYTHON_HAS_POSIX_THREADS=1
+      PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
+      PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIpthread.so'
+   else
+      PYTHON_HAS_POSIX_THREADS=0
+      PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
+      PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIposix.so'
+   fi
 fi
-if test "x$pythonusepthreads" = "xyes"; then
-   PYTHON_HAS_POSIX_THREADS=1
-   PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIpthread.la'
-   PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIpthread.so'
-else
-   PYTHON_HAS_POSIX_THREADS=0
-   PYTHON_POSIX_LIB='$(top_builddir)/unix/libOpenIPMIposix.la'
-   PYTHON_POSIX_SO='$(top_builddir)/unix/.libs/libOpenIPMIposix.so'
-fi
+
 AC_SUBST(PYTHON_DIR)
-AC_SUBST(PYTHON_CFLAGS)
 AC_SUBST(PYTHON_INSTALL_DIR)
 AC_SUBST(PYTHON_INSTALL_LIB_DIR)
 AC_SUBST(PYTHON_HAS_POSIX_THREADS)
 AC_SUBST(PYTHON_POSIX_LIB)
 AC_SUBST(PYTHON_POSIX_SO)
+AC_SUBST(PYTHON_SWIG_FLAGS)
 
 # Check for Tkinter/Tix
 if test "x$tkinter" = "x"; then
