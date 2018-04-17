@@ -628,25 +628,17 @@ fi
 AC_SUBST(PYTHON_GUI_DIR)
 
 # Now check for swig
-if test "x$swigprog" = "x" -a "x$tryswig" = "xyes"; then
-   AC_PATH_PROG(swigprog, swig)
-fi
-if test "x$swigprog" != "x"; then
-   swigver=`$swigprog -version 2>&1 | grep 'SWIG Version' | sed 's/SWIG Version //'`
-   swigmajor=`echo $swigver | sed 's/\.[[0-9]]*\.[[0-9]]*$//'`
-   swigminor=`echo $swigver | sed 's/^[[0-9]]*\.\([[0-9]]*\)\.[[0-9]]*$/\1/'`
-   swigrel=`echo $swigver | sed 's/^[[0-9]]*\.[[0-9]]*\.//'`
-   if test '(' "$swigmajor" -lt 1 ')' -o '(' '(' "$swigmajor" -eq 1 ')' -a '(' "$swigminor" -lt 3 ')' ')' -o '(' '(' "$swigmajor" -eq 1 ')' -a '(' "$swigminor" -eq 3 ')' -a '(' "$swigrel" -lt 21 ')' ')'; then
-      echo "***swig must be version 1.3.21 or greater, disabling swig and perl/python"
-   else
-      echo "swig version $swigver"
+SWIG_DIR=
+SWIG=
+if test "x$tryswig" = "xyes"; then
+   if test "x$swigprog" != "x"; then
+      SWIG="$swigprog"
+   fi
+   AX_PKG_SWIG([1.3.21])
+   if test "x$SWIG" != "x"; then
       AC_DEFINE([HAVE_SWIG], [], [Have swig installed])
       SWIG_DIR=swig
-      SWIG=$swigprog
    fi
-else
-   SWIG_DIR=
-   SWIG=
 fi
 AC_SUBST(SWIG_DIR)
 AC_SUBST(SWIG)

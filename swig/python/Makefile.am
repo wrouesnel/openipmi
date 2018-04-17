@@ -19,22 +19,14 @@ _OpenIPMI_la_LIBADD = $(OPENIPMI_SWIG_LIBS) $(PYTHON_POSIX_LIB)
 
 EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h openipmigui.py sample.py sample2.py
 
-OpenIPMI.pyc: OpenIPMI.py _OpenIPMI.la
-	-PYTHONPATH=$(PYPATH) $(pythonprog) -c 'import OpenIPMI.py'
-
-OpenIPMI.pyo: OpenIPMI.py _OpenIPMI.la
-	-PYTHONPATH=$(PYPATH) $(pythonprog) -O -c 'import OpenIPMI.py'
-
 OpenIPMI_wrap.c OpenIPMI.py: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
 	$(SWIG) $(DEFS) -python -o OpenIPMI_wrap.c -I$(top_srcdir)/swig/python $<
 
 CLEANFILES = OpenIPMI_wrap.c OpenIPMI.py OpenIPMI.pyo OpenIPMI.pyc
 
-install-exec-local: _OpenIPMI.la OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
+install-exec-local: _OpenIPMI.la OpenIPMI.py
 	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
 	$(INSTALL_DATA) OpenIPMI.py "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
-	$(INSTALL_DATA) OpenIPMI.pyc "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
-	$(INSTALL_DATA) OpenIPMI.pyo "$(DESTDIR)$(PYTHON_INSTALL_DIR)"
 	if test "x$(PYTHON_GUI_DIR)" = "xopenipmigui"; then \
 	    $(INSTALL) -d $(DESTDIR)$(bindir); \
 	    $(INSTALL_SCRIPT) $(srcdir)/openipmigui.py "$(DESTDIR)$(bindir)/openipmigui";\
@@ -43,8 +35,6 @@ install-exec-local: _OpenIPMI.la OpenIPMI.py OpenIPMI.pyc OpenIPMI.pyo
 uninstall-local:
 	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(PYTHON_INSTALL_LIB_DIR)/_OpenIPMI.so"
 	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.py"
-	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.pyc"
-	rm -f "$(DESTDIR)$(PYTHON_INSTALL_DIR)/OpenIPMI.pyo"
 	rm -f "$(DESTDIR)$(bindir)/openipmigui"
 
 rungui:
