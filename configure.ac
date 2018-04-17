@@ -578,7 +578,7 @@ if test "x$pythonprog" != "x"; then
    if test "x$pythonusepthreads" = "x"; then
       cat - <<_ACEOF >conftest.py
 try:
-  import thread
+  import threading
   print('yes')
 except:
   print('no')

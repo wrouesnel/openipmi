@@ -248,7 +248,7 @@ def run(args):
     # Detect if we need a separate OpenIPMI driver thread.  See the
     # openipmi_driver function above for the reason.
     try:
-        import thread
+        import threading
         try:
             top.tk.getvar("tcl_platform", "threaded")
             # Tcl is threaded, no need for another thread.
