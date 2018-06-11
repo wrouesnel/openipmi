@@ -50,7 +50,7 @@
 #include <OpenIPMI/ipmi_tcl.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_debug.h>
-#include <editline/readline.h>
+#include <readline/readline.h>
 
 #ifdef HAVE_GLIB
 #include <glib.h>
@@ -1048,6 +1048,8 @@ main(int argc, char *argv[])
 	    return 1;
 	}
     }
+
+    rl_initialize();
 
     if (use_debug_os) {
 	os_hnd = &ipmi_debug_os_handlers;
