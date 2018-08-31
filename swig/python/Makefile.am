@@ -1,5 +1,6 @@
 
 SUBDIRS = . @PYTHON_GUI_DIR@
+DIST_SUBDIRS = openipmigui
 
 AM_CFLAGS = $(PYTHON_CPPFLAGS) \
 	    -I $(top_builddir) \
