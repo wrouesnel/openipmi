@@ -901,7 +901,7 @@ ipmi_dev_data_handler(int            fd,
 		      os_hnd_fd_id_t *id)
 {
     ipmi_con_t       *ipmi = (ipmi_con_t *) cb_data;
-    unsigned char    data[MAX_IPMI_DATA_SIZE];
+    unsigned char    data[IPMI_MAX_MSG_LENGTH];
     ipmi_addr_t      addr;
     struct ipmi_recv recv;
     int              rv;

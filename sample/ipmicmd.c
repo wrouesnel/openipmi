@@ -267,7 +267,7 @@ typedef struct timed_data_s
     ipmi_con_t     *con;
     struct timeval start_time;
     ipmi_msg_t     msg;
-    unsigned char  data[MAX_IPMI_DATA_SIZE];
+    unsigned char  data[IPMI_MAX_MSG_LENGTH];
     ipmi_addr_t    addr;
     unsigned int   addr_len;
     unsigned int   count;
@@ -368,7 +368,7 @@ process_input_line(char *buf)
     ipmi_addr_t        *addr = (ipmi_addr_t *) addr_data;
     unsigned int       addr_len;
     ipmi_msg_t         msg;
-    unsigned char      outbuf[MAX_IPMI_DATA_SIZE];
+    unsigned char      outbuf[IPMI_MAX_MSG_LENGTH];
     int                rv = 0;
     short              channel;
     unsigned char      seq = 0;
