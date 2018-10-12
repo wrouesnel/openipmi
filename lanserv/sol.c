@@ -477,12 +477,12 @@ sol_serial_initialize(ipmi_sol_t *sol)
 	fprintf(stderr, "SOL device %s is already owned by process %d\n",
 		sol->device, err);
 	err = EBUSY;
-	goto out;
+	goto out_nounlock;
     }
     if (err < 0) {
 	fprintf(stderr, "Error locking SOL device %s\n", sol->device);
 	err = -err;
-	goto out;
+	goto out_nounlock;
     }
 #endif /* USE_UUCP_LOCKING */
     devinit(sol, &sd->termctl);
@@ -497,6 +497,8 @@ sol_serial_initialize(ipmi_sol_t *sol)
     err = tcsetattr(sd->fd, TCSANOW, &sd->termctl);
     if (err == -1) {
 	err = errno;
+	close(sd->fd);
+	sd->fd = -1;
 	fprintf(stderr, "Error configuring SOL device %s\n", sol->device);
 	goto out;
     }
@@ -505,6 +507,11 @@ sol_serial_initialize(ipmi_sol_t *sol)
     ioctl(sd->fd, TIOCCBRK);
 
  out:
+#ifdef USE_UUCP_LOCKING
+    if (err)
+	uucp_rm_lock(sd->sys, sol->device);
+ out_nounlock:
+#endif
     return err;
 }
 
