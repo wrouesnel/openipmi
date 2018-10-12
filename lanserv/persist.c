@@ -97,6 +97,9 @@ persist_init(const char *papp, const char *instance, const char *ibasedir)
     char *n;
     int rv = 0;
 
+    if (!persist_enable)
+	return 0;
+
     if (app)
 	return EBUSY;
     

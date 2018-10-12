@@ -715,6 +715,15 @@ static struct poptOption poptOpts[]=
 	"nostdio",
 	""
     },
+    {
+	"nopersist",
+	'p',
+	POPT_ARG_NONE,
+	NULL,
+	'p',
+	"nopersist",
+	""
+    },
     POPT_AUTOHELP
     {
 	NULL,
@@ -1375,6 +1384,9 @@ main(int argc, const char *argv[])
 		break;
 	    case 'v':
 		print_version = 1;
+		break;
+	    case 'p':
+		persist_enable = 0;
 		break;
 	}
     }
