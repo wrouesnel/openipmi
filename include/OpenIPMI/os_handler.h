@@ -158,12 +158,12 @@ struct os_handler_s
        stop it first. */
     int (*free_timer)(os_handler_t      *handler,
 		      os_hnd_timer_id_t *id);
-    /* This is called to register a callback handler to be called at
-       the given time or after (absolute time, as seen by
-       gettimeofday).  After the given time has passed, the
-       "timed_out" will be called with the given cb_data.  The
-       identifier in "id" just be one previously allocated with
-       alloc_timer().  Note that timed_out may NOT block. */
+    /* This is called to register a callback handler to be called
+       after the given amount of time (relative).  After the given
+       time has passed, the "timed_out" will be called with the given
+       cb_data.  The identifier in "id" just be one previously
+       allocated with alloc_timer().  Note that timed_out may NOT
+       block. */
     int (*start_timer)(os_handler_t      *handler,
 		       os_hnd_timer_id_t *id,
 		       struct timeval    *timeout,
