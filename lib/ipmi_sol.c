@@ -2541,6 +2541,7 @@ static void ipmid_changed(ipmi_con_t   *ipmid,
 {
     ipmi_sol_conn_t *conn = cb_data;
 
+    ipmi_lock(conn->transmitter.packet_lock);
     if (err) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "ipmi_sol.c(handle_active_payload_response): "
@@ -2549,11 +2550,13 @@ static void ipmid_changed(ipmi_con_t   *ipmid,
     }
 
     finish_activate_payload(conn);
+    ipmi_unlock(conn->transmitter.packet_lock);
     return;
 
  out_err:
     send_close(conn, NULL); 
     ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, err);
+    ipmi_unlock(conn->transmitter.packet_lock);
 }
 
 /*
