@@ -521,10 +521,17 @@ find_sol_connection(ipmi_sol_conn_t *sol)
     return NULL;
 }
 
+static void ipmid_changed(ipmi_con_t   *ipmid,
+			  int          err,
+			  unsigned int port_num,
+			  int          any_port_up,
+			  void         *cb_data);
 
 static void
 sol_cleanup(ipmi_sol_conn_t *conn)
 {
+    conn->ipmid->remove_con_change_handler(conn->ipmid, ipmid_changed, conn);
+
     if (conn->state != ipmi_sol_state_closed)
 	ipmi_sol_force_close(conn);
 
@@ -1747,10 +1754,14 @@ dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
     qitem = transmitter->outgoing_queue.head;
 
     if (qitem) {
-	if (qitem->transmit_complete_callback)
+	if (qitem->transmit_complete_callback) {
+	    ipmi_unlock(transmitter->queue_lock);
+	    ipmi_unlock(transmitter->packet_lock);
 	    (qitem->transmit_complete_callback)(transmitter->sol_conn,
 						error, qitem->cb_data);
-	
+	    ipmi_lock(transmitter->packet_lock);
+	    ipmi_lock(transmitter->queue_lock);
+	}
 	if (qitem->data)
 	    ipmi_mem_free(qitem->data);
 	
@@ -1794,6 +1805,8 @@ transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
 			       int             error,
 			       int             acknowledged_char_count)
 {
+    ipmi_sol_outgoing_queue_item_t *qitem;
+
     /*
      * Handle the in-band data by iterating through packets, and:
      *	1) Counting off how many bytes of this packet have been ACKed,
@@ -1804,8 +1817,6 @@ transmitter_handle_acknowledge(ipmi_sol_conn_t *conn,
     ipmi_log(IPMI_LOG_INFO, "Received ACK for %d chars",
 	     acknowledged_char_count);
 #endif
-
-    ipmi_sol_outgoing_queue_item_t *qitem;
 
     do {
 	int avail_this_pkt;
@@ -2003,6 +2014,7 @@ ipmi_sol_write(ipmi_sol_conn_t               *conn,
 	       void                          *cb_data)
 {
     int rv;
+
     if (count <= 0)
 	return EINVAL;
 
@@ -2012,8 +2024,9 @@ ipmi_sol_write(ipmi_sol_conn_t               *conn,
     {
 	rv = add_to_transmit_queue(&conn->transmitter, buf, count, 0,
 				   cb, cb_data);
-    } else
+    } else {
 	rv = EINVAL;
+    }
     ipmi_unlock(conn->transmitter.packet_lock);
     return rv;
 }
@@ -2533,7 +2546,7 @@ finish_activate_payload(ipmi_sol_conn_t *conn)
     ipmi_sol_set_connection_state(conn, ipmi_sol_state_connected, 0);
 }
 
-static void ipmid_changed(ipmi_con_t   *ipmid, 
+static void ipmid_changed(ipmi_con_t   *ipmid,
 			  int          err,
 			  unsigned int port_num,
 			  int          any_port_up,
@@ -3202,8 +3215,6 @@ handle_deactivate_payload_response(ipmi_sol_conn_t *conn,
 	    ipmi_sol_set_connection_state(conn, ipmi_sol_state_closed, 0);
 
     transmitter_shutdown(&conn->transmitter, 0);
-
-    return;
 }
 
 int
