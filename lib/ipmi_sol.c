@@ -530,7 +530,9 @@ static void ipmid_changed(ipmi_con_t   *ipmid,
 static void
 sol_cleanup(ipmi_sol_conn_t *conn)
 {
-    conn->ipmid->remove_con_change_handler(conn->ipmid, ipmid_changed, conn);
+    if (conn->ipmid)
+	conn->ipmid->remove_con_change_handler(conn->ipmid, ipmid_changed,
+					       conn);
 
     if (conn->state != ipmi_sol_state_closed)
 	ipmi_sol_force_close(conn);
