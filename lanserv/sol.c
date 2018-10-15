@@ -456,13 +456,13 @@ sol_serial_shutdown(ipmi_sol_t *sol)
 {
     soldata_t *sd = sol->soldata;
 
-#ifdef USE_UUCP_LOCKING
-    uucp_rm_lock(sd->sys, sol->device);
-#endif /* USE_UUCP_LOCKING */
-
     if (sd->fd >= 0)
 	close(sd->fd);
     sd->fd = -1;
+
+#ifdef USE_UUCP_LOCKING
+    uucp_rm_lock(sd->sys, sol->device);
+#endif /* USE_UUCP_LOCKING */
 }
 
 static int
