@@ -322,10 +322,6 @@ The source tree here consists of the following directories:
 +---lib - The man OpenIPMI code.  This is where all the logic for the
 |         handling of IPMI messages is.
 |  
-+---libedit - A readline replacement that provides cmdlang/openipmish
-|   |         with command line editing.
-|   \---editline - Include files for libedit
-|
 +---man - The man pages for the 
 |
 +---sample - Sample code and utilities that use the OpenIPMI library.

@@ -763,58 +763,13 @@ AX_CONFIG_FEATURE(
    [epoll_pwait], [This platform supports epoll(7) with epoll_pwait(2)],
    [HAVE_EPOLL_PWAIT], [This platform supports epoll(7) with epoll_pwait(2).])
 
-# Everything from here to AC_OUTPUT is for libedit
-
-# AC_PROG_LIBTOOL runs AC_CANONICAL_HOST
-case $host in 
-   *-sun-*) AC_DEFINE([_SUNOS], [], [Solaris's term.h does horrid things.]);;
-esac
-
 AC_CHECK_LIB(curses, tgetent, TERM_LIBS=-lcurses,
    [AC_CHECK_LIB(ncursesw, tgetent, TERM_LIBS=-lncursesw,
     [AC_CHECK_LIB(ncurses, tgetent, TERM_LIBS=-lncurses,
       [AC_MSG_ERROR([libtermcap, libcurses or libncurses are required!])])] )] )
-
-# Checks for header files.
-AC_FUNC_ALLOCA
-AC_HEADER_DIRENT
-AC_HEADER_STDC
-AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h limits.h malloc.h stdlib.h string.h sys/ioctl.h sys/param.h termios.h unistd.h curses.h ncurses.h sys/cdefs.h])
-
-## include curses.h to prevent "Present But Cannot Be Compiled"
-AC_CHECK_HEADERS([term.h],,,
-[[#if HAVE_CURSES_H
-# include <curses.h>
-#elif HAVE_NCURSES_H
-# include <ncurses.h>
-#endif
-]])
-
-AC_CHECK_FUNCS(wresize vw_printw cfmakeraw)
-
-# Checks for typedefs, structures, and compiler characteristics.
-AC_C_CONST
-AC_TYPE_PID_T
-AC_TYPE_SIZE_T
-AC_CHECK_TYPES([u_int32_t])
-
-# Checks for library functions.
-AC_FUNC_CLOSEDIR_VOID
-AC_FUNC_FORK
-AC_CHECK_FUNCS(strlcpy strlcat fgetln)
-AC_PROG_GCC_TRADITIONAL
-## _AIX is offended by rpl_malloc and rpl_realloc
-#AC_FUNC_MALLOC
-#AC_FUNC_REALLOC
-AC_TYPE_SIGNAL
-AC_FUNC_STAT
-AC_CHECK_FUNCS([endpwent isascii memchr memset re_comp regcomp strcasecmp strchr strcspn strdup strerror strrchr strstr strtol issetugid])
-EL_GETPW_R_POSIX
-EL_GETPW_R_DRAFT
 AC_SUBST(TERM_LIBS)
 
-# End of libedit inclusions
+AC_CHECK_FUNCS(cfmakeraw)
 
 if test "${build}" != "${host}" ; then
 	AC_CHECK_PROGS(BUILD_CC, [${build_alias}-gcc ${build}-gcc gcc])
@@ -841,7 +796,6 @@ AC_OUTPUT(Makefile
 	  swig/perl/Makefile
 	  swig/python/Makefile
 	  swig/python/openipmigui/Makefile
-	  libedit/Makefile
 	  cmdlang/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile

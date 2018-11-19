@@ -71,8 +71,7 @@ rmcp_ping_SOURCES = rmcp_ping.c
 rmcp_ping_LDADD = $(SOCKETLIB)
 
 ipmi_serial_bmc_emu_SOURCES = ipmi_serial_bmc_emu.c
-ipmi_serial_bmc_emu_LDADD = $(top_builddir)/libedit/libedit.a $(TERM_LIBS) \
-		$(SOCKETLIB)
+ipmi_serial_bmc_emu_LDADD = -lreadline $(TERM_LIBS) $(SOCKETLIB)
 ipmi_serial_bmc_emu_CFLAGS = -I $(top_srcdir)/libedit
 
 EXTRA_DIST = example_oem.c

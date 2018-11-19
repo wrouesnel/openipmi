@@ -247,9 +247,12 @@ debug_log_raw_msg(sys_data_t *sys,
     int pos;
     char dummy;
     unsigned int i;
+    struct timeval tv;
 
+    gettimeofday(&tv, NULL);
     va_start(ap, format);
     slen = vsnprintf(&dummy, 1, format, ap);
+    slen += snprintf(&dummy, 1, " %ld.%6.6ld", tv.tv_sec, tv.tv_usec);
     va_end(ap);
     slen += len * 3 + 2;
     str = malloc(slen);
@@ -258,6 +261,7 @@ debug_log_raw_msg(sys_data_t *sys,
     va_start(ap, format);
     pos = vsprintf(str, format, ap);
     va_end(ap);
+    pos += sprintf(str + pos, " %ld.%6.6ld", tv.tv_sec, tv.tv_usec);
     str[pos++] = '\n';
     str[pos] = '\0';
     for (i = 0; i < len; i++)

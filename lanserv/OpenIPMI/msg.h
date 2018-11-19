@@ -111,7 +111,7 @@ typedef struct msg_s
     struct msg_s *next;
 } msg_t;
 
-#define IPMI_SIM_MAX_MSG_LENGTH 36
+#define IPMI_SIM_MAX_MSG_LENGTH 255
 
 typedef struct rsp_msg
 {
