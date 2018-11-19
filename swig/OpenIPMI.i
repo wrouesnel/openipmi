@@ -3160,6 +3160,7 @@ init_tcl(void)
     swig_os_hnd->set_log_handler(swig_os_hnd, openipmi_swig_vlog);
     ipmi_init(swig_os_hnd);
     ipmi_cmdlang_init(swig_os_hnd);
+    return 0;
 #else
     return ENOSYS;
 #endif
