@@ -576,6 +576,7 @@ ipmi_shutdown(void)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     if (con_type_list)
 	locked_list_destroy(con_type_list);
+    ipmi_debug_malloc_cleanup();
     ipmi_malloc_shutdown();
 
     ipmi_os_handler = NULL;

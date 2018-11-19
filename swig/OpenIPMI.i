@@ -3211,7 +3211,6 @@ shutdown_everything()
     IPMI_SWIG_C_CB_ENTRY
     ipmi_cmdlang_cleanup();
     ipmi_shutdown();
-    ipmi_debug_malloc_cleanup();
     swig_os_hnd->free_os_handler(swig_os_hnd);
     swig_os_hnd = NULL;
 #ifdef OpenIPMI_HAVE_CLEANUP_LANG
