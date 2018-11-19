@@ -369,7 +369,7 @@ if test "x$trytcl" != "xno"; then
    FOUND_TCL_HEADER=no
    ver=`echo 'puts \$tcl_version' | tclsh`
    if test "x$tclcflags" = "x"; then
-      AC_CHECK_HEADER(tcl.h, FOUND_TCL_HEADER=yes; )
+      AC_CHECK_HEADER(tcl$ver/tcl.h, FOUND_TCL_HEADER=yes; )
       if test "x$FOUND_TCL_HEADER" != "xyes"; then
          echo -n "checking for /usr/include/tcl$ver... "
 	 if test 'x$ver' != 'x' -a -d "/usr/include/tcl$ver"; then
