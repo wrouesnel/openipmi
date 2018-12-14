@@ -715,11 +715,12 @@ AC_HAVE_FUNCS(syslog)
 DIA=
 AC_PATH_PROG(diaprog, dia)
 if test "x$diaprog" != "x"; then
-   diaver=`$diaprog --version 2>&1 | sed 's/Dia version \([[^,]]*\), .*$/\1/'`
+   diaver=`$diaprog --version 2>&1 | grep 'Dia version' | sed 's/Dia version \([[^,]]*\), .*$/\1/' | sed 's/^\([[0-9.]]\+\)+.*$/\1/'`
    tmp=`echo $diaver | sed 's/^[[0-9.]]\+$//'`
    if test "x$diaver" = "x" -o "x$tmp" != 'x'; then
       # Couldn't get the dia version, give up.
       echo "Couldn't determine the dia version from '$diaver'"
+      exit 1
    else
       DIA="$diaprog"
       diaver_major=`echo $diaver | sed 's/\.[[0-9.]]\+$//'`
