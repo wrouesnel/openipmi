@@ -3755,18 +3755,18 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
     sdr.data[0] = info->slave_address;
     sdr.data[1] = info->channel & 0xf;
     sdr.data[2] = ((info->ACPI_system_power_notify_required << 7)
-		   || (info->ACPI_device_power_notify_required << 6)
-		   || (info->controller_logs_init_agent_errors << 3)
-		   || (info->log_init_agent_errors_accessing << 2)
-		   || (info->global_init));
+		   | (info->ACPI_device_power_notify_required << 6)
+		   | (info->controller_logs_init_agent_errors << 3)
+		   | (info->log_init_agent_errors_accessing << 2)
+		   | (info->global_init));
     sdr.data[3] = ((info->chassis_device << 7)
-		   || (info->bridge << 6)
-		   || (info->IPMB_event_generator << 5)
-		   || (info->IPMB_event_receiver << 4)
-		   || (info->FRU_inventory_device << 3)
-		   || (info->SEL_device << 2)
-		   || (info->SDR_repository_device << 1)
-		   || info->sensor_device);
+		   | (info->bridge << 6)
+		   | (info->IPMB_event_generator << 5)
+		   | (info->IPMB_event_receiver << 4)
+		   | (info->FRU_inventory_device << 3)
+		   | (info->SEL_device << 2)
+		   | (info->SDR_repository_device << 1)
+		   | info->sensor_device);
     sdr.data[4] = 0;
     sdr.data[5] = 0;
     sdr.data[6] = 0;
