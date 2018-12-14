@@ -874,7 +874,6 @@ oem_event_handler(ipmi_mc_t    *mc,
     mc_event_info_t  einfo;
     unsigned long    timestamp;
     ipmi_mc_id_t     mc_id;
-    ipmi_mc_t        *bmc = ipmi_mc_get_bmc(mc);
 
     if ((event->type != 2) && (event->type != 3))
 	/* Not a system event record or OEM event. */
@@ -886,7 +885,7 @@ oem_event_handler(ipmi_mc_t    *mc,
 
     timestamp = ipmi_get_uint32(&(event->data[0]));
 
-    if (timestamp < ipmi_bmc_get_startup_SEL_time(bmc))
+    if (timestamp < ipmi_mc_get_startup_SEL_time(mc))
 	/* It's an old event, ignore it. */
 	return 0;
 
@@ -918,7 +917,7 @@ oem_event_handler(ipmi_mc_t    *mc,
     /* If the event was handled but not delivered to the user, then
        deliver it to the unhandled handler. */
     if (einfo.handled && (einfo.event != NULL))
-	ipmi_handle_unhandled_event(bmc, event);
+	ipmi_handle_unhandled_event(mc, event);
 
     return einfo.handled;
 }
@@ -1547,16 +1546,16 @@ oem_handler(ipmi_mc_t *mc,
     ipmi_entity_t      *ent;
     int                rv;
     oem_info_t         *info;
-    ipmi_mc_t          *bmc = ipmi_mc_get_bmc(mc);
+    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
 
     info = malloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
-    ipmi_mc_entity_lock(bmc);
+    i_ipmi_domain_entity_lock(domain);
 
-    ents = ipmi_mc_get_entities(bmc);
-    rv = ipmi_entity_add(ents, bmc, 0,
+    ents = ipmi_domain_get_entities(domain);
+    rv = ipmi_entity_add(ents, domain, 0, slave_addr, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
 			 oem_addr_to_instance(slave_addr),
 			 "my-name",
@@ -1575,7 +1574,7 @@ oem_handler(ipmi_mc_t *mc,
 	goto out;
     }
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, oem_mc_removed, info);
+    rv = ipmi_mc_add_oem_removed_handler(mc, oem_mc_removed, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "oem_handler: could not set OEM removal handler");
@@ -1595,7 +1594,7 @@ oem_handler(ipmi_mc_t *mc,
     rv = ipmi_mc_set_oem_event_handler(mc, oem_event_handler, info);
 
  out:
-    ipmi_mc_entity_unlock(bmc);
+    i_ipmi_domain_entity_unlock(domain);
 
     
     return rv;
