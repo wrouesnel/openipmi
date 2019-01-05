@@ -945,7 +945,8 @@ lanparm_config_set(ipmi_lanparm_t *lanparm, void *cb_data)
 	goto out_err;
     }
     info->cmd_info = cmd_info;
-    strncpy(info->name, name, sizeof(info->name));
+    strncpy(info->name, name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_lan_set_config(lanparm, lanc, lanparm_config_set_done, info);
@@ -1028,7 +1029,8 @@ lanparm_config_unlock(ipmi_lanparm_t *lanparm, void *cb_data)
 	goto out_err;
     }
     info->cmd_info = cmd_info;
-    strncpy(info->name, name, sizeof(info->name));
+    strncpy(info->name, name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_lan_clear_lock(lanparm, lanc, lanparm_config_unlock_done, info);

@@ -2015,7 +2015,8 @@ mc_user_set(ipmi_mc_t *mc, void *cb_data)
 		cmdlang->errstr = "no name value";
 		goto out_err;
 	    }
-	    strncpy(info->pw, argv[curr_arg], 20);
+	    strncpy(info->pw, argv[curr_arg], 19);
+	    info->pw[19] = '\0';
 	} else {
 	    cmdlang->err = EINVAL;
 	    cmdlang->errstr = "invalid setting";

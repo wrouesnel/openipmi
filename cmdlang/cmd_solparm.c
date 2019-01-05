@@ -539,7 +539,8 @@ solparm_config_set(ipmi_solparm_t *solparm, void *cb_data)
 	goto out_err;
     }
     info->cmd_info = cmd_info;
-    strncpy(info->name, name, sizeof(info->name));
+    strncpy(info->name, name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_sol_set_config(solparm, solc, solparm_config_set_done, info);
@@ -622,7 +623,8 @@ solparm_config_unlock(ipmi_solparm_t *solparm, void *cb_data)
 	goto out_err;
     }
     info->cmd_info = cmd_info;
-    strncpy(info->name, name, sizeof(info->name));
+    strncpy(info->name, name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_sol_clear_lock(solparm, solc, solparm_config_unlock_done, info);
