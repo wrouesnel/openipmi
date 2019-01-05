@@ -4072,13 +4072,13 @@ fru_node_set_field(ipmi_fru_node_t           *pnode,
 		   unsigned int              data_len)
 {
     ipmi_fru_t     *fru = i_ipmi_fru_node_get_data(pnode);
-    fru_data_rep_t *p;
 
     if (index > NUM_FRUL_ENTRIES)
 	return EINVAL;
 
-    p = frul + index;
     if (index < NUM_FRUL_ENTRIES) {
+	fru_data_rep_t *p = frul + index;
+
 	if (p->hasnum) {
 	    /* Insert/delete array indexes. */
 	    if (intval >= 0) {
