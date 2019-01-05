@@ -921,8 +921,10 @@ entities_handler(ipmi_entity_t *entity,
 	type = IPMI_ENTITY_GENERIC + 1;
     curr_entity_id = ipmi_entity_convert_to_id(entity);
     ipmi_entity_get_id(entity, name, 32);
-    if (strlen(name) == 0)
-	strncpy(name, ipmi_entity_get_entity_id_string(entity), 33);
+    if (strlen(name) == 0) {
+	strncpy(name, ipmi_entity_get_entity_id_string(entity), 32);
+	name[32] = '\0';
+    }
     if (ipmi_entity_is_present(entity))
 	present = "present";
     else
