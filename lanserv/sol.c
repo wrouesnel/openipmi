@@ -262,7 +262,7 @@ uucp_mk_lock(sys_data_t *sys, const char *devname)
 	if ((fd = open(lck_file, O_RDONLY)) >= 0) {
 	    int n;
 
-	    n = read(fd, &buf, sizeof(buf));
+	    n = read(fd, &buf, sizeof(buf) - 1);
 	    close(fd);
 	    if( n == 4 ) 		/* Kermit-style lockfile. */
 		pid = buf.ival;
