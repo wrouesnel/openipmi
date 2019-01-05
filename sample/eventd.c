@@ -336,6 +336,7 @@ send_sensor_event_to_prog(ipmi_sensor_t               *sensor,
     idstr[127] = '\0';
 
     send_event_to_prog(type, event, parms, num_parms);
+    parms[num_parms - 1] = NULL; /* Make sure not to pass idstr back up. */
 }
 
 /*
