@@ -724,7 +724,7 @@ i_ipmi_create_mc(ipmi_domain_t *domain,
     }
     memset(mc->sel_timer_info, 0, sizeof(*mc->sel_timer_info));
     strncpy(mc->sel_timer_info->name, mc->name,
-	    sizeof(mc->sel_timer_info->name));
+	    sizeof(mc->sel_timer_info->name) - 1);
     mc->sel_timer_info->mc_id = ipmi_mc_convert_to_id(mc);
     mc->sel_timer_info->mc = mc;
     mc->sel_timer_info->os_hnd = os_hnd;
