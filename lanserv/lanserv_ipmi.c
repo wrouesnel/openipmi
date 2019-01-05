@@ -310,6 +310,7 @@ return_rmcpp_rsp(lanserv_data_t *lan, session_t *session, msg_t *msg,
 	pos[5] = msg->cmd;
 	pos[len] = -ipmb_checksum(pos+3, len-3, 0);
 	len++;
+	dlen++;
     }
 
     if (session && !session->in_startup) {
