@@ -1625,7 +1625,8 @@ ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
 
     info->handler = handler;
     info->cb_data = cb_data;
-    strncpy(info->name, mc->name, sizeof(info->name));
+    strncpy(info->name, mc->name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_GET_SEL_TIME_CMD;
@@ -1698,7 +1699,8 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t             *mc,
 
     info->handler = handler;
     info->cb_data = cb_data;
-    strncpy(info->name, mc->name, sizeof(info->name));
+    strncpy(info->name, mc->name, sizeof(info->name) - 1);
+    info->name[sizeof(info->name) - 1] = '\0';
 
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_SET_SEL_TIME_CMD;
