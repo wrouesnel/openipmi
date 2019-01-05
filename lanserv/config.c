@@ -314,6 +314,8 @@ get_delim_str(char **rtokptr, char **rval, const char **err)
 	    val = tokptr;
 	    while (*tokptr != endc) {
 		if (*tokptr == '\0') {
+		    if (rv)
+			free(rv);
 		    *err = "End of line in string";
 		    return -1;
 		}
