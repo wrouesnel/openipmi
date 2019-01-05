@@ -233,8 +233,10 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 	   || find_sel_event_by_recid(mc, e->record_id, NULL))
     {
 	e->record_id++;
-	if (e->record_id == start_record_id)
+	if (e->record_id == start_record_id) {
+	    free(e);
 	    return EAGAIN;
+	}
 	mc->sel.next_entry++;
     }
 
@@ -714,8 +716,10 @@ new_sdr_entry(sdrs_t *sdrs, unsigned char length)
 	return NULL;
 
     entry->data = malloc(length + 6);
-    if (!entry->data)
+    if (!entry->data) {
+	free(entry);
 	return NULL;
+    }
 
     entry->record_id = sdrs->next_entry;
 
