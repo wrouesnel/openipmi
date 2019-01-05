@@ -1997,7 +1997,8 @@ mc_user_set(ipmi_mc_t *mc, void *cb_data)
 		cmdlang->errstr = "no name value";
 		goto out_err;
 	    }
-	    strncpy(info->name, argv[curr_arg], 16);
+	    strncpy(info->name, argv[curr_arg], 15);
+	    info->name[15] = '\0';
 	} else if (strcmp(argv[curr_arg], "password") == 0) {
 	    info->pw_set = 1;
 	    curr_arg++;

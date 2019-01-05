@@ -934,10 +934,9 @@ mc_add_fru_data(emu_out_t *out, emu_data_t *emu, lmc_data_t *mc, char **toks)
 	}
 	rv = ipmi_mc_add_fru_file(mc, devid, length, file_offset,
 				  (void *) frufn);
-	if (rv) {
-	    free(frufn);
+	if (rv)
 	    out->eprintf(out, "**Unable to add FRU file, error 0x%x\n", rv);
-	}
+	free(frufn);
     } else if (strcmp(tok, "data") == 0) {
 	for (i=0; i<length; i++) {
 	    rv = emu_get_uchar(out, toks, &data[i], "data byte", 1);
