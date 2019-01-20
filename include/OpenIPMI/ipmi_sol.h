@@ -519,13 +519,6 @@ int ipmi_sol_open(ipmi_sol_conn_t *conn);
  * initial state.
  * 
  * @param [in] conn	The IPMI SoL connection to close.
- * @param [in] force	Nonzero if the connection should be forced to close.
- *			Forcing the connection to close will be a synchronous
- *			operation.  All outstanding transmits will be cancelled
- *			and the transmit_complete callbacks will be called
- *			indicating that the transmit failed.  The connection_
- *			state callback will also be called before this function
- *			returns.
  * @return	Zero on success.
  *		EINVAL if this handle was already closing or closed.  If the
  * 			handle is closing, consider using ipmi_sol_force_close
@@ -534,6 +527,23 @@ int ipmi_sol_open(ipmi_sol_conn_t *conn);
  */
 int ipmi_sol_close(ipmi_sol_conn_t *conn);
 
+/**
+ * Requests the closure of the SoL session.
+ *
+ * Closing the SoL session also restores the baseboard serial mux to its
+ * initial state.
+ *
+ * @param [in] conn	The IPMI SoL connection to close.
+ * @param [in] rem_close Nonzero if the connection should send a close to
+ *			the remote end.  If false, don't inform the remote
+ *			end of the close.
+ * @return	Zero on success.
+ *		EINVAL if this handle was already closing or closed.  If the
+ * 			handle is closing, consider using ipmi_sol_force_close
+ *			to hurry it along.
+ *		A nonzero error code on other failure.
+ */
+int ipmi_sol_force_close_wsend(ipmi_sol_conn_t *conn, int rem_close);
 
 /**
  * Forces the closure of the SoL session.

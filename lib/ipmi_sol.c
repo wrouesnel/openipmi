@@ -3237,7 +3237,7 @@ ipmi_sol_close(ipmi_sol_conn_t *conn)
 
 
 int
-ipmi_sol_force_close(ipmi_sol_conn_t *conn)
+ipmi_sol_force_close_wsend(ipmi_sol_conn_t *conn, int rem_close)
 {
     ipmi_lock(conn->transmitter.packet_lock);
     if (conn->state == ipmi_sol_state_closed) {
@@ -3245,7 +3245,7 @@ ipmi_sol_force_close(ipmi_sol_conn_t *conn)
 	return EINVAL;
     }
 
-    if (conn->state != ipmi_sol_state_closing)
+    if (rem_close && conn->state != ipmi_sol_state_closing)
 	/*
 	 * Try to be polite to the BMC. Don't ask for a callback,
 	 * cos we'll be gone!
@@ -3262,6 +3262,11 @@ ipmi_sol_force_close(ipmi_sol_conn_t *conn)
     return 0;
 }
 
+int
+ipmi_sol_force_close(ipmi_sol_conn_t *conn)
+{
+    return ipmi_sol_force_close_wsend(conn, 1);
+}
 
 int
 ipmi_sol_free(ipmi_sol_conn_t *conn)

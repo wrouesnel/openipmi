@@ -414,6 +414,13 @@ struct ipmi_con_s
        not long enough to hold it. */
     int (*get_port_info)(ipmi_con_t *ipmi, unsigned int port,
 			 char *info, int *info_len);
+
+    /* Disable the connection.  This is primarily for handling a fork,
+       make sure nothing happens on the connection after this is
+       called.  To call this, you should make sure that no thread is
+       in any event loop (before the fork) and there are no calls into
+       the library.  After calling this you should call close. */
+    void (*disable)(ipmi_con_t *ipmi);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

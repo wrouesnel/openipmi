@@ -122,6 +122,7 @@ typedef struct smi_data_s
     ipmi_con_t                 *ipmi;
     int                        fd;
     int                        if_num;
+    int			       disabled;
     pending_cmd_t              *pending_cmds;
     ipmi_lock_t                *cmd_lock;
     cmd_handler_t              *cmd_handlers;
@@ -195,7 +196,7 @@ smi_cleanup(ipmi_con_t *ipmi)
 	unsigned int  addr_len;
 	unsigned char data[1];
 	next_cmd = cmd->next;
-	if (cmd->rsp_handler) {
+	if (!smi->disabled && cmd->rsp_handler) {
 	    if (cmd->use_orig_addr) {
 		addr = &cmd->orig_addr;
 		addr_len = cmd->orig_addr_len;
@@ -1425,6 +1426,14 @@ smi_start_con(ipmi_con_t *ipmi)
     return rv;
 }
 
+static void
+smi_disable(ipmi_con_t *ipmi)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    smi->disabled = 1;
+}
+
 static ipmi_args_t *get_startup_args(ipmi_con_t *ipmi);
 
 static int
@@ -1524,6 +1533,7 @@ setup(int          if_num,
     ipmi->close_connection_done = smi_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
     ipmi->get_startup_args = get_startup_args;
+    ipmi->disable = smi_disable;
 
     rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
 				      smi->fd,

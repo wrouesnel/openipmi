@@ -302,6 +302,7 @@ struct lan_data_s
 
     unsigned char              slave_addr[MAX_IPMI_USED_CHANNELS];
     int                        is_active;
+    int			       disabled;
 
     /* Have we already been started? */
     int                        started;
@@ -3968,8 +3969,10 @@ lan_cleanup(ipmi_con_t *ipmi)
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
 
-    for (i=0; i<lan->cparm.num_ip_addr; i++)
-	send_close_session(ipmi, lan, i);
+    if (!lan->disabled) {
+	for (i=0; i<lan->cparm.num_ip_addr; i++)
+	    send_close_session(ipmi, lan, i);
+    }
 
     lan->in_cleanup = 1;
 
@@ -4035,16 +4038,18 @@ lan_cleanup(ipmi_con_t *ipmi)
 
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
 
-	ipmi_unlock(lan->seq_num_lock);
+	if (!lan->disabled) {
+	    ipmi_unlock(lan->seq_num_lock);
 
-	q_item->msg.netfn |= 1; /* Convert it to a response. */
-	q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
-	q_item->msg.data_len = 1;
-	ipmi_handle_rsp_item_copyall(ipmi, q_item->rsp_item,
-				     &q_item->addr, q_item->addr_len,
-				     &q_item->msg, q_item->rsp_handler);
+	    q_item->msg.netfn |= 1; /* Convert it to a response. */
+	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
+	    q_item->msg.data_len = 1;
+	    ipmi_handle_rsp_item_copyall(ipmi, q_item->rsp_item,
+					 &q_item->addr, q_item->addr_len,
+					 &q_item->msg, q_item->rsp_handler);
 
-	ipmi_lock(lan->seq_num_lock);
+	    ipmi_lock(lan->seq_num_lock);
+	}
 
 	ipmi_mem_free(q_item->info);
 	ipmi_mem_free(q_item);
@@ -5430,6 +5435,13 @@ most_secure_lanp_auth(void)
     return IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE;
 }
 
+static void
+lan_disable(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    lan->disabled = 1;
+}
 
 int
 ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
@@ -5779,6 +5791,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->get_port_info = lan_get_port_info;
     ipmi->register_stat_handler = lan_register_stat_handler;
     ipmi->unregister_stat_handler = lan_unregister_stat_handler;
+    ipmi->disable = lan_disable;
 
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */
