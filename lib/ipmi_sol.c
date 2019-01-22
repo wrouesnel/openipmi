@@ -528,6 +528,28 @@ static void ipmid_changed(ipmi_con_t   *ipmid,
 			  void         *cb_data);
 
 static void
+sol_connection_closed(ipmi_con_t *ipmi, void *cb_data)
+{
+    ipmi_sol_conn_t *conn = cb_data;
+
+    if (conn->transmitter.packet_lock)
+	ipmi_destroy_lock(conn->transmitter.packet_lock);
+    if (conn->transmitter.queue_lock)
+	ipmi_destroy_lock(conn->transmitter.queue_lock);
+    if (conn->transmitter.oob_op_lock)
+	ipmi_destroy_lock(conn->transmitter.oob_op_lock);
+    if (conn->data_received_callback_list)
+	locked_list_destroy(conn->data_received_callback_list);
+    if (conn->break_detected_callback_list)
+	locked_list_destroy(conn->break_detected_callback_list);
+    if (conn->bmc_transmit_overrun_callback_list)
+	locked_list_destroy(conn->bmc_transmit_overrun_callback_list);
+    if (conn->connection_state_callback_list)
+	locked_list_destroy(conn->connection_state_callback_list);
+    ipmi_mem_free(conn);
+}
+
+static void
 sol_cleanup(ipmi_sol_conn_t *conn)
 {
     if (conn->ipmid)
@@ -546,22 +568,7 @@ sol_cleanup(ipmi_sol_conn_t *conn)
 	ipmi_mem_free(to_free);
     }
 
-    conn->ipmi->close_connection(conn->ipmi);
-    if (conn->transmitter.packet_lock)
-	ipmi_destroy_lock(conn->transmitter.packet_lock);
-    if (conn->transmitter.queue_lock)
-	ipmi_destroy_lock(conn->transmitter.queue_lock);
-    if (conn->transmitter.oob_op_lock)
-	ipmi_destroy_lock(conn->transmitter.oob_op_lock);
-    if (conn->data_received_callback_list)
-	locked_list_destroy(conn->data_received_callback_list);
-    if (conn->break_detected_callback_list)
-	locked_list_destroy(conn->break_detected_callback_list);
-    if (conn->bmc_transmit_overrun_callback_list)
-	locked_list_destroy(conn->bmc_transmit_overrun_callback_list);
-    if (conn->connection_state_callback_list)
-	locked_list_destroy(conn->connection_state_callback_list);
-    ipmi_mem_free(conn);
+    conn->ipmi->close_connection_done(conn->ipmid, sol_connection_closed, conn);
 }
 
 /**
@@ -2622,6 +2629,7 @@ setup_new_ipmi(ipmi_sol_conn_t *conn)
 		 "Error setting up new connection: %d.", rv);
 	return rv;
     }
+    ipmi_free_args(args);
 
     rv = conn->ipmid->add_con_change_handler(conn->ipmid, ipmid_changed, conn);
     if (rv) {
