@@ -568,7 +568,9 @@ sol_cleanup(ipmi_sol_conn_t *conn)
 	ipmi_mem_free(to_free);
     }
 
-    conn->ipmi->close_connection_done(conn->ipmid, sol_connection_closed, conn);
+    if (conn->ipmi->close_connection_done(conn->ipmid, sol_connection_closed,
+					  conn))
+	sol_connection_closed(NULL, conn);
 }
 
 /**
