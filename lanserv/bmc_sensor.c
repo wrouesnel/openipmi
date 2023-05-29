@@ -740,6 +740,12 @@ handle_get_sensor_reading(lmc_data_t    *mc,
 	return;
     }
 
+	if (sensor->ready == 0 ){
+		rdata[0] = IPMI_COULD_NOT_PROVIDE_RESPONSE_CC;
+		*rdata_len = 1;
+		return;
+	}
+
     rdata[0] = 0;
     rdata[1] = sensor->value;
     rdata[2] = ((sensor->events_enabled << 7)
@@ -1160,6 +1166,7 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     sensor->event_reading_code = event_reading_code;
     sensor->event_only = event_only;
     mc->sensors[lun][sens_num] = sensor;
+	sensor->ready = 0;
 
     if (mc->emu->atca_mode && (type == 0xf0)) {
 	/* This is the ATCA hot-swap sensor. */
@@ -1540,7 +1547,7 @@ sensor_poll(void *cb_data)
 		set_sensor_bit(mc, sensor,
 			       i, ((val >> i) & 1), 0, 0xff, 0xff, 1);
 	}
-
+	sensor->ready = 1;
       out_restart:
 	mc->sysinfo->start_timer(sensor->poll_timer, &sensor->poll_timer_time);
     }

@@ -122,6 +122,7 @@ struct sensor_s
     unsigned int  events_enabled   : 1;
     unsigned int  enabled          : 1;
 
+    unsigned char ready;
     unsigned char sensor_type;
     unsigned char event_reading_code;
 
